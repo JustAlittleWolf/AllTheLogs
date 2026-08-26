@@ -43,7 +43,6 @@ class RealDatasetTest {
 
             List<LogFile> files = store.logFiles();
             assertTrue(files.stream().allMatch(file -> file.entryCount() > 0));
-            assertTrue(files.stream().anyMatch(file -> file.dateSource() == DateSource.FILE_NAME));
 
             // Every log in the dataset comes from a launcher that writes a recognisable version line.
             Map<String, Long> versions = files.stream().collect(

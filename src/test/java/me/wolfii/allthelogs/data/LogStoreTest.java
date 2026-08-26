@@ -73,7 +73,6 @@ class LogStoreTest {
         assertEquals(Optional.of(SourceKind.DIRECTORY), entry.logFile().sourceKind());
         assertEquals("26.2", entry.logFile().minecraftVersion());
         assertEquals(LocalDate.of(2026, 8, 25), entry.logFile().date());
-        assertEquals(DateSource.FILE_NAME, entry.logFile().dateSource());
         assertEquals(LocalDateTime.of(2026, 8, 25, 10, 0, 11), entry.timestamp());
     }
 
@@ -83,7 +82,6 @@ class LogStoreTest {
 
         LogFile latest = store.logFiles().stream()
                 .filter(file -> file.fileName().equals("latest.log")).findFirst().orElseThrow();
-        assertEquals(DateSource.LAST_MODIFIED, latest.dateSource());
         assertEquals(latest.lastModified().orElseThrow().toLocalDate(), latest.date());
         assertEquals("1.8.9", latest.minecraftVersion());
     }
@@ -145,7 +143,7 @@ class LogStoreTest {
 
         store.importArchive(archive, ImportOptions.defaults().withTimezone(offset));
 
-        ChatEntry entry = store.search("in archive").getFirst();
+        ChatEntry entry = store.query(ChatQuery.all().withSubstring("in archive")).getFirst();
         assertEquals(LogDates.toSystemLocal(LocalDateTime.of(2026, 1, 2, 10, 0, 10), offset), entry.timestamp());
     }
 
@@ -387,7 +385,6 @@ class LogStoreTest {
 
         LogFile file = store.startSession("26.2", startedAt);
 
-        assertEquals(DateSource.SESSION, file.dateSource());
         assertTrue(file.sourceKind().isEmpty());
         assertEquals("26.2", file.minecraftVersion());
         assertEquals(LocalDate.of(2026, 8, 26), file.date());
@@ -412,7 +409,6 @@ class LogStoreTest {
 
         ChatEntry entry = store.query(ChatQuery.all().withSubstring("client message")).getFirst();
         assertTrue(entry.logFile().sourceKind().isEmpty());
-        assertEquals(DateSource.SESSION, entry.logFile().dateSource());
         assertEquals("26.2", entry.logFile().minecraftVersion());
         assertEquals(LocalDate.of(2026, 8, 26), entry.logFile().date());
         assertEquals(LocalDateTime.of(2026, 8, 26, 12, 0, 0), entry.timestamp());
@@ -489,7 +485,7 @@ class LogStoreTest {
 
         assertEquals(3, store.logFiles().size());
         assertTrue(store.logFiles().stream().allMatch(file -> file.entryCount() == 1));
-        assertTrue(store.logFiles().stream().allMatch(file -> file.dateSource() == DateSource.SESSION));
+        assertTrue(store.logFiles().stream().allMatch(file -> file.sourceKind().isEmpty()));
     }
 
     @Test
@@ -516,9 +512,9 @@ class LogStoreTest {
         store.startSession("26.2", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
         store.importDirectory(logsDirectory());
 
-        assertTrue(store.logFiles().stream().anyMatch(file -> file.dateSource() == DateSource.SESSION));
+        assertTrue(store.logFiles().stream().anyMatch(file -> file.sourceKind().isEmpty()));
         assertEquals(0, store.logFiles().stream()
-                .filter(file -> file.dateSource() == DateSource.SESSION)
+                .filter(file -> file.sourceKind().isEmpty())
                 .findFirst().orElseThrow().entryCount());
     }
 
@@ -594,7 +590,7 @@ class LogStoreTest {
     void defaultImportLeavesTimestampsInLocalTime() throws IOException {
         store.importDirectory(logsDirectory());
 
-        ChatEntry entry = store.search("needle in here").getFirst();
+        ChatEntry entry = store.query(ChatQuery.all().withSubstring("needle in here")).getFirst();
         assertEquals(LocalDateTime.of(2026, 8, 25, 10, 0, 11), entry.timestamp());
         assertEquals(LocalDateTime.of(2026, 8, 25, 10, 0, 0),
                 entry.logFile().firstEntryTime().orElseThrow());
@@ -607,12 +603,12 @@ class LogStoreTest {
         ZoneOffset minusThree = ZoneOffset.ofHours(-3);
 
         ImportResult first = store.importDirectory(root, ImportOptions.defaults().withTimezone(plusThree));
-        ChatEntry plus = store.search("needle in here").getFirst();
+        ChatEntry plus = store.query(ChatQuery.all().withSubstring("needle in here")).getFirst();
 
         store.close();
         store = LogStore.openInMemory();
         ImportResult second = store.importDirectory(root, ImportOptions.defaults().withTimezone(minusThree));
-        ChatEntry minus = store.search("needle in here").getFirst();
+        ChatEntry minus = store.query(ChatQuery.all().withSubstring("needle in here")).getFirst();
 
         assertTrue(first.failures().isEmpty(), () -> "unexpected failures: " + first.failures());
         assertTrue(second.failures().isEmpty(), () -> "unexpected failures: " + second.failures());
@@ -630,9 +626,8 @@ class LogStoreTest {
     void importTimezoneDoesNotChangeTheNamedLogDate() throws IOException {
         store.importDirectory(logsDirectory(), ImportOptions.defaults().withTimezone(ZoneOffset.ofHours(-10)));
 
-        ChatEntry entry = store.search("needle in here").getFirst();
+        ChatEntry entry = store.query(ChatQuery.all().withSubstring("needle in here")).getFirst();
         assertEquals(LocalDate.of(2026, 8, 25), entry.logFile().date());
-        assertEquals(DateSource.FILE_NAME, entry.logFile().dateSource());
     }
 
     @Test
@@ -645,7 +640,6 @@ class LogStoreTest {
         store.importDirectory(tempDir, ImportOptions.defaults().withTimezone(ZoneOffset.UTC));
         LogFile utc = store.logFiles().getFirst();
         assertEquals(LocalDate.of(2026, 8, 25), utc.date());
-        assertEquals(DateSource.LAST_MODIFIED, utc.dateSource());
         // lastModified is an absolute instant, stored in local time regardless of the import timezone.
         assertEquals(LocalDateTime.ofInstant(modified, ZoneId.systemDefault()), utc.lastModified().orElseThrow());
 
@@ -654,7 +648,6 @@ class LogStoreTest {
         store.importDirectory(tempDir, ImportOptions.defaults().withTimezone(ZoneOffset.ofHours(14)));
         LogFile plusFourteen = store.logFiles().getFirst();
         assertEquals(LocalDate.of(2026, 8, 26), plusFourteen.date());
-        assertEquals(DateSource.LAST_MODIFIED, plusFourteen.dateSource());
         assertEquals(LocalDateTime.ofInstant(modified, ZoneId.systemDefault()),
                 plusFourteen.lastModified().orElseThrow());
     }

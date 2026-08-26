@@ -29,7 +29,6 @@ public final class Schema {
                 source_path VARCHAR NOT NULL,
                 entry_path VARCHAR NOT NULL,
                 log_date DATE NOT NULL,
-                date_source VARCHAR NOT NULL,
                 minecraft_version VARCHAR NOT NULL,
                 last_modified TIMESTAMP,
                 first_entry_time TIMESTAMP,

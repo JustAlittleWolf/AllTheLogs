@@ -78,12 +78,12 @@ public final class LogStore implements AutoCloseable {
     private static final String SESSION_SOURCE_PATH = "<session>";
     /// Sentinel that tells the writer loop that no more logs are coming.
     private static final PreparedLog END_OF_STREAM = new PreparedLog(
-        "", SourceKind.DIRECTORY, "", "", LocalDate.EPOCH, DateSource.FILE_NAME, "", null, List.of(), List.of(),
+        "", SourceKind.DIRECTORY, "", "", LocalDate.EPOCH, "", null, List.of(), List.of(),
         false, null, null);
 
     private final DuckDBConnection connection;
     private final Path databasePath;
-    /// File id of the current [DateSource#SESSION], or `-1` when none is active.
+    /// File id of the current client session, or `-1` when none is active.
     private long sessionFileId = -1;
     /// Next line index to assign in the current session.
     private int sessionLineIndex;
@@ -157,20 +157,20 @@ public final class LogStore implements AutoCloseable {
         try (BufferedReader reader = open(candidate)) {
             parsed = LogParser.parse(reader);
         }
-        LogDates.Resolved resolved = LogDates.resolve(candidate.fileName(), candidate.lastModified(), timezone);
+        LocalDate date = LogDates.resolve(candidate.fileName(), candidate.lastModified(), timezone);
 
         List<LocalDateTime> times = new ArrayList<>(parsed.entries().size());
         List<String> messages = new ArrayList<>(parsed.entries().size());
         for (ParsedLog.Entry entry : parsed.entries()) {
-            times.add(LogDates.toSystemLocal(resolved.date(), entry.time(), timezone));
+            times.add(LogDates.toSystemLocal(date, entry.time(), timezone));
             messages.add(entry.message());
         }
-        LocalDateTime firstLineTime = LogDates.toSystemLocal(resolved.date(), parsed.firstLineTime(), timezone);
-        LocalDateTime lastLineTime = LogDates.toSystemLocal(resolved.date(), parsed.lastLineTime(), timezone);
+        LocalDateTime firstLineTime = LogDates.toSystemLocal(date, parsed.firstLineTime(), timezone);
+        LocalDateTime lastLineTime = LogDates.toSystemLocal(date, parsed.lastLineTime(), timezone);
         LocalDateTime lastModified = candidate.lastModified() == null
             ? null : LocalDateTime.ofInstant(candidate.lastModified(), ZoneId.systemDefault());
         return new PreparedLog(candidate.fileName(), candidate.sourceKind(), candidate.sourcePath(),
-            candidate.entryPath(), resolved.date(), resolved.source(), parsed.minecraftVersion(),
+            candidate.entryPath(), date, parsed.minecraftVersion(),
             lastModified, times, messages, parsed.resourceManagerReloaded(),
             firstLineTime, lastLineTime);
     }
@@ -209,8 +209,8 @@ public final class LogStore implements AutoCloseable {
             file = readLogFile(result, 1);
             fileCache.put(cacheKey, file);
         }
-        LocalDateTime timestamp = result.getTimestamp(12).toLocalDateTime();
-        return new ChatEntry(file, timestamp, result.getInt(13), result.getString(14));
+        LocalDateTime timestamp = result.getTimestamp(11).toLocalDateTime();
+        return new ChatEntry(file, timestamp, result.getInt(12), result.getString(13));
     }
 
     private static LogFile readLogFile(ResultSet result, int offset) throws SQLException {
@@ -224,12 +224,11 @@ public final class LogStore implements AutoCloseable {
             result.getString(offset + 2),
             result.getString(offset + 3),
             result.getDate(offset + 4).toLocalDate(),
-            DateSource.valueOf(result.getString(offset + 5)),
-            result.getString(offset + 6),
+            result.getString(offset + 5),
+            optionalTimestamp(result, offset + 6),
             optionalTimestamp(result, offset + 7),
             optionalTimestamp(result, offset + 8),
-            optionalTimestamp(result, offset + 9),
-            result.getLong(offset + 10));
+            result.getLong(offset + 9));
     }
 
     private static Optional<LocalDateTime> optionalTimestamp(ResultSet result, int column) throws SQLException {
@@ -362,8 +361,8 @@ public final class LogStore implements AutoCloseable {
     /// [LogFile#lastEntryTime()] as lines arrive. Starting another session leaves the previous file in place and
     /// switches subsequent imports to the new one.
     ///
-    /// The file's [LogFile#dateSource()] is [DateSource#SESSION] and [LogFile#sourceKind()] is empty, since the
-    /// lines were captured from the running client rather than read from a directory or archive.
+    /// The file's [LogFile#sourceKind()] is empty, since the lines were captured from the running client rather than
+    /// read from a directory or archive.
     ///
     /// @param minecraftVersion the version of the running game
     /// @return the created log file, with no entries yet
@@ -425,18 +424,17 @@ public final class LogStore implements AutoCloseable {
         String entryPath = "session/" + fileId;
         Timestamp start = Timestamp.valueOf(startedAt);
         try (PreparedStatement insert = connection.prepareStatement("""
-            INSERT INTO log_file (id, file_name, source_kind, source_path, entry_path, log_date, date_source,
+            INSERT INTO log_file (id, file_name, source_kind, source_path, entry_path, log_date,
                                   minecraft_version, last_modified, first_entry_time, last_entry_time, entry_count)
-            VALUES (?, ?, NULL, ?, ?, ?, ?, ?, NULL, ?, ?, 0)""")) {
+            VALUES (?, ?, NULL, ?, ?, ?, ?, NULL, ?, ?, 0)""")) {
             insert.setLong(1, fileId);
             insert.setString(2, fileName);
             insert.setString(3, SESSION_SOURCE_PATH);
             insert.setString(4, entryPath);
             insert.setDate(5, Date.valueOf(date));
-            insert.setString(6, DateSource.SESSION.name());
-            insert.setString(7, minecraftVersion);
+            insert.setString(6, minecraftVersion);
+            insert.setTimestamp(7, start);
             insert.setTimestamp(8, start);
-            insert.setTimestamp(9, start);
             insert.execute();
         }
         sessionFileId = fileId;
@@ -447,7 +445,6 @@ public final class LogStore implements AutoCloseable {
             SESSION_SOURCE_PATH,
             entryPath,
             date,
-            DateSource.SESSION,
             minecraftVersion,
             Optional.empty(),
             Optional.of(startedAt),
@@ -524,7 +521,7 @@ public final class LogStore implements AutoCloseable {
     public List<LogFile> logFiles() {
         List<LogFile> files = new ArrayList<>();
         String sql = """
-            SELECT file_name, source_kind, source_path, entry_path, log_date, date_source, minecraft_version,
+            SELECT file_name, source_kind, source_path, entry_path, log_date, minecraft_version,
                    last_modified, first_entry_time, last_entry_time, entry_count
             FROM log_file ORDER BY log_date, entry_path""";
         try (Statement statement = connection.createStatement();

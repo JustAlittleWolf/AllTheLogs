@@ -1,6 +1,5 @@
 package me.wolfii.allthelogs.data.internal;
 
-import me.wolfii.allthelogs.data.DateSource;
 import me.wolfii.allthelogs.data.SourceKind;
 
 import java.time.LocalDate;
@@ -22,7 +21,6 @@ public record PreparedLog(
     String sourcePath,
     String entryPath,
     LocalDate date,
-    DateSource dateSource,
     String minecraftVersion,
     LocalDateTime lastModified,
     List<LocalDateTime> entryTimes,

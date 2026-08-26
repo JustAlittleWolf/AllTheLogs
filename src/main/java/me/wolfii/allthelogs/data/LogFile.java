@@ -14,7 +14,6 @@ import java.util.Optional;
 ///                        imported directory, for archives the slash separated path inside the archive, with nested
 ///                        archives separated by `!/`
 /// @param date            the calendar date the log belongs to
-/// @param dateSource      how [#date] was determined; [DateSource#SESSION] for a running client session
 /// @param minecraftVersion the Minecraft version the log was produced by, or `unknown`
 /// @param lastModified    last modification time as reported by the file system or archive, if available
 /// @param firstEntryTime  timestamp of the first logged line of this file, not just chat entries; converted from the
@@ -29,7 +28,6 @@ public record LogFile(
     String sourcePath,
     String entryPath,
     LocalDate date,
-    DateSource dateSource,
     String minecraftVersion,
     Optional<LocalDateTime> lastModified,
     Optional<LocalDateTime> firstEntryTime,
