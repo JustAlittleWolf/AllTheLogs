@@ -27,8 +27,7 @@ public final class MessageWrap {
                     break;
                 }
                 end = next;
-                char c = text.charAt(end - 1);
-                if (c == ' ' || c == '\t' || c == '-') {
+                if (canBreakAfter(text.charAt(end - 1))) {
                     breakAt = end;
                 }
             }
@@ -76,5 +75,9 @@ public final class MessageWrap {
             index += wrapped.get(i).length();
         }
         return index + indexAtX(wrapped.get(clampedLine), x, widthOf);
+    }
+
+    private static boolean canBreakAfter(char c) {
+        return c == ' ' || c == '\t' || c == '-';
     }
 }

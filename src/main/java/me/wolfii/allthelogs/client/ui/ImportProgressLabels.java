@@ -12,10 +12,6 @@ final class ImportProgressLabels {
     private ImportProgressLabels() {
     }
 
-    static String currentFile(LogSource source) {
-        return currentFile(source, null);
-    }
-
     /**
      * Path of the file currently being imported, relative to {@code importPath} when possible. Archive work
      * appends {@code !/} and the entry (or nested archive) being read.

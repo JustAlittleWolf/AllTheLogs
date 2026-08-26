@@ -71,14 +71,9 @@ public final class MessageListLayout {
     }
 
     static boolean needsClusterGap(DisplayRow previous, DisplayRow current, int contextLines) {
-        if (previous.chatLog().equals(current.chatLog())
-            && Math.abs(current.lineIndex() - previous.lineIndex()) == 1) {
-            return false;
-        }
-        if (!previous.chatLog().equals(current.chatLog())) {
-            return true;
-        }
-        return Math.abs(current.lineIndex() - previous.lineIndex()) > contextLines;
+        if (!previous.chatLog().equals(current.chatLog())) return true;
+        int gap = Math.abs(current.lineIndex() - previous.lineIndex());
+        return gap > 1 && gap > contextLines;
     }
 
     public int contentHeight() {

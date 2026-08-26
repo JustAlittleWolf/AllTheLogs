@@ -15,6 +15,11 @@ import java.util.Locale;
  * Builds chat-line {@link Component}s with hex colours: white for hits, light green on the match, grey for context.
  */
 public final class MessageComponents {
+    /**
+     * Timestamp column sample used to reserve width for {@code HH:mm:ss} plus a gap before the message.
+     */
+    public static final String TIMESTAMP_GUTTER = "00:00:00  ";
+
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss");
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("EEE, MMM d, yyyy", Locale.US);
 
@@ -25,9 +30,21 @@ public final class MessageComponents {
         return matches > 99 ? ">99" : Integer.toString(matches);
     }
 
+    /**
+     * Text for the list's status chip: a persistent overlay, loading, match count, or both.
+     */
+    public static Component listStatus(Component overlay, boolean loading, boolean showMatches, int matchCount) {
+        if (overlay != null && !overlay.getString().isEmpty()) return overlay;
+        String count = matchCountText(matchCount);
+        if (loading && showMatches) {
+            return Component.translatable("allthelogs.status.matches_loading", count);
+        }
+        if (loading) return Component.translatable("allthelogs.status.loading");
+        return Component.translatable("allthelogs.status.matches", count);
+    }
+
     public static Component timestamp(DisplayRow row) {
-        return Component.literal(row.entry().timestamp().toLocalTime().withNano(0).format(TIME))
-            .withStyle(Style.EMPTY.withColor(rgb(ContextColors.TIMESTAMP)));
+        return colored(row.entry().timestamp().toLocalTime().withNano(0).format(TIME), ContextColors.TIMESTAMP);
     }
 
     public static Component dateHeader(LocalDate date) {
@@ -44,35 +61,30 @@ public final class MessageComponents {
         int end = Math.clamp(to, start, full.length());
         String text = full.substring(start, end);
         if (!row.match()) {
-            return Component.literal(text).withStyle(Style.EMPTY.withColor(rgb(ContextColors.contextText(row.distanceFromMatch()))));
+            return colored(text, ContextColors.contextText(row.distanceFromMatch()));
         }
         if (row.highlights().isEmpty()) {
-            return Component.literal(text).withStyle(Style.EMPTY.withColor(rgb(ContextColors.MATCH_TEXT)));
+            return colored(text, ContextColors.MATCH_TEXT);
         }
         MutableComponent result = Component.empty();
         int cursor = 0;
         for (HighlightSpan span : row.highlights()) {
             int highlightStart = Math.clamp(span.start() - start, 0, text.length());
             int highlightEnd = Math.clamp(span.end() - start, 0, text.length());
-            if (highlightEnd <= 0 || highlightStart >= text.length() || highlightEnd <= highlightStart) {
-                continue;
-            }
+            if (highlightEnd <= highlightStart) continue;
             if (highlightStart > cursor) {
-                result.append(Component.literal(text.substring(cursor, highlightStart))
-                    .withStyle(Style.EMPTY.withColor(rgb(ContextColors.MATCH_TEXT))));
+                result.append(colored(text.substring(cursor, highlightStart), ContextColors.MATCH_TEXT));
             }
-            result.append(Component.literal(text.substring(highlightStart, highlightEnd))
-                .withStyle(Style.EMPTY.withColor(rgb(ContextColors.MATCH_HIGHLIGHT))));
+            result.append(colored(text.substring(highlightStart, highlightEnd), ContextColors.MATCH_HIGHLIGHT));
             cursor = highlightEnd;
         }
         if (cursor < text.length()) {
-            result.append(Component.literal(text.substring(cursor))
-                .withStyle(Style.EMPTY.withColor(rgb(ContextColors.MATCH_TEXT))));
+            result.append(colored(text.substring(cursor), ContextColors.MATCH_TEXT));
         }
         return result;
     }
 
-    private static int rgb(int argb) {
-        return argb & 0xFFFFFF;
+    private static Component colored(String text, int argb) {
+        return Component.literal(text).withStyle(Style.EMPTY.withColor(argb & 0xFFFFFF));
     }
 }
