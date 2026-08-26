@@ -17,7 +17,7 @@ class SearchFilterTest {
         assertFalse(query.hasTextFilter());
         assertEquals(SearchFilter.DEFAULT_CONTEXT_LINES, query.contextLines());
         assertEquals(SearchFilter.DEFAULT_LIMIT, query.limit());
-        assertEquals(ChatQuery.Sort.ASCENDING, query.sort());
+        assertEquals(ChatQuery.Sort.DESCENDING, query.sort());
     }
 
     @Test
