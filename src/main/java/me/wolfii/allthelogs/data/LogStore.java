@@ -28,12 +28,15 @@ import java.util.zip.GZIPInputStream;
 /// ```java
 /// try (LogStore store = LogStore.open(Path.of("logs.duckdb"))) {
 ///     store.importDirectory(Path.of("C:/Users/me/AppData/Roaming/.minecraft"),
-///             ImportOptions.defaults().withPathMatcher("**&#47;logs&#47;**"));
+///             ImportOptions.defaults().withPathMatcher("**&#47;logs&#47;**"),
+///             progress -> System.out.println(progress.completedFiles() + "/" + progress.discoveredFiles()
+///                     + " " + progress.current()));
 ///     List<ChatEntry> hits = store.query(ChatQuery.all().withSubstring("welcome").withContextLines(2));
 /// }
 /// ```
 ///
-/// A store is not safe for use from several threads at once; imports parallelise internally.
+/// A store is not safe for use from several threads at once; imports parallelise internally. Session capture
+/// ([#startSession(String)], [#importSessionMessage(String)]) does not report progress.
 public final class LogStore implements AutoCloseable {
     /// Legacy Windows code page that old Minecraft launchers wrote logs in, before UTF-8 became the norm.
     private static final Charset WINDOWS_1252 = Charset.forName("windows-1252");
@@ -217,7 +220,13 @@ public final class LogStore implements AutoCloseable {
 
     /// Imports every log file found below `directory` with [ImportOptions#defaults()].
     public ImportResult importDirectory(Path directory) {
-        return importDirectory(directory, ImportOptions.defaults());
+        return importDirectory(directory, ImportOptions.defaults(), null);
+    }
+
+    /// Imports every log file found below `directory` with [ImportOptions#defaults()], reporting progress to
+    /// `progress`.
+    public ImportResult importDirectory(Path directory, Consumer<ImportProgress> progress) {
+        return importDirectory(directory, ImportOptions.defaults(), progress);
     }
 
     /// Imports every log file found below `directory`.
@@ -226,14 +235,30 @@ public final class LogStore implements AutoCloseable {
     ///                  imported log is recorded as a [LogSource.File] pointing at the file itself
     /// @throws LogDataException if `directory` is not a directory, or the database rejects the writes
     public ImportResult importDirectory(Path directory, ImportOptions options) {
+        return importDirectory(directory, options, null);
+    }
+
+    /// Imports every log file found below `directory`.
+    ///
+    /// @param directory the directory to walk; [ImportOptions#pathMatcher()] is relative to this directory. Each
+    ///                  imported log is recorded as a [LogSource.File] pointing at the file itself
+    /// @param progress  called as files are found and processed, with the current log file or archive; `null` to
+    ///                  ignore progress. Session capture does not report progress
+    /// @throws LogDataException if `directory` is not a directory, or the database rejects the writes
+    public ImportResult importDirectory(Path directory, ImportOptions options, Consumer<ImportProgress> progress) {
         Objects.requireNonNull(directory, "directory");
         Objects.requireNonNull(options, "options");
-        return runImport(options, discovery -> discovery.discoverDirectory(directory));
+        return runImport(options, discovery -> discovery.discoverDirectory(directory), progress);
     }
 
     /// Imports every log file inside `archive` with [ImportOptions#defaults()].
     public ImportResult importArchive(Path archive) {
-        return importArchive(archive, ImportOptions.defaults());
+        return importArchive(archive, ImportOptions.defaults(), null);
+    }
+
+    /// Imports every log file inside `archive` with [ImportOptions#defaults()], reporting progress to `progress`.
+    public ImportResult importArchive(Path archive, Consumer<ImportProgress> progress) {
+        return importArchive(archive, ImportOptions.defaults(), progress);
     }
 
     /// Imports every log file inside `archive`. Zip, 7z, tar and tar.gz archives are supported.
@@ -242,9 +267,20 @@ public final class LogStore implements AutoCloseable {
     ///                log inside it
     /// @throws LogDataException if `archive` is not a file, or the database rejects the writes
     public ImportResult importArchive(Path archive, ImportOptions options) {
+        return importArchive(archive, options, null);
+    }
+
+    /// Imports every log file inside `archive`. Zip, 7z, tar and tar.gz archives are supported.
+    ///
+    /// @param archive  the archive to read; each result is a [LogSource.Archive] with that file and the path of the
+    ///                 log inside it
+    /// @param progress called as files are found and processed, with the current log file or archive; `null` to
+    ///                 ignore progress. Session capture does not report progress
+    /// @throws LogDataException if `archive` is not a file, or the database rejects the writes
+    public ImportResult importArchive(Path archive, ImportOptions options, Consumer<ImportProgress> progress) {
         Objects.requireNonNull(archive, "archive");
         Objects.requireNonNull(options, "options");
-        return runImport(options, discovery -> discovery.discoverArchive(archive));
+        return runImport(options, discovery -> discovery.discoverArchive(archive), progress);
     }
 
     /// Discovers candidates on a background thread, parses them on a pool and writes them on the calling thread.
@@ -252,11 +288,12 @@ public final class LogStore implements AutoCloseable {
     /// The writer runs on the calling thread because DuckDB's appender is confined to the thread that created it, and
     /// the store is opened by the caller. Discovery is pushed to its own thread so that reading archives overlaps with
     /// writing rather than serialising behind it.
-    private ImportResult runImport(ImportOptions options, Consumer<LogDiscovery> walk) {
+    private ImportResult runImport(ImportOptions options, Consumer<LogDiscovery> walk, Consumer<ImportProgress> progress) {
         BlockingQueue<PreparedLog> queue = new ArrayBlockingQueue<>(WRITE_QUEUE_CAPACITY);
         List<ImportResult.Failure> parseFailures = Collections.synchronizedList(new ArrayList<>());
         AtomicInteger skipped = new AtomicInteger();
         AtomicInteger empty = new AtomicInteger();
+        ImportObserver observer = new ImportObserver(progress);
 
         try (LogWriter writer = new LogWriter(connection)) {
             var failureRef = new AtomicReference<RuntimeException>();
@@ -264,6 +301,7 @@ public final class LogStore implements AutoCloseable {
             LogDiscovery discovery = new LogDiscovery(options, candidate -> {
                 if (options.skipAlreadyImported() && writer.isAlreadyImported(candidate.sourcePath(), candidate.entryPath())) {
                     skipped.incrementAndGet();
+                    observer.fileCompleted();
                     return;
                 }
                 parsers.execute(() -> {
@@ -271,6 +309,7 @@ public final class LogStore implements AutoCloseable {
                         PreparedLog prepared = prepare(candidate, options.timezone());
                         if (prepared.firstLineTime() == null || prepared.lastLineTime() == null || (prepared.messages().isEmpty() && !prepared.resourceManagerReloaded())) {
                             skipped.incrementAndGet();
+                            observer.fileCompleted();
                             return;
                         }
                         if (prepared.messages().isEmpty()) {
@@ -280,11 +319,13 @@ public final class LogStore implements AutoCloseable {
                     } catch (IOException e) {
                         parseFailures.add(new ImportResult.Failure(failurePath(candidate),
                             "could not parse: " + e.getMessage()));
+                        observer.fileCompleted();
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
+                        observer.fileCompleted();
                     }
                 });
-            });
+            }, observer);
 
             Thread discoverer = new Thread(() -> {
                 try {
@@ -292,6 +333,7 @@ public final class LogStore implements AutoCloseable {
                 } catch (RuntimeException e) {
                     failureRef.set(e);
                 } finally {
+                    observer.discoveryFinished();
                     parsers.shutdown();
                     try {
                         awaitTermination(parsers);
@@ -308,11 +350,14 @@ public final class LogStore implements AutoCloseable {
                     PreparedLog log = queue.take();
                     if (log == END_OF_STREAM) break;
                     writer.write(log);
+                    observer.fileCompleted(sourceOf(log));
                 }
             } finally {
                 // Drain whatever is still queued so no parsing thread stays blocked on a full queue if writing failed.
                 drain(queue, discoverer);
             }
+
+            observer.finished();
 
             RuntimeException discoveryFailure = failureRef.get();
             if (discoveryFailure != null) throw discoveryFailure;
@@ -329,6 +374,14 @@ public final class LogStore implements AutoCloseable {
             Thread.currentThread().interrupt();
             throw new LogDataException("import was interrupted", e);
         }
+    }
+
+    private static LogSource sourceOf(PreparedLog log) {
+        return switch (log.sourceKind()) {
+            case FILE -> new LogSource.File(Path.of(log.sourcePath()));
+            case ARCHIVE -> new LogSource.Archive(Path.of(log.sourcePath()), log.entryPath());
+            case SESSION -> new LogSource.Session();
+        };
     }
 
     /// Starts a capture session for a running Minecraft client and creates a [ChatLog] for it.
