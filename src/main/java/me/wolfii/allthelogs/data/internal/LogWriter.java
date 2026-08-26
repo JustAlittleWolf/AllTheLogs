@@ -163,7 +163,7 @@ public final class LogWriter implements AutoCloseable {
     /// @return how many of this session's files were dropped because every one of their entries turned out to be a
     ///         duplicate
     private int refreshFileAggregates(Statement statement) throws SQLException {
-        // first_entry_time/last_entry_time bound every logged line of the file, not just its chat entries, so
+        // start_time/end_time bound every logged line of the file, not just its chat entries, so
         // deduplicating chat entries must not touch already stored bounds that came from lines with no chat marker;
         // only entry_count needs recomputing here.
         statement.execute("""

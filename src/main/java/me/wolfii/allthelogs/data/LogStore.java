@@ -208,8 +208,8 @@ public final class LogStore implements AutoCloseable {
             log = readChatLog(result, 1);
             logCache.put(cacheKey, log);
         }
-        LocalDateTime timestamp = result.getTimestamp(10).toLocalDateTime();
-        return new ChatEntry(log, timestamp, result.getInt(11), result.getString(12));
+        LocalDateTime timestamp = result.getTimestamp(9).toLocalDateTime();
+        return new ChatEntry(log, timestamp, result.getInt(10), result.getString(11));
     }
 
     private static ChatLog readChatLog(ResultSet result, int offset) throws SQLException {
@@ -218,8 +218,7 @@ public final class LogStore implements AutoCloseable {
             result.getDate(offset + 4).toLocalDate(),
             result.getString(offset + 5),
             result.getTimestamp(offset + 6).toLocalDateTime(),
-            result.getTimestamp(offset + 7).toLocalDateTime(),
-            result.getLong(offset + 8));
+            result.getTimestamp(offset + 7).toLocalDateTime());
     }
 
     private static LogSource readLogSource(ResultSet result, int offset) throws SQLException {
@@ -234,7 +233,7 @@ public final class LogStore implements AutoCloseable {
         }
         return switch (sourceKind) {
             case FILE -> new LogSource.File(Path.of(path));
-            case ARCHIVE -> new LogSource.Archive(Path.of(path + LogDiscovery.ARCHIVE_SEPARATOR + entryPath));
+            case ARCHIVE -> new LogSource.Archive(Path.of(path), entryPath);
             case SESSION -> new LogSource.Session();
         };
     }
@@ -274,8 +273,8 @@ public final class LogStore implements AutoCloseable {
 
     /// Imports every log file inside `archive`. Zip, 7z, tar and tar.gz archives are supported.
     ///
-    /// @param archive the archive to read; [LogSource.Archive#path()] of the results is the archive file, then `!/`,
-    ///                then the path of the log inside it
+    /// @param archive the archive to read; each result is a [LogSource.Archive] with that file and the path of the
+    ///                log inside it
     /// @throws LogDataException if `archive` is not a file, or the database rejects the writes
     public ImportResult importArchive(Path archive, ImportOptions options) {
         Objects.requireNonNull(archive, "archive");
@@ -369,8 +368,8 @@ public final class LogStore implements AutoCloseable {
     /// Starts a capture session for a running Minecraft client and creates a [ChatLog] for it.
     ///
     /// Chat lines imported with [#importSessionMessage(String)] are stored against this log. Its
-    /// [ChatLog#firstEntryTime()] is the session start; [#importSessionMessage(String, LocalDateTime)] and
-    /// [#updateSessionLastEntryTime(LocalDateTime)] update [ChatLog#lastEntryTime()] as the session continues.
+    /// [ChatLog#startTime()] is the session start; [#importSessionMessage(String, LocalDateTime)] and
+    /// [#updateSessionEndTime(LocalDateTime)] update [ChatLog#endTime()] as the session continues.
     /// Starting another session leaves the previous log in place and switches subsequent imports to the new one.
     ///
     /// The log's [ChatLog#source()] is a [LogSource.Session], since the lines were captured from the running client
@@ -391,7 +390,28 @@ public final class LogStore implements AutoCloseable {
         Objects.requireNonNull(startedAt, "startedAt");
         LocalDateTime start = startedAt.withNano(0);
         try {
-            return insertSessionFile(minecraftVersion, start);
+            long fileId = nextFileId();
+            LocalDate date = start.toLocalDate();
+            String entryPath = "session/" + fileId;
+            Timestamp timestamp = Timestamp.valueOf(start);
+            try (PreparedStatement insert = connection.prepareStatement("""
+                INSERT INTO log_file (id, file_name, source_kind, source_path, entry_path, log_date,
+                                      minecraft_version, start_time, end_time, entry_count)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""")) {
+                insert.setLong(1, fileId);
+                insert.setString(2, "");
+                insert.setString(3, SourceKind.SESSION.name());
+                insert.setString(4, SESSION_SOURCE_PATH);
+                insert.setString(5, entryPath);
+                insert.setDate(6, Date.valueOf(date));
+                insert.setString(7, minecraftVersion);
+                insert.setTimestamp(8, timestamp);
+                insert.setTimestamp(9, timestamp);
+                insert.execute();
+            }
+            sessionFileId = fileId;
+            sessionLineIndex = 0;
+            return new ChatLog(new LogSource.Session(), date, minecraftVersion, start, start);
         } catch (SQLException e) {
             throw new LogDataException("could not start a client session", e);
         }
@@ -427,25 +447,24 @@ public final class LogStore implements AutoCloseable {
         }
     }
 
-    /// Updates [ChatLog#lastEntryTime()] of the current session to the current time, without storing a chat line.
-    public void updateSessionLastEntryTime() {
-        updateSessionLastEntryTime(LocalDateTime.now());
-    }
-
-    /// Updates [ChatLog#lastEntryTime()] of the current session, without storing a chat line.
+    /// Updates [ChatLog#endTime()] of the current session, without storing a chat line.
     ///
     /// Whole seconds only, matching [#importSessionMessage(String, LocalDateTime)]. If `timestamp` is earlier than
-    /// the time already stored, the existing last entry time is kept.
+    /// the time already stored, the existing end time is kept.
     ///
     /// @throws LogDataException if no session is active, or the update cannot be written
-    public void updateSessionLastEntryTime(LocalDateTime timestamp) {
+    public void updateSessionEndTime(LocalDateTime timestamp) {
         Objects.requireNonNull(timestamp, "timestamp");
         requireActiveSession();
         LocalDateTime stamp = timestamp.withNano(0);
-        try {
-            writeSessionLastEntryTime(stamp);
+        try (PreparedStatement update = connection.prepareStatement("""
+            UPDATE log_file SET end_time = greatest(end_time, ?)
+            WHERE id = ?""")) {
+            update.setTimestamp(1, Timestamp.valueOf(stamp));
+            update.setLong(2, sessionFileId);
+            update.execute();
         } catch (SQLException e) {
-            throw new LogDataException("could not update the session last entry time", e);
+            throw new LogDataException("could not update the session end time", e);
         }
     }
 
@@ -453,31 +472,6 @@ public final class LogStore implements AutoCloseable {
         if (sessionFileId < 0) {
             throw new LogDataException("no client session is active; call startSession first");
         }
-    }
-
-    private ChatLog insertSessionFile(String minecraftVersion, LocalDateTime startedAt) throws SQLException {
-        long fileId = nextFileId();
-        LocalDate date = startedAt.toLocalDate();
-        String entryPath = "session/" + fileId;
-        Timestamp start = Timestamp.valueOf(startedAt);
-        try (PreparedStatement insert = connection.prepareStatement("""
-            INSERT INTO log_file (id, file_name, source_kind, source_path, entry_path, log_date,
-                                  minecraft_version, first_entry_time, last_entry_time, entry_count)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""")) {
-            insert.setLong(1, fileId);
-            insert.setString(2, "");
-            insert.setString(3, SourceKind.SESSION.name());
-            insert.setString(4, SESSION_SOURCE_PATH);
-            insert.setString(5, entryPath);
-            insert.setDate(6, Date.valueOf(date));
-            insert.setString(7, minecraftVersion);
-            insert.setTimestamp(8, start);
-            insert.setTimestamp(9, start);
-            insert.execute();
-        }
-        sessionFileId = fileId;
-        sessionLineIndex = 0;
-        return new ChatLog(new LogSource.Session(), date, minecraftVersion, startedAt, startedAt, 0);
     }
 
     private boolean writeSessionEntry(String message, LocalDateTime timestamp) throws SQLException {
@@ -502,23 +496,13 @@ public final class LogStore implements AutoCloseable {
         try (PreparedStatement update = connection.prepareStatement("""
             UPDATE log_file SET
                 entry_count = entry_count + 1,
-                last_entry_time = greatest(last_entry_time, ?)
+                end_time = greatest(end_time, ?)
             WHERE id = ?""")) {
             update.setTimestamp(1, Timestamp.valueOf(timestamp));
             update.setLong(2, sessionFileId);
             update.execute();
         }
         return true;
-    }
-
-    private void writeSessionLastEntryTime(LocalDateTime timestamp) throws SQLException {
-        try (PreparedStatement update = connection.prepareStatement("""
-            UPDATE log_file SET last_entry_time = greatest(last_entry_time, ?)
-            WHERE id = ?""")) {
-            update.setTimestamp(1, Timestamp.valueOf(timestamp));
-            update.setLong(2, sessionFileId);
-            update.execute();
-        }
     }
 
     private long nextFileId() throws SQLException {
@@ -560,7 +544,7 @@ public final class LogStore implements AutoCloseable {
         List<ChatLog> logs = new ArrayList<>();
         String sql = """
             SELECT file_name, source_kind, source_path, entry_path, log_date, minecraft_version,
-                   first_entry_time, last_entry_time, entry_count
+                   start_time, end_time
             FROM log_file ORDER BY log_date, entry_path""";
         try (Statement statement = connection.createStatement();
              ResultSet result = statement.executeQuery(sql)) {

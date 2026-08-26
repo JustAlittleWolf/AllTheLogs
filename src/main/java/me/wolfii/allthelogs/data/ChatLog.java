@@ -9,19 +9,17 @@ import java.util.Objects;
 /// @param source           where this log was read from
 /// @param date             the calendar date the log belongs to
 /// @param minecraftVersion the Minecraft version the log was produced by, or `unknown`
-/// @param firstEntryTime   timestamp of the first logged line, not just chat entries; converted from the import
+/// @param startTime        timestamp of the first logged line, not just chat entries; converted from the import
 ///                         timezone like chat entries. For a client session this is when the session started
-/// @param lastEntryTime    timestamp of the last logged line, not just chat entries; converted from the import
+/// @param endTime          timestamp of the last logged line, not just chat entries; converted from the import
 ///                         timezone like chat entries. For a client session this is updated by
-///                         [LogStore#importSessionMessage(String)] and [LogStore#updateSessionLastEntryTime()]
-/// @param entryCount       number of stored chat entries
+///                         [LogStore#importSessionMessage(String)] and [LogStore#updateSessionEndTime(LocalDateTime)]
 public record ChatLog(
     LogSource source,
     LocalDate date,
     String minecraftVersion,
-    LocalDateTime firstEntryTime,
-    LocalDateTime lastEntryTime,
-    long entryCount
+    LocalDateTime startTime,
+    LocalDateTime endTime
 ) {
     /// Placeholder used when the Minecraft version could not be determined from the log contents.
     public static final String UNKNOWN_VERSION = "unknown";
@@ -30,7 +28,7 @@ public record ChatLog(
         Objects.requireNonNull(source, "source");
         Objects.requireNonNull(date, "date");
         Objects.requireNonNull(minecraftVersion, "minecraftVersion");
-        Objects.requireNonNull(firstEntryTime, "firstEntryTime");
-        Objects.requireNonNull(lastEntryTime, "lastEntryTime");
+        Objects.requireNonNull(startTime, "startTime");
+        Objects.requireNonNull(endTime, "endTime");
     }
 }

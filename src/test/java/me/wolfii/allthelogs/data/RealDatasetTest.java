@@ -42,7 +42,7 @@ class RealDatasetTest {
             assertTrue(result.failures().isEmpty(), () -> "unexpected failures: " + result.failures());
 
             List<ChatLog> files = store.chatLogs();
-            assertTrue(files.stream().allMatch(file -> file.entryCount() > 0));
+            assertEquals(files.size(), store.logEntries().stream().map(ChatEntry::chatLog).distinct().count());
 
             // Every log in the dataset comes from a launcher that writes a recognisable version line.
             Map<String, Long> versions = files.stream().collect(
@@ -110,7 +110,7 @@ class RealDatasetTest {
     private static String entryPath(LogSource source) {
         return switch (source) {
             case LogSource.File file -> file.path().toString();
-            case LogSource.Archive archive -> archive.path().toString();
+            case LogSource.Archive archive -> archive.path() + "!" + archive.entryPath();
             case LogSource.Session session -> "session";
         };
     }

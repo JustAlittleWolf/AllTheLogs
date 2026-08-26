@@ -17,11 +17,13 @@ public sealed interface LogSource permits LogSource.File, LogSource.Archive, Log
 
     /// The log was read out of an archive (zip, 7z, tar, ...).
     ///
-    /// @param path the archive file, then `!/`, then the path of the log inside it. Nested archives are also
-    ///             separated by `!/`, e.g. `/backups/outer.zip!/inner.zip!/logs/2026-08-25-2.log.gz`
-    record Archive(Path path) implements LogSource {
+    /// @param path      absolute path of the archive file
+    /// @param entryPath path of the log inside that archive, always `/` separated, with nested archives separated by
+    ///                  `!/`
+    record Archive(Path path, String entryPath) implements LogSource {
         public Archive {
             Objects.requireNonNull(path, "path");
+            Objects.requireNonNull(entryPath, "entryPath");
         }
     }
 
