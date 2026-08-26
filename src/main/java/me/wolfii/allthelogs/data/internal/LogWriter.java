@@ -31,6 +31,10 @@ public final class LogWriter implements AutoCloseable {
     /// Ids of files written with no chat entries but a `Reloading ResourceManager` line, kept in memory only so the
     /// post dedup cleanup does not drop them the way it drops files whose entries all turned out to be duplicates.
     private final java.util.Set<Long> keepEvenIfEmpty = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    /// First file id handed out by this writer, so counters and dedup bookkeeping can be scoped to files this
+    /// session actually wrote instead of every file that happens to live in the database, which may include files
+    /// from earlier, unrelated import runs against the same store.
+    private final long sessionStartId;
     private long nextFileId;
     private long bufferedEntries;
     private long writtenEntries;
@@ -47,6 +51,7 @@ public final class LogWriter implements AutoCloseable {
                 nextFileId = Math.max(nextFileId, id + 1);
             }
         }
+        this.sessionStartId = nextFileId;
         // The appender autocommits every 204,800 rows by default, and each of those commits durably syncs to disk.
         // A whole import is one logical unit of work, so wrapping it in an explicit transaction turns flush() into a
         // cheap in-memory materialisation and defers the durable sync to the single commit on close().
@@ -131,34 +136,42 @@ public final class LogWriter implements AutoCloseable {
     ///
     /// This runs once at the end of an import instead of checking each row as it is written: a set based anti join
     /// lets the database do the work in one pass, and it also catches duplicates between two files of the same run,
-    /// which a per row check against already committed data would miss.
+    /// which a per row check against already committed data would miss. Duplicates are removed across the whole
+    /// store, not just files written this session, so a re-import that duplicates an earlier run's entries still
+    /// gets cleaned up; but this writer's own [#writtenFiles()]/[#writtenEntries()] counters only move for rows that
+    /// belonged to files this session wrote, so they keep reporting what this import actually contributed.
     ///
-    /// @return the number of removed entries
+    /// @return the number of removed entries, across the whole store
     public long deduplicate() throws SQLException {
         flushAppenders();
-        long removed;
-        try (Statement statement = connection.createStatement()) {
-            // The window function over every row is the expensive part, so run it once and let the DELETE's own
-            // update count report how many rows matched, instead of running the same scan twice: once to count and
-            // once to delete.
-            removed = statement.executeUpdate("""
+        long removed = 0;
+        long removedFromSession = 0;
+        try (Statement statement = connection.createStatement();
+             // The window function over every row is the expensive part, so run it once and let the DELETE stream
+             // back which files it touched, instead of running the same scan twice: once to count and once to
+             // delete.
+             ResultSet deleted = statement.executeQuery("""
                 DELETE FROM chat_entry WHERE rowid IN (
                     SELECT rowid FROM (
                         SELECT rowid, row_number() OVER (
                             PARTITION BY entry_time, message ORDER BY file_id, line_index) AS rn
                         FROM chat_entry
                     ) WHERE rn > 1
-                )""");
-            if (removed == 0) return 0;
-            writtenFiles -= refreshFileAggregates(statement);
+                ) RETURNING file_id""")) {
+            while (deleted.next()) {
+                removed++;
+                if (deleted.getLong(1) >= sessionStartId) removedFromSession++;
+            }
+            if (removed > 0) writtenFiles -= refreshFileAggregates(statement);
         }
-        writtenEntries -= removed;
+        writtenEntries -= removedFromSession;
         return removed;
     }
 
     /// Recomputes the per file counters after rows were deleted, and drops files left without any entries.
     ///
-    /// @return how many files were dropped because every one of their entries turned out to be a duplicate
+    /// @return how many of this session's files were dropped because every one of their entries turned out to be a
+    ///         duplicate
     private int refreshFileAggregates(Statement statement) throws SQLException {
         // first_entry_time/last_entry_time bound every logged line of the file, not just its chat entries, so
         // deduplicating chat entries must not touch already stored bounds that came from lines with no chat marker;
@@ -174,6 +187,7 @@ public final class LogWriter implements AutoCloseable {
 
         List<Long> emptyIds = new ArrayList<>();
         List<String> emptyLocations = new ArrayList<>();
+        int emptySessionFiles = 0;
         try (ResultSet result = statement.executeQuery(
             "SELECT id, source_path, entry_path FROM log_file WHERE entry_count = 0")) {
             while (result.next()) {
@@ -181,13 +195,14 @@ public final class LogWriter implements AutoCloseable {
                 if (keepEvenIfEmpty.contains(id)) continue;
                 emptyIds.add(id);
                 emptyLocations.add(locationKey(result.getString(2), result.getString(3)));
+                if (id >= sessionStartId) emptySessionFiles++;
             }
         }
         emptyLocations.forEach(existingLocations::remove);
         for (long id : emptyIds) {
             statement.execute("DELETE FROM log_file WHERE id = " + id);
         }
-        return emptyLocations.size();
+        return emptySessionFiles;
     }
 
     private void deleteFile(long fileId) throws SQLException {
