@@ -1,11 +1,11 @@
 package me.wolfii.allthelogs.data;
 
-/// Where a log file was read from.
+/// Where a [ChatLog] was read from.
 public enum SourceKind {
-    /// The log file was read directly from the file system.
+    /// The log was read directly from the file system.
     DIRECTORY,
-    /// The log file was read out of an archive (zip, 7z, tar, ...).
+    /// The log was read out of an archive (zip, 7z, tar, ...).
     ARCHIVE,
-    /// The file is a [LogStore#startSession(String) client session], captured while the Minecraft client was running.
+    /// The log is a [LogStore#startSession(String) client session], captured while the Minecraft client was running.
     SESSION
 }

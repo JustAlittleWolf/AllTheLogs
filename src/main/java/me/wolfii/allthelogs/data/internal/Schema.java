@@ -30,9 +30,8 @@ public final class Schema {
                 entry_path VARCHAR NOT NULL,
                 log_date DATE NOT NULL,
                 minecraft_version VARCHAR NOT NULL,
-                last_modified TIMESTAMP,
-                first_entry_time TIMESTAMP,
-                last_entry_time TIMESTAMP,
+                first_entry_time TIMESTAMP NOT NULL,
+                last_entry_time TIMESTAMP NOT NULL,
                 entry_count BIGINT NOT NULL
             )""");
         statement.execute("""

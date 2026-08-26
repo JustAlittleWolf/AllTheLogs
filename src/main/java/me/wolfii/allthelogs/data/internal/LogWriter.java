@@ -63,14 +63,6 @@ public final class LogWriter implements AutoCloseable {
         this.entryAppender = connection.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "chat_entry");
     }
 
-    private static void appendNullable(DuckDBAppender appender, LocalDateTime value) throws SQLException {
-        if (value == null) {
-            appender.appendNull();
-        } else {
-            appender.append(value);
-        }
-    }
-
     private static String locationKey(String sourcePath, String entryPath) {
         return sourcePath + "\u0000" + entryPath;
     }
@@ -101,9 +93,8 @@ public final class LogWriter implements AutoCloseable {
         fileAppender.append(log.entryPath());
         fileAppender.append(log.date());
         fileAppender.append(log.minecraftVersion());
-        appendNullable(fileAppender, log.lastModified());
-        appendNullable(fileAppender, log.firstLineTime());
-        appendNullable(fileAppender, log.lastLineTime());
+        fileAppender.append(log.firstLineTime());
+        fileAppender.append(log.lastLineTime());
         fileAppender.append((long) times.size());
         fileAppender.endRow();
 

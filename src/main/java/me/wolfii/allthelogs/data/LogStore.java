@@ -57,7 +57,7 @@ import java.util.zip.GZIPInputStream;
 ///
 /// The store is backed by an embedded DuckDB database, which needs no server, works on every major operating system
 /// and keeps everything in the one file passed to [#open(Path)]. Callers never see the schema: imports take file
-/// system paths, queries take a [ChatQuery] and return [ChatEntry] records with their [LogFile] already resolved.
+/// system paths, queries take a [ChatQuery] and return [ChatEntry] records with their [ChatLog] already resolved.
 ///
 /// ```java
 /// try (LogStore store = LogStore.open(Path.of("logs.duckdb"))) {
@@ -78,7 +78,7 @@ public final class LogStore implements AutoCloseable {
     private static final String SESSION_SOURCE_PATH = "<session>";
     /// Sentinel that tells the writer loop that no more logs are coming.
     private static final PreparedLog END_OF_STREAM = new PreparedLog(
-        "", SourceKind.DIRECTORY, "", "", LocalDate.EPOCH, "", null, List.of(), List.of(),
+        "", SourceKind.DIRECTORY, "", "", LocalDate.EPOCH, "", List.of(), List.of(),
         false, null, null);
 
     private final DuckDBConnection connection;
@@ -167,11 +167,9 @@ public final class LogStore implements AutoCloseable {
         }
         LocalDateTime firstLineTime = LogDates.toSystemLocal(date, parsed.firstLineTime(), timezone);
         LocalDateTime lastLineTime = LogDates.toSystemLocal(date, parsed.lastLineTime(), timezone);
-        LocalDateTime lastModified = candidate.lastModified() == null
-            ? null : LocalDateTime.ofInstant(candidate.lastModified(), ZoneId.systemDefault());
         return new PreparedLog(candidate.fileName(), candidate.sourceKind(), candidate.sourcePath(),
             candidate.entryPath(), date, parsed.minecraftVersion(),
-            lastModified, times, messages, parsed.resourceManagerReloaded(),
+            times, messages, parsed.resourceManagerReloaded(),
             firstLineTime, lastLineTime);
     }
 
@@ -200,36 +198,31 @@ public final class LogStore implements AutoCloseable {
         }
     }
 
-    private static ChatEntry readEntry(ResultSet result, Map<String, LogFile> fileCache) throws SQLException {
-        // Many consecutive rows come from the same file, so resolving metadata once per file avoids rebuilding the
+    private static ChatEntry readEntry(ResultSet result, Map<String, ChatLog> logCache) throws SQLException {
+        // Many consecutive rows come from the same log, so resolving metadata once per log avoids rebuilding the
         // same record thousands of times.
         String cacheKey = result.getString(3) + "\u0000" + result.getString(4);
-        LogFile file = fileCache.get(cacheKey);
-        if (file == null) {
-            file = readLogFile(result, 1);
-            fileCache.put(cacheKey, file);
+        ChatLog log = logCache.get(cacheKey);
+        if (log == null) {
+            log = readChatLog(result, 1);
+            logCache.put(cacheKey, log);
         }
-        LocalDateTime timestamp = result.getTimestamp(11).toLocalDateTime();
-        return new ChatEntry(file, timestamp, result.getInt(12), result.getString(13));
+        LocalDateTime timestamp = result.getTimestamp(10).toLocalDateTime();
+        return new ChatEntry(log, timestamp, result.getInt(11), result.getString(12));
     }
 
-    private static LogFile readLogFile(ResultSet result, int offset) throws SQLException {
-        return new LogFile(
-            result.getString(offset),
-            SourceKind.valueOf(result.getString(offset + 1)),
-            result.getString(offset + 2),
-            result.getString(offset + 3),
+    private static ChatLog readChatLog(ResultSet result, int offset) throws SQLException {
+        return new ChatLog(
+            new LogSource(
+                result.getString(offset),
+                SourceKind.valueOf(result.getString(offset + 1)),
+                result.getString(offset + 2),
+                result.getString(offset + 3)),
             result.getDate(offset + 4).toLocalDate(),
             result.getString(offset + 5),
-            optionalTimestamp(result, offset + 6),
-            optionalTimestamp(result, offset + 7),
-            optionalTimestamp(result, offset + 8),
-            result.getLong(offset + 9));
-    }
-
-    private static Optional<LocalDateTime> optionalTimestamp(ResultSet result, int column) throws SQLException {
-        Timestamp timestamp = result.getTimestamp(column);
-        return timestamp == null ? Optional.empty() : Optional.of(timestamp.toLocalDateTime());
+            result.getTimestamp(offset + 6).toLocalDateTime(),
+            result.getTimestamp(offset + 7).toLocalDateTime(),
+            result.getLong(offset + 8));
     }
 
     /// The file this store is backed by, or empty for an in memory store.
@@ -245,7 +238,7 @@ public final class LogStore implements AutoCloseable {
     /// Imports every log file found below `directory`.
     ///
     /// @param directory the directory to walk; also the root that [ImportOptions#pathMatcher()] and
-    ///                  [LogFile#entryPath()] are relative to
+    ///                  [LogSource#entryPath()] are relative to
     /// @throws LogDataException if `directory` is not a directory, or the database rejects the writes
     public ImportResult importDirectory(Path directory, ImportOptions options) {
         Objects.requireNonNull(directory, "directory");
@@ -260,7 +253,7 @@ public final class LogStore implements AutoCloseable {
 
     /// Imports every log file inside `archive`. Zip, 7z, tar and tar.gz archives are supported.
     ///
-    /// @param archive the archive to read; [LogFile#entryPath()] of the results is relative to its root
+    /// @param archive the archive to read; [LogSource#entryPath()] of the results is relative to its root
     /// @throws LogDataException if `archive` is not a file, or the database rejects the writes
     public ImportResult importArchive(Path archive, ImportOptions options) {
         Objects.requireNonNull(archive, "archive");
@@ -291,7 +284,8 @@ public final class LogStore implements AutoCloseable {
                 parsers.execute(() -> {
                     try {
                         PreparedLog prepared = prepare(candidate, options.timezone());
-                        if (prepared.messages().isEmpty() && !prepared.resourceManagerReloaded()) {
+                        if (prepared.firstLineTime() == null || prepared.lastLineTime() == null
+                            || (prepared.messages().isEmpty() && !prepared.resourceManagerReloaded())) {
                             empty.incrementAndGet();
                             return;
                         }
@@ -350,27 +344,27 @@ public final class LogStore implements AutoCloseable {
         }
     }
 
-    /// Starts a capture session for a running Minecraft client and creates a [LogFile] for it.
+    /// Starts a capture session for a running Minecraft client and creates a [ChatLog] for it.
     ///
-    /// Chat lines imported with [#importSessionMessage(String)] are stored against this file. Its
-    /// [LogFile#firstEntryTime()] is the session start; [#importSessionMessage(String, LocalDateTime)] updates
-    /// [LogFile#lastEntryTime()] as lines arrive. Starting another session leaves the previous file in place and
+    /// Chat lines imported with [#importSessionMessage(String)] are stored against this log. Its
+    /// [ChatLog#firstEntryTime()] is the session start; [#importSessionMessage(String, LocalDateTime)] updates
+    /// [ChatLog#lastEntryTime()] as lines arrive. Starting another session leaves the previous log in place and
     /// switches subsequent imports to the new one.
     ///
-    /// The file's [LogFile#sourceKind()] is [SourceKind#SESSION], since the lines were captured from the running
-    /// client rather than read from a directory or archive.
+    /// The log's [LogSource#kind()] is [SourceKind#SESSION], since the lines were captured from the running client
+    /// rather than read from a directory or archive.
     ///
     /// @param minecraftVersion the version of the running game
-    /// @return the created log file, with no entries yet
+    /// @return the created chat log, with no entries yet
     /// @throws LogDataException if the session cannot be written
-    public LogFile startSession(String minecraftVersion) {
+    public ChatLog startSession(String minecraftVersion) {
         return startSession(minecraftVersion, LocalDateTime.now());
     }
 
     /// Starts a capture session at an explicit time.
     ///
     /// @see #startSession(String)
-    public LogFile startSession(String minecraftVersion, LocalDateTime startedAt) {
+    public ChatLog startSession(String minecraftVersion, LocalDateTime startedAt) {
         Objects.requireNonNull(minecraftVersion, "minecraftVersion");
         Objects.requireNonNull(startedAt, "startedAt");
         LocalDateTime start = startedAt.withNano(0);
@@ -413,7 +407,7 @@ public final class LogStore implements AutoCloseable {
         }
     }
 
-    private LogFile insertSessionFile(String minecraftVersion, LocalDateTime startedAt) throws SQLException {
+    private ChatLog insertSessionFile(String minecraftVersion, LocalDateTime startedAt) throws SQLException {
         long fileId = nextFileId();
         LocalDate date = startedAt.toLocalDate();
         String fileName = date + "-session.log";
@@ -421,8 +415,8 @@ public final class LogStore implements AutoCloseable {
         Timestamp start = Timestamp.valueOf(startedAt);
         try (PreparedStatement insert = connection.prepareStatement("""
             INSERT INTO log_file (id, file_name, source_kind, source_path, entry_path, log_date,
-                                  minecraft_version, last_modified, first_entry_time, last_entry_time, entry_count)
-            VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, 0)""")) {
+                                  minecraft_version, first_entry_time, last_entry_time, entry_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""")) {
             insert.setLong(1, fileId);
             insert.setString(2, fileName);
             insert.setString(3, SourceKind.SESSION.name());
@@ -436,16 +430,12 @@ public final class LogStore implements AutoCloseable {
         }
         sessionFileId = fileId;
         sessionLineIndex = 0;
-        return new LogFile(
-            fileName,
-            SourceKind.SESSION,
-            SESSION_SOURCE_PATH,
-            entryPath,
+        return new ChatLog(
+            new LogSource(fileName, SourceKind.SESSION, SESSION_SOURCE_PATH, entryPath),
             date,
             minecraftVersion,
-            Optional.empty(),
-            Optional.of(startedAt),
-            Optional.of(startedAt),
+            startedAt,
+            startedAt,
             0);
     }
 
@@ -488,19 +478,19 @@ public final class LogStore implements AutoCloseable {
         }
     }
 
-    /// Returns every entry matching `query`, resolved into records with their log file attached.
+    /// Returns every entry matching `query`, resolved into records with their chat log attached.
     ///
     /// @throws LogDataException if the query is rejected, e.g. because its regex is malformed
     public List<ChatEntry> query(ChatQuery query) {
         Objects.requireNonNull(query, "query");
         QueryBuilder builder = QueryBuilder.build(query);
         List<ChatEntry> entries = new ArrayList<>();
-        Map<String, LogFile> fileCache = new HashMap<>();
+        Map<String, ChatLog> logCache = new HashMap<>();
         try (PreparedStatement statement = connection.prepareStatement(builder.sql())) {
             builder.bind(statement);
             try (ResultSet result = statement.executeQuery()) {
                 while (result.next()) {
-                    entries.add(readEntry(result, fileCache));
+                    entries.add(readEntry(result, logCache));
                 }
             }
         } catch (SQLException e) {
@@ -514,22 +504,22 @@ public final class LogStore implements AutoCloseable {
         return query(ChatQuery.all());
     }
 
-    /// Returns metadata for every imported log file, ordered by date.
-    public List<LogFile> logFiles() {
-        List<LogFile> files = new ArrayList<>();
+    /// Returns every imported chat log, ordered by date.
+    public List<ChatLog> chatLogs() {
+        List<ChatLog> logs = new ArrayList<>();
         String sql = """
             SELECT file_name, source_kind, source_path, entry_path, log_date, minecraft_version,
-                   last_modified, first_entry_time, last_entry_time, entry_count
+                   first_entry_time, last_entry_time, entry_count
             FROM log_file ORDER BY log_date, entry_path""";
         try (Statement statement = connection.createStatement();
              ResultSet result = statement.executeQuery(sql)) {
             while (result.next()) {
-                files.add(readLogFile(result, 1));
+                logs.add(readChatLog(result, 1));
             }
         } catch (SQLException e) {
-            throw new LogDataException("could not read log file metadata", e);
+            throw new LogDataException("could not read chat log metadata", e);
         }
-        return files;
+        return logs;
     }
 
     @Override
