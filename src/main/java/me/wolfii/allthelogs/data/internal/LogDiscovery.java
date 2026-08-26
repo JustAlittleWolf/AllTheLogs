@@ -41,7 +41,7 @@ public final class LogDiscovery {
         this(options, consumer, new ImportObserver(null));
     }
 
-    LogDiscovery(ImportOptions options, Consumer<LogCandidate> consumer, ImportObserver observer) {
+    public LogDiscovery(ImportOptions options, Consumer<LogCandidate> consumer, ImportObserver observer) {
         this.options = options;
         this.pathMatcher = options.pathMatcher() == null ? null : Globs.compile(options.pathMatcher());
         this.consumer = consumer;

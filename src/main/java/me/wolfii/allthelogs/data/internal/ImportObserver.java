@@ -10,20 +10,15 @@ import java.util.function.Consumer;
 ///
 /// All mutations and callback invocations are serialised, so the consumer never sees concurrent calls. When no
 /// callback was supplied, every method returns immediately.
-final class ImportObserver {
+public final class ImportObserver {
     private final Consumer<ImportProgress> callback;
     private int discoveredFiles;
     private int completedFiles;
     private boolean discoveryComplete;
     private LogSource current;
 
-    ImportObserver(Consumer<ImportProgress> callback) {
+    public ImportObserver(Consumer<ImportProgress> callback) {
         this.callback = callback;
-    }
-
-    /// Sets [#ImportProgress#current] to a file on disk, without counting it as discovered.
-    void workingOnFile(Path path) {
-        setCurrent(new LogSource.File(path));
     }
 
     /// Sets [#ImportProgress#current] to an archive, without counting it as a discovered log file.
@@ -45,13 +40,13 @@ final class ImportObserver {
     }
 
     /// Records that the current log file has been imported, skipped, found empty, or failed.
-    void fileCompleted() {
+    public void fileCompleted() {
         fileCompleted(null);
     }
 
     /// Records that a log file has been stored, and makes it the current item so the UI still has something to
     /// show after discovery has finished.
-    void fileCompleted(LogSource source) {
+    public void fileCompleted(LogSource source) {
         if (callback == null) return;
         synchronized (this) {
             if (source != null) current = source;
@@ -61,7 +56,7 @@ final class ImportObserver {
     }
 
     /// Marks that no more log files will be found. Parsing and writing may still be in flight.
-    void discoveryFinished() {
+    public void discoveryFinished() {
         if (callback == null) return;
         synchronized (this) {
             discoveryComplete = true;
@@ -70,7 +65,7 @@ final class ImportObserver {
     }
 
     /// Clears the current item after every discovered file has been handled.
-    void finished() {
+    public void finished() {
         if (callback == null) return;
         synchronized (this) {
             current = null;
