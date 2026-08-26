@@ -6,14 +6,17 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Maps match timestamps onto a vertical timeline and chooses date labels for the track.
  */
 public final class TimelineLayout {
-    private static final DateTimeFormatter YEAR = DateTimeFormatter.ofPattern("yyyy");
-    private static final DateTimeFormatter MONTH = DateTimeFormatter.ofPattern("MMM yyyy");
-    private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("MMM d");
+    private static final DateTimeFormatter HOVER_DATE_TIME = DateTimeFormatter.ofPattern("MMM d, yyyy HH:mm", Locale.US);
+    private static final DateTimeFormatter HOVER_DATE = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.US);
+    private static final DateTimeFormatter YEAR = DateTimeFormatter.ofPattern("yyyy", Locale.US);
+    private static final DateTimeFormatter MONTH = DateTimeFormatter.ofPattern("MMM yyyy", Locale.US);
+    private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("MMM d", Locale.US);
 
     private TimelineLayout() {
     }
@@ -21,6 +24,15 @@ public final class TimelineLayout {
     /**
      * 0 at {@code oldest}, 1 at {@code newest}. Marker lists may be in either order.
      */
+    /**
+     * Hover label for the timeline scrubber. Time is omitted when more than four distinct match dates are in
+     * the current filter.
+     */
+    public static String hoverLabel(LocalDateTime time, int uniqueDates) {
+        if (time == null) return "";
+        return uniqueDates > 4 ? time.format(HOVER_DATE) : time.format(HOVER_DATE_TIME);
+    }
+
     public static double progress(LocalDateTime time, LocalDateTime oldest, LocalDateTime newest) {
         LocalDateTime first = earlier(oldest, newest);
         LocalDateTime last = later(oldest, newest);

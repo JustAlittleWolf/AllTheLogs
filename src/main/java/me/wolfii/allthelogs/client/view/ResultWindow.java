@@ -1,7 +1,10 @@
 package me.wolfii.allthelogs.client.view;
 
+import me.wolfii.allthelogs.data.ChatQuery;
+
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.function.IntUnaryOperator;
 
 /**
  * Sliding window of displayed log rows. Replacing the buffered page adjusts the scroll offset so the same
@@ -100,6 +103,23 @@ public final class ResultWindow {
         return List.copyOf(rows.subList(fromRow, toRow + 1));
     }
 
+    /**
+     * Merges {@code extra} into {@code existing} without duplicates, then orders by timestamp, file, and line
+     * in {@code sort} order.
+     */
+    public static List<DisplayRow> mergeSorted(List<DisplayRow> existing, List<DisplayRow> extra, ChatQuery.Sort sort) {
+        List<DisplayRow> merged = new ArrayList<>(mergeUnique(existing, extra));
+        Comparator<DisplayRow> order = Comparator
+            .comparing((DisplayRow row) -> row.entry().timestamp())
+            .thenComparingInt(DisplayRow::lineIndex)
+            .thenComparing(row -> String.valueOf(row.chatLog().source()));
+        if (sort == ChatQuery.Sort.DESCENDING) {
+            order = order.reversed();
+        }
+        merged.sort(order);
+        return List.copyOf(merged);
+    }
+
     public List<DisplayRow> rows() {
         return rows;
     }
@@ -124,6 +144,15 @@ public final class ResultWindow {
      */
     public double replaceKeepingAnchor(List<DisplayRow> next, boolean hasBefore, boolean hasAfter,
                                        DisplayRow.RowKey anchor, double scrollY, int rowHeight) {
+        return replaceKeepingAnchor(next, hasBefore, hasAfter, anchor, scrollY, index -> index * rowHeight);
+    }
+
+    /**
+     * Replaces the buffer with {@code next} and returns the scroll offset that keeps {@code anchor} at the same
+     * pixel position using {@code indexToY} to map row indexes onto content coordinates.
+     */
+    public double replaceKeepingAnchor(List<DisplayRow> next, boolean hasBefore, boolean hasAfter,
+                                       DisplayRow.RowKey anchor, double scrollY, IntUnaryOperator indexToY) {
         int oldIndex = indexOf(rows, anchor);
         int newIndex = indexOf(next, anchor);
         this.rows = List.copyOf(next);
@@ -132,13 +161,27 @@ public final class ResultWindow {
         if (oldIndex < 0 || newIndex < 0) {
             return scrollY;
         }
-        double screenY = oldIndex * (double) rowHeight - scrollY;
-        return newIndex * (double) rowHeight - screenY;
+        double screenY = indexToY.applyAsInt(oldIndex) - scrollY;
+        return indexToY.applyAsInt(newIndex) - screenY;
     }
 
     public DisplayRow.RowKey keyAtPixel(double scrollY, int rowHeight) {
         if (rows.isEmpty() || rowHeight <= 0) return null;
         int index = (int) Math.floor(Math.max(0, scrollY) / rowHeight);
+        if (index >= rows.size()) index = rows.size() - 1;
+        return rows.get(index).key();
+    }
+
+    public DisplayRow.RowKey keyAtY(double scrollY, IntUnaryOperator indexToY, int size) {
+        if (rows.isEmpty() || size <= 0) return null;
+        int index = 0;
+        for (int i = 0; i < size; i++) {
+            if (indexToY.applyAsInt(i) <= scrollY) {
+                index = i;
+            } else {
+                break;
+            }
+        }
         if (index >= rows.size()) index = rows.size() - 1;
         return rows.get(index).key();
     }

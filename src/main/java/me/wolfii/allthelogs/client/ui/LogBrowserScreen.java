@@ -10,8 +10,8 @@ import me.wolfii.allthelogs.client.AllTheLogsClient;
 import me.wolfii.allthelogs.client.search.DateParser;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.view.DisplayRow;
+import me.wolfii.allthelogs.client.view.MessageListLayout;
 import me.wolfii.allthelogs.client.view.ResultWindow;
-import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.ChatQuery;
 import me.wolfii.allthelogs.data.LogStoreMetadata;
 import net.minecraft.client.Minecraft;
@@ -43,7 +43,10 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
     private ParentUIComponent filterPanel;
     private ButtonComponent oldestFirst;
     private ButtonComponent newestFirst;
+    private ButtonComponent versionButton;
+    private List<String> versions = List.of();
     private boolean filterOpen;
+    private FlowLayout root;
 
     public LogBrowserScreen() {
         this(null);
@@ -103,8 +106,9 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
 
     @Override
     protected void build(FlowLayout root) {
+        this.root = root;
         root.gap(6);
-        root.surface(Surface.VANILLA_TRANSLUCENT)
+        root.surface(Surface.blur(3f, 8f).and(Surface.flat(0x99000000)))
             .padding(Insets.of(8))
             .horizontalAlignment(HorizontalAlignment.LEFT)
             .verticalAlignment(VerticalAlignment.TOP);
@@ -112,8 +116,10 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         root.child(buildToolbar(root));
 
         list = new TimelineLogList();
+        list.setContextLines(filter.contextLines());
         list.onApproachEdge(this::loadMore);
         list.onJump(this::jumpTo);
+        list.onExpand(this::expandAround);
         root.child(list.verticalSizing(Sizing.expand()));
 
         reload(true);
@@ -187,6 +193,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         }
         oldestFirst = null;
         newestFirst = null;
+        versionButton = null;
         filterOpen = false;
     }
 
@@ -199,6 +206,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
             updateFilter(filter.withRegex(value))));
         content.child(checkbox("allthelogs.filter.case_sensitive", filter.caseSensitive(), value ->
             updateFilter(filter.withCaseSensitive(value))));
+        content.child(versionRow());
         content.child(labeledField("allthelogs.filter.context", String.valueOf(filter.contextLines()), text -> {
             try {
                 updateFilter(filter.withContextLines(Integer.parseInt(text.trim())));
@@ -238,6 +246,35 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         return box;
     }
 
+    private FlowLayout versionRow() {
+        FlowLayout row = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
+        row.gap(2);
+        row.child(UIComponents.label(Component.translatable("allthelogs.filter.version")));
+        versionButton = UIComponents.button(versionLabel(), button -> openVersionMenu(button));
+        row.child(versionButton);
+        return row;
+    }
+
+    private Component versionLabel() {
+        if (!filter.hasVersion()) {
+            return Component.translatable("allthelogs.filter.version.all");
+        }
+        return Component.literal(filter.version());
+    }
+
+    private void openVersionMenu(ButtonComponent button) {
+        if (root == null) return;
+        DropdownComponent.openContextMenu(this, root, FlowLayout::child,
+            button.x(), button.y() + button.height(), dropdown -> {
+                dropdown.button(Component.translatable("allthelogs.filter.version.all"), ignored ->
+                    updateFilter(filter.withVersion(null)));
+                for (String version : versions) {
+                    dropdown.button(Component.literal(version), ignored ->
+                        updateFilter(filter.withVersion(version)));
+                }
+            });
+    }
+
     private ButtonComponent sortButton(String key, ChatQuery.Sort sort) {
         return UIComponents.button(Component.translatable(key), button -> {
             if (filter.sort() == sort) return;
@@ -271,7 +308,9 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
 
     private void updateFilter(SearchFilter next) {
         filter = next.withoutOffset();
+        if (list != null) list.setContextLines(filter.contextLines());
         syncSortButtons();
+        if (versionButton != null) versionButton.setMessage(versionLabel());
         reload(true);
     }
 
@@ -297,10 +336,10 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
             });
         });
         if (resetTimeline) {
-            AllTheLogsClient.worker().query(page.toTimelineQuery()).whenComplete((entries, error) -> {
+            AllTheLogsClient.worker().matchBounds(page.toTimelineQuery()).whenComplete((bounds, error) -> {
                 Minecraft.getInstance().execute(() -> {
                     if (error != null || list == null) return;
-                    list.setMarkers(entries.stream().map(ChatEntry::timestamp).toList());
+                    list.setMatchBounds(bounds);
                 });
             });
         }
@@ -320,6 +359,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
             lines.add(Component.translatable("allthelogs.meta.hint"));
             lines.addAll(metadataTooltip(metadata));
             info.tooltip(lines);
+            versions = metadata.minecraftVersions();
         }));
     }
 
@@ -336,9 +376,9 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         boolean olderPage = edge == TimelineLogList.Edge.BEFORE;
         SearchFilter page = filter.withOffset(cursor);
         if (olderPage) page = page.withSort(filter.sort().opposite());
-        DisplayRow.RowKey anchor = list.window().keyAtPixel(list.scrollY(), TimelineLogList.ROW_HEIGHT);
-        int firstVisible = (int) Math.floor(list.scrollY() / TimelineLogList.ROW_HEIGHT);
-        int lastVisible = firstVisible + Math.max(1, list.height() / TimelineLogList.ROW_HEIGHT);
+        DisplayRow.RowKey anchor = list.visibleAnchor();
+        int firstVisible = list.firstVisibleIndex();
+        int lastVisible = list.lastVisibleIndex();
         AllTheLogsClient.worker().query(page.toQuery()).whenComplete((entries, error) -> {
             Minecraft.getInstance().execute(() -> {
                 list.setLoading(false);
@@ -359,6 +399,24 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
                 if (olderPage && !more) hasBefore = false;
                 if (!olderPage && !more) hasAfter = false;
                 list.applyPage(trimmed, hasBefore, hasAfter, anchor);
+            });
+        });
+    }
+
+    private void expandAround(DisplayRow row) {
+        int extra = MessageListLayout.extraContextLines(filter.contextLines());
+        if (extra <= 0 || list == null) return;
+        DisplayRow.RowKey anchor = row.key();
+        AllTheLogsClient.worker().around(row.chatLog(), row.lineIndex(), extra).whenComplete((entries, error) -> {
+            Minecraft.getInstance().execute(() -> {
+                if (error != null || list == null) {
+                    if (error != null) AllTheLogsClient.LOGGER.warn("AllTheLogs expand query failed", error);
+                    return;
+                }
+                List<DisplayRow> extraRows = DisplayRow.from(entries, filter);
+                List<DisplayRow> merged = ResultWindow.mergeSorted(list.window().rows(), extraRows, filter.sort());
+                list.applyPage(merged, list.window().hasBefore(), list.window().hasAfter(), anchor);
+                list.setScrollY(list.scrollY());
             });
         });
     }

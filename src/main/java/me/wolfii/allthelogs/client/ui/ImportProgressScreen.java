@@ -34,7 +34,9 @@ public final class ImportProgressScreen extends BaseOwoScreen<FlowLayout> {
     private LabelComponent current;
     private BoxComponent fill;
     private ButtonComponent done;
+    private ButtonComponent cancel;
     private boolean finished;
+    private boolean cancelled;
 
     public ImportProgressScreen(Screen parent, Path path, ImportOptions options, boolean archive) {
         super(Component.translatable("allthelogs.screen.import.progress"));
@@ -82,10 +84,16 @@ public final class ImportProgressScreen extends BaseOwoScreen<FlowLayout> {
         track.child(fill);
         card.child(track);
 
+        FlowLayout actions = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
+        actions.gap(8);
+        cancel = UIComponents.button(Component.translatable("allthelogs.import.progress.cancel"),
+            button -> cancelImport());
         done = UIComponents.button(Component.translatable("allthelogs.import.progress.back"),
             button -> Minecraft.getInstance().gui.setScreen(parent));
         done.active(false);
-        card.child(done);
+        actions.child(cancel);
+        actions.child(done);
+        card.child(actions);
 
         root.child(card);
         start();
@@ -100,18 +108,35 @@ public final class ImportProgressScreen extends BaseOwoScreen<FlowLayout> {
         future.whenComplete((imported, error) -> Minecraft.getInstance().execute(() -> {
             finished = true;
             done.active(true);
+            cancel.active(false);
             if (error != null) {
                 AllTheLogsClient.LOGGER.warn("Import failed", error);
                 heading.text(Component.translatable("allthelogs.status.error"));
                 current.text(Component.empty());
                 return;
             }
-            heading.text(Component.translatable("allthelogs.status.imported",
-                imported.importedFiles(), imported.importedEntries()));
+            if (cancelled) {
+                heading.text(Component.translatable("allthelogs.import.progress.cancelled",
+                    Long.toString(imported.importedFiles()), Long.toString(imported.importedEntries())));
+            } else if (imported.importedFiles() == 0 && imported.skippedFiles() > 0) {
+                heading.text(Component.translatable("allthelogs.status.imported.skipped",
+                    Long.toString(imported.skippedFiles())));
+            } else {
+                heading.text(Component.translatable("allthelogs.status.imported",
+                    Long.toString(imported.importedFiles()), Long.toString(imported.importedEntries())));
+            }
             counts.text(Component.translatable("allthelogs.import.progress.done"));
             current.text(Component.empty());
             fill.horizontalSizing(Sizing.fill(100));
         }));
+    }
+
+    private void cancelImport() {
+        if (finished) return;
+        cancelled = true;
+        cancel.active(false);
+        AllTheLogsClient.worker().cancelImport();
+        heading.text(Component.translatable("allthelogs.import.progress.cancelling"));
     }
 
     private void applyProgress(ImportProgress snapshot) {
@@ -120,10 +145,13 @@ public final class ImportProgressScreen extends BaseOwoScreen<FlowLayout> {
         fill.horizontalSizing(Sizing.fill(Math.max(1, percent)));
         if (snapshot.discoveryComplete()) {
             counts.text(Component.translatable("allthelogs.import.progress.counts",
-                snapshot.completedFiles(), snapshot.discoveredFiles(), percent));
+                Integer.toString(snapshot.completedFiles()),
+                Integer.toString(Math.max(snapshot.discoveredFiles(), snapshot.estimatedFiles())),
+                Integer.toString(percent)));
         } else {
             counts.text(Component.translatable("allthelogs.import.progress.discovering",
-                snapshot.completedFiles(), snapshot.discoveredFiles()));
+                Integer.toString(snapshot.completedFiles()),
+                Integer.toString(Math.max(snapshot.discoveredFiles(), snapshot.estimatedFiles()))));
         }
         String file = ImportProgressLabels.currentFile(snapshot.current());
         current.text(file.isEmpty()
@@ -133,6 +161,9 @@ public final class ImportProgressScreen extends BaseOwoScreen<FlowLayout> {
 
     @Override
     public void onClose() {
+        if (!finished) {
+            AllTheLogsClient.worker().cancelImport();
+        }
         Minecraft.getInstance().gui.setScreen(parent);
     }
 }

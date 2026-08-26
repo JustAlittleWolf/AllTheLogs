@@ -23,8 +23,8 @@ class ContextColorsTest {
     }
 
     @Test
-    void highlightIsAVeryLightGreen() {
-        assertEquals(0xFFC8F5C0, ContextColors.MATCH_HIGHLIGHT);
+    void highlightIsASlightlyDarkerGreen() {
+        assertEquals(0xFFA8DC9C, ContextColors.MATCH_HIGHLIGHT);
         assertEquals(0xFFFFFFFF, ContextColors.MATCH_TEXT);
     }
 

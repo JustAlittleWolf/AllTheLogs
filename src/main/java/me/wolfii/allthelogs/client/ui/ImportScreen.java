@@ -70,7 +70,7 @@ public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
         pathBox.setMaxLength(1024);
         pathRow.child(pathBox);
         pathRow.child(UIComponents.button(Component.translatable("allthelogs.import.browse"),
-            button -> NativeFilePicker.pickFolder(currentPath(), this::setPath)));
+            button -> NativeFilePicker.pickFolder(currentPath(), this::setFolder)));
         pathRow.child(UIComponents.button(Component.translatable("allthelogs.import.browse.archive"),
             button -> NativeFilePicker.pickArchive(currentPath(), this::setPath)));
         form.child(pathRow);
@@ -161,6 +161,11 @@ public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
         nestedArchives = options.nestedArchives();
         skipAlreadyImported = options.skipAlreadyImported();
         pathMatcher = options.pathMatcher() == null ? "" : options.pathMatcher();
+    }
+
+    private void setFolder(Path path) {
+        nestedArchives = true;
+        setPath(path);
     }
 
     private void setPath(Path path) {

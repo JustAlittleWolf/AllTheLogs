@@ -9,9 +9,9 @@ import java.time.Duration;
 public final class ContextColors {
     public static final int MATCH_TEXT = 0xFFFFFFFF;
     /**
-     * Very light green used as the background behind the matching substring.
+     * Slightly darker than white-green so highlighted substrings stay readable on a dim list.
      */
-    public static final int MATCH_HIGHLIGHT = 0xFFC8F5C0;
+    public static final int MATCH_HIGHLIGHT = 0xFFA8DC9C;
     public static final int TIMESTAMP = 0xFFA0A0A0;
 
     static final int NEAR_GRAY = 0xC8;
