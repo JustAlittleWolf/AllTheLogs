@@ -65,12 +65,17 @@ public final class QueryBuilder {
                 + (conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions))
                 + " " + order + limit;
         } else {
+            // Expanding each match into the concrete line indices it wants, rather than asking for every row whose
+            // index falls in a BETWEEN window, turns the lookup into an equality join. DuckDB can hash that, while a
+            // range predicate forces it to compare each entry against the match set, which gets dramatically slower
+            // as the number of matches grows. DISTINCT collapses the overlapping windows of neighbouring matches, so
+            // the join still returns every row at most once.
+            int context = query.contextLines();
+            List<String> contextConditions = new ArrayList<>();
+            contextConditions.add("e.file_id = w.file_id");
+            contextConditions.add("e.line_index = w.line_index");
             // The date range must also constrain the context rows, otherwise a match at the edge of the range would
             // pull in neighbours from outside it.
-            List<String> contextConditions = new ArrayList<>();
-            contextConditions.add("e.file_id = m.file_id");
-            contextConditions.add("e.line_index BETWEEN m.line_index - " + query.contextLines()
-                + " AND m.line_index + " + query.contextLines());
             if (query.from() != null) {
                 contextConditions.add("e.entry_time >= ?");
                 parameters.add(Timestamp.valueOf(query.from()));
@@ -79,10 +84,12 @@ public final class QueryBuilder {
                 contextConditions.add("e.entry_time < ?");
                 parameters.add(Timestamp.valueOf(query.to()));
             }
-            sql = "WITH matches AS (SELECT file_id, line_index FROM chat_entry" + where + ") "
+            sql = "WITH matches AS (SELECT file_id, line_index FROM chat_entry" + where + "), "
+                + "wanted AS (SELECT DISTINCT m.file_id, m.line_index + o.offset AS line_index FROM matches m, "
+                + "(SELECT unnest(range(-" + context + ", " + context + " + 1)) AS offset) o) "
                 + SELECT_COLUMNS
                 + " FROM chat_entry e JOIN log_file f ON f.id = e.file_id"
-                + " WHERE EXISTS (SELECT 1 FROM matches m WHERE " + String.join(" AND ", contextConditions) + ") "
+                + " WHERE EXISTS (SELECT 1 FROM wanted w WHERE " + String.join(" AND ", contextConditions) + ") "
                 + order + limit;
         }
         return new QueryBuilder(sql, parameters);
