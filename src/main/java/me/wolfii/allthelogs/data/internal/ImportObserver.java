@@ -39,7 +39,7 @@ public final class ImportObserver {
         }
     }
 
-    /// Records that the current log file has been imported, skipped, found empty, or failed.
+    /// Records that the current log file has been imported, skipped, or failed.
     public void fileCompleted() {
         fileCompleted(null);
     }

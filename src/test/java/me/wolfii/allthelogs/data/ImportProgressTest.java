@@ -164,12 +164,17 @@ class ImportProgressTest {
 
     @Test
     void emptyFilesCountAsCompletedProgress() throws IOException {
-        LogFixtures.writePlain(tempDir.resolve("logs"), "2026-04-01-1.log",
-                "[10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3\n");
+        LogFixtures.writePlain(tempDir.resolve("logs"), "2026-04-02-1.log",
+                "[10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3\n"
+                    + "[10:00:05] [Render thread/INFO]: Reloading ResourceManager: vanilla, fabric\n"
+                    + "[10:00:10] [Render thread/INFO]: done\n");
         List<ImportProgress> updates = new CopyOnWriteArrayList<>();
 
-        store.importDirectory(tempDir, updates::add);
+        ImportResult result = store.importDirectory(tempDir, updates::add);
 
+        assertEquals(1, result.importedFiles());
+        assertEquals(1, result.emptyFiles());
+        assertEquals(0, result.skippedFiles());
         ImportProgress last = updates.getLast();
         assertEquals(1, last.discoveredFiles());
         assertEquals(1, last.completedFiles());

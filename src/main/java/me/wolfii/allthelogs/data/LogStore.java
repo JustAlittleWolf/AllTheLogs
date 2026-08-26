@@ -313,6 +313,8 @@ public final class LogStore implements AutoCloseable {
                 parsers.execute(() -> {
                     try {
                         PreparedLog prepared = prepare(candidate, options.timezone());
+                        // Files without timestamps, or with neither chat nor a resource-manager reload, are not
+                        // stored. Empty files are the ones that are stored despite having no chat lines.
                         if (prepared.firstLineTime() == null || prepared.lastLineTime() == null || (prepared.messages().isEmpty() && !prepared.resourceManagerReloaded())) {
                             skipped.incrementAndGet();
                             observer.fileCompleted();
