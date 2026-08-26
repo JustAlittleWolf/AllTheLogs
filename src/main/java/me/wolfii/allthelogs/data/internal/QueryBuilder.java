@@ -16,7 +16,7 @@ import java.util.List;
 /// deduplicated for free.
 public final class QueryBuilder {
     private static final String SELECT_COLUMNS = """
-        SELECT f.file_name, f.source_kind, f.source_path, f.entry_path, f.log_date, f.date_source,
+        SELECT f.file_name, f.source_kind, f.source_path, f.entry_path, f.log_date,
                f.minecraft_version, f.last_modified, f.first_entry_time, f.last_entry_time, f.entry_count,
                e.entry_time, e.line_index, e.message
         """;
@@ -93,15 +93,6 @@ public final class QueryBuilder {
                 + order + limit;
         }
         return new QueryBuilder(sql, parameters);
-    }
-
-    /// Builds the SQL for counting matching entries, ignoring context lines, ordering and limit.
-    public static QueryBuilder buildCount(ChatQuery query) {
-        QueryBuilder full = build(query.withContextLines(0).withLimit(-1));
-        int fromIndex = full.sql.indexOf(" FROM chat_entry e");
-        int orderIndex = full.sql.indexOf(" ORDER BY ");
-        String body = full.sql.substring(fromIndex, orderIndex);
-        return new QueryBuilder("SELECT count(*)" + body, full.parameters);
     }
 
     public String sql() {

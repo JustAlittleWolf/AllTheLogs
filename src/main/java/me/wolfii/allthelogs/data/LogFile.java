@@ -7,27 +7,27 @@ import java.util.Optional;
 /// Metadata about a single imported Minecraft log file.
 ///
 /// @param fileName        the bare file name, e.g. `2026-08-25-2.log.gz`
-/// @param sourceKind      whether the file came from a directory or an archive
-/// @param sourcePath      absolute path of the root that was imported (the directory or the outermost archive)
+/// @param sourceKind      whether the file came from a directory or an archive; empty for a client session
+/// @param sourcePath      absolute path of the root that was imported (the directory or the outermost archive), or
+///                        a sentinel for a client session
 /// @param entryPath       path of the log inside that root; for directory imports this is the path relative to the
 ///                        imported directory, for archives the slash separated path inside the archive, with nested
 ///                        archives separated by `!/`
 /// @param date            the calendar date the log belongs to
-/// @param dateSource      how [#date] was determined
 /// @param minecraftVersion the Minecraft version the log was produced by, or `unknown`
 /// @param lastModified    last modification time as reported by the file system or archive, if available
-/// @param firstEntryTime  timestamp of the first logged line of this file, not just chat entries, empty if no line
-    ///                        carried a recognisable timestamp; converted from the import timezone like chat entries
-    /// @param lastEntryTime   timestamp of the last logged line of this file, not just chat entries, empty if no line
-    ///                        carried a recognisable timestamp; converted from the import timezone like chat entries
+/// @param firstEntryTime  timestamp of the first logged line of this file, not just chat entries; converted from the
+///                        import timezone like chat entries. For a client session this is when the session started
+/// @param lastEntryTime   timestamp of the last logged line of this file, not just chat entries; converted from the
+///                        import timezone like chat entries. For a client session this is updated each time a message
+///                        is imported with [LogStore#importSessionMessage(String)]
 /// @param entryCount      number of stored chat entries of this file
 public record LogFile(
     String fileName,
-    SourceKind sourceKind,
+    Optional<SourceKind> sourceKind,
     String sourcePath,
     String entryPath,
     LocalDate date,
-    DateSource dateSource,
     String minecraftVersion,
     Optional<LocalDateTime> lastModified,
     Optional<LocalDateTime> firstEntryTime,

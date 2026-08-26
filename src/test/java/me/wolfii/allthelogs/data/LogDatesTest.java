@@ -18,23 +18,20 @@ class LogDatesTest {
     @Test
     void prefersTheDateEncodedInTheFileName() {
         Instant modified = Instant.parse("2026-01-01T00:00:00Z");
-        LogDates.Resolved resolved = LogDates.resolve("2026-08-24-1.log.gz", modified, ZoneOffset.ofHours(14));
+        LocalDate resolved = LogDates.resolve("2026-08-24-1.log.gz", modified, ZoneOffset.ofHours(14));
 
-        assertEquals(LocalDate.of(2026, 8, 24), resolved.date());
-        assertEquals(DateSource.FILE_NAME, resolved.source());
+        assertEquals(LocalDate.of(2026, 8, 24), resolved);
     }
 
     @Test
     void fallsBackToLastModifiedInterpretedInTheGivenTimezone() {
         Instant modified = Instant.parse("2026-08-25T22:00:00Z");
 
-        LogDates.Resolved utc = LogDates.resolve("latest.log", modified, ZoneOffset.UTC);
-        assertEquals(LocalDate.of(2026, 8, 25), utc.date());
-        assertEquals(DateSource.LAST_MODIFIED, utc.source());
+        LocalDate utc = LogDates.resolve("latest.log", modified, ZoneOffset.UTC);
+        assertEquals(LocalDate.of(2026, 8, 25), utc);
 
-        LogDates.Resolved plusFourteen = LogDates.resolve("latest.log", modified, ZoneOffset.ofHours(14));
-        assertEquals(LocalDate.of(2026, 8, 26), plusFourteen.date());
-        assertEquals(DateSource.LAST_MODIFIED, plusFourteen.source());
+        LocalDate plusFourteen = LogDates.resolve("latest.log", modified, ZoneOffset.ofHours(14));
+        assertEquals(LocalDate.of(2026, 8, 26), plusFourteen);
     }
 
     @Test

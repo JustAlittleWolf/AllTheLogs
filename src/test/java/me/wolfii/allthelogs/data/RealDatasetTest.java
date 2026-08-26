@@ -43,14 +43,13 @@ class RealDatasetTest {
 
             List<LogFile> files = store.logFiles();
             assertTrue(files.stream().allMatch(file -> file.entryCount() > 0));
-            assertTrue(files.stream().anyMatch(file -> file.dateSource() == DateSource.FILE_NAME));
 
             // Every log in the dataset comes from a launcher that writes a recognisable version line.
             Map<String, Long> versions = files.stream().collect(
                     Collectors.groupingBy(LogFile::minecraftVersion, Collectors.counting()));
             assertTrue(versions.size() > 1, () -> "expected several Minecraft versions, got " + versions);
 
-            assertEquals(result.importedEntries(), store.count(ChatQuery.all()));
+            assertEquals(result.importedEntries(), store.logEntries().size());
         }
     }
 
@@ -74,7 +73,7 @@ class RealDatasetTest {
                 entries += result.importedEntries();
             }
             assertTrue(entries > 0, "expected to import entries from archives");
-            assertTrue(store.logFiles().stream().allMatch(file -> file.sourceKind() == SourceKind.ARCHIVE));
+            assertTrue(store.logFiles().stream().allMatch(file -> file.sourceKind().orElse(null) == SourceKind.ARCHIVE));
         }
     }
 
@@ -85,14 +84,14 @@ class RealDatasetTest {
 
         try (LogStore store = LogStore.open(tempDir.resolve("queries.duckdb"))) {
             store.importDirectory(dataset, ImportOptions.defaults().withPathMatcher("**/logs/**"));
-            assumeTrue(store.count(ChatQuery.all()) > 0, "no entries imported");
+            assumeTrue(!store.logEntries().isEmpty(), "no entries imported");
 
             LogFile earliest = store.logFiles().getFirst();
             LogFile latest = store.logFiles().getLast();
             LocalDateTime from = earliest.date().atStartOfDay();
             LocalDateTime to = latest.date().plusDays(1).atStartOfDay();
 
-            assertEquals(store.count(ChatQuery.all()), store.count(ChatQuery.all().withRange(from, to)));
+            assertEquals(store.logEntries().size(), store.query(ChatQuery.all().withRange(from, to)).size());
 
             List<ChatEntry> withContext = store.query(ChatQuery.all()
                     .withRegex("(?i)joined the game|left the game|<")

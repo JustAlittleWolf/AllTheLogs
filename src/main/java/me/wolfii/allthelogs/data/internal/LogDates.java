@@ -1,7 +1,5 @@
 package me.wolfii.allthelogs.data.internal;
 
-import me.wolfii.allthelogs.data.DateSource;
-
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -23,13 +21,12 @@ public final class LogDates {
     ///
     /// @param lastModified may be `null` when the source reports no modification time; the current date in `timezone`
     ///                     is used then
-    public static Resolved resolve(String fileName, Instant lastModified, ZoneId timezone) {
+    public static LocalDate resolve(String fileName, Instant lastModified, ZoneId timezone) {
         LocalDate fromName = fromFileName(fileName);
-        if (fromName != null) return new Resolved(fromName, DateSource.FILE_NAME);
-        LocalDate fallback = lastModified == null
+        if (fromName != null) return fromName;
+        return lastModified == null
             ? LocalDate.now(timezone)
             : lastModified.atZone(timezone).toLocalDate();
-        return new Resolved(fallback, DateSource.LAST_MODIFIED);
     }
 
     /// Combines a log's calendar date with a line time and converts the result from `sourceZone` to the JVM default
@@ -63,10 +60,5 @@ public final class LogDates {
             }
         }
         return null;
-    }
-
-    /// @param date   the resolved date
-    /// @param source how it was resolved
-    public record Resolved(LocalDate date, DateSource source) {
     }
 }
