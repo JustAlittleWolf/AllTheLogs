@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.sql.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -116,26 +117,26 @@ public final class LogStore implements AutoCloseable {
         }
     }
 
-    private static PreparedLog prepare(LogCandidate candidate) throws IOException {
+    private static PreparedLog prepare(LogCandidate candidate, ZoneId timezone) throws IOException {
         ParsedLog parsed;
         try (BufferedReader reader = open(candidate)) {
             parsed = LogParser.parse(reader);
         }
-        LogDates.Resolved resolved = LogDates.resolve(candidate.fileName(), candidate.lastModified());
+        LogDates.Resolved resolved = LogDates.resolve(candidate.fileName(), candidate.lastModified(), timezone);
 
         List<LocalDateTime> times = new ArrayList<>(parsed.entries().size());
         List<String> messages = new ArrayList<>(parsed.entries().size());
         for (ParsedLog.Entry entry : parsed.entries()) {
-            times.add(LocalDateTime.of(resolved.date(), entry.time()));
+            times.add(LogDates.toSystemLocal(resolved.date(), entry.time(), timezone));
             messages.add(entry.message());
         }
-        LocalDateTime firstLineTime = parsed.firstLineTime() == null
-            ? null : LocalDateTime.of(resolved.date(), parsed.firstLineTime());
-        LocalDateTime lastLineTime = parsed.lastLineTime() == null
-            ? null : LocalDateTime.of(resolved.date(), parsed.lastLineTime());
+        LocalDateTime firstLineTime = LogDates.toSystemLocal(resolved.date(), parsed.firstLineTime(), timezone);
+        LocalDateTime lastLineTime = LogDates.toSystemLocal(resolved.date(), parsed.lastLineTime(), timezone);
+        LocalDateTime lastModified = candidate.lastModified() == null
+            ? null : LocalDateTime.ofInstant(candidate.lastModified(), ZoneId.systemDefault());
         return new PreparedLog(candidate.fileName(), candidate.sourceKind(), candidate.sourcePath(),
             candidate.entryPath(), resolved.date(), resolved.source(), parsed.minecraftVersion(),
-            candidate.lastModified(), times, messages, parsed.resourceManagerReloaded(),
+            lastModified, times, messages, parsed.resourceManagerReloaded(),
             firstLineTime, lastLineTime);
     }
 
@@ -255,7 +256,7 @@ public final class LogStore implements AutoCloseable {
                 }
                 parsers.execute(() -> {
                     try {
-                        PreparedLog prepared = prepare(candidate);
+                        PreparedLog prepared = prepare(candidate, options.timezone());
                         if (prepared.messages().isEmpty() && !prepared.resourceManagerReloaded()) {
                             empty.incrementAndGet();
                             return;

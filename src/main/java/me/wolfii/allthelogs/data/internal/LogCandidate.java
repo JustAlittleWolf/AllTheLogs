@@ -2,7 +2,7 @@ package me.wolfii.allthelogs.data.internal;
 
 import me.wolfii.allthelogs.data.SourceKind;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /// A log file that was discovered and is ready to be parsed, with its contents already materialised in memory.
 ///
@@ -13,14 +13,14 @@ import java.time.LocalDateTime;
 /// @param sourceKind   whether it came from a directory or an archive
 /// @param sourcePath   absolute path of the import root
 /// @param entryPath    path within the import root, always `/` separated, nested archives separated by `!/`
-/// @param lastModified last modification time, or `null` if the source does not report one
+/// @param lastModified last modification instant, or `null` if the source does not report one
 /// @param content      raw file bytes, still gzip compressed if the file name ends in `.gz`
 public record LogCandidate(
     String fileName,
     SourceKind sourceKind,
     String sourcePath,
     String entryPath,
-    LocalDateTime lastModified,
+    Instant lastModified,
     byte[] content
 ) {
 }
