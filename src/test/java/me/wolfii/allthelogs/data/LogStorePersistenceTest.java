@@ -17,7 +17,9 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/// End to end coverage of the advertised portable file: write a database, close it, open it again, and query.
+/**
+ * End to end coverage of the advertised portable file: write a database, close it, open it again, and query.
+ */
 class LogStorePersistenceTest {
     @TempDir
     Path tempDir;
