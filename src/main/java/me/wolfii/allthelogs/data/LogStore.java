@@ -56,12 +56,9 @@ public final class LogStore implements AutoCloseable {
     /// format predates the string compression this data benefits from most. Asking for the newest format unlocks
     /// `DICT_FSST`, which deduplicates the many repeated chat lines and then compresses the remaining dictionary,
     /// roughly halving the space messages take. Chat lines are far shorter than the 4096 byte threshold at which
-    /// DuckDB would consider Zstd, so the threshold is lowered enough that Zstd can win on the occasional file full of
-    /// long unique lines while short lines still land on the cheaper `DICT_FSST`.
     private static Properties storageSettings() {
         Properties settings = new Properties();
         settings.setProperty("storage_compatibility_version", "latest");
-        settings.setProperty("zstd_min_string_length", "512");
         return settings;
     }
 
