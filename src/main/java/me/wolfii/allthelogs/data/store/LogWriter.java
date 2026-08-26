@@ -1,6 +1,5 @@
 package me.wolfii.allthelogs.data.store;
 
-import me.wolfii.allthelogs.data.SessionMarker;
 import org.duckdb.DuckDBAppender;
 import org.duckdb.DuckDBConnection;
 

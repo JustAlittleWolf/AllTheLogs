@@ -17,7 +17,7 @@ import java.util.Objects;
  *                          its write-ahead log when present. For an in-memory store this is DuckDB's current memory
  *                          usage for that database
  */
-public record StoreMetadata(
+public record LogStoreMetadata(
     List<String> minecraftVersions,
     LocalDate firstLogDate,
     LocalDate lastLogDate,
@@ -25,7 +25,7 @@ public record StoreMetadata(
     long chatEntryCount,
     long databaseSizeBytes
 ) {
-    public StoreMetadata {
+    public LogStoreMetadata {
         Objects.requireNonNull(minecraftVersions, "minecraftVersions");
         minecraftVersions = List.copyOf(minecraftVersions);
         if (chatLogCount < 0) throw new IllegalArgumentException("chatLogCount must not be negative");

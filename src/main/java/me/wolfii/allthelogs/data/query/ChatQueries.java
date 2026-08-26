@@ -1,6 +1,7 @@
 package me.wolfii.allthelogs.data.query;
 
 import me.wolfii.allthelogs.data.*;
+import me.wolfii.allthelogs.data.store.SessionMarker;
 import me.wolfii.allthelogs.data.store.SourceKind;
 import org.duckdb.*;
 
@@ -105,7 +106,7 @@ public final class ChatQueries {
      * Summarises the stored logs, using {@code databaseSizeBytes} supplied by the caller so file-backed stores can
      * report on-disk size including the write-ahead log.
      */
-    public StoreMetadata metadata(long databaseSizeBytes) {
+    public LogStoreMetadata metadata(long databaseSizeBytes) {
         try {
             List<String> versions = new ArrayList<>();
             try (Statement statement = connection.createStatement();
@@ -136,7 +137,7 @@ public final class ChatQueries {
                 result.next();
                 chatEntryCount = result.getLong(1);
             }
-            return new StoreMetadata(versions, firstLogDate, lastLogDate, chatLogCount, chatEntryCount,
+            return new LogStoreMetadata(versions, firstLogDate, lastLogDate, chatLogCount, chatEntryCount,
                 databaseSizeBytes);
         } catch (SQLException e) {
             throw new LogDataException("could not read store metadata", e);

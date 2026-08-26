@@ -3,7 +3,6 @@ package me.wolfii.allthelogs.data.store;
 import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.LogDataException;
 import me.wolfii.allthelogs.data.LogSource;
-import me.wolfii.allthelogs.data.SessionMarker;
 import me.wolfii.allthelogs.data.parse.FormattingCodes;
 import org.duckdb.DuckDBConnection;
 

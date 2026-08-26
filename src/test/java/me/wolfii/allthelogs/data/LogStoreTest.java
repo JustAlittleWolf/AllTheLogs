@@ -1,7 +1,7 @@
 package me.wolfii.allthelogs.data;
 
 import me.wolfii.allthelogs.data.parse.LogDates;
-import me.wolfii.allthelogs.locations.CurrentLogsImport;
+import me.wolfii.allthelogs.data.store.SessionMarker;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -96,7 +96,11 @@ class LogStoreTest {
         LogFixtures.writePlain(logs, "debug.log", LogFixtures.legacyLog("debug"));
         LogFixtures.writeGzipped(logs, "2026-08-26-1.log.gz", LogFixtures.modernLog("26.2", "rotated"));
 
-        ImportResult result = store.importDirectory(logs, CurrentLogsImport.options());
+        ImportResult result = store.importDirectory(logs, ImportOptions.defaults()
+            .withRecursive(false)
+            .withNestedArchives(false)
+            .withSkipAlreadyImported(true)
+            .withPathMatcher("{*.log.gz,*.log}"));
 
         assertEquals(2, result.importedFiles());
         List<String> messages = store.chatEntries().stream().map(ChatEntry::message).toList();
@@ -594,7 +598,7 @@ class LogStoreTest {
         try (LogStore reopened = LogStore.open(database)) {
             assertEquals(8, reopened.chatEntries().size());
             assertEquals(database, reopened.databasePath().orElseThrow());
-            StoreMetadata metadata = reopened.metadata();
+            LogStoreMetadata metadata = reopened.metadata();
             assertEquals(3, metadata.chatLogCount());
             assertEquals(8, metadata.chatEntryCount());
             assertTrue(metadata.minecraftVersions().containsAll(List.of("26.2", "1.8.9")));
@@ -604,8 +608,8 @@ class LogStoreTest {
     }
 
     @Test
-    void emptyStoreMetadataHasZeroCounts() {
-        StoreMetadata metadata = store.metadata();
+    void emptyLogStoreMetadataHasZeroCounts() {
+        LogStoreMetadata metadata = store.metadata();
 
         assertTrue(metadata.minecraftVersions().isEmpty());
         assertNull(metadata.firstLogDate());
@@ -622,7 +626,7 @@ class LogStoreTest {
         LogFixtures.writeGzipped(logs, "2026-08-24-1.log.gz", LogFixtures.modernLog("26.2", "one", "two"));
         store.importDirectory(tempDir);
 
-        StoreMetadata metadata = store.metadata();
+        LogStoreMetadata metadata = store.metadata();
         assertEquals(List.of("1.8.9", "26.2"), metadata.minecraftVersions());
         assertEquals(LocalDate.of(2026, 8, 20), metadata.firstLogDate());
         assertEquals(LocalDate.of(2026, 8, 24), metadata.lastLogDate());

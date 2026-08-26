@@ -7,10 +7,10 @@ import io.wispforest.owo.ui.container.ScrollContainer;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.*;
 import me.wolfii.allthelogs.client.AllTheLogsClient;
+import me.wolfii.allthelogs.client.CommonLogLocations;
 import me.wolfii.allthelogs.client.NativeFilePicker;
 import me.wolfii.allthelogs.data.ImportOptions;
 import me.wolfii.allthelogs.data.ImportProgress;
-import me.wolfii.allthelogs.locations.CommonLogLocations;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -149,12 +149,6 @@ public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
         nestedArchives = options.nestedArchives();
         skipAlreadyImported = options.skipAlreadyImported();
         pathMatcher = options.pathMatcher() == null ? "" : options.pathMatcher();
-        rebuildAdvancedFromState();
-    }
-
-    private void rebuildAdvancedFromState() {
-        // The collapsible already holds live checkboxes; path/timezone fields update from applyLocation
-        // the next time the screen is opened. Keep the in-memory options for the current import.
     }
 
     private void setPath(Path path) {

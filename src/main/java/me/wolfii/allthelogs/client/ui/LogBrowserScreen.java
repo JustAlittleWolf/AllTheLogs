@@ -156,7 +156,6 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
                 filter = filter.withContextLines(Integer.parseInt(text.trim())).withoutOffset();
                 persistAndReload();
             } catch (RuntimeException ignored) {
-                // leave the previous value until the field is valid
             }
         }));
 
