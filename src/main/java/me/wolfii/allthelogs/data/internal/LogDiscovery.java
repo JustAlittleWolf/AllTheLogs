@@ -29,7 +29,7 @@ public final class LogDiscovery {
     /// Separates the archive path from the path inside it, matching the convention of JAR URLs.
     public static final String ARCHIVE_SEPARATOR = "!/";
     private static final List<String> LOG_SUFFIXES = List.of(".log", ".log.gz");
-    private static final List<String> ARCHIVE_SUFFIXES = List.of(".zip", ".7z", ".tar", ".tar.gz", ".tgz", ".jar");
+    private static final List<String> ARCHIVE_SUFFIXES = List.of(".zip", ".7z", ".tar", ".tar.gz", ".tgz");
     private static final int STREAM_BUFFER = 1 << 16;
 
     private final ImportOptions options;
