@@ -39,7 +39,8 @@ public final class LogStore implements AutoCloseable {
     private static final String LIVE_SOURCE_PATH = "<live>";
     /// Sentinel that tells the writer loop that no more logs are coming.
     private static final PreparedLog END_OF_STREAM = new PreparedLog(
-        "", SourceKind.DIRECTORY, "", "", LocalDate.EPOCH, DateSource.FILE_NAME, "", null, List.of(), List.of());
+        "", SourceKind.DIRECTORY, "", "", LocalDate.EPOCH, DateSource.FILE_NAME, "", null, List.of(), List.of(),
+        false, null, null);
 
     private final DuckDBConnection connection;
     private final Path databasePath;
@@ -108,9 +109,14 @@ public final class LogStore implements AutoCloseable {
             times.add(LocalDateTime.of(resolved.date(), entry.time()));
             messages.add(entry.message());
         }
+        LocalDateTime firstLineTime = parsed.firstLineTime() == null
+            ? null : LocalDateTime.of(resolved.date(), parsed.firstLineTime());
+        LocalDateTime lastLineTime = parsed.lastLineTime() == null
+            ? null : LocalDateTime.of(resolved.date(), parsed.lastLineTime());
         return new PreparedLog(candidate.fileName(), candidate.sourceKind(), candidate.sourcePath(),
             candidate.entryPath(), resolved.date(), resolved.source(), parsed.minecraftVersion(),
-            candidate.lastModified(), times, messages);
+            candidate.lastModified(), times, messages, parsed.resourceManagerReloaded(),
+            firstLineTime, lastLineTime);
     }
 
     private static BufferedReader open(LogCandidate candidate) throws IOException {
@@ -201,6 +207,7 @@ public final class LogStore implements AutoCloseable {
         BlockingQueue<PreparedLog> queue = new ArrayBlockingQueue<>(WRITE_QUEUE_CAPACITY);
         List<ImportResult.Failure> parseFailures = java.util.Collections.synchronizedList(new ArrayList<>());
         AtomicInteger skipped = new AtomicInteger();
+        AtomicInteger empty = new AtomicInteger();
 
         try (LogWriter writer = new LogWriter(connection)) {
             var failureRef = new AtomicReference<RuntimeException>();
@@ -214,8 +221,8 @@ public final class LogStore implements AutoCloseable {
                 parsers.execute(() -> {
                     try {
                         PreparedLog prepared = prepare(candidate);
-                        if (prepared.messages().isEmpty()) {
-                            skipped.incrementAndGet();
+                        if (prepared.messages().isEmpty() && !prepared.resourceManagerReloaded()) {
+                            empty.incrementAndGet();
                             return;
                         }
                         queue.put(prepared);
@@ -263,7 +270,7 @@ public final class LogStore implements AutoCloseable {
 
             List<ImportResult.Failure> failures = new ArrayList<>(discovery.failures());
             failures.addAll(parseFailures);
-            return new ImportResult(writer.writtenFiles(), skipped.get(), writer.writtenEntries(),
+            return new ImportResult(writer.writtenFiles(), skipped.get(), empty.get(), writer.writtenEntries(),
                 List.copyOf(failures));
         } catch (SQLException e) {
             throw new LogDataException("could not write imported logs", e);

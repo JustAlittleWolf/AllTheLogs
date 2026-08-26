@@ -28,6 +28,9 @@ public final class LogWriter implements AutoCloseable {
     private final DuckDBAppender entryAppender;
     /// Read by the discovery thread for skip decisions while the writer thread updates it, hence concurrent.
     private final Map<String, Long> existingLocations = new ConcurrentHashMap<>();
+    /// Ids of files written with no chat entries but a `Reloading ResourceManager` line, kept in memory only so the
+    /// post dedup cleanup does not drop them the way it drops files whose entries all turned out to be duplicates.
+    private final java.util.Set<Long> keepEvenIfEmpty = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private long nextFileId;
     private long bufferedEntries;
     private long writtenEntries;
@@ -88,8 +91,8 @@ public final class LogWriter implements AutoCloseable {
         fileAppender.append(log.dateSource().name());
         fileAppender.append(log.minecraftVersion());
         appendNullable(fileAppender, log.lastModified());
-        appendNullable(fileAppender, times.isEmpty() ? null : times.getFirst());
-        appendNullable(fileAppender, times.isEmpty() ? null : times.getLast());
+        appendNullable(fileAppender, log.firstLineTime());
+        appendNullable(fileAppender, log.lastLineTime());
         fileAppender.append((long) times.size());
         fileAppender.endRow();
 
@@ -102,6 +105,7 @@ public final class LogWriter implements AutoCloseable {
             entryAppender.endRow();
         }
 
+        if (times.isEmpty() && log.resourceManagerReloaded()) keepEvenIfEmpty.add(fileId);
         existingLocations.put(locationKey(log.sourcePath(), log.entryPath()), fileId);
         writtenFiles++;
         writtenEntries += times.size();
@@ -155,30 +159,33 @@ public final class LogWriter implements AutoCloseable {
     ///
     /// @return how many files were dropped because every one of their entries turned out to be a duplicate
     private int refreshFileAggregates(Statement statement) throws SQLException {
+        // first_entry_time/last_entry_time bound every logged line of the file, not just its chat entries, so
+        // deduplicating chat entries must not touch already stored bounds that came from lines with no chat marker;
+        // only entry_count needs recomputing here.
         statement.execute("""
-            UPDATE log_file SET
-                entry_count = coalesce(stats.count, 0),
-                first_entry_time = stats.first_time,
-                last_entry_time = stats.last_time
+            UPDATE log_file SET entry_count = coalesce(stats.count, 0)
             FROM (
-                SELECT f.id AS file_id,
-                       count(e.entry_time) AS count,
-                       min(e.entry_time) AS first_time,
-                       max(e.entry_time) AS last_time
+                SELECT f.id AS file_id, count(e.entry_time) AS count
                 FROM log_file f LEFT JOIN chat_entry e ON e.file_id = f.id
                 GROUP BY f.id
             ) stats
             WHERE log_file.id = stats.file_id""");
 
+        List<Long> emptyIds = new ArrayList<>();
         List<String> emptyLocations = new ArrayList<>();
         try (ResultSet result = statement.executeQuery(
-            "SELECT source_path, entry_path FROM log_file WHERE entry_count = 0")) {
+            "SELECT id, source_path, entry_path FROM log_file WHERE entry_count = 0")) {
             while (result.next()) {
-                emptyLocations.add(locationKey(result.getString(1), result.getString(2)));
+                long id = result.getLong(1);
+                if (keepEvenIfEmpty.contains(id)) continue;
+                emptyIds.add(id);
+                emptyLocations.add(locationKey(result.getString(2), result.getString(3)));
             }
         }
         emptyLocations.forEach(existingLocations::remove);
-        statement.execute("DELETE FROM log_file WHERE entry_count = 0");
+        for (long id : emptyIds) {
+            statement.execute("DELETE FROM log_file WHERE id = " + id);
+        }
         return emptyLocations.size();
     }
 

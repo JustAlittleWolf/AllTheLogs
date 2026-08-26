@@ -88,8 +88,10 @@ class LogStoreTest {
         LogFile file = store.logFiles().stream()
                 .filter(f -> f.fileName().equals("2026-08-24-1.log.gz")).findFirst().orElseThrow();
         assertEquals(3, file.entryCount());
-        assertEquals(LocalDateTime.of(2026, 8, 24, 10, 0, 10), file.firstEntryTime().orElseThrow());
-        assertEquals(LocalDateTime.of(2026, 8, 24, 10, 0, 12), file.lastEntryTime().orElseThrow());
+        // Bounds cover every logged line of the file, not just its chat entries, so they start at the very first
+        // line ("Loading Minecraft...") rather than the first [CHAT] line.
+        assertEquals(LocalDateTime.of(2026, 8, 24, 10, 0, 0), file.firstEntryTime().orElseThrow());
+        assertEquals(LocalDateTime.of(2026, 8, 24, 10, 0, 13), file.lastEntryTime().orElseThrow());
         assertTrue(file.lastModified().isPresent());
     }
 
@@ -341,8 +343,42 @@ class LogStoreTest {
         ImportResult result = store.importDirectory(tempDir);
 
         assertEquals(0, result.importedFiles());
-        assertEquals(1, result.skippedFiles());
+        assertEquals(1, result.emptyFiles());
         assertFalse(store.logFiles().stream().anyMatch(file -> file.fileName().equals("2026-04-01-1.log")));
+    }
+
+    @Test
+    void logsWithResourceManagerReloadAreKeptEvenWithoutChatEntries() throws IOException {
+        LogFixtures.writePlain(tempDir.resolve("logs"), "2026-04-02-1.log",
+                "[10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3\n"
+                    + "[10:00:05] [Render thread/INFO]: Reloading ResourceManager: vanilla, fabric\n"
+                    + "[10:00:10] [Render thread/INFO]: done\n");
+
+        ImportResult result = store.importDirectory(tempDir);
+
+        assertEquals(1, result.importedFiles());
+        assertEquals(0, result.emptyFiles());
+        LogFile file = store.logFiles().stream()
+                .filter(f -> f.fileName().equals("2026-04-02-1.log")).findFirst().orElseThrow();
+        assertEquals(0, file.entryCount());
+        assertEquals(LocalDate.of(2026, 4, 2), file.date());
+        assertEquals(LocalDateTime.of(2026, 4, 2, 10, 0, 0), file.firstEntryTime().orElseThrow());
+        assertEquals(LocalDateTime.of(2026, 4, 2, 10, 0, 10), file.lastEntryTime().orElseThrow());
+    }
+
+    @Test
+    void fileEntryTimeBoundsCoverAllLoggedLinesNotJustChatEntries() throws IOException {
+        LogFixtures.writePlain(tempDir.resolve("logs"), "2026-04-03-1.log",
+                "[09:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3\n"
+                    + "[09:00:05] [Render thread/INFO]: [CHAT] hello\n"
+                    + "[09:00:10] [Render thread/INFO]: done\n");
+
+        store.importDirectory(tempDir);
+
+        LogFile file = store.logFiles().stream()
+                .filter(f -> f.fileName().equals("2026-04-03-1.log")).findFirst().orElseThrow();
+        assertEquals(LocalDateTime.of(2026, 4, 3, 9, 0, 0), file.firstEntryTime().orElseThrow());
+        assertEquals(LocalDateTime.of(2026, 4, 3, 9, 0, 10), file.lastEntryTime().orElseThrow());
     }
 
     @Test

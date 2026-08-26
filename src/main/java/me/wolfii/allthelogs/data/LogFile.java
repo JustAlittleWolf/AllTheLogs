@@ -16,8 +16,10 @@ import java.util.Optional;
 /// @param dateSource      how [#date] was determined
 /// @param minecraftVersion the Minecraft version the log was produced by, or `unknown`
 /// @param lastModified    last modification time as reported by the file system or archive, if available
-/// @param firstEntryTime  timestamp of the first chat entry of this file, empty if the file has no chat entries
-/// @param lastEntryTime   timestamp of the last chat entry of this file, empty if the file has no chat entries
+/// @param firstEntryTime  timestamp of the first logged line of this file, not just chat entries, empty if no line
+///                        carried a recognisable timestamp
+/// @param lastEntryTime   timestamp of the last logged line of this file, not just chat entries, empty if no line
+///                        carried a recognisable timestamp
 /// @param entryCount      number of stored chat entries of this file
 public record LogFile(
     String fileName,

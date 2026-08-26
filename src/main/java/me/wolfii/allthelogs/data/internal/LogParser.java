@@ -18,6 +18,7 @@ import java.util.regex.Pattern;
 /// treated as a continuation of the previous line, which is how multi line chat messages such as book pages appear.
 public final class LogParser {
     private static final String CHAT_MARKER = "[CHAT] ";
+    private static final String RESOURCE_MANAGER_RELOAD_MARKER = "Reloading ResourceManager";
 
     /// Matches the leading `[HH:mm:ss]` or `[yyyy-MM-dd HH:mm:ss]` of a log line. Fractional seconds, as written by
     /// some launchers, are tolerated and discarded.
@@ -44,6 +45,9 @@ public final class LogParser {
         LocalTime pendingTime = null;
         String version = null;
         int versionPriority = Integer.MAX_VALUE;
+        boolean resourceManagerReloaded = false;
+        LocalTime firstLineTime = null;
+        LocalTime lastLineTime = null;
 
         String line;
         while ((line = reader.readLine()) != null) {
@@ -58,6 +62,16 @@ public final class LogParser {
                 entries.add(new ParsedLog.Entry(pendingTime, pending.toString()));
                 pending = null;
                 pendingTime = null;
+            }
+
+            LocalTime lineTime = parseTime(start);
+            if (lineTime != null) {
+                if (firstLineTime == null) firstLineTime = lineTime;
+                lastLineTime = lineTime;
+            }
+
+            if (!resourceManagerReloaded && line.contains(RESOURCE_MANAGER_RELOAD_MARKER)) {
+                resourceManagerReloaded = true;
             }
 
             if (versionPriority > 0) {
@@ -77,15 +91,15 @@ public final class LogParser {
                 if (!line.endsWith("[CHAT]")) continue;
                 chat = line.length() - "[CHAT]".length();
             }
-            LocalTime time = parseTime(start);
-            if (time == null) continue;
-            pendingTime = time;
+            if (lineTime == null) continue;
+            pendingTime = lineTime;
             pending = new StringBuilder(line.substring(Math.min(chat + CHAT_MARKER.length(), line.length())));
         }
         if (pending != null) entries.add(new ParsedLog.Entry(pendingTime, pending.toString()));
 
         entries.replaceAll(entry -> new ParsedLog.Entry(entry.time(), FormattingCodes.strip(entry.message())));
-        return new ParsedLog(version == null ? LogFile.UNKNOWN_VERSION : version, entries);
+        return new ParsedLog(version == null ? LogFile.UNKNOWN_VERSION : version, entries,
+            resourceManagerReloaded, firstLineTime, lastLineTime);
     }
 
     private static LocalTime parseTime(Matcher start) {
