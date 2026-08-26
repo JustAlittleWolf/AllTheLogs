@@ -1,44 +1,16 @@
 package me.wolfii.allthelogs.data;
 
-import me.wolfii.allthelogs.data.internal.FormattingCodes;
-import me.wolfii.allthelogs.data.internal.LogCandidate;
-import me.wolfii.allthelogs.data.internal.LogDates;
-import me.wolfii.allthelogs.data.internal.LogDiscovery;
-import me.wolfii.allthelogs.data.internal.LogParser;
-import me.wolfii.allthelogs.data.internal.LogWriter;
-import me.wolfii.allthelogs.data.internal.ParsedLog;
-import me.wolfii.allthelogs.data.internal.PreparedLog;
-import me.wolfii.allthelogs.data.internal.QueryBuilder;
-import me.wolfii.allthelogs.data.internal.Schema;
+import me.wolfii.allthelogs.data.internal.*;
 import org.duckdb.DuckDBConnection;
 
-import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.sql.Timestamp;
+import java.sql.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.*;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -67,7 +39,7 @@ public final class LogStore implements AutoCloseable {
     private static final String LIVE_SOURCE_PATH = "<live>";
     /// Sentinel that tells the writer loop that no more logs are coming.
     private static final PreparedLog END_OF_STREAM = new PreparedLog(
-            "", SourceKind.DIRECTORY, "", "", LocalDate.EPOCH, DateSource.FILE_NAME, "", null, List.of(), List.of());
+        "", SourceKind.DIRECTORY, "", "", LocalDate.EPOCH, DateSource.FILE_NAME, "", null, List.of(), List.of());
 
     private final DuckDBConnection connection;
     private final Path databasePath;
@@ -108,6 +80,80 @@ public final class LogStore implements AutoCloseable {
         } catch (SQLException e) {
             throw new LogDataException("could not open in-memory log database", e);
         }
+    }
+
+    private static void drain(BlockingQueue<PreparedLog> queue, Thread discoverer) throws InterruptedException {
+        while (discoverer.isAlive() || !queue.isEmpty()) {
+            queue.poll(50, TimeUnit.MILLISECONDS);
+        }
+        discoverer.join();
+    }
+
+    private static void awaitTermination(ExecutorService parsers) throws InterruptedException {
+        while (!parsers.awaitTermination(1, TimeUnit.MINUTES)) {
+            // Keep waiting; a single log file never takes this long, so this only loops under extreme load.
+        }
+    }
+
+    private static PreparedLog prepare(LogCandidate candidate) throws IOException {
+        ParsedLog parsed;
+        try (BufferedReader reader = open(candidate)) {
+            parsed = LogParser.parse(reader);
+        }
+        LogDates.Resolved resolved = LogDates.resolve(candidate.fileName(), candidate.lastModified());
+
+        List<LocalDateTime> times = new ArrayList<>(parsed.entries().size());
+        List<String> messages = new ArrayList<>(parsed.entries().size());
+        for (ParsedLog.Entry entry : parsed.entries()) {
+            times.add(LocalDateTime.of(resolved.date(), entry.time()));
+            messages.add(entry.message());
+        }
+        return new PreparedLog(candidate.fileName(), candidate.sourceKind(), candidate.sourcePath(),
+            candidate.entryPath(), resolved.date(), resolved.source(), parsed.minecraftVersion(),
+            candidate.lastModified(), times, messages);
+    }
+
+    private static BufferedReader open(LogCandidate candidate) throws IOException {
+        InputStream stream = new ByteArrayInputStream(candidate.content());
+        if (candidate.fileName().toLowerCase(Locale.ROOT).endsWith(".gz")) {
+            stream = new GZIPInputStream(stream);
+        }
+        // Minecraft writes logs in UTF-8, but older clients on Windows produced bytes in the system code page; the
+        // replacement character keeps such files readable instead of failing the whole import.
+        return new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8), 1 << 16);
+    }
+
+    private static ChatEntry readEntry(ResultSet result, Map<String, LogFile> fileCache) throws SQLException {
+        // Many consecutive rows come from the same file, so resolving metadata once per file avoids rebuilding the
+        // same record thousands of times.
+        String cacheKey = result.getString(3) + "\u0000" + result.getString(4);
+        LogFile file = fileCache.get(cacheKey);
+        if (file == null) {
+            file = readLogFile(result, 1);
+            fileCache.put(cacheKey, file);
+        }
+        LocalDateTime timestamp = result.getTimestamp(12).toLocalDateTime();
+        return new ChatEntry(file, timestamp, result.getInt(13), result.getString(14));
+    }
+
+    private static LogFile readLogFile(ResultSet result, int offset) throws SQLException {
+        return new LogFile(
+            result.getString(offset),
+            SourceKind.valueOf(result.getString(offset + 1)),
+            result.getString(offset + 2),
+            result.getString(offset + 3),
+            result.getDate(offset + 4).toLocalDate(),
+            DateSource.valueOf(result.getString(offset + 5)),
+            result.getString(offset + 6),
+            optionalTimestamp(result, offset + 7),
+            optionalTimestamp(result, offset + 8),
+            optionalTimestamp(result, offset + 9),
+            result.getLong(offset + 10));
+    }
+
+    private static Optional<LocalDateTime> optionalTimestamp(ResultSet result, int column) throws SQLException {
+        Timestamp timestamp = result.getTimestamp(column);
+        return timestamp == null ? Optional.empty() : Optional.of(timestamp.toLocalDateTime());
     }
 
     /// The file this store is backed by, or empty for an in memory store.
@@ -161,7 +207,7 @@ public final class LogStore implements AutoCloseable {
             ExecutorService parsers = Executors.newFixedThreadPool(options.parallelism());
             LogDiscovery discovery = new LogDiscovery(options, candidate -> {
                 if (options.skipAlreadyImported()
-                        && writer.isAlreadyImported(candidate.sourcePath(), candidate.entryPath())) {
+                    && writer.isAlreadyImported(candidate.sourcePath(), candidate.entryPath())) {
                     skipped.incrementAndGet();
                     return;
                 }
@@ -175,7 +221,7 @@ public final class LogStore implements AutoCloseable {
                         queue.put(prepared);
                     } catch (IOException e) {
                         parseFailures.add(new ImportResult.Failure(candidate.entryPath(),
-                                "could not parse: " + e.getMessage()));
+                            "could not parse: " + e.getMessage()));
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                     }
@@ -218,54 +264,13 @@ public final class LogStore implements AutoCloseable {
             List<ImportResult.Failure> failures = new ArrayList<>(discovery.failures());
             failures.addAll(parseFailures);
             return new ImportResult(writer.writtenFiles(), skipped.get(), writer.writtenEntries(),
-                    List.copyOf(failures));
+                List.copyOf(failures));
         } catch (SQLException e) {
             throw new LogDataException("could not write imported logs", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new LogDataException("import was interrupted", e);
         }
-    }
-
-    private static void drain(BlockingQueue<PreparedLog> queue, Thread discoverer) throws InterruptedException {
-        while (discoverer.isAlive() || !queue.isEmpty()) {
-            queue.poll(50, TimeUnit.MILLISECONDS);
-        }
-        discoverer.join();
-    }
-
-    private static void awaitTermination(ExecutorService parsers) throws InterruptedException {
-        while (!parsers.awaitTermination(1, TimeUnit.MINUTES)) {
-            // Keep waiting; a single log file never takes this long, so this only loops under extreme load.
-        }
-    }
-
-    private static PreparedLog prepare(LogCandidate candidate) throws IOException {
-        ParsedLog parsed;
-        try (BufferedReader reader = open(candidate)) {
-            parsed = LogParser.parse(reader);
-        }
-        LogDates.Resolved resolved = LogDates.resolve(candidate.fileName(), candidate.lastModified());
-
-        List<LocalDateTime> times = new ArrayList<>(parsed.entries().size());
-        List<String> messages = new ArrayList<>(parsed.entries().size());
-        for (ParsedLog.Entry entry : parsed.entries()) {
-            times.add(LocalDateTime.of(resolved.date(), entry.time()));
-            messages.add(entry.message());
-        }
-        return new PreparedLog(candidate.fileName(), candidate.sourceKind(), candidate.sourcePath(),
-                candidate.entryPath(), resolved.date(), resolved.source(), parsed.minecraftVersion(),
-                candidate.lastModified(), times, messages);
-    }
-
-    private static BufferedReader open(LogCandidate candidate) throws IOException {
-        InputStream stream = new ByteArrayInputStream(candidate.content());
-        if (candidate.fileName().toLowerCase(Locale.ROOT).endsWith(".gz")) {
-            stream = new GZIPInputStream(stream);
-        }
-        // Minecraft writes logs in UTF-8, but older clients on Windows produced bytes in the system code page; the
-        // replacement character keeps such files readable instead of failing the whole import.
-        return new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8), 1 << 16);
     }
 
     /// Stores a single chat line captured from a running game, stamped with the current time.
@@ -302,9 +307,9 @@ public final class LogStore implements AutoCloseable {
     }
 
     private boolean writeLiveEntry(String minecraftVersion, String message, LocalDateTime timestamp)
-            throws SQLException {
+        throws SQLException {
         try (PreparedStatement duplicate = connection.prepareStatement(
-                "SELECT 1 FROM chat_entry WHERE entry_time = ? AND message = ? LIMIT 1")) {
+            "SELECT 1 FROM chat_entry WHERE entry_time = ? AND message = ? LIMIT 1")) {
             duplicate.setTimestamp(1, Timestamp.valueOf(timestamp));
             duplicate.setString(2, message);
             try (ResultSet result = duplicate.executeQuery()) {
@@ -317,7 +322,7 @@ public final class LogStore implements AutoCloseable {
         long fileId;
         int lineIndex;
         try (PreparedStatement existing = connection.prepareStatement(
-                "SELECT id, entry_count FROM log_file WHERE source_path = ? AND entry_path = ?")) {
+            "SELECT id, entry_count FROM log_file WHERE source_path = ? AND entry_path = ?")) {
             existing.setString(1, LIVE_SOURCE_PATH);
             existing.setString(2, entryPath);
             try (ResultSet result = existing.executeQuery()) {
@@ -333,7 +338,7 @@ public final class LogStore implements AutoCloseable {
         }
 
         try (PreparedStatement insert = connection.prepareStatement(
-                "INSERT INTO chat_entry (file_id, line_index, entry_time, message) VALUES (?, ?, ?, ?)")) {
+            "INSERT INTO chat_entry (file_id, line_index, entry_time, message) VALUES (?, ?, ?, ?)")) {
             insert.setLong(1, fileId);
             insert.setInt(2, lineIndex);
             insert.setTimestamp(3, Timestamp.valueOf(timestamp));
@@ -341,11 +346,11 @@ public final class LogStore implements AutoCloseable {
             insert.execute();
         }
         try (PreparedStatement update = connection.prepareStatement("""
-                UPDATE log_file SET
-                    entry_count = entry_count + 1,
-                    first_entry_time = least(coalesce(first_entry_time, ?), ?),
-                    last_entry_time = greatest(coalesce(last_entry_time, ?), ?)
-                WHERE id = ?""")) {
+            UPDATE log_file SET
+                entry_count = entry_count + 1,
+                first_entry_time = least(coalesce(first_entry_time, ?), ?),
+                last_entry_time = greatest(coalesce(last_entry_time, ?), ?)
+            WHERE id = ?""")) {
             Timestamp stamp = Timestamp.valueOf(timestamp);
             update.setTimestamp(1, stamp);
             update.setTimestamp(2, stamp);
@@ -358,11 +363,11 @@ public final class LogStore implements AutoCloseable {
     }
 
     private void insertLiveFile(long fileId, String minecraftVersion, LocalDate date, String entryPath)
-            throws SQLException {
+        throws SQLException {
         try (PreparedStatement insert = connection.prepareStatement("""
-                INSERT INTO log_file (id, file_name, source_kind, source_path, entry_path, log_date, date_source,
-                                      minecraft_version, last_modified, first_entry_time, last_entry_time, entry_count)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 0)""")) {
+            INSERT INTO log_file (id, file_name, source_kind, source_path, entry_path, log_date, date_source,
+                                  minecraft_version, last_modified, first_entry_time, last_entry_time, entry_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 0)""")) {
             insert.setLong(1, fileId);
             insert.setString(2, date + "-live.log");
             insert.setString(3, SourceKind.LIVE.name());
@@ -460,9 +465,9 @@ public final class LogStore implements AutoCloseable {
     public List<LogFile> logFiles() {
         List<LogFile> files = new ArrayList<>();
         String sql = """
-                SELECT file_name, source_kind, source_path, entry_path, log_date, date_source, minecraft_version,
-                       last_modified, first_entry_time, last_entry_time, entry_count
-                FROM log_file ORDER BY log_date, entry_path""";
+            SELECT file_name, source_kind, source_path, entry_path, log_date, date_source, minecraft_version,
+                   last_modified, first_entry_time, last_entry_time, entry_count
+            FROM log_file ORDER BY log_date, entry_path""";
         try (Statement statement = connection.createStatement();
              ResultSet result = statement.executeQuery(sql)) {
             while (result.next()) {
@@ -481,39 +486,6 @@ public final class LogStore implements AutoCloseable {
         } catch (SQLException e) {
             throw new LogDataException("could not compact the database", e);
         }
-    }
-
-    private static ChatEntry readEntry(ResultSet result, Map<String, LogFile> fileCache) throws SQLException {
-        // Many consecutive rows come from the same file, so resolving metadata once per file avoids rebuilding the
-        // same record thousands of times.
-        String cacheKey = result.getString(3) + "\u0000" + result.getString(4);
-        LogFile file = fileCache.get(cacheKey);
-        if (file == null) {
-            file = readLogFile(result, 1);
-            fileCache.put(cacheKey, file);
-        }
-        LocalDateTime timestamp = result.getTimestamp(12).toLocalDateTime();
-        return new ChatEntry(file, timestamp, result.getInt(13), result.getString(14));
-    }
-
-    private static LogFile readLogFile(ResultSet result, int offset) throws SQLException {
-        return new LogFile(
-                result.getString(offset),
-                SourceKind.valueOf(result.getString(offset + 1)),
-                result.getString(offset + 2),
-                result.getString(offset + 3),
-                result.getDate(offset + 4).toLocalDate(),
-                DateSource.valueOf(result.getString(offset + 5)),
-                result.getString(offset + 6),
-                optionalTimestamp(result, offset + 7),
-                optionalTimestamp(result, offset + 8),
-                optionalTimestamp(result, offset + 9),
-                result.getLong(offset + 10));
-    }
-
-    private static Optional<LocalDateTime> optionalTimestamp(ResultSet result, int column) throws SQLException {
-        Timestamp timestamp = result.getTimestamp(column);
-        return timestamp == null ? Optional.empty() : Optional.of(timestamp.toLocalDateTime());
     }
 
     @Override

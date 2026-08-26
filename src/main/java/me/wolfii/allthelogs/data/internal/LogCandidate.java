@@ -16,11 +16,11 @@ import java.time.LocalDateTime;
 /// @param lastModified last modification time, or `null` if the source does not report one
 /// @param content      raw file bytes, still gzip compressed if the file name ends in `.gz`
 public record LogCandidate(
-        String fileName,
-        SourceKind sourceKind,
-        String sourcePath,
-        String entryPath,
-        LocalDateTime lastModified,
-        byte[] content
+    String fileName,
+    SourceKind sourceKind,
+    String sourcePath,
+    String entryPath,
+    LocalDateTime lastModified,
+    byte[] content
 ) {
 }

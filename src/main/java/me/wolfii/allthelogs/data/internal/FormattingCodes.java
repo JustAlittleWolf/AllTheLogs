@@ -28,6 +28,6 @@ public final class FormattingCodes {
 
     private static boolean isCode(char c) {
         return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')
-                || c == 'k' || c == 'l' || c == 'm' || c == 'n' || c == 'o' || c == 'r';
+            || c == 'k' || c == 'l' || c == 'm' || c == 'n' || c == 'o' || c == 'r';
     }
 }

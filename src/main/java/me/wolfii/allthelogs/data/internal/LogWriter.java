@@ -37,7 +37,7 @@ public final class LogWriter implements AutoCloseable {
         this.connection = connection;
         try (Statement statement = connection.createStatement();
              ResultSet result = statement.executeQuery(
-                     "SELECT id, source_path, entry_path FROM log_file")) {
+                 "SELECT id, source_path, entry_path FROM log_file")) {
             while (result.next()) {
                 long id = result.getLong(1);
                 existingLocations.put(locationKey(result.getString(2), result.getString(3)), id);
@@ -46,6 +46,18 @@ public final class LogWriter implements AutoCloseable {
         }
         this.fileAppender = connection.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "log_file");
         this.entryAppender = connection.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "chat_entry");
+    }
+
+    private static void appendNullable(DuckDBAppender appender, LocalDateTime value) throws SQLException {
+        if (value == null) {
+            appender.appendNull();
+        } else {
+            appender.append(value);
+        }
+    }
+
+    private static String locationKey(String sourcePath, String entryPath) {
+        return sourcePath + "\u0000" + entryPath;
     }
 
     /// Whether a log at this location has already been stored, either by an earlier run or earlier in this one.
@@ -117,22 +129,22 @@ public final class LogWriter implements AutoCloseable {
         long removed;
         try (Statement statement = connection.createStatement()) {
             try (ResultSet result = statement.executeQuery("""
-                    SELECT count(*) FROM (
-                        SELECT row_number() OVER (PARTITION BY entry_time, message ORDER BY file_id, line_index) AS rn
-                        FROM chat_entry
-                    ) WHERE rn > 1""")) {
+                SELECT count(*) FROM (
+                    SELECT row_number() OVER (PARTITION BY entry_time, message ORDER BY file_id, line_index) AS rn
+                    FROM chat_entry
+                ) WHERE rn > 1""")) {
                 result.next();
                 removed = result.getLong(1);
             }
             if (removed == 0) return 0;
             statement.execute("""
-                    DELETE FROM chat_entry WHERE rowid IN (
-                        SELECT rowid FROM (
-                            SELECT rowid, row_number() OVER (
-                                PARTITION BY entry_time, message ORDER BY file_id, line_index) AS rn
-                            FROM chat_entry
-                        ) WHERE rn > 1
-                    )""");
+                DELETE FROM chat_entry WHERE rowid IN (
+                    SELECT rowid FROM (
+                        SELECT rowid, row_number() OVER (
+                            PARTITION BY entry_time, message ORDER BY file_id, line_index) AS rn
+                        FROM chat_entry
+                    ) WHERE rn > 1
+                )""");
             writtenFiles -= refreshFileAggregates(statement);
         }
         writtenEntries -= removed;
@@ -144,23 +156,23 @@ public final class LogWriter implements AutoCloseable {
     /// @return how many files were dropped because every one of their entries turned out to be a duplicate
     private int refreshFileAggregates(Statement statement) throws SQLException {
         statement.execute("""
-                UPDATE log_file SET
-                    entry_count = coalesce(stats.count, 0),
-                    first_entry_time = stats.first_time,
-                    last_entry_time = stats.last_time
-                FROM (
-                    SELECT f.id AS file_id,
-                           count(e.entry_time) AS count,
-                           min(e.entry_time) AS first_time,
-                           max(e.entry_time) AS last_time
-                    FROM log_file f LEFT JOIN chat_entry e ON e.file_id = f.id
-                    GROUP BY f.id
-                ) stats
-                WHERE log_file.id = stats.file_id""");
+            UPDATE log_file SET
+                entry_count = coalesce(stats.count, 0),
+                first_entry_time = stats.first_time,
+                last_entry_time = stats.last_time
+            FROM (
+                SELECT f.id AS file_id,
+                       count(e.entry_time) AS count,
+                       min(e.entry_time) AS first_time,
+                       max(e.entry_time) AS last_time
+                FROM log_file f LEFT JOIN chat_entry e ON e.file_id = f.id
+                GROUP BY f.id
+            ) stats
+            WHERE log_file.id = stats.file_id""");
 
         List<String> emptyLocations = new ArrayList<>();
         try (ResultSet result = statement.executeQuery(
-                "SELECT source_path, entry_path FROM log_file WHERE entry_count = 0")) {
+            "SELECT source_path, entry_path FROM log_file WHERE entry_count = 0")) {
             while (result.next()) {
                 emptyLocations.add(locationKey(result.getString(1), result.getString(2)));
             }
@@ -185,18 +197,6 @@ public final class LogWriter implements AutoCloseable {
         fileAppender.flush();
         entryAppender.flush();
         bufferedEntries = 0;
-    }
-
-    private static void appendNullable(DuckDBAppender appender, LocalDateTime value) throws SQLException {
-        if (value == null) {
-            appender.appendNull();
-        } else {
-            appender.append(value);
-        }
-    }
-
-    private static String locationKey(String sourcePath, String entryPath) {
-        return sourcePath + "\u0000" + entryPath;
     }
 
     @Override

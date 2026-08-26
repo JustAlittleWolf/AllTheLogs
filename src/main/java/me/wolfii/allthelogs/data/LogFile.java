@@ -20,17 +20,17 @@ import java.util.Optional;
 /// @param lastEntryTime   timestamp of the last chat entry of this file, empty if the file has no chat entries
 /// @param entryCount      number of stored chat entries of this file
 public record LogFile(
-        String fileName,
-        SourceKind sourceKind,
-        String sourcePath,
-        String entryPath,
-        LocalDate date,
-        DateSource dateSource,
-        String minecraftVersion,
-        Optional<LocalDateTime> lastModified,
-        Optional<LocalDateTime> firstEntryTime,
-        Optional<LocalDateTime> lastEntryTime,
-        long entryCount
+    String fileName,
+    SourceKind sourceKind,
+    String sourcePath,
+    String entryPath,
+    LocalDate date,
+    DateSource dateSource,
+    String minecraftVersion,
+    Optional<LocalDateTime> lastModified,
+    Optional<LocalDateTime> firstEntryTime,
+    Optional<LocalDateTime> lastEntryTime,
+    long entryCount
 ) {
     /// Placeholder used when the Minecraft version could not be determined from the log contents.
     public static final String UNKNOWN_VERSION = "unknown";

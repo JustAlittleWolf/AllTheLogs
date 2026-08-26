@@ -16,11 +16,6 @@ public final class LogDates {
     private LogDates() {
     }
 
-    /// @param date   the resolved date
-    /// @param source how it was resolved
-    public record Resolved(LocalDate date, DateSource source) {
-    }
-
     /// Resolves the date from the file name, falling back to the last modification time.
     ///
     /// @param lastModified may be `null` when the source reports no modification time; the current date is used then
@@ -46,5 +41,10 @@ public final class LogDates {
             }
         }
         return null;
+    }
+
+    /// @param date   the resolved date
+    /// @param source how it was resolved
+    public record Resolved(LocalDate date, DateSource source) {
     }
 }

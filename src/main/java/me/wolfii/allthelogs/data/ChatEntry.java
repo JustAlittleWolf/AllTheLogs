@@ -10,9 +10,9 @@ import java.time.LocalDateTime;
 ///                  one file have consecutive indices, which is what makes retrieving surrounding lines cheap
 /// @param message   the raw chat text, including any legacy formatting codes
 public record ChatEntry(
-        LogFile logFile,
-        LocalDateTime timestamp,
-        int lineIndex,
-        String message
+    LogFile logFile,
+    LocalDateTime timestamp,
+    int lineIndex,
+    String message
 ) {
 }

@@ -12,11 +12,11 @@ package me.wolfii.allthelogs.data;
 /// @param skipAlreadyImported whether files whose source and entry path are already present in the database are
 ///                        skipped instead of replaced
 public record ImportOptions(
-        boolean recursive,
-        boolean nestedArchives,
-        String pathMatcher,
-        int parallelism,
-        boolean skipAlreadyImported
+    boolean recursive,
+    boolean nestedArchives,
+    String pathMatcher,
+    int parallelism,
+    boolean skipAlreadyImported
 ) {
     public ImportOptions {
         if (parallelism < 1) throw new IllegalArgumentException("parallelism must be at least 1, was " + parallelism);

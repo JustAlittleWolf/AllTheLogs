@@ -16,10 +16,10 @@ import java.util.List;
 /// deduplicated for free.
 public final class QueryBuilder {
     private static final String SELECT_COLUMNS = """
-            SELECT f.file_name, f.source_kind, f.source_path, f.entry_path, f.log_date, f.date_source,
-                   f.minecraft_version, f.last_modified, f.first_entry_time, f.last_entry_time, f.entry_count,
-                   e.entry_time, e.line_index, e.message
-            """;
+        SELECT f.file_name, f.source_kind, f.source_path, f.entry_path, f.log_date, f.date_source,
+               f.minecraft_version, f.last_modified, f.first_entry_time, f.last_entry_time, f.entry_count,
+               e.entry_time, e.line_index, e.message
+        """;
 
     private final String sql;
     private final List<Object> parameters;
@@ -27,21 +27,6 @@ public final class QueryBuilder {
     private QueryBuilder(String sql, List<Object> parameters) {
         this.sql = sql;
         this.parameters = parameters;
-    }
-
-    public String sql() {
-        return sql;
-    }
-
-    public void bind(PreparedStatement statement) throws SQLException {
-        for (int i = 0; i < parameters.size(); i++) {
-            Object parameter = parameters.get(i);
-            if (parameter instanceof Timestamp timestamp) {
-                statement.setTimestamp(i + 1, timestamp);
-            } else {
-                statement.setString(i + 1, (String) parameter);
-            }
-        }
     }
 
     public static QueryBuilder build(ChatQuery query) {
@@ -77,15 +62,15 @@ public final class QueryBuilder {
         String sql;
         if (query.contextLines() == 0 || !query.hasTextFilter()) {
             sql = SELECT_COLUMNS + " FROM chat_entry e JOIN log_file f ON f.id = e.file_id"
-                    + (conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions))
-                    + " " + order + limit;
+                + (conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions))
+                + " " + order + limit;
         } else {
             // The date range must also constrain the context rows, otherwise a match at the edge of the range would
             // pull in neighbours from outside it.
             List<String> contextConditions = new ArrayList<>();
             contextConditions.add("e.file_id = m.file_id");
             contextConditions.add("e.line_index BETWEEN m.line_index - " + query.contextLines()
-                    + " AND m.line_index + " + query.contextLines());
+                + " AND m.line_index + " + query.contextLines());
             if (query.from() != null) {
                 contextConditions.add("e.entry_time >= ?");
                 parameters.add(Timestamp.valueOf(query.from()));
@@ -95,10 +80,10 @@ public final class QueryBuilder {
                 parameters.add(Timestamp.valueOf(query.to()));
             }
             sql = "WITH matches AS (SELECT file_id, line_index FROM chat_entry" + where + ") "
-                    + SELECT_COLUMNS
-                    + " FROM chat_entry e JOIN log_file f ON f.id = e.file_id"
-                    + " WHERE EXISTS (SELECT 1 FROM matches m WHERE " + String.join(" AND ", contextConditions) + ") "
-                    + order + limit;
+                + SELECT_COLUMNS
+                + " FROM chat_entry e JOIN log_file f ON f.id = e.file_id"
+                + " WHERE EXISTS (SELECT 1 FROM matches m WHERE " + String.join(" AND ", contextConditions) + ") "
+                + order + limit;
         }
         return new QueryBuilder(sql, parameters);
     }
@@ -110,5 +95,20 @@ public final class QueryBuilder {
         int orderIndex = full.sql.indexOf(" ORDER BY ");
         String body = full.sql.substring(fromIndex, orderIndex);
         return new QueryBuilder("SELECT count(*)" + body, full.parameters);
+    }
+
+    public String sql() {
+        return sql;
+    }
+
+    public void bind(PreparedStatement statement) throws SQLException {
+        for (int i = 0; i < parameters.size(); i++) {
+            Object parameter = parameters.get(i);
+            if (parameter instanceof Timestamp timestamp) {
+                statement.setTimestamp(i + 1, timestamp);
+            } else {
+                statement.setString(i + 1, (String) parameter);
+            }
+        }
     }
 }

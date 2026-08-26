@@ -22,16 +22,16 @@ public final class LogParser {
     /// Matches the leading `[HH:mm:ss]` or `[yyyy-MM-dd HH:mm:ss]` of a log line. Fractional seconds, as written by
     /// some launchers, are tolerated and discarded.
     private static final Pattern LINE_START = Pattern.compile(
-            "^\\[(?:\\d{4}-\\d{2}-\\d{2}[ T])?(\\d{1,2}):(\\d{2}):(\\d{2})(?:[.,]\\d+)?] ");
+        "^\\[(?:\\d{4}-\\d{2}-\\d{2}[ T])?(\\d{1,2}):(\\d{2}):(\\d{2})(?:[.,]\\d+)?] ");
 
     /// Version detection patterns, most trustworthy first. The first pattern that matches anywhere in the file wins,
     /// and scanning for a version stops as soon as the most trustworthy one is found.
     private static final Pattern[] VERSION_PATTERNS = {
-            Pattern.compile("Loading Minecraft (\\S+) with (?:Fabric|Quilt) Loader"),
-            Pattern.compile("for Minecraft (\\S+) loading"),
-            Pattern.compile("Starting integrated minecraft server version (\\S+)"),
-            Pattern.compile("Minecraft Version: (\\S+)"),
-            Pattern.compile("--version,? (\\S+)")
+        Pattern.compile("Loading Minecraft (\\S+) with (?:Fabric|Quilt) Loader"),
+        Pattern.compile("for Minecraft (\\S+) loading"),
+        Pattern.compile("Starting integrated minecraft server version (\\S+)"),
+        Pattern.compile("Minecraft Version: (\\S+)"),
+        Pattern.compile("--version,? (\\S+)")
     };
 
     private LogParser() {

@@ -11,10 +11,10 @@ import java.util.List;
 ///                      and message were dropped
 /// @param failures      files that could not be read, with the reason
 public record ImportResult(
-        int importedFiles,
-        int skippedFiles,
-        long importedEntries,
-        List<Failure> failures
+    int importedFiles,
+    int skippedFiles,
+    long importedEntries,
+    List<Failure> failures
 ) {
     /// @param path   the path of the file that failed, formatted like [LogFile#entryPath()]
     /// @param reason human readable description of what went wrong

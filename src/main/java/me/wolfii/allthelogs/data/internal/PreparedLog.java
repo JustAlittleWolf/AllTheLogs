@@ -11,15 +11,15 @@ import java.util.List;
 ///
 /// @param entryTimes timestamps of the chat entries, parallel to [#messages]
 public record PreparedLog(
-        String fileName,
-        SourceKind sourceKind,
-        String sourcePath,
-        String entryPath,
-        LocalDate date,
-        DateSource dateSource,
-        String minecraftVersion,
-        LocalDateTime lastModified,
-        List<LocalDateTime> entryTimes,
-        List<String> messages
+    String fileName,
+    SourceKind sourceKind,
+    String sourcePath,
+    String entryPath,
+    LocalDate date,
+    DateSource dateSource,
+    String minecraftVersion,
+    LocalDateTime lastModified,
+    List<LocalDateTime> entryTimes,
+    List<String> messages
 ) {
 }

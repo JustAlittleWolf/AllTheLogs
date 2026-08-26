@@ -18,32 +18,32 @@ public final class Schema {
 
     public static void create(Statement statement) throws SQLException {
         statement.execute("""
-                CREATE TABLE IF NOT EXISTS meta (
-                    key VARCHAR PRIMARY KEY,
-                    value VARCHAR NOT NULL
-                )""");
+            CREATE TABLE IF NOT EXISTS meta (
+                key VARCHAR PRIMARY KEY,
+                value VARCHAR NOT NULL
+            )""");
         statement.execute("""
-                CREATE TABLE IF NOT EXISTS log_file (
-                    id BIGINT PRIMARY KEY,
-                    file_name VARCHAR NOT NULL,
-                    source_kind VARCHAR NOT NULL,
-                    source_path VARCHAR NOT NULL,
-                    entry_path VARCHAR NOT NULL,
-                    log_date DATE NOT NULL,
-                    date_source VARCHAR NOT NULL,
-                    minecraft_version VARCHAR NOT NULL,
-                    last_modified TIMESTAMP,
-                    first_entry_time TIMESTAMP,
-                    last_entry_time TIMESTAMP,
-                    entry_count BIGINT NOT NULL
-                )""");
+            CREATE TABLE IF NOT EXISTS log_file (
+                id BIGINT PRIMARY KEY,
+                file_name VARCHAR NOT NULL,
+                source_kind VARCHAR NOT NULL,
+                source_path VARCHAR NOT NULL,
+                entry_path VARCHAR NOT NULL,
+                log_date DATE NOT NULL,
+                date_source VARCHAR NOT NULL,
+                minecraft_version VARCHAR NOT NULL,
+                last_modified TIMESTAMP,
+                first_entry_time TIMESTAMP,
+                last_entry_time TIMESTAMP,
+                entry_count BIGINT NOT NULL
+            )""");
         statement.execute("""
-                CREATE TABLE IF NOT EXISTS chat_entry (
-                    file_id BIGINT NOT NULL,
-                    line_index INTEGER NOT NULL,
-                    entry_time TIMESTAMP NOT NULL,
-                    message VARCHAR NOT NULL
-                )""");
+            CREATE TABLE IF NOT EXISTS chat_entry (
+                file_id BIGINT NOT NULL,
+                line_index INTEGER NOT NULL,
+                entry_time TIMESTAMP NOT NULL,
+                message VARCHAR NOT NULL
+            )""");
         statement.execute("CREATE UNIQUE INDEX IF NOT EXISTS log_file_location ON log_file (source_path, entry_path)");
         statement.execute("CREATE INDEX IF NOT EXISTS chat_entry_location ON chat_entry (file_id, line_index)");
         statement.execute("INSERT OR IGNORE INTO meta VALUES ('schema_version', '" + VERSION + "')");

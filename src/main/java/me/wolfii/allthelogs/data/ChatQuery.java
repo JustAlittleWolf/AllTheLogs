@@ -124,7 +124,7 @@ public final class ChatQuery {
     @Override
     public String toString() {
         return "ChatQuery[substring=" + substring + ", caseSensitive=" + caseSensitive + ", regex=" + regex
-                + ", from=" + from + ", to=" + to + ", contextLines=" + contextLines + ", limit=" + limit
-                + ", descending=" + descending + "]";
+            + ", from=" + from + ", to=" + to + ", contextLines=" + contextLines + ", limit=" + limit
+            + ", descending=" + descending + "]";
     }
 }
