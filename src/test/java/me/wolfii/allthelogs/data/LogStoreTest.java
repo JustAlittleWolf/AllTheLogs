@@ -329,6 +329,120 @@ class LogStoreTest {
     }
 
     @Test
+    void sortsDescendingWithTheSortOption() throws IOException {
+        store.importDirectory(logsDirectory());
+
+        List<ChatEntry> byFlag = store.query(ChatQuery.all().withDescending(true));
+        List<ChatEntry> bySort = store.query(ChatQuery.all().withSort(ChatQuery.Sort.DESCENDING));
+
+        assertEquals(byFlag.stream().map(ChatEntry::message).toList(),
+            bySort.stream().map(ChatEntry::message).toList());
+        assertTrue(bySort.getFirst().timestamp().isAfter(bySort.getLast().timestamp()));
+    }
+
+    @Test
+    void timestampOffsetPagesForwardAndBackward() throws IOException {
+        importOffsetLog();
+
+        List<String> forward = store.query(ChatQuery.all()
+                .withOffset(LocalDateTime.of(2026, 6, 1, 10, 0, 11)))
+            .stream().map(ChatEntry::message).toList();
+        assertEquals(List.of("hit", "four", "five"), forward);
+
+        List<String> backward = store.query(ChatQuery.all()
+                .withSort(ChatQuery.Sort.DESCENDING)
+                .withOffset(LocalDateTime.of(2026, 6, 1, 10, 0, 13)))
+            .stream().map(ChatEntry::message).toList();
+        assertEquals(List.of("hit", "two", "one"), backward);
+    }
+
+    @Test
+    void timestampOffsetComplementsTheLimit() throws IOException {
+        importOffsetLog();
+
+        List<ChatEntry> page1 = store.query(ChatQuery.all().withLimit(2));
+        assertEquals(List.of("one", "two"), page1.stream().map(ChatEntry::message).toList());
+
+        List<ChatEntry> page2 = store.query(ChatQuery.all()
+            .withOffset(page1.getLast().timestamp())
+            .withLimit(2));
+        assertEquals(List.of("hit", "four"), page2.stream().map(ChatEntry::message).toList());
+
+        List<ChatEntry> page3 = store.query(ChatQuery.all()
+            .withOffset(page2.getLast().timestamp())
+            .withLimit(2));
+        assertEquals(List.of("five"), page3.stream().map(ChatEntry::message).toList());
+    }
+
+    @Test
+    void timestampOffsetPagesNewestFirst() throws IOException {
+        importOffsetLog();
+
+        List<ChatEntry> page1 = store.query(ChatQuery.all()
+            .withSort(ChatQuery.Sort.DESCENDING)
+            .withLimit(2));
+        assertEquals(List.of("five", "four"), page1.stream().map(ChatEntry::message).toList());
+
+        List<ChatEntry> page2 = store.query(ChatQuery.all()
+            .withSort(ChatQuery.Sort.DESCENDING)
+            .withOffset(page1.getLast().timestamp())
+            .withLimit(2));
+        assertEquals(List.of("hit", "two"), page2.stream().map(ChatEntry::message).toList());
+    }
+
+    @Test
+    void contextLinesMayExtendBeyondTheTimestampOffset() throws IOException {
+        importOffsetLog();
+
+        List<String> after = store.query(ChatQuery.all()
+                .withSubstring("hit")
+                .withContextLines(2)
+                .withOffset(LocalDateTime.of(2026, 6, 1, 10, 0, 11)))
+            .stream().map(ChatEntry::message).toList();
+        assertEquals(List.of("one", "two", "hit", "four", "five"), after);
+
+        List<String> before = store.query(ChatQuery.all()
+                .withSubstring("hit")
+                .withContextLines(2)
+                .withSort(ChatQuery.Sort.DESCENDING)
+                .withOffset(LocalDateTime.of(2026, 6, 1, 10, 0, 13)))
+            .stream().map(ChatEntry::message).toList();
+        assertEquals(List.of("five", "four", "hit", "two", "one"), before);
+    }
+
+    @Test
+    void limitAppliesToMatchesBeforeContextIsExpanded() throws IOException {
+        importOffsetLog();
+
+        List<String> hits = store.query(ChatQuery.all()
+                .withSubstring("t")
+                .withContextLines(1)
+                .withLimit(1))
+            .stream().map(ChatEntry::message).toList();
+        // "two" is the first match for "t" in ascending order; context adds "one" and "hit".
+        assertEquals(List.of("one", "two", "hit"), hits);
+    }
+
+    @Test
+    void rangeStillClipsContextWhenAnOffsetIsSet() throws IOException {
+        importOffsetLog();
+
+        List<String> hits = store.query(ChatQuery.all()
+                .withSubstring("hit")
+                .withContextLines(2)
+                .withOffset(LocalDateTime.of(2026, 6, 1, 10, 0, 11))
+                .withRange(LocalDateTime.of(2026, 6, 1, 10, 0, 12), LocalDateTime.of(2026, 6, 1, 10, 0, 14)))
+            .stream().map(ChatEntry::message).toList();
+        assertEquals(List.of("hit", "four"), hits);
+    }
+
+    private void importOffsetLog() throws IOException {
+        LogFixtures.writeGzipped(tempDir.resolve("logs"), "2026-06-01-1.log.gz",
+            LogFixtures.modernLog("26.2", "one", "two", "hit", "four", "five"));
+        store.importDirectory(tempDir);
+    }
+
+    @Test
     void fetchesResultsThatSpanSeveralDuckDbChunks() throws IOException {
         StringBuilder log = new StringBuilder();
         log.append("[10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3\n");

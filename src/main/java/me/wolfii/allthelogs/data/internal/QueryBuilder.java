@@ -15,6 +15,11 @@ import java.util.Locale;
 /// so DuckDB does not repeat file strings on every row of a multi-million result. Context lines are resolved inside
 /// the database: matching rows are expanded into the concrete `(file_id, line_index)` keys they want, then hash-joined
 /// back to `chat_entry`. DISTINCT collapses overlapping windows, so every row is returned at most once.
+///
+/// A timestamp [ChatQuery#offset()] filters which rows count as matches, in the sort direction. Context expansion
+/// does not apply that bound, so surrounding lines may fall on the other side of the cursor. [ChatQuery#withRange]
+/// still clips both matches and context. When context is requested, [ChatQuery#limit()] applies to the match set
+/// before expansion, so a page of N matches still includes their surrounding lines.
 public final class QueryBuilder {
     private static final String SELECT_COLUMNS = "SELECT e.file_id, e.entry_time, e.line_index, e.message";
 
@@ -38,6 +43,7 @@ public final class QueryBuilder {
             conditions.add("entry_time < ?");
             parameters.add(Timestamp.valueOf(query.to()));
         }
+        addOffsetCondition(query, conditions, parameters);
         if (query.substring() != null) {
             if (query.caseSensitive()) {
                 conditions.add("contains(message, ?)");
@@ -54,11 +60,12 @@ public final class QueryBuilder {
         }
 
         String where = conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions);
-        String order = "ORDER BY e.entry_time " + (query.descending() ? "DESC" : "ASC") + ", e.file_id, e.line_index";
-        String limit = query.limit() < 0 ? "" : " LIMIT " + query.limit();
+        String order = orderBy(query, "e.entry_time", "e.file_id", "e.line_index");
+        boolean expandContext = query.contextLines() > 0 && query.hasTextFilter();
+        String limit = query.limit() < 0 || expandContext ? "" : " LIMIT " + query.limit();
 
         String sql;
-        if (query.contextLines() == 0 || !query.hasTextFilter()) {
+        if (!expandContext) {
             sql = SELECT_COLUMNS + " FROM chat_entry e"
                 + where
                 + " " + order + limit;
@@ -70,6 +77,9 @@ public final class QueryBuilder {
             // the join still returns every row at most once.
             int context = query.contextLines();
             List<String> contextFilters = new ArrayList<>();
+            // The date range must also constrain the context rows, otherwise a match at the edge of the range would
+            // pull in neighbours from outside it. The timestamp offset does not: it is a pagination cursor, and
+            // context is allowed to extend beyond it.
             if (query.from() != null) {
                 contextFilters.add("e.entry_time >= ?");
                 parameters.add(Timestamp.valueOf(query.from()));
@@ -79,15 +89,36 @@ public final class QueryBuilder {
                 parameters.add(Timestamp.valueOf(query.to()));
             }
             String contextWhere = contextFilters.isEmpty() ? "" : " WHERE " + String.join(" AND ", contextFilters);
-            sql = "WITH matches AS (SELECT file_id, line_index FROM chat_entry" + where + "), "
+            String matchOrder = orderBy(query, "entry_time", "file_id", "line_index");
+            String matchLimit = query.limit() < 0 ? "" : " " + matchOrder + " LIMIT " + query.limit();
+            sql = "WITH matches AS (SELECT file_id, line_index FROM chat_entry" + where + matchLimit + "), "
                 + "wanted AS (SELECT DISTINCT m.file_id, m.line_index + o.offset AS line_index FROM matches m, "
                 + "(SELECT unnest(range(-" + context + ", " + context + " + 1)) AS offset) o) "
                 + SELECT_COLUMNS
                 + " FROM wanted w INNER JOIN chat_entry e ON e.file_id = w.file_id AND e.line_index = w.line_index"
                 + contextWhere
-                + " " + order + limit;
+                + " " + order;
         }
         return new QueryBuilder(sql, parameters);
+    }
+
+    private static void addOffsetCondition(ChatQuery query, List<String> conditions, List<Object> parameters) {
+        if (query.offset() == null) return;
+        // Exclusive in the sort direction so (limit, offset=lastTimestamp) is the next page without repeating the
+        // last match. Context is added later without this predicate.
+        if (query.descending()) {
+            conditions.add("entry_time < ?");
+        } else {
+            conditions.add("entry_time > ?");
+        }
+        parameters.add(Timestamp.valueOf(query.offset()));
+    }
+
+    private static String orderBy(ChatQuery query, String time, String file, String line) {
+        if (query.descending()) {
+            return "ORDER BY " + time + " DESC, " + file + " DESC, " + line + " DESC";
+        }
+        return "ORDER BY " + time + " ASC, " + file + " ASC, " + line + " ASC";
     }
 
     public String sql() {
