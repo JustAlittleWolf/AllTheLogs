@@ -1,19 +1,22 @@
-package me.wolfii.allthelogs.data.internal;
+package me.wolfii.allthelogs.data.discover;
 
 import java.util.regex.Pattern;
 
-/// Translates the glob syntax used by [me.wolfii.allthelogs.data.ImportOptions#pathMatcher()] into a regex.
-///
-/// The default file system's path matcher is deliberately not used: paths inside archives are virtual and always use
-/// `/`, so matching must behave identically on every operating system.
+/**
+ * Translates the glob syntax used by {@link me.wolfii.allthelogs.data.ImportOptions#pathMatcher()} into a regex.
+ * Paths inside archives are virtual and always use {@code /}, so the default file system's path matcher is not used.
+ */
 public final class Globs {
     private Globs() {
     }
 
-    /// Compiles a glob into a pattern that matches whole `/` separated paths.
-    ///
-    /// Supported: `?` for one character except `/`, `*` for any run of characters except `/`, `**` for any run
-    /// including `/`, `[abc]` and `[!abc]` character classes, and `{a,b}` alternatives.
+    /**
+     * Compiles a glob into a pattern that matches whole {@code /} separated paths.
+     * <p>
+     * Supported: {@code ?} for one character except {@code /}, {@code *} for any run of characters except {@code /},
+     * {@code **} for any run including {@code /}, {@code [abc]} and {@code [!abc]} character classes, and
+     * {@code {a,b}} alternatives.
+     */
     public static Pattern compile(String glob) {
         StringBuilder regex = new StringBuilder("^");
         int depth = 0;
@@ -27,8 +30,7 @@ public final class Globs {
                 case '*' -> {
                     if (i + 1 < glob.length() && glob.charAt(i + 1) == '*') {
                         i++;
-                        // "**" spans any number of directories, including none, so the separator that joins it to its
-                        // neighbour is part of the wildcard rather than a required character.
+                        // "**" includes the joining separator so it can match zero directories.
                         if (i + 1 < glob.length() && glob.charAt(i + 1) == '/') {
                             i++;
                             regex.append("(?:.*/)?");

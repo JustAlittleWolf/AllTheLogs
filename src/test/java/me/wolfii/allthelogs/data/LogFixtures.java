@@ -9,12 +9,14 @@ import java.util.zip.GZIPOutputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-/// Builds small log files and archives for the tests.
+/**
+ * Builds small log files and archives for the tests.
+ */
 final class LogFixtures {
     private LogFixtures() {
     }
 
-    /// A modern Fabric style log whose first line carries the Minecraft version.
+    /** A modern Fabric style log whose first line carries the Minecraft version. */
     static String modernLog(String version, String... chatMessages) {
         StringBuilder log = new StringBuilder();
         log.append("[10:00:00] [main/INFO]: Loading Minecraft ").append(version)
@@ -29,7 +31,7 @@ final class LogFixtures {
         return log.toString();
     }
 
-    /// A 1.8.9 Forge style log; the version only shows up in a Forge Mod Loader line.
+    /** A 1.8.9 Forge style log; the version only shows up in a Forge Mod Loader line. */
     static String legacyLog(String... chatMessages) {
         StringBuilder log = new StringBuilder();
         log.append("[12:00:00] [main/INFO]: Forge Mod Loader version 11.15.1.2318 for Minecraft 1.8.9 loading\n");
@@ -57,7 +59,7 @@ final class LogFixtures {
         return file;
     }
 
-    /// Writes a zip whose entries are the given path to content pairs; entries ending in `.gz` are gzipped.
+    /** Writes a zip whose entries are the given path to content pairs; entries ending in {@code .gz} are gzipped. */
     static Path writeZip(Path file, java.util.Map<String, String> entries) throws IOException {
         Files.createDirectories(file.getParent());
         try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(file))) {

@@ -1,9 +1,10 @@
-package me.wolfii.allthelogs.data.internal;
+package me.wolfii.allthelogs.data.discover;
 
 import me.wolfii.allthelogs.data.ImportOptions;
 import me.wolfii.allthelogs.data.ImportResult;
 import me.wolfii.allthelogs.data.LogDataException;
 import me.wolfii.allthelogs.data.LogSource;
+import me.wolfii.allthelogs.data.store.SourceKind;
 import org.apache.commons.compress.archivers.ArchiveEntry;
 import org.apache.commons.compress.archivers.ArchiveInputStream;
 import org.apache.commons.compress.archivers.ArchiveStreamFactory;
@@ -11,21 +12,29 @@ import org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry;
 import org.apache.commons.compress.archivers.sevenz.SevenZFile;
 import org.apache.commons.compress.compressors.CompressorStreamFactory;
 
-import java.io.*;
+import java.io.BufferedInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.FilterInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Locale;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
-/// Walks directories and archives and hands every log file that passes the filters to a consumer.
-///
-/// Discovery is single threaded on purpose: it is dominated by sequential IO, and archive formats such as 7z cannot be
-/// read concurrently anyway. The expensive work, parsing and inserting, happens on the consumer side.
+/**
+ * Walks directories and archives and hands every log file that passes the filters to a consumer.
+ * Discovery is single-threaded: it is dominated by sequential IO, and formats such as 7z cannot be read concurrently.
+ */
 public final class LogDiscovery {
-    /// Separates the archive path from the path inside it, matching the convention of JAR URLs.
+    /** Separates the archive path from the path inside it, matching the convention of JAR URLs. */
     public static final String ARCHIVE_SEPARATOR = "!/";
     private static final List<String> LOG_SUFFIXES = List.of(".log", ".log.gz");
     private static final List<String> ARCHIVE_SUFFIXES = List.of(".zip", ".7z", ".tar", ".tar.gz", ".tgz");
@@ -48,7 +57,6 @@ public final class LogDiscovery {
         this.observer = observer;
     }
 
-    /// Reads an entry whose length the archive already told us, so the buffer is allocated exactly once.
     private static byte[] readFully(InputStream stream, long expectedSize) throws IOException {
         if (expectedSize > Integer.MAX_VALUE) {
             throw new IOException("archive entry is too large to read: " + expectedSize + " bytes");
@@ -85,7 +93,9 @@ public final class LogDiscovery {
         return List.copyOf(failures);
     }
 
-    /// Walks a directory tree, emitting every log file and, if enabled, descending into archives found on the way.
+    /**
+     * Walks a directory tree, emitting every log file and, if enabled, descending into archives found on the way.
+     */
     public void discoverDirectory(Path root) {
         Path absolute = root.toAbsolutePath().normalize();
         if (!Files.isDirectory(absolute)) {
@@ -94,7 +104,9 @@ public final class LogDiscovery {
         walk(absolute, absolute, "");
     }
 
-    /// Reads an archive, emitting every log file inside it.
+    /**
+     * Reads an archive, emitting every log file inside it.
+     */
     public void discoverArchive(Path archive) {
         Path absolute = archive.toAbsolutePath().normalize();
         if (!Files.isRegularFile(absolute)) {
@@ -140,10 +152,12 @@ public final class LogDiscovery {
         }
     }
 
-    /// @param sourcePath  absolute path of the archive file recorded on the resulting candidates
-    /// @param description human readable location of this archive, used in failure messages
-    /// @param prefix      path prefix that entries of this archive get inside the outermost archive
-    /// @param globPrefix  path prefix used for [ImportOptions#pathMatcher()], relative to the import root
+    /**
+     * @param sourcePath  absolute path of the archive file recorded on the resulting candidates
+     * @param description human readable location of this archive, used in failure messages
+     * @param prefix      path prefix that entries of this archive get inside the outermost archive
+     * @param globPrefix  path prefix used for {@link ImportOptions#pathMatcher()}, relative to the import root
+     */
     private void readArchive(Path archive, String sourcePath, String description, String prefix, String globPrefix,
                              String archiveName) {
         String archiveEntry = prefix.isEmpty() ? "" : prefix.substring(0, prefix.length() - ARCHIVE_SEPARATOR.length());
@@ -250,7 +264,9 @@ public final class LogDiscovery {
         InputStream open() throws IOException;
     }
 
-    /// Hides [InputStream#close] from consumers so that reading one entry cannot end the whole archive stream.
+    /**
+     * Hides {@link InputStream#close()} from consumers so that reading one entry cannot end the whole archive stream.
+     */
     private static final class NonClosingStream extends FilterInputStream {
         private NonClosingStream(InputStream delegate) {
             super(delegate);
@@ -261,7 +277,10 @@ public final class LogDiscovery {
         }
     }
 
-    /// Exposes the current entry of a [SevenZFile] as a stream, since the sequential API reads through the file itself.
+    /**
+     * Exposes the current entry of a {@link SevenZFile} as a stream, since the sequential API reads through the file
+     * itself.
+     */
     private static final class SevenZEntryStream extends InputStream {
         private final SevenZFile file;
 

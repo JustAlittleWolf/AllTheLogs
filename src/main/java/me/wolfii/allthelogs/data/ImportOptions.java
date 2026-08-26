@@ -3,20 +3,23 @@ package me.wolfii.allthelogs.data;
 import java.time.ZoneId;
 import java.util.Objects;
 
-/// Tuning knobs for an import run. Create one via [#defaults()] and derive variants with the `with*` methods.
-///
-/// @param recursive       for directory imports, whether to descend into subdirectories; for archive imports, whether
-///                        to descend into directories of the archive
-/// @param nestedArchives  whether archives found inside the imported tree (or inside the imported archive) are opened
-///                        and imported as well
-/// @param pathMatcher     glob restricting which log files are considered, matched against the path of the file
-///                        relative to the import root, e.g. `**&#47;logs&#47;**`; `null` accepts everything
-/// @param parallelism     number of log files parsed concurrently
-/// @param skipAlreadyImported whether files whose source and entry path are already present in the database are
-///                        skipped instead of replaced
-/// @param timezone        timezone the timestamps inside the imported log files are expressed in; they are converted
-///                        to the JVM's default timezone for storage, so that files written in different zones stay
-///                        comparable. Passing the default timezone leaves the values unchanged
+/**
+ * Tuning knobs for an import run. Create one via {@link #defaults()} and derive variants with the {@code with*}
+ * methods.
+ *
+ * @param recursive            for directory imports, whether to descend into subdirectories; for archive imports,
+ *                             whether to descend into directories of the archive
+ * @param nestedArchives       whether archives found inside the imported tree (or inside the imported archive) are
+ *                             opened and imported as well
+ * @param pathMatcher          glob restricting which log files are considered, matched against the path of the file
+ *                             relative to the import root, e.g. {@code **&#47;logs&#47;**}; {@code null} accepts everything
+ * @param parallelism          number of log files parsed concurrently
+ * @param skipAlreadyImported  whether files whose source and entry path are already present in the database are
+ *                             skipped instead of replaced
+ * @param timezone             timezone the timestamps inside the imported log files are expressed in; they are
+ *                             converted to the JVM's default timezone for storage, so that files written in different
+ *                             zones stay comparable. Passing the default timezone leaves the values unchanged
+ */
 public record ImportOptions(
     boolean recursive,
     boolean nestedArchives,
@@ -30,8 +33,10 @@ public record ImportOptions(
         Objects.requireNonNull(timezone, "timezone");
     }
 
-    /// Defaults to a recursive import of nested archives, one parser per CPU, replacing already imported files, and
-    /// treating log timestamps as local time.
+    /**
+     * Defaults to a recursive import of nested archives, one parser per CPU, replacing already imported files, and
+     * treating log timestamps as local time.
+     */
     public static ImportOptions defaults() {
         return new ImportOptions(true, true, null, Runtime.getRuntime().availableProcessors(), false,
             ZoneId.systemDefault());
@@ -45,7 +50,9 @@ public record ImportOptions(
         return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, timezone);
     }
 
-    /// @param pathMatcher a glob such as `**&#47;logs&#47;**`, or `null` to accept every file
+    /**
+     * @param pathMatcher a glob such as {@code **&#47;logs&#47;**}, or {@code null} to accept every file
+     */
     public ImportOptions withPathMatcher(String pathMatcher) {
         return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, timezone);
     }
@@ -58,14 +65,18 @@ public record ImportOptions(
         return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, timezone);
     }
 
-    /// Timezone the timestamps inside the imported logs are expressed in. Stored timestamps are converted from this
-    /// timezone to the JVM default timezone. Passing the default timezone, which is also what [#defaults()] uses,
-    /// leaves the values unchanged.
+    /**
+     * Timezone the timestamps inside the imported logs are expressed in. Stored timestamps are converted from this
+     * timezone to the JVM default timezone. Passing the default timezone, which is also what {@link #defaults()} uses,
+     * leaves the values unchanged.
+     */
     public ImportOptions withTimezone(ZoneId timezone) {
         return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, timezone);
     }
 
-    /// @param timezone an IANA timezone id such as `America/New_York`, or `UTC`
+    /**
+     * @param timezone an IANA timezone id such as {@code America/New_York}, or {@code UTC}
+     */
     public ImportOptions withTimezone(String timezone) {
         return withTimezone(ZoneId.of(timezone));
     }

@@ -1,4 +1,4 @@
-package me.wolfii.allthelogs.data.internal;
+package me.wolfii.allthelogs.data.discover;
 
 import me.wolfii.allthelogs.data.ImportProgress;
 import me.wolfii.allthelogs.data.LogSource;
@@ -6,10 +6,11 @@ import me.wolfii.allthelogs.data.LogSource;
 import java.nio.file.Path;
 import java.util.function.Consumer;
 
-/// Tracks import progress and notifies the caller-supplied callback.
-///
-/// All mutations and callback invocations are serialised, so the consumer never sees concurrent calls. When no
-/// callback was supplied, every method returns immediately.
+/**
+ * Tracks import progress and notifies the caller-supplied callback.
+ * All mutations and callback invocations are serialised. When no callback was supplied, every method returns
+ * immediately.
+ */
 public final class ImportObserver {
     private final Consumer<ImportProgress> callback;
     private int discoveredFiles;
@@ -21,15 +22,19 @@ public final class ImportObserver {
         this.callback = callback;
     }
 
-    /// Sets [#ImportProgress#current] to an archive, without counting it as a discovered log file.
-    ///
-    /// @param entryPath empty while the archive itself is being opened, otherwise the path of the log or nested
-    ///                  archive inside it
+    /**
+     * Sets {@link ImportProgress#current()} to an archive, without counting it as a discovered log file.
+     *
+     * @param entryPath empty while the archive itself is being opened, otherwise the path of the log or nested
+     *                  archive inside it
+     */
     void workingOnArchive(Path archive, String entryPath) {
         setCurrent(new LogSource.Archive(archive, entryPath));
     }
 
-    /// Records that a matching log file has been found and is now the current item.
+    /**
+     * Records that a matching log file has been found and is now the current item.
+     */
     void fileStarted(LogSource source) {
         if (callback == null) return;
         synchronized (this) {
@@ -39,13 +44,17 @@ public final class ImportObserver {
         }
     }
 
-    /// Records that the current log file has been imported, skipped, or failed.
+    /**
+     * Records that the current log file has been imported, skipped, or failed.
+     */
     public void fileCompleted() {
         fileCompleted(null);
     }
 
-    /// Records that a log file has been stored, and makes it the current item so the UI still has something to
-    /// show after discovery has finished.
+    /**
+     * Records that a log file has been stored, and makes it the current item so the UI still has something to
+     * show after discovery has finished.
+     */
     public void fileCompleted(LogSource source) {
         if (callback == null) return;
         synchronized (this) {
@@ -55,7 +64,9 @@ public final class ImportObserver {
         }
     }
 
-    /// Marks that no more log files will be found. Parsing and writing may still be in flight.
+    /**
+     * Marks that no more log files will be found. Parsing and writing may still be in flight.
+     */
     public void discoveryFinished() {
         if (callback == null) return;
         synchronized (this) {
@@ -64,7 +75,9 @@ public final class ImportObserver {
         }
     }
 
-    /// Clears the current item after every discovered file has been handled.
+    /**
+     * Clears the current item after every discovered file has been handled.
+     */
     public void finished() {
         if (callback == null) return;
         synchronized (this) {

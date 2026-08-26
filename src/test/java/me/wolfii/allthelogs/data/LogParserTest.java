@@ -1,7 +1,7 @@
 package me.wolfii.allthelogs.data;
 
-import me.wolfii.allthelogs.data.internal.LogParser;
-import me.wolfii.allthelogs.data.internal.ParsedLog;
+import me.wolfii.allthelogs.data.parse.LogParser;
+import me.wolfii.allthelogs.data.parse.ParsedLog;
 import org.junit.jupiter.api.Test;
 
 import java.io.BufferedReader;

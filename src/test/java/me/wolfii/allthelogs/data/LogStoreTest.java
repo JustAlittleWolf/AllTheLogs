@@ -1,6 +1,6 @@
 package me.wolfii.allthelogs.data;
 
-import me.wolfii.allthelogs.data.internal.LogDates;
+import me.wolfii.allthelogs.data.parse.LogDates;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

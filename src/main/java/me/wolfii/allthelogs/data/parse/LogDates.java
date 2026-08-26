@@ -1,22 +1,29 @@
-package me.wolfii.allthelogs.data.internal;
+package me.wolfii.allthelogs.data.parse;
 
-import java.time.*;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/// Determines which calendar date a log file belongs to, and converts naive log timestamps into the JVM's local zone.
+/**
+ * Resolves a log file's calendar date and converts naive log timestamps into the JVM's local zone.
+ */
 public final class LogDates {
-    /// Matches the `yyyy-MM-dd` prefix that the vanilla client uses for rolled log files, and the `yyyy_MM_dd` and
-    /// `yyyyMMdd` spellings used by some launchers.
     private static final Pattern DATE_IN_NAME = Pattern.compile("(\\d{4})[-_]?(\\d{2})[-_]?(\\d{2})");
 
     private LogDates() {
     }
 
-    /// Resolves the date from the file name, falling back to the last modification time interpreted in `timezone`.
-    ///
-    /// @param lastModified may be `null` when the source reports no modification time; the current date in `timezone`
-    ///                     is used then
+    /**
+     * Resolves the date from the file name, falling back to the last modification time interpreted in
+     * {@code timezone}.
+     *
+     * @param lastModified may be {@code null} when the source reports no modification time; the current date in
+     *                     {@code timezone} is used then
+     */
     public static LocalDate resolve(String fileName, Instant lastModified, ZoneId timezone) {
         LocalDate fromName = fromFileName(fileName);
         if (fromName != null) return fromName;
@@ -25,15 +32,20 @@ public final class LogDates {
             : lastModified.atZone(timezone).toLocalDate();
     }
 
-    /// Combines a log's calendar date with a line time and converts the result from `sourceZone` to the JVM default
-    /// timezone. Times that are already in the default timezone are returned as is.
+    /**
+     * Combines a log's calendar date with a line time and converts the result from {@code sourceZone} to the JVM
+     * default timezone.
+     */
     public static LocalDateTime toSystemLocal(LocalDate date, LocalTime time, ZoneId sourceZone) {
         if (date == null || time == null) return null;
         return toSystemLocal(LocalDateTime.of(date, time), sourceZone);
     }
 
-    /// Converts a naive timestamp from `sourceZone` to the JVM default timezone. Passing the default timezone leaves
-    /// the value unchanged, including during DST gaps where a round-trip through that zone would shift the clock.
+    /**
+     * Converts a naive timestamp from {@code sourceZone} to the JVM default timezone.
+     * Passing the default timezone leaves the value unchanged, including during DST gaps where a round-trip through
+     * that zone would shift the clock.
+     */
     public static LocalDateTime toSystemLocal(LocalDateTime dateTime, ZoneId sourceZone) {
         if (dateTime == null) return null;
         ZoneId local = ZoneId.systemDefault();
@@ -41,7 +53,9 @@ public final class LogDates {
         return dateTime.atZone(sourceZone).withZoneSameInstant(local).toLocalDateTime();
     }
 
-    /// @return the date encoded in the file name, or `null` if it carries none
+    /**
+     * @return the date encoded in the file name, or {@code null} if it carries none
+     */
     public static LocalDate fromFileName(String fileName) {
         Matcher matcher = DATE_IN_NAME.matcher(fileName);
         while (matcher.find()) {
@@ -52,7 +66,6 @@ public final class LogDates {
             try {
                 return LocalDate.of(year, month, day);
             } catch (java.time.DateTimeException ignored) {
-                // A number that looks like a date but is not, e.g. February 30th; keep looking.
             }
         }
         return null;
