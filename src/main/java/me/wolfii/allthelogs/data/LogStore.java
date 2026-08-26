@@ -1,9 +1,22 @@
 package me.wolfii.allthelogs.data;
 
-import me.wolfii.allthelogs.data.internal.*;
+import me.wolfii.allthelogs.data.internal.FormattingCodes;
+import me.wolfii.allthelogs.data.internal.LogCandidate;
+import me.wolfii.allthelogs.data.internal.LogDates;
+import me.wolfii.allthelogs.data.internal.LogDiscovery;
+import me.wolfii.allthelogs.data.internal.LogParser;
+import me.wolfii.allthelogs.data.internal.LogWriter;
+import me.wolfii.allthelogs.data.internal.ParsedLog;
+import me.wolfii.allthelogs.data.internal.PreparedLog;
+import me.wolfii.allthelogs.data.internal.QueryBuilder;
+import me.wolfii.allthelogs.data.internal.Schema;
 import org.duckdb.DuckDBConnection;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.StringReader;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
@@ -11,12 +24,30 @@ import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.sql.*;
+import java.sql.Date;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -92,7 +123,7 @@ public final class LogStore implements AutoCloseable {
     }
 
     /// Opens a store that lives only in memory, for tests and throwaway analysis.
-    public static LogStore openInMemory() {
+    static LogStore openInMemory() {
         try {
             var connection = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:", storageSettings());
             try (Statement statement = connection.createStatement()) {
@@ -241,7 +272,7 @@ public final class LogStore implements AutoCloseable {
     /// writing rather than serialising behind it.
     private ImportResult runImport(ImportOptions options, Consumer<LogDiscovery> walk) {
         BlockingQueue<PreparedLog> queue = new ArrayBlockingQueue<>(WRITE_QUEUE_CAPACITY);
-        List<ImportResult.Failure> parseFailures = java.util.Collections.synchronizedList(new ArrayList<>());
+        List<ImportResult.Failure> parseFailures = Collections.synchronizedList(new ArrayList<>());
         AtomicInteger skipped = new AtomicInteger();
         AtomicInteger empty = new AtomicInteger();
 
@@ -316,7 +347,7 @@ public final class LogStore implements AutoCloseable {
         }
     }
 
-    /// Stores a single chat line captured from a running game, stamped with the current time.
+    /// Imports a single chat line captured from a running game, stamped with the current time.
     ///
     /// Live entries are grouped into one synthetic [LogFile] per day and Minecraft version, whose
     /// [LogFile#sourceKind()] is [SourceKind#LIVE], so they sit alongside imported logs in every query. A line that
@@ -327,14 +358,14 @@ public final class LogStore implements AutoCloseable {
     /// @param message          the chat line as the game rendered it; formatting codes are stripped like on import
     /// @return `true` if the entry was stored, `false` if it was dropped as a duplicate
     /// @throws LogDataException if the entry cannot be written
-    public boolean addLiveEntry(String minecraftVersion, String message) {
-        return addLiveEntry(minecraftVersion, message, LocalDateTime.now());
+    public boolean importLive(String minecraftVersion, String message) {
+        return importLive(minecraftVersion, message, LocalDateTime.now());
     }
 
-    /// Stores a single chat line captured from a running game at an explicit time.
+    /// Imports a single chat line captured from a running game at an explicit time.
     ///
-    /// @see #addLiveEntry(String, String)
-    public boolean addLiveEntry(String minecraftVersion, String message, LocalDateTime timestamp) {
+    /// @see #importLive(String, String)
+    public boolean importLive(String minecraftVersion, String message, LocalDateTime timestamp) {
         Objects.requireNonNull(minecraftVersion, "minecraftVersion");
         Objects.requireNonNull(message, "message");
         Objects.requireNonNull(timestamp, "timestamp");
@@ -416,7 +447,7 @@ public final class LogStore implements AutoCloseable {
             insert.setString(3, SourceKind.LIVE.name());
             insert.setString(4, LIVE_SOURCE_PATH);
             insert.setString(5, entryPath);
-            insert.setDate(6, java.sql.Date.valueOf(date));
+            insert.setDate(6, Date.valueOf(date));
             insert.setString(7, DateSource.FILE_NAME.name());
             insert.setString(8, minecraftVersion);
             insert.execute();
@@ -431,77 +462,30 @@ public final class LogStore implements AutoCloseable {
         }
     }
 
-    /// Removes entries that share a timestamp and message with another entry, keeping one of them.
-    ///
-    /// Imports do this automatically; call it directly only after writing through some other path.
-    ///
-    /// @return the number of removed entries
-    public long deduplicate() {
-        try (LogWriter writer = new LogWriter(connection)) {
-            return writer.deduplicate();
-        } catch (SQLException e) {
-            throw new LogDataException("could not deduplicate chat entries", e);
-        }
-    }
-
     /// Returns every entry matching `query`, resolved into records with their log file attached.
     ///
     /// @throws LogDataException if the query is rejected, e.g. because its regex is malformed
     public List<ChatEntry> query(ChatQuery query) {
         Objects.requireNonNull(query, "query");
-        List<ChatEntry> entries = new ArrayList<>();
-        forEach(query, entries::add);
-        return entries;
-    }
-
-    /// Returns every stored entry, oldest first. Convenience for `query(ChatQuery.all())`.
-    public List<ChatEntry> allEntries() {
-        return query(ChatQuery.all());
-    }
-
-    /// Returns entries whose message contains `substring`, compared case insensitively.
-    public List<ChatEntry> search(String substring) {
-        return query(ChatQuery.all().withSubstring(substring));
-    }
-
-    /// Returns entries whose timestamp lies in `[from, to)`. Either bound may be `null` to leave that side open.
-    public List<ChatEntry> inRange(LocalDateTime from, LocalDateTime to) {
-        return query(ChatQuery.all().withRange(from, to));
-    }
-
-    /// Streams matching entries to `consumer` without materialising them all in memory, for result sets that are too
-    /// large to hold at once.
-    ///
-    /// @throws LogDataException if the query is rejected, e.g. because its regex is malformed
-    public void forEach(ChatQuery query, Consumer<ChatEntry> consumer) {
-        Objects.requireNonNull(query, "query");
-        Objects.requireNonNull(consumer, "consumer");
         QueryBuilder builder = QueryBuilder.build(query);
+        List<ChatEntry> entries = new ArrayList<>();
         Map<String, LogFile> fileCache = new HashMap<>();
         try (PreparedStatement statement = connection.prepareStatement(builder.sql())) {
             builder.bind(statement);
             try (ResultSet result = statement.executeQuery()) {
                 while (result.next()) {
-                    consumer.accept(readEntry(result, fileCache));
+                    entries.add(readEntry(result, fileCache));
                 }
             }
         } catch (SQLException e) {
             throw new LogDataException("could not run query " + query, e);
         }
+        return entries;
     }
 
-    /// Counts entries matching `query`, ignoring its context lines, ordering and limit.
-    public long count(ChatQuery query) {
-        Objects.requireNonNull(query, "query");
-        QueryBuilder builder = QueryBuilder.buildCount(query);
-        try (PreparedStatement statement = connection.prepareStatement(builder.sql())) {
-            builder.bind(statement);
-            try (ResultSet result = statement.executeQuery()) {
-                return result.next() ? result.getLong(1) : 0;
-            }
-        } catch (SQLException e) {
-            throw new LogDataException("could not count entries for " + query, e);
-        }
+    /// Returns every stored entry, oldest first. Convenience for `query(ChatQuery.all())`.
+    public List<ChatEntry> logEntries() {
+        return query(ChatQuery.all());
     }
 
     /// Returns metadata for every imported log file, ordered by date.
@@ -520,15 +504,6 @@ public final class LogStore implements AutoCloseable {
             throw new LogDataException("could not read log file metadata", e);
         }
         return files;
-    }
-
-    /// Reclaims space and rewrites the database file compactly. Worth calling after a large import.
-    public void compact() {
-        try (Statement statement = connection.createStatement()) {
-            statement.execute("CHECKPOINT");
-        } catch (SQLException e) {
-            throw new LogDataException("could not compact the database", e);
-        }
     }
 
     @Override

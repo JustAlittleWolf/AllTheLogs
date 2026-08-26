@@ -95,15 +95,6 @@ public final class QueryBuilder {
         return new QueryBuilder(sql, parameters);
     }
 
-    /// Builds the SQL for counting matching entries, ignoring context lines, ordering and limit.
-    public static QueryBuilder buildCount(ChatQuery query) {
-        QueryBuilder full = build(query.withContextLines(0).withLimit(-1));
-        int fromIndex = full.sql.indexOf(" FROM chat_entry e");
-        int orderIndex = full.sql.indexOf(" ORDER BY ");
-        String body = full.sql.substring(fromIndex, orderIndex);
-        return new QueryBuilder("SELECT count(*)" + body, full.parameters);
-    }
-
     public String sql() {
         return sql;
     }
