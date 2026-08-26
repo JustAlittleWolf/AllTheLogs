@@ -214,13 +214,9 @@ public final class LogStore implements AutoCloseable {
     }
 
     private static LogFile readLogFile(ResultSet result, int offset) throws SQLException {
-        String kind = result.getString(offset + 1);
-        Optional<SourceKind> sourceKind = kind == null
-            ? Optional.empty()
-            : Optional.of(SourceKind.valueOf(kind));
         return new LogFile(
             result.getString(offset),
-            sourceKind,
+            SourceKind.valueOf(result.getString(offset + 1)),
             result.getString(offset + 2),
             result.getString(offset + 3),
             result.getDate(offset + 4).toLocalDate(),
@@ -361,8 +357,8 @@ public final class LogStore implements AutoCloseable {
     /// [LogFile#lastEntryTime()] as lines arrive. Starting another session leaves the previous file in place and
     /// switches subsequent imports to the new one.
     ///
-    /// The file's [LogFile#sourceKind()] is empty, since the lines were captured from the running client rather than
-    /// read from a directory or archive.
+    /// The file's [LogFile#sourceKind()] is [SourceKind#SESSION], since the lines were captured from the running
+    /// client rather than read from a directory or archive.
     ///
     /// @param minecraftVersion the version of the running game
     /// @return the created log file, with no entries yet
@@ -426,22 +422,23 @@ public final class LogStore implements AutoCloseable {
         try (PreparedStatement insert = connection.prepareStatement("""
             INSERT INTO log_file (id, file_name, source_kind, source_path, entry_path, log_date,
                                   minecraft_version, last_modified, first_entry_time, last_entry_time, entry_count)
-            VALUES (?, ?, NULL, ?, ?, ?, ?, NULL, ?, ?, 0)""")) {
+            VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, 0)""")) {
             insert.setLong(1, fileId);
             insert.setString(2, fileName);
-            insert.setString(3, SESSION_SOURCE_PATH);
-            insert.setString(4, entryPath);
-            insert.setDate(5, Date.valueOf(date));
-            insert.setString(6, minecraftVersion);
-            insert.setTimestamp(7, start);
+            insert.setString(3, SourceKind.SESSION.name());
+            insert.setString(4, SESSION_SOURCE_PATH);
+            insert.setString(5, entryPath);
+            insert.setDate(6, Date.valueOf(date));
+            insert.setString(7, minecraftVersion);
             insert.setTimestamp(8, start);
+            insert.setTimestamp(9, start);
             insert.execute();
         }
         sessionFileId = fileId;
         sessionLineIndex = 0;
         return new LogFile(
             fileName,
-            Optional.empty(),
+            SourceKind.SESSION,
             SESSION_SOURCE_PATH,
             entryPath,
             date,

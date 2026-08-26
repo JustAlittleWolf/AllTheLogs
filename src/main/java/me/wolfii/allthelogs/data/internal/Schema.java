@@ -25,7 +25,7 @@ public final class Schema {
             CREATE TABLE IF NOT EXISTS log_file (
                 id BIGINT PRIMARY KEY,
                 file_name VARCHAR NOT NULL,
-                source_kind VARCHAR,
+                source_kind VARCHAR NOT NULL,
                 source_path VARCHAR NOT NULL,
                 entry_path VARCHAR NOT NULL,
                 log_date DATE NOT NULL,

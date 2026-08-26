@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.data.internal;
 
+import me.wolfii.allthelogs.data.SourceKind;
 import org.duckdb.DuckDBAppender;
 import org.duckdb.DuckDBConnection;
 
@@ -188,7 +189,8 @@ public final class LogWriter implements AutoCloseable {
         List<String> emptyLocations = new ArrayList<>();
         int emptySessionFiles = 0;
         try (ResultSet result = statement.executeQuery(
-            "SELECT id, source_path, entry_path FROM log_file WHERE entry_count = 0 AND source_kind IS NOT NULL")) {
+            "SELECT id, source_path, entry_path FROM log_file WHERE entry_count = 0 AND source_kind <> '"
+                + SourceKind.SESSION.name() + "'")) {
             while (result.next()) {
                 long id = result.getLong(1);
                 if (keepEvenIfEmpty.contains(id)) continue;

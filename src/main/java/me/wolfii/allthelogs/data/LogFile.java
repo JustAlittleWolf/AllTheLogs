@@ -7,7 +7,7 @@ import java.util.Optional;
 /// Metadata about a single imported Minecraft log file.
 ///
 /// @param fileName        the bare file name, e.g. `2026-08-25-2.log.gz`
-/// @param sourceKind      whether the file came from a directory or an archive; empty for a client session
+/// @param sourceKind      whether the file came from a directory, an archive, or a running client session
 /// @param sourcePath      absolute path of the root that was imported (the directory or the outermost archive), or
 ///                        a sentinel for a client session
 /// @param entryPath       path of the log inside that root; for directory imports this is the path relative to the
@@ -24,7 +24,7 @@ import java.util.Optional;
 /// @param entryCount      number of stored chat entries of this file
 public record LogFile(
     String fileName,
-    Optional<SourceKind> sourceKind,
+    SourceKind sourceKind,
     String sourcePath,
     String entryPath,
     LocalDate date,

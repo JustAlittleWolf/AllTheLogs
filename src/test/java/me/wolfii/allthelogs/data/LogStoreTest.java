@@ -19,7 +19,6 @@ import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -70,7 +69,7 @@ class LogStoreTest {
         ChatEntry entry = store.query(ChatQuery.all().withSubstring("needle in here")).getFirst();
         assertEquals("2026-08-25-1.log.gz", entry.logFile().fileName());
         assertEquals("logs/2026-08-25-1.log.gz", entry.logFile().entryPath());
-        assertEquals(Optional.of(SourceKind.DIRECTORY), entry.logFile().sourceKind());
+        assertEquals(SourceKind.DIRECTORY, entry.logFile().sourceKind());
         assertEquals("26.2", entry.logFile().minecraftVersion());
         assertEquals(LocalDate.of(2026, 8, 25), entry.logFile().date());
         assertEquals(LocalDateTime.of(2026, 8, 25, 10, 0, 11), entry.timestamp());
@@ -130,7 +129,7 @@ class LogStoreTest {
 
         assertEquals(1, result.importedFiles());
         ChatEntry entry = store.query(ChatQuery.all().withSubstring("in archive")).getFirst();
-        assertEquals(Optional.of(SourceKind.ARCHIVE), entry.logFile().sourceKind());
+        assertEquals(SourceKind.ARCHIVE, entry.logFile().sourceKind());
         assertEquals("logs/2026-01-02-1.log.gz", entry.logFile().entryPath());
         assertEquals("1.21.8", entry.logFile().minecraftVersion());
     }
@@ -385,7 +384,7 @@ class LogStoreTest {
 
         LogFile file = store.startSession("26.2", startedAt);
 
-        assertTrue(file.sourceKind().isEmpty());
+        assertEquals(SourceKind.SESSION, file.sourceKind());
         assertEquals("26.2", file.minecraftVersion());
         assertEquals(LocalDate.of(2026, 8, 26), file.date());
         assertEquals(startedAt, file.firstEntryTime().orElseThrow());
@@ -408,7 +407,7 @@ class LogStoreTest {
         assertTrue(store.importSessionMessage("client message", LocalDateTime.of(2026, 8, 26, 12, 0, 0)));
 
         ChatEntry entry = store.query(ChatQuery.all().withSubstring("client message")).getFirst();
-        assertTrue(entry.logFile().sourceKind().isEmpty());
+        assertEquals(SourceKind.SESSION, entry.logFile().sourceKind());
         assertEquals("26.2", entry.logFile().minecraftVersion());
         assertEquals(LocalDate.of(2026, 8, 26), entry.logFile().date());
         assertEquals(LocalDateTime.of(2026, 8, 26, 12, 0, 0), entry.timestamp());
@@ -485,7 +484,7 @@ class LogStoreTest {
 
         assertEquals(3, store.logFiles().size());
         assertTrue(store.logFiles().stream().allMatch(file -> file.entryCount() == 1));
-        assertTrue(store.logFiles().stream().allMatch(file -> file.sourceKind().isEmpty()));
+        assertTrue(store.logFiles().stream().allMatch(file -> file.sourceKind() == SourceKind.SESSION));
     }
 
     @Test
@@ -512,9 +511,9 @@ class LogStoreTest {
         store.startSession("26.2", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
         store.importDirectory(logsDirectory());
 
-        assertTrue(store.logFiles().stream().anyMatch(file -> file.sourceKind().isEmpty()));
+        assertTrue(store.logFiles().stream().anyMatch(file -> file.sourceKind() == SourceKind.SESSION));
         assertEquals(0, store.logFiles().stream()
-                .filter(file -> file.sourceKind().isEmpty())
+                .filter(file -> file.sourceKind() == SourceKind.SESSION)
                 .findFirst().orElseThrow().entryCount());
     }
 
