@@ -4,6 +4,11 @@ import me.wolfii.allthelogs.data.internal.*;
 import org.duckdb.DuckDBConnection;
 
 import java.io.*;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.sql.*;
@@ -32,6 +37,8 @@ import java.util.zip.GZIPInputStream;
 ///
 /// A store is not safe for use from several threads at once; imports parallelise internally.
 public final class LogStore implements AutoCloseable {
+    /// Legacy Windows code page that old Minecraft launchers wrote logs in, before UTF-8 became the norm.
+    private static final Charset WINDOWS_1252 = Charset.forName("windows-1252");
     /// How many parsed logs may wait for the writer before parsing threads block. Keeps memory bounded while still
     /// letting the writer stay busy.
     private static final int WRITE_QUEUE_CAPACITY = 64;
@@ -137,9 +144,24 @@ public final class LogStore implements AutoCloseable {
         if (candidate.fileName().toLowerCase(Locale.ROOT).endsWith(".gz")) {
             stream = new GZIPInputStream(stream);
         }
-        // Minecraft writes logs in UTF-8, but older clients on Windows produced bytes in the system code page; the
-        // replacement character keeps such files readable instead of failing the whole import.
-        return new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8), 1 << 16);
+        byte[] bytes = stream.readAllBytes();
+        // Minecraft writes logs in UTF-8, but older clients on Windows produced bytes in the system code page
+        // (Windows-1252). Decoding those bytes as UTF-8 would silently turn every non-ASCII byte, including the
+        // section sign that introduces formatting codes, into the replacement character, so the file is only
+        // treated as UTF-8 if it actually is valid UTF-8.
+        String text = decode(bytes);
+        return new BufferedReader(new StringReader(text), 1 << 16);
+    }
+
+    private static String decode(byte[] bytes) {
+        CharsetDecoder strictUtf8 = StandardCharsets.UTF_8.newDecoder()
+            .onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT);
+        try {
+            return strictUtf8.decode(ByteBuffer.wrap(bytes)).toString();
+        } catch (CharacterCodingException e) {
+            return new String(bytes, WINDOWS_1252);
+        }
     }
 
     private static ChatEntry readEntry(ResultSet result, Map<String, LogFile> fileCache) throws SQLException {
