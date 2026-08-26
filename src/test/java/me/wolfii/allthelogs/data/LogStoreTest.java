@@ -396,8 +396,8 @@ class LogStoreTest {
     }
 
     @Test
-    void importClientRequiresAnActiveSession() {
-        assertThrows(LogDataException.class, () -> store.importClient("hello"));
+    void importSessionMessageRequiresAnActiveSession() {
+        assertThrows(LogDataException.class, () -> store.importSessionMessage("hello"));
     }
 
     @Test
@@ -405,7 +405,7 @@ class LogStoreTest {
         store.importDirectory(logsDirectory());
         store.startSession("26.2", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
 
-        assertTrue(store.importClient("client message", LocalDateTime.of(2026, 8, 26, 12, 0, 0)));
+        assertTrue(store.importSessionMessage("client message", LocalDateTime.of(2026, 8, 26, 12, 0, 0)));
 
         ChatEntry entry = store.query(ChatQuery.all().withSubstring("client message")).getFirst();
         assertTrue(entry.logFile().sourceKind().isEmpty());
@@ -420,7 +420,7 @@ class LogStoreTest {
         LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
         store.startSession("26.2", startedAt);
 
-        store.importClient("later", startedAt.plusMinutes(5));
+        store.importSessionMessage("later", startedAt.plusMinutes(5));
 
         LogFile file = store.logFiles().getFirst();
         assertEquals(startedAt, file.firstEntryTime().orElseThrow());
@@ -432,7 +432,7 @@ class LogStoreTest {
     void clientEntriesUseTheCurrentTimeByDefault() {
         store.startSession("26.2");
         LocalDateTime before = LocalDateTime.now().withNano(0);
-        assertTrue(store.importClient("now"));
+        assertTrue(store.importSessionMessage("now"));
 
         ChatEntry entry = store.query(ChatQuery.all().withSubstring("now")).getFirst();
         assertFalse(entry.timestamp().isBefore(before));
@@ -442,7 +442,7 @@ class LogStoreTest {
     @Test
     void clientEntriesStripFormattingCodes() {
         store.startSession("26.2", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
-        store.importClient("\u00a7chello \u00a7aworld", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
+        store.importSessionMessage("\u00a7chello \u00a7aworld", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
 
         assertEquals("hello world", store.logEntries().getFirst().message());
     }
@@ -451,9 +451,9 @@ class LogStoreTest {
     void consecutiveClientEntriesGetIncreasingLineIndices() {
         LocalDateTime base = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
         store.startSession("26.2", base);
-        store.importClient("first", base);
-        store.importClient("second", base.plusSeconds(1));
-        store.importClient("third", base.plusSeconds(2));
+        store.importSessionMessage("first", base);
+        store.importSessionMessage("second", base.plusSeconds(1));
+        store.importSessionMessage("third", base.plusSeconds(2));
 
         assertEquals(List.of(0, 1, 2), store.logEntries().stream().map(ChatEntry::lineIndex).toList());
         LogFile file = store.logFiles().getFirst();
@@ -466,9 +466,9 @@ class LogStoreTest {
     void clientEntriesSupportContextLines() {
         LocalDateTime base = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
         store.startSession("26.2", base);
-        store.importClient("before", base);
-        store.importClient("the needle", base.plusSeconds(1));
-        store.importClient("after", base.plusSeconds(2));
+        store.importSessionMessage("before", base);
+        store.importSessionMessage("the needle", base.plusSeconds(1));
+        store.importSessionMessage("after", base.plusSeconds(2));
 
         List<ChatEntry> hits = store.query(ChatQuery.all().withSubstring("needle").withContextLines(1));
         assertEquals(List.of("before", "the needle", "after"), hits.stream().map(ChatEntry::message).toList());
@@ -477,11 +477,11 @@ class LogStoreTest {
     @Test
     void eachSessionGetsItsOwnLogFile() {
         store.startSession("26.2", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
-        store.importClient("a", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
+        store.importSessionMessage("a", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
         store.startSession("26.2", LocalDateTime.of(2026, 8, 27, 12, 0, 0));
-        store.importClient("b", LocalDateTime.of(2026, 8, 27, 12, 0, 0));
+        store.importSessionMessage("b", LocalDateTime.of(2026, 8, 27, 12, 0, 0));
         store.startSession("1.21.8", LocalDateTime.of(2026, 8, 27, 13, 0, 0));
-        store.importClient("c", LocalDateTime.of(2026, 8, 27, 13, 0, 0));
+        store.importSessionMessage("c", LocalDateTime.of(2026, 8, 27, 13, 0, 0));
 
         assertEquals(3, store.logFiles().size());
         assertTrue(store.logFiles().stream().allMatch(file -> file.entryCount() == 1));
@@ -492,8 +492,8 @@ class LogStoreTest {
     void repeatedClientEntriesAreDroppedAsDuplicates() {
         LocalDateTime timestamp = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
         store.startSession("26.2", timestamp);
-        assertTrue(store.importClient("duplicated", timestamp));
-        assertFalse(store.importClient("duplicated", timestamp));
+        assertTrue(store.importSessionMessage("duplicated", timestamp));
+        assertFalse(store.importSessionMessage("duplicated", timestamp));
 
         assertEquals(1, store.logEntries().size());
     }
@@ -503,7 +503,7 @@ class LogStoreTest {
         store.importDirectory(logsDirectory());
         store.startSession("26.2", LocalDateTime.of(2026, 8, 25, 10, 0, 10));
 
-        assertFalse(store.importClient("delta", LocalDateTime.of(2026, 8, 25, 10, 0, 10)));
+        assertFalse(store.importSessionMessage("delta", LocalDateTime.of(2026, 8, 25, 10, 0, 10)));
         assertEquals(8, store.logEntries().size());
     }
 
@@ -550,8 +550,8 @@ class LogStoreTest {
     void deduplicationKeepsDistinctEntriesThatOnlyShareATimestamp() {
         LocalDateTime timestamp = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
         store.startSession("26.2", timestamp);
-        store.importClient("one", timestamp);
-        store.importClient("two", timestamp);
+        store.importSessionMessage("one", timestamp);
+        store.importSessionMessage("two", timestamp);
 
         assertEquals(2, store.logEntries().size());
     }

@@ -356,8 +356,8 @@ public final class LogStore implements AutoCloseable {
 
     /// Starts a capture session for a running Minecraft client and creates a [LogFile] for it.
     ///
-    /// Chat lines imported with [#importClient(String)] are stored against this file. Its
-    /// [LogFile#firstEntryTime()] is the session start; [#importClient(String, LocalDateTime)] updates
+    /// Chat lines imported with [#importSessionMessage(String)] are stored against this file. Its
+    /// [LogFile#firstEntryTime()] is the session start; [#importSessionMessage(String, LocalDateTime)] updates
     /// [LogFile#lastEntryTime()] as lines arrive. Starting another session leaves the previous file in place and
     /// switches subsequent imports to the new one.
     ///
@@ -393,14 +393,14 @@ public final class LogStore implements AutoCloseable {
     /// @param message the chat line as the game rendered it; formatting codes are stripped like on import
     /// @return `true` if the entry was stored, `false` if it was dropped as a duplicate
     /// @throws LogDataException if no session is active, or the entry cannot be written
-    public boolean importClient(String message) {
-        return importClient(message, LocalDateTime.now());
+    public boolean importSessionMessage(String message) {
+        return importSessionMessage(message, LocalDateTime.now());
     }
 
     /// Imports a single chat line from the running client into the current session at an explicit time.
     ///
-    /// @see #importClient(String)
-    public boolean importClient(String message, LocalDateTime timestamp) {
+    /// @see #importSessionMessage(String)
+    public boolean importSessionMessage(String message, LocalDateTime timestamp) {
         Objects.requireNonNull(message, "message");
         Objects.requireNonNull(timestamp, "timestamp");
         if (sessionFileId < 0) {

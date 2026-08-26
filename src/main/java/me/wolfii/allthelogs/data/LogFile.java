@@ -19,8 +19,8 @@ import java.util.Optional;
 /// @param firstEntryTime  timestamp of the first logged line of this file, not just chat entries; converted from the
 ///                        import timezone like chat entries. For a client session this is when the session started
 /// @param lastEntryTime   timestamp of the last logged line of this file, not just chat entries; converted from the
-///                        import timezone like chat entries. For a client session this is updated each time a line is
-///                        imported
+///                        import timezone like chat entries. For a client session this is updated each time a message
+///                        is imported with [LogStore#importSessionMessage(String)]
 /// @param entryCount      number of stored chat entries of this file
 public record LogFile(
     String fileName,
