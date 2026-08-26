@@ -223,7 +223,6 @@ public final class LogStore implements AutoCloseable {
     }
 
     private static LogSource readLogSource(ResultSet result, int offset) throws SQLException {
-        String fileName = result.getString(offset);
         String kind = result.getString(offset + 1);
         String path = result.getString(offset + 2);
         String entryPath = result.getString(offset + 3);
