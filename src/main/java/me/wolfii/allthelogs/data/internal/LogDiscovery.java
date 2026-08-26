@@ -3,6 +3,7 @@ package me.wolfii.allthelogs.data.internal;
 import me.wolfii.allthelogs.data.ImportOptions;
 import me.wolfii.allthelogs.data.ImportResult;
 import me.wolfii.allthelogs.data.LogDataException;
+import me.wolfii.allthelogs.data.LogSource;
 import org.apache.commons.compress.archivers.ArchiveEntry;
 import org.apache.commons.compress.archivers.ArchiveInputStream;
 import org.apache.commons.compress.archivers.ArchiveStreamFactory;
@@ -33,12 +34,18 @@ public final class LogDiscovery {
     private final ImportOptions options;
     private final Pattern pathMatcher;
     private final Consumer<LogCandidate> consumer;
+    private final ImportObserver observer;
     private final List<ImportResult.Failure> failures = new ArrayList<>();
 
     public LogDiscovery(ImportOptions options, Consumer<LogCandidate> consumer) {
+        this(options, consumer, new ImportObserver(null));
+    }
+
+    public LogDiscovery(ImportOptions options, Consumer<LogCandidate> consumer, ImportObserver observer) {
         this.options = options;
         this.pathMatcher = options.pathMatcher() == null ? null : Globs.compile(options.pathMatcher());
         this.consumer = consumer;
+        this.observer = observer;
     }
 
     /// Reads an entry whose length the archive already told us, so the buffer is allocated exactly once.
@@ -113,15 +120,18 @@ public final class LogDiscovery {
             }
             if (isLogFile(name)) {
                 if (!matches(entryPath)) continue;
+                Path absoluteFile = child.toAbsolutePath().normalize();
+                observer.fileStarted(new LogSource.File(absoluteFile));
                 byte[] content;
                 try {
                     content = Files.readAllBytes(child);
                 } catch (IOException e) {
                     failures.add(new ImportResult.Failure(entryPath, "could not read file: " + e.getMessage()));
+                    observer.fileCompleted();
                     continue;
                 }
                 consumer.accept(new LogCandidate(name, SourceKind.FILE,
-                    child.toAbsolutePath().normalize().toString(), "",
+                    absoluteFile.toString(), "",
                     lastModified(child), content));
             } else if (options.nestedArchives() && isArchive(name)) {
                 readArchive(child, child.toAbsolutePath().normalize().toString(), child.toString(),
@@ -136,6 +146,8 @@ public final class LogDiscovery {
     /// @param globPrefix  path prefix used for [ImportOptions#pathMatcher()], relative to the import root
     private void readArchive(Path archive, String sourcePath, String description, String prefix, String globPrefix,
                              String archiveName) {
+        String archiveEntry = prefix.isEmpty() ? "" : prefix.substring(0, prefix.length() - ARCHIVE_SEPARATOR.length());
+        observer.workingOnArchive(Path.of(sourcePath), archiveEntry);
         try {
             if (archiveName.toLowerCase(Locale.ROOT).endsWith(".7z")) {
                 readSevenZip(archive, sourcePath, description, prefix, globPrefix);
@@ -199,9 +211,13 @@ public final class LogDiscovery {
 
         if (isLogFile(name)) {
             if (!matches(globPrefix + normalized)) return;
+            observer.fileStarted(new LogSource.Archive(Path.of(sourcePath), entryPath));
             byte[] bytes;
             try (InputStream stream = content.open()) {
                 bytes = readFully(stream, size);
+            } catch (IOException e) {
+                observer.fileCompleted();
+                throw e;
             }
             consumer.accept(new LogCandidate(name, SourceKind.ARCHIVE, sourcePath, entryPath, modified, bytes));
         } else if (options.nestedArchives() && isArchive(name)) {
