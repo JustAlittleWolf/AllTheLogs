@@ -32,9 +32,10 @@ class MessageListLayoutTest {
         MessageListLayout layout = MessageListLayout.of(List.of(first, later), 5);
 
         assertEquals(1, layout.dates().size());
-        assertEquals(0, layout.dates().getFirst().y());
-        assertEquals(MessageListLayout.DATE_HEIGHT, layout.rowY(0));
-        assertEquals(MessageListLayout.DATE_HEIGHT + MessageListLayout.ROW_HEIGHT + MessageListLayout.CLUSTER_GAP,
+        assertEquals(MessageListLayout.DATE_GAP, layout.dates().getFirst().y());
+        assertEquals(MessageListLayout.DATE_GAP + MessageListLayout.DATE_HEIGHT, layout.rowY(0));
+        assertEquals(MessageListLayout.DATE_GAP + MessageListLayout.DATE_HEIGHT
+                + MessageListLayout.ROW_HEIGHT + MessageListLayout.CLUSTER_GAP,
             layout.rowY(1));
     }
 
@@ -49,6 +50,16 @@ class MessageListLayoutTest {
         assertFalse(MessageListLayout.needsClusterGap(a, b, 5));
         assertTrue(MessageListLayout.needsClusterGap(a,
             new DisplayRow(new ChatEntry(log, time.plusHours(2), 12, "c"), true, Duration.ZERO, List.of()), 5));
+    }
+
+    @Test
+    void wrappedLinesTakeARowHeightEach() {
+        LocalDateTime time = LocalDateTime.of(2026, 8, 26, 10, 0);
+        ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), time.toLocalDate(), "26.2", time, time);
+        DisplayRow row = new DisplayRow(new ChatEntry(log, time, 0, "abcdefghij"), true, Duration.ZERO, List.of());
+        MessageListLayout layout = MessageListLayout.of(List.of(row), 5, 4, String::length);
+        assertEquals(MessageListLayout.DATE_GAP + MessageListLayout.DATE_HEIGHT, layout.rowY(0));
+        assertEquals(3 * MessageListLayout.ROW_HEIGHT, layout.rowHeight(0));
     }
 
     @Test

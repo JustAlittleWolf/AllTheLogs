@@ -44,6 +44,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
     private ButtonComponent oldestFirst;
     private ButtonComponent newestFirst;
     private ButtonComponent versionButton;
+    private ParentUIComponent versionMenu;
     private List<String> versions = List.of();
     private boolean filterOpen;
     private FlowLayout root;
@@ -85,10 +86,6 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
             return List.of(Component.translatable("allthelogs.meta.empty"));
         }
         List<Component> lines = new ArrayList<>();
-        String versions = metadata.minecraftVersions().isEmpty()
-            ? "—"
-            : String.join(", ", metadata.minecraftVersions());
-        lines.add(Component.translatable("allthelogs.meta.versions", versions));
         if (metadata.firstLogDate() != null && metadata.lastLogDate() != null) {
             lines.add(Component.translatable("allthelogs.meta.range",
                 metadata.firstLogDate().toString(), metadata.lastLogDate().toString()));
@@ -108,7 +105,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
     protected void build(FlowLayout root) {
         this.root = root;
         root.gap(6);
-        root.surface(Surface.blur(3f, 8f).and(Surface.flat(0x99000000)))
+        root.surface(Surface.flat(0x4D000000))
             .padding(Insets.of(8))
             .horizontalAlignment(HorizontalAlignment.LEFT)
             .verticalAlignment(VerticalAlignment.TOP);
@@ -194,6 +191,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         oldestFirst = null;
         newestFirst = null;
         versionButton = null;
+        closeVersionMenu();
         filterOpen = false;
     }
 
@@ -250,7 +248,8 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         FlowLayout row = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
         row.gap(2);
         row.child(UIComponents.label(Component.translatable("allthelogs.filter.version")));
-        versionButton = UIComponents.button(versionLabel(), button -> openVersionMenu(button));
+        versionButton = UIComponents.button(versionLabel(), button -> toggleVersionMenu(button));
+        versionButton.horizontalSizing(Sizing.fill());
         row.child(versionButton);
         return row;
     }
@@ -262,17 +261,48 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         return Component.literal(filter.version());
     }
 
+    private void toggleVersionMenu(ButtonComponent button) {
+        if (versionMenu != null) {
+            closeVersionMenu();
+            return;
+        }
+        openVersionMenu(button);
+    }
+
+    private void closeVersionMenu() {
+        if (root != null && versionMenu != null) {
+            root.removeChild(versionMenu);
+        }
+        versionMenu = null;
+    }
+
     private void openVersionMenu(ButtonComponent button) {
         if (root == null) return;
-        DropdownComponent.openContextMenu(this, root, FlowLayout::child,
-            button.x(), button.y() + button.height(), dropdown -> {
-                dropdown.button(Component.translatable("allthelogs.filter.version.all"), ignored ->
-                    updateFilter(filter.withVersion(null)));
-                for (String version : versions) {
-                    dropdown.button(Component.literal(version), ignored ->
-                        updateFilter(filter.withVersion(version)));
-                }
-            });
+        closeVersionMenu();
+        FlowLayout items = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
+        items.gap(1).padding(Insets.of(2));
+        items.child(versionChoice(Component.translatable("allthelogs.filter.version.all"), null));
+        for (String version : versions) {
+            items.child(versionChoice(Component.literal(version), version));
+        }
+        int width = Math.max(180, button.width());
+        int height = Math.min(180, Math.max(24, (versions.size() + 1) * 20 + 8));
+        ScrollContainer<FlowLayout> menu = UIContainers.verticalScroll(
+            Sizing.fixed(width), Sizing.fixed(height), items);
+        menu.scrollbar(OverflowScrollbar.vanillaFlat());
+        menu.surface(Surface.flat(0xF0101010).and(Surface.outline(0xFF3C3C3C)));
+        menu.positioning(Positioning.absolute(button.x(), button.y() + button.height()));
+        versionMenu = menu;
+        root.child(menu);
+    }
+
+    private ButtonComponent versionChoice(Component label, String version) {
+        ButtonComponent choice = UIComponents.button(label, ignored -> {
+            closeVersionMenu();
+            updateFilter(filter.withVersion(version));
+        });
+        choice.horizontalSizing(Sizing.fill());
+        return choice;
     }
 
     private ButtonComponent sortButton(String key, ChatQuery.Sort sort) {
@@ -430,6 +460,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
                 if (error != null) return;
                 List<DisplayRow> rows = DisplayRow.from(entries, filter);
                 list.reset(rows, true, pageIsFull(rows, filter));
+                list.scrollToTime(time);
             });
         });
     }

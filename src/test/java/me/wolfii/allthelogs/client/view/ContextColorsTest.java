@@ -18,8 +18,8 @@ class ContextColorsTest {
         assertTrue(channel(near) > channel(mid));
         assertTrue(channel(mid) > channel(far));
         assertEquals(far, beyond);
-        assertEquals(0xFFC8C8C8, near);
-        assertEquals(0xFF909090, far);
+        assertEquals(0xFFA0A0A0, near);
+        assertEquals(0xFF727272, far);
     }
 
     @Test

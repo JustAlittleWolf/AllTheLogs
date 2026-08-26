@@ -2,6 +2,7 @@ package me.wolfii.allthelogs.client.view;
 
 import me.wolfii.allthelogs.data.ChatQuery;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.function.IntUnaryOperator;
@@ -202,6 +203,38 @@ public final class ResultWindow {
             if (rows.get(i).match()) return rows.get(i).entry().timestamp();
         }
         return rows.isEmpty() ? null : rows.getLast().entry().timestamp();
+    }
+
+    /**
+     * Whether {@code time} falls between the earliest and latest timestamps currently buffered.
+     */
+    public boolean coversTime(LocalDateTime time) {
+        if (rows.isEmpty() || time == null) return false;
+        LocalDateTime min = rows.getFirst().entry().timestamp();
+        LocalDateTime max = min;
+        for (DisplayRow row : rows) {
+            LocalDateTime at = row.entry().timestamp();
+            if (at.isBefore(min)) min = at;
+            if (at.isAfter(max)) max = at;
+        }
+        return !time.isBefore(min) && !time.isAfter(max);
+    }
+
+    /**
+     * Index of the row whose timestamp is closest to {@code time}, or {@code -1} when the window is empty.
+     */
+    public int nearestIndex(LocalDateTime time) {
+        if (rows.isEmpty() || time == null) return -1;
+        int best = 0;
+        long bestDelta = Long.MAX_VALUE;
+        for (int i = 0; i < rows.size(); i++) {
+            long delta = Math.abs(Duration.between(rows.get(i).entry().timestamp(), time).toMillis());
+            if (delta < bestDelta) {
+                bestDelta = delta;
+                best = i;
+            }
+        }
+        return best;
     }
 
     public int matchCount() {

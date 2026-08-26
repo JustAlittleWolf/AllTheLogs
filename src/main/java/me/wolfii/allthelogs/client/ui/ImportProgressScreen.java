@@ -153,7 +153,7 @@ public final class ImportProgressScreen extends BaseOwoScreen<FlowLayout> {
                 Integer.toString(snapshot.completedFiles()),
                 Integer.toString(Math.max(snapshot.discoveredFiles(), snapshot.estimatedFiles()))));
         }
-        String file = ImportProgressLabels.currentFile(snapshot.current());
+        String file = ImportProgressLabels.currentFile(snapshot.current(), path);
         current.text(file.isEmpty()
             ? Component.empty()
             : Component.translatable("allthelogs.import.progress.current", file));

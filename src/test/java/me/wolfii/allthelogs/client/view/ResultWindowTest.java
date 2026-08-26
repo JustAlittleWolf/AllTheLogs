@@ -12,6 +12,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ResultWindowTest {
     @Test
@@ -51,6 +53,16 @@ class ResultWindowTest {
         ResultWindow window = new ResultWindow();
         window.reset(rows, false, false);
         assertEquals(2, window.matchCount());
+    }
+
+    @Test
+    void coversTimeAndNearestIndexUseBufferedTimestamps() {
+        ResultWindow window = new ResultWindow();
+        window.reset(List.of(row("a.log", 0), row("a.log", 10)), false, false);
+        LocalDateTime start = LocalDateTime.of(2026, 8, 26, 10, 0);
+        assertTrue(window.coversTime(start.plusSeconds(10)));
+        assertFalse(window.coversTime(start.plusHours(3)));
+        assertEquals(1, window.nearestIndex(start.plusSeconds(9)));
     }
 
     @Test

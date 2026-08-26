@@ -35,7 +35,14 @@ public final class MessageComponents {
     }
 
     public static Component message(DisplayRow row) {
-        String text = row.message();
+        return messageRange(row, 0, row.message().length());
+    }
+
+    public static Component messageRange(DisplayRow row, int from, int to) {
+        String full = row.message();
+        int start = Math.clamp(from, 0, full.length());
+        int end = Math.clamp(to, start, full.length());
+        String text = full.substring(start, end);
         if (!row.match()) {
             return Component.literal(text).withStyle(Style.EMPTY.withColor(rgb(ContextColors.contextText(row.distanceFromMatch()))));
         }
@@ -45,17 +52,18 @@ public final class MessageComponents {
         MutableComponent result = Component.empty();
         int cursor = 0;
         for (HighlightSpan span : row.highlights()) {
-            int start = Math.min(span.start(), text.length());
-            int end = Math.min(span.end(), text.length());
-            if (start > cursor) {
-                result.append(Component.literal(text.substring(cursor, start))
+            int highlightStart = Math.clamp(span.start() - start, 0, text.length());
+            int highlightEnd = Math.clamp(span.end() - start, 0, text.length());
+            if (highlightEnd <= 0 || highlightStart >= text.length() || highlightEnd <= highlightStart) {
+                continue;
+            }
+            if (highlightStart > cursor) {
+                result.append(Component.literal(text.substring(cursor, highlightStart))
                     .withStyle(Style.EMPTY.withColor(rgb(ContextColors.MATCH_TEXT))));
             }
-            if (end > start) {
-                result.append(Component.literal(text.substring(start, end))
-                    .withStyle(Style.EMPTY.withColor(rgb(ContextColors.MATCH_HIGHLIGHT))));
-            }
-            cursor = Math.max(cursor, end);
+            result.append(Component.literal(text.substring(highlightStart, highlightEnd))
+                .withStyle(Style.EMPTY.withColor(rgb(ContextColors.MATCH_HIGHLIGHT))));
+            cursor = highlightEnd;
         }
         if (cursor < text.length()) {
             result.append(Component.literal(text.substring(cursor))
