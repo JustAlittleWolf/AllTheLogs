@@ -1,15 +1,17 @@
 package me.wolfii.allthelogs.client.view;
 
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
 /**
- * Maps match timestamps onto a vertical timeline and chooses date labels for the track.
+ * Maps match timestamps onto a vertical timeline. Mapping is O(1) in the number of matches: the browser
+ * stores only the oldest and newest hit, so drawing the scrubber never walks the match list.
  */
 public final class TimelineLayout {
     private static final DateTimeFormatter HOVER_DATE_TIME = DateTimeFormatter.ofPattern("MMM d, yyyy HH:mm", Locale.US);
@@ -22,9 +24,6 @@ public final class TimelineLayout {
     }
 
     /**
-     * 0 at {@code oldest}, 1 at {@code newest}. Marker lists may be in either order.
-     */
-    /**
      * Hover label for the timeline scrubber. Time is omitted when more than four distinct match dates are in
      * the current filter.
      */
@@ -33,17 +32,30 @@ public final class TimelineLayout {
         return uniqueDates > 4 ? time.format(HOVER_DATE) : time.format(HOVER_DATE_TIME);
     }
 
+    /**
+     * Milliseconds from the UTC epoch. Used so per-frame mapping does not allocate {@link java.time.Duration}.
+     */
+    public static long epochMillis(LocalDateTime time) {
+        if (time == null) return 0;
+        return time.toEpochSecond(ZoneOffset.UTC) * 1000L + time.getNano() / 1_000_000L;
+    }
+
+    /**
+     * 0 at {@code oldest}, 1 at {@code newest}. The two range ends may be in either order.
+     */
     public static double progress(LocalDateTime time, LocalDateTime oldest, LocalDateTime newest) {
-        LocalDateTime first = earlier(oldest, newest);
-        LocalDateTime last = later(oldest, newest);
-        if (time == null || first == null || last == null) return 0;
-        if (!last.isAfter(first)) return 0;
-        double total = Duration.between(first, last).toMillis();
-        if (total <= 0) return 0;
-        double at = Duration.between(first, time).toMillis();
-        if (at < 0) return 0;
-        if (at > total) return 1;
-        return at / total;
+        return progressMillis(epochMillis(time), epochMillis(earlier(oldest, newest)), epochMillis(later(oldest, newest)));
+    }
+
+    public static double progressMillis(long timeMs, long oldestMs, long newestMs) {
+        long first = Math.min(oldestMs, newestMs);
+        long last = Math.max(oldestMs, newestMs);
+        long span = last - first;
+        if (span <= 0) return 0;
+        long at = timeMs - first;
+        if (at <= 0) return 0;
+        if (at >= span) return 1;
+        return at / (double) span;
     }
 
     /**
@@ -51,40 +63,36 @@ public final class TimelineLayout {
      * newest-first message order.
      */
     public static int y(LocalDateTime time, LocalDateTime first, LocalDateTime last, int top, int height) {
-        return top + (int) Math.round(progress(time, first, last) * Math.max(0, height - 1));
+        return yFromProgress(progress(time, first, last), top, height);
     }
 
     /**
      * Pixel Y with newest at the top and oldest at the bottom, like Immich's timeline scrubber.
      */
     public static int yFromNewest(LocalDateTime time, LocalDateTime oldest, LocalDateTime newest, int top, int height) {
-        double fromNewest = 1 - progress(time, oldest, newest);
-        return top + (int) Math.round(fromNewest * Math.max(0, height - 1));
+        return yFromNewestMillis(epochMillis(time), epochMillis(oldest), epochMillis(newest), top, height);
+    }
+
+    public static int yFromNewestMillis(long timeMs, long oldestMs, long newestMs, int top, int height) {
+        return yFromProgress(1 - progressMillis(timeMs, oldestMs, newestMs), top, height);
     }
 
     public static LocalDateTime timeFromNewest(double progressFromTop, LocalDateTime oldest, LocalDateTime newest) {
         LocalDateTime first = earlier(oldest, newest);
         LocalDateTime last = later(oldest, newest);
         if (first == null || last == null) return first;
+        return timeFromNewestMillis(progressFromTop, epochMillis(first), epochMillis(last));
+    }
+
+    public static LocalDateTime timeFromNewestMillis(double progressFromTop, long oldestMs, long newestMs) {
+        long first = Math.min(oldestMs, newestMs);
+        long last = Math.max(oldestMs, newestMs);
         double clamped = Math.clamp(progressFromTop, 0, 1);
-        long millis = Math.round(Duration.between(first, last).toMillis() * (1 - clamped));
-        return first.plus(Duration.ofMillis(millis));
-    }
-
-    public static LocalDateTime oldest(List<LocalDateTime> times) {
-        LocalDateTime oldest = null;
-        for (LocalDateTime time : times) {
-            if (time != null && (oldest == null || time.isBefore(oldest))) oldest = time;
-        }
-        return oldest;
-    }
-
-    public static LocalDateTime newest(List<LocalDateTime> times) {
-        LocalDateTime newest = null;
-        for (LocalDateTime time : times) {
-            if (time != null && (newest == null || time.isAfter(newest))) newest = time;
-        }
-        return newest;
+        long millis = Math.round((last - first) * (1 - clamped));
+        return LocalDateTime.ofEpochSecond(
+            Math.floorDiv(first + millis, 1000L),
+            (int) (Math.floorMod(first + millis, 1000L) * 1_000_000L),
+            ZoneOffset.UTC);
     }
 
     static LocalDateTime earlier(LocalDateTime a, LocalDateTime b) {
@@ -106,7 +114,7 @@ public final class TimelineLayout {
         LocalDate start = oldest.toLocalDate();
         LocalDate end = newest.toLocalDate();
         if (end.isBefore(start)) return List.of();
-        long days = Duration.between(start.atStartOfDay(), end.plusDays(1).atStartOfDay()).toDays();
+        long days = ChronoUnit.DAYS.between(start, end) + 1;
         List<DateTick> ticks = new ArrayList<>();
         if (days > 400) {
             LocalDate cursor = LocalDate.of(start.getYear(), 1, 1);
@@ -134,26 +142,8 @@ public final class TimelineLayout {
         return List.copyOf(ticks);
     }
 
-    /**
-     * Downsamples markers so neighbouring timestamps are at least {@code minGapPx} apart on a track of
-     * {@code height} pixels. The first and last markers are always kept.
-     */
-    public static List<LocalDateTime> downsample(List<LocalDateTime> times, int height, int minGapPx) {
-        if (times.size() <= 2 || height <= 0 || minGapPx <= 0) return List.copyOf(times);
-        LocalDateTime first = oldest(times);
-        LocalDateTime last = newest(times);
-        List<LocalDateTime> kept = new ArrayList<>();
-        int lastY = Integer.MIN_VALUE;
-        for (int i = 0; i < times.size(); i++) {
-            LocalDateTime time = times.get(i);
-            int y = yFromNewest(time, first, last, 0, height);
-            boolean isEdge = i == 0 || i == times.size() - 1;
-            if (isEdge || Math.abs(y - lastY) >= minGapPx) {
-                kept.add(time);
-                lastY = y;
-            }
-        }
-        return List.copyOf(kept);
+    private static int yFromProgress(double progress, int top, int height) {
+        return top + (int) Math.round(progress * Math.max(0, height - 1));
     }
 
     public record DateTick(LocalDateTime at, String label) {

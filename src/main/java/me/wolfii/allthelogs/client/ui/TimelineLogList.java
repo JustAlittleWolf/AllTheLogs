@@ -50,8 +50,9 @@ public final class TimelineLogList extends BaseUIComponent {
     private final MessageSelection selection = new MessageSelection();
     private MessageListLayout layout = MessageListLayout.of(List.of(), 0);
     private int contextLines;
-    private LocalDateTime rangeOldest;
-    private LocalDateTime rangeNewest;
+    private long rangeOldestMs;
+    private long rangeNewestMs;
+    private boolean hasRange;
     private int uniqueMatchDates;
     private double scrollY;
     private boolean loading;
@@ -99,15 +100,15 @@ public final class TimelineLogList extends BaseUIComponent {
     }
 
     public void setMatchBounds(MatchBounds bounds) {
-        if (bounds == null) {
-            this.rangeOldest = null;
-            this.rangeNewest = null;
+        if (bounds == null || bounds.oldest() == null || bounds.newest() == null) {
             this.uniqueMatchDates = 0;
+            this.hasRange = false;
             return;
         }
-        this.rangeOldest = bounds.oldest();
-        this.rangeNewest = bounds.newest();
+        this.rangeOldestMs = TimelineLayout.epochMillis(bounds.oldest());
+        this.rangeNewestMs = TimelineLayout.epochMillis(bounds.newest());
         this.uniqueMatchDates = bounds.uniqueDates();
+        this.hasRange = true;
     }
 
     public void setLoading(boolean loading) {
@@ -350,6 +351,10 @@ public final class TimelineLogList extends BaseUIComponent {
         graphics.drawText(text, boxX + 8, boxY + 4, 1, TEXT);
     }
 
+    /**
+     * Draws the scrubber in O(1) match work: only the cached oldest/newest timestamps are mapped to pixels.
+     * The previous implementation walked every match through {@code TimelineLayout.downsample} each frame.
+     */
     private void drawTimeline(OwoUIGraphics graphics, int columnX, int mouseX, int mouseY) {
         int trackRight = x + width - 2;
         int trackLeft = trackRight - TRACK_WIDTH;
@@ -357,19 +362,14 @@ public final class TimelineLogList extends BaseUIComponent {
         graphics.fill(trackX, y, trackX + TRACK_WIDTH, y + height, TRACK);
         graphics.fill(trackX, y, trackX + 1, y + height, TRACK_BORDER);
 
-        LocalDateTime oldest = rangeOldest;
-        LocalDateTime newest = rangeNewest;
-        if (oldest == null || newest == null) {
-            oldest = window.firstMatchTime();
-            newest = window.lastMatchTime();
-        }
-        if (oldest == null || newest == null) {
+        if (!ensureRange()) {
             return;
         }
 
         LocalDateTime viewTime = visibleTime();
         if (viewTime != null) {
-            int thumbCenter = TimelineLayout.yFromNewest(viewTime, oldest, newest, y, height);
+            int thumbCenter = TimelineLayout.yFromNewestMillis(
+                TimelineLayout.epochMillis(viewTime), rangeOldestMs, rangeNewestMs, y, height);
             int thumbTop = Math.clamp(thumbCenter - THUMB_HEIGHT / 2, y, y + height - THUMB_HEIGHT);
             graphics.fill(trackX + 1, thumbTop, trackX + TRACK_WIDTH - 1, thumbTop + THUMB_HEIGHT, THUMB);
         }
@@ -392,6 +392,17 @@ public final class TimelineLogList extends BaseUIComponent {
         }
     }
 
+    private boolean ensureRange() {
+        if (hasRange) return true;
+        LocalDateTime oldest = window.firstMatchTime();
+        LocalDateTime newest = window.lastMatchTime();
+        if (oldest == null || newest == null) return false;
+        rangeOldestMs = TimelineLayout.epochMillis(oldest);
+        rangeNewestMs = TimelineLayout.epochMillis(newest);
+        hasRange = true;
+        return true;
+    }
+
     private LocalDateTime visibleTime() {
         List<DisplayRow> rows = window.rows();
         if (rows.isEmpty()) return null;
@@ -400,11 +411,9 @@ public final class TimelineLogList extends BaseUIComponent {
     }
 
     private LocalDateTime timeAtY(double mouseY) {
-        LocalDateTime oldest = rangeOldest != null ? rangeOldest : window.firstMatchTime();
-        LocalDateTime newest = rangeNewest != null ? rangeNewest : window.lastMatchTime();
-        if (oldest == null || newest == null) return null;
+        if (!ensureRange()) return null;
         double progress = (mouseY - y) / Math.max(1, height - 1);
-        return TimelineLayout.timeFromNewest(progress, oldest, newest);
+        return TimelineLayout.timeFromNewestMillis(progress, rangeOldestMs, rangeNewestMs);
     }
 
     private void jumpToY(double mouseY) {
