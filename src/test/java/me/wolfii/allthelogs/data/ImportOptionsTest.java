@@ -37,7 +37,7 @@ class ImportOptionsTest {
 
     @Test
     void rejectsANullTimezone() {
-        assertThrows(NullPointerException.class, () -> ImportOptions.defaults().withTimezone(null));
+        assertThrows(NullPointerException.class, () -> ImportOptions.defaults().withTimezone((ZoneId) null));
     }
 
     @Test
