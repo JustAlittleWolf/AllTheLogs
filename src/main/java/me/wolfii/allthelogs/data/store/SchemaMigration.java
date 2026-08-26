@@ -12,8 +12,13 @@ import java.sql.Statement;
  *   <li>1 — initial {@link Schema} layout ({@code log_file}, {@code chat_entry}, location index)</li>
  * </ul>
  * <p>
- * To bump the schema, increment {@link #CURRENT_VERSION}, add a step in {@link #migrateFrom(Statement, int)},
- * and document the change in this class.
+ * To bump the schema:
+ * <ol>
+ *   <li>Increment {@link #CURRENT_VERSION}</li>
+ *   <li>Add a {@code case} in {@link #stepFrom(int)} that migrates from the previous version</li>
+ *   <li>Document the change in the version history above</li>
+ * </ol>
+ * Each step is applied in order, and the stored version is advanced only after that step succeeds.
  */
 public final class SchemaMigration {
     static final String META_TABLE = "allthelogs_meta";
@@ -21,6 +26,22 @@ public final class SchemaMigration {
 
     /** Schema version written by this release. */
     public static final int CURRENT_VERSION = 1;
+
+    @FunctionalInterface
+    interface UpgradeStep {
+        void apply(Statement statement) throws SQLException;
+    }
+
+    @FunctionalInterface
+    interface UpgradePlan {
+        UpgradeStep stepFrom(int fromVersion);
+    }
+
+    /**
+     * Migrations from version {@code N} to {@code N + 1}. Add a case when bumping
+     * {@link #CURRENT_VERSION}.
+     */
+    static final UpgradePlan PLAN = SchemaMigration::stepFrom;
 
     private SchemaMigration() {
     }
@@ -32,11 +53,9 @@ public final class SchemaMigration {
         createMetaTable(statement);
         int version = readVersion(statement);
         if (version == 0) {
-            if (hasDataTables(statement)) {
-                setVersion(statement, CURRENT_VERSION);
-                return;
+            if (!hasDataTables(statement)) {
+                Schema.create(statement);
             }
-            Schema.create(statement);
             setVersion(statement, CURRENT_VERSION);
             return;
         }
@@ -45,8 +64,15 @@ public final class SchemaMigration {
                 + " is newer than this mod supports (" + CURRENT_VERSION + ")");
         }
         if (version < CURRENT_VERSION) {
-            upgrade(statement, version, CURRENT_VERSION);
+            upgrade(statement, version, CURRENT_VERSION, PLAN);
         }
+    }
+
+    private static UpgradeStep stepFrom(int fromVersion) {
+        return switch (fromVersion) {
+            // case 1 -> SchemaMigration::migrateTo2;
+            default -> null;
+        };
     }
 
     private static void createMetaTable(Statement statement) throws SQLException {
@@ -74,24 +100,28 @@ public final class SchemaMigration {
             if (!result.next()) {
                 return 0;
             }
-            return Integer.parseInt(result.getString(1));
+            String value = result.getString(1);
+            try {
+                return Integer.parseInt(value);
+            } catch (NumberFormatException e) {
+                throw new SQLException("invalid schema version: " + value, e);
+            }
         }
     }
 
-    private static void setVersion(Statement statement, int version) throws SQLException {
+    static void setVersion(Statement statement, int version) throws SQLException {
         statement.execute("DELETE FROM " + META_TABLE + " WHERE k = '" + VERSION_KEY + "'");
         statement.execute("INSERT INTO " + META_TABLE + " VALUES ('" + VERSION_KEY + "', '" + version + "')");
     }
 
-    private static void upgrade(Statement statement, int from, int to) throws SQLException {
+    static void upgrade(Statement statement, int from, int to, UpgradePlan plan) throws SQLException {
         for (int version = from; version < to; version++) {
-            migrateFrom(statement, version);
+            UpgradeStep step = plan.stepFrom(version);
+            if (step == null) {
+                throw new SQLException("no migration path from schema version " + version);
+            }
+            step.apply(statement);
             setVersion(statement, version + 1);
         }
-    }
-
-    private static void migrateFrom(Statement statement, int fromVersion) throws SQLException {
-        // When adding version 2, replace this throw with: if (fromVersion == 1) { migrateTo2(statement); return; }
-        throw new SQLException("no migration path from schema version " + fromVersion);
     }
 }
