@@ -8,6 +8,7 @@
 	"allthelogs.filter.context": "Lines of context",
 	"allthelogs.filter.version": "Minecraft version",
 	"allthelogs.filter.version.all": "ALL",
+    "allthelogs.filter.sort": "Order",
 	"allthelogs.filter.sort.ascending": "Oldest first",
 	"allthelogs.filter.sort.descending": "Newest first",
 	"allthelogs.filter.from": "No earlier than",
