@@ -1,6 +1,7 @@
 package me.wolfii.allthelogs.data.importer;
 
 import me.wolfii.allthelogs.data.*;
+import me.wolfii.allthelogs.data.discover.FileCountEstimator;
 import me.wolfii.allthelogs.data.discover.ImportObserver;
 import me.wolfii.allthelogs.data.discover.LogCandidate;
 import me.wolfii.allthelogs.data.discover.LogDiscovery;
@@ -21,6 +22,7 @@ import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 /**
@@ -73,18 +75,31 @@ public final class LogImporter {
      * Imports every matching log file under {@code directory}.
      */
     public ImportResult importDirectory(Path directory, ImportOptions options, Consumer<ImportProgress> progress) {
-        return runImport(options, discovery -> discovery.discoverDirectory(directory), progress);
+        return importDirectory(directory, options, progress, () -> false);
+    }
+
+    public ImportResult importDirectory(Path directory, ImportOptions options, Consumer<ImportProgress> progress,
+                                        BooleanSupplier cancelled) {
+        int estimate = FileCountEstimator.estimateDirectory(directory, options);
+        return runImport(options, discovery -> discovery.discoverDirectory(directory), progress, cancelled, estimate);
     }
 
     /**
      * Imports every matching log file inside {@code archive}.
      */
     public ImportResult importArchive(Path archive, ImportOptions options, Consumer<ImportProgress> progress) {
-        return runImport(options, discovery -> discovery.discoverArchive(archive), progress);
+        return importArchive(archive, options, progress, () -> false);
     }
 
-    private ImportResult runImport(ImportOptions options, Consumer<LogDiscovery> walk, Consumer<ImportProgress> progress) {
-        ImportResult result = importIntoStore(options, walk, progress);
+    public ImportResult importArchive(Path archive, ImportOptions options, Consumer<ImportProgress> progress,
+                                      BooleanSupplier cancelled) {
+        int estimate = FileCountEstimator.estimateArchive(archive, options);
+        return runImport(options, discovery -> discovery.discoverArchive(archive), progress, cancelled, estimate);
+    }
+
+    private ImportResult runImport(ImportOptions options, Consumer<LogDiscovery> walk, Consumer<ImportProgress> progress,
+                                   BooleanSupplier cancelled, int estimatedFiles) {
+        ImportResult result = importIntoStore(options, walk, progress, cancelled, estimatedFiles);
         if (result.importedFiles() > 0) {
             try (Statement statement = connection.createStatement()) {
                 Schema.clusterEntries(statement);
@@ -95,23 +110,32 @@ public final class LogImporter {
         return result;
     }
 
-    private ImportResult importIntoStore(ImportOptions options, Consumer<LogDiscovery> walk, Consumer<ImportProgress> progress) {
+    private ImportResult importIntoStore(ImportOptions options, Consumer<LogDiscovery> walk,
+                                         Consumer<ImportProgress> progress, BooleanSupplier cancelled,
+                                         int estimatedFiles) {
+        BooleanSupplier stop = cancelled == null ? () -> false : cancelled;
         BlockingQueue<PreparedLog> queue = new ArrayBlockingQueue<>(WRITE_QUEUE_CAPACITY);
         List<ImportResult.Failure> parseFailures = Collections.synchronizedList(new ArrayList<>());
         AtomicInteger skipped = new AtomicInteger();
         AtomicInteger empty = new AtomicInteger();
         ImportObserver observer = new ImportObserver(progress);
+        observer.setEstimatedFiles(estimatedFiles);
 
         try (LogWriter writer = new LogWriter(connection)) {
             var failureRef = new AtomicReference<RuntimeException>();
             ExecutorService parsers = Executors.newFixedThreadPool(options.parallelism());
             LogDiscovery discovery = new LogDiscovery(options, candidate -> {
+                if (stop.getAsBoolean()) return;
                 if (options.skipAlreadyImported() && writer.isAlreadyImported(candidate.sourcePath(), candidate.entryPath())) {
                     skipped.incrementAndGet();
                     observer.fileCompleted();
                     return;
                 }
                 parsers.execute(() -> {
+                    if (stop.getAsBoolean()) {
+                        observer.fileCompleted();
+                        return;
+                    }
                     try {
                         PreparedLog prepared = LogPreparer.prepare(candidate, options.timezone());
                         // Not stored: missing timestamps, or no chat and no resource-manager reload.
@@ -140,11 +164,13 @@ public final class LogImporter {
                         observer.fileCompleted();
                     }
                 });
-            }, observer);
+            }, observer, stop);
 
             Thread discoverer = new Thread(() -> {
                 try {
-                    walk.accept(discovery);
+                    if (!stop.getAsBoolean()) {
+                        walk.accept(discovery);
+                    }
                 } catch (RuntimeException e) {
                     failureRef.set(e);
                 } finally {
@@ -162,7 +188,13 @@ public final class LogImporter {
 
             try {
                 while (true) {
-                    PreparedLog log = queue.take();
+                    if (stop.getAsBoolean()) {
+                        parsers.shutdownNow();
+                        discoverer.interrupt();
+                        break;
+                    }
+                    PreparedLog log = queue.poll(50, TimeUnit.MILLISECONDS);
+                    if (log == null) continue;
                     if (log == END_OF_STREAM) break;
                     writer.write(log);
                     observer.fileCompleted(sourceOf(log));
@@ -174,7 +206,7 @@ public final class LogImporter {
             observer.finished();
 
             RuntimeException discoveryFailure = failureRef.get();
-            if (discoveryFailure != null) throw discoveryFailure;
+            if (discoveryFailure != null && !stop.getAsBoolean()) throw discoveryFailure;
 
             writer.deduplicate();
 

@@ -227,7 +227,9 @@ class ImportProgressTest {
 
     @Test
     void fractionIsZeroWhenNothingHasBeenDiscovered() {
-        assertEquals(0d, new ImportProgress(0, 0, false, null).fraction());
-        assertEquals(0.5, new ImportProgress(1, 2, false, null).fraction());
+        assertEquals(0d, new ImportProgress(0, 0, 0, false, null).fraction());
+        assertEquals(0.5, new ImportProgress(1, 2, 0, false, null).fraction());
+        assertEquals(0.1, new ImportProgress(1, 1, 10, false, null).fraction());
+        assertEquals(1.0, new ImportProgress(4, 4, 10, true, null).fraction());
     }
 }

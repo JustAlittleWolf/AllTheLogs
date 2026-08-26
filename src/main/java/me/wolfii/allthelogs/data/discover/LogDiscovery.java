@@ -36,17 +36,28 @@ public final class LogDiscovery {
     private final Pattern pathMatcher;
     private final Consumer<LogCandidate> consumer;
     private final ImportObserver observer;
+    private final java.util.function.BooleanSupplier cancelled;
     private final List<ImportResult.Failure> failures = new ArrayList<>();
 
     public LogDiscovery(ImportOptions options, Consumer<LogCandidate> consumer) {
-        this(options, consumer, new ImportObserver(null));
+        this(options, consumer, new ImportObserver(null), () -> false);
     }
 
     public LogDiscovery(ImportOptions options, Consumer<LogCandidate> consumer, ImportObserver observer) {
+        this(options, consumer, observer, () -> false);
+    }
+
+    public LogDiscovery(ImportOptions options, Consumer<LogCandidate> consumer, ImportObserver observer,
+                        java.util.function.BooleanSupplier cancelled) {
         this.options = options;
         this.pathMatcher = options.pathMatcher() == null ? null : Globs.compile(options.pathMatcher());
         this.consumer = consumer;
         this.observer = observer;
+        this.cancelled = cancelled == null ? () -> false : cancelled;
+    }
+
+    private boolean cancelled() {
+        return cancelled.getAsBoolean();
     }
 
     private static byte[] readFully(InputStream stream, long expectedSize) throws IOException {
@@ -71,13 +82,13 @@ public final class LogDiscovery {
         return Instant.ofEpochMilli(epochMillis);
     }
 
-    private static boolean isLogFile(String name) {
+    static boolean isLogFile(String name) {
         if (name.equalsIgnoreCase("latest.log")) return false;
         String lower = name.toLowerCase(Locale.ROOT);
         return LOG_SUFFIXES.stream().anyMatch(lower::endsWith);
     }
 
-    private static boolean isArchive(String name) {
+    static boolean isArchive(String name) {
         String lower = name.toLowerCase(Locale.ROOT);
         return ARCHIVE_SUFFIXES.stream().anyMatch(lower::endsWith);
     }
@@ -117,6 +128,7 @@ public final class LogDiscovery {
             return;
         }
         for (Path child : children) {
+            if (cancelled()) return;
             String name = child.getFileName().toString();
             String entryPath = prefix.isEmpty() ? name : prefix + "/" + name;
             if (Files.isDirectory(child)) {
@@ -154,6 +166,7 @@ public final class LogDiscovery {
     private void readArchive(Path archive, String sourcePath, String description, String prefix, String globPrefix,
                              String archiveName) {
         String archiveEntry = prefix.isEmpty() ? "" : prefix.substring(0, prefix.length() - ARCHIVE_SEPARATOR.length());
+        if (cancelled()) return;
         observer.workingOnArchive(Path.of(sourcePath), archiveEntry);
         try {
             if (archiveName.toLowerCase(Locale.ROOT).endsWith(".7z")) {
@@ -171,6 +184,7 @@ public final class LogDiscovery {
         try (SevenZFile file = SevenZFile.builder().setPath(archive).get()) {
             SevenZArchiveEntry entry;
             while ((entry = file.getNextEntry()) != null) {
+                if (cancelled()) return;
                 if (entry.isDirectory()) continue;
                 Instant modified = entry.getHasLastModifiedDate()
                     ? entry.getLastModifiedDate().toInstant() : null;
@@ -192,6 +206,7 @@ public final class LogDiscovery {
             try (ArchiveInputStream<?> stream = new ArchiveStreamFactory().createArchiveInputStream(input)) {
                 ArchiveEntry entry;
                 while ((entry = stream.getNextEntry()) != null) {
+                    if (cancelled()) return;
                     if (entry.isDirectory() || !stream.canReadEntryData(entry)) continue;
                     Instant modified = entry.getLastModifiedDate() == null ? null
                         : toInstant(entry.getLastModifiedDate().getTime());
@@ -209,6 +224,7 @@ public final class LogDiscovery {
     private void handleArchiveEntry(String rawName, Instant modified, String sourcePath, String description,
                                     String prefix, String globPrefix, long size, ContentSupplier content)
         throws IOException {
+        if (cancelled()) return;
         String normalized = rawName.replace('\\', '/');
         if (normalized.startsWith("./")) normalized = normalized.substring(2);
         String name = normalized.substring(normalized.lastIndexOf('/') + 1);

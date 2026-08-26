@@ -37,33 +37,7 @@ public final class QueryBuilder {
     public static QueryBuilder build(ChatQuery query) {
         List<Object> parameters = new ArrayList<>();
         List<String> conditions = new ArrayList<>();
-
-        if (query.startingAt() != null) {
-            conditions.add("entry_time >= ?");
-            parameters.add(Timestamp.valueOf(query.startingAt()));
-        }
-        if (query.upUntil() != null) {
-            conditions.add("entry_time < ?");
-            parameters.add(Timestamp.valueOf(query.upUntil()));
-        }
-        addOffsetCondition(query, conditions, parameters);
-        if (query.version() != null) {
-            conditions.add("file_id IN (SELECT id FROM log_file WHERE minecraft_version = ?)");
-            parameters.add(query.version());
-        }
-        if (query.substring() != null) {
-            if (query.caseSensitive()) {
-                conditions.add("contains(message, ?)");
-                parameters.add(query.substring());
-            } else {
-                conditions.add("contains(lower(message), ?)");
-                parameters.add(query.substring().toLowerCase(Locale.ROOT));
-            }
-        }
-        if (query.regex() != null) {
-            conditions.add("regexp_matches(message, ?)");
-            parameters.add(query.regex());
-        }
+        addMatchConditions(query, true, conditions, parameters);
 
         String where = conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions);
         String order = orderBy(query, "e.entry_time", "e.file_id", "e.line_index");
@@ -103,6 +77,52 @@ public final class QueryBuilder {
         return new QueryBuilder(sql, parameters);
     }
 
+    /**
+     * Oldest and newest match timestamps and how many distinct dates they cover. Ignores context, limit, and
+     * offset so the timeline can span every match for the filter.
+     */
+    public static QueryBuilder bounds(ChatQuery query) {
+        List<Object> parameters = new ArrayList<>();
+        List<String> conditions = new ArrayList<>();
+        addMatchConditions(query, false, conditions, parameters);
+        String where = conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions);
+        String sql = "SELECT MIN(e.entry_time), MAX(e.entry_time), COUNT(DISTINCT CAST(e.entry_time AS DATE))"
+            + " FROM chat_entry e" + where;
+        return new QueryBuilder(sql, parameters);
+    }
+
+    private static void addMatchConditions(ChatQuery query, boolean includeOffset, List<String> conditions,
+                                           List<Object> parameters) {
+        if (query.startingAt() != null) {
+            conditions.add("entry_time >= ?");
+            parameters.add(Timestamp.valueOf(query.startingAt()));
+        }
+        if (query.upUntil() != null) {
+            conditions.add("entry_time < ?");
+            parameters.add(Timestamp.valueOf(query.upUntil()));
+        }
+        if (includeOffset) {
+            addOffsetCondition(query, conditions, parameters);
+        }
+        if (query.version() != null) {
+            conditions.add("file_id IN (SELECT id FROM log_file WHERE minecraft_version = ?)");
+            parameters.add(query.version());
+        }
+        if (query.substring() != null) {
+            if (query.caseSensitive()) {
+                conditions.add("contains(message, ?)");
+                parameters.add(query.substring());
+            } else {
+                conditions.add("contains(lower(message), ?)");
+                parameters.add(query.substring().toLowerCase(Locale.ROOT));
+            }
+        }
+        if (query.regex() != null) {
+            conditions.add("regexp_matches(message, ?)");
+            parameters.add(query.regex());
+        }
+    }
+
     private static void addOffsetCondition(ChatQuery query, List<String> conditions, List<Object> parameters) {
         if (query.offset() == null) return;
         // Exclusive in the sort direction so (limit, offset=lastTimestamp) is the next page without repeating the
@@ -131,6 +151,8 @@ public final class QueryBuilder {
             Object parameter = parameters.get(i);
             if (parameter instanceof Timestamp timestamp) {
                 statement.setTimestamp(i + 1, timestamp);
+            } else if (parameter instanceof Integer integer) {
+                statement.setInt(i + 1, integer);
             } else {
                 statement.setString(i + 1, (String) parameter);
             }

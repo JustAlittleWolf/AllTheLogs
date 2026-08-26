@@ -83,6 +83,85 @@ public final class ChatQueries {
     }
 
     /**
+     * Oldest and newest match times for {@code query}, ignoring paging and context.
+     */
+    public MatchBounds bounds(ChatQuery query) {
+        QueryBuilder builder = QueryBuilder.bounds(query);
+        try (PreparedStatement prepared = connection.prepareStatement(builder.sql())) {
+            builder.bind(prepared);
+            try (ResultSet result = prepared.executeQuery()) {
+                if (!result.next()) return MatchBounds.empty();
+                Timestamp oldest = result.getTimestamp(1);
+                Timestamp newest = result.getTimestamp(2);
+                int uniqueDates = result.getInt(3);
+                if (oldest == null || newest == null) return MatchBounds.empty();
+                return new MatchBounds(oldest.toLocalDateTime(), newest.toLocalDateTime(), uniqueDates);
+            }
+        } catch (SQLException | RuntimeException e) {
+            throw new LogDataException("could not read match bounds for " + query, e);
+        }
+    }
+
+    /**
+     * Entries from {@code log} whose line index is within {@code radius} of {@code lineIndex}, inclusive.
+     */
+    public List<ChatEntry> around(ChatLog log, int lineIndex, int radius) {
+        Objects.requireNonNull(log, "log");
+        int from = Math.max(0, lineIndex - Math.max(0, radius));
+        int to = lineIndex + Math.max(0, radius);
+        String sourcePath = storedSourcePath(log.source());
+        String entryPath = storedEntryPath(log.source());
+        String sql = SELECT_AROUND;
+        List<ChatEntry> entries = new ArrayList<>();
+        try {
+            ResultRows rows = new ResultRows(Math.max(16, to - from + 1));
+            try (PreparedStatement prepared = connection.prepareStatement(sql)) {
+                prepared.setString(1, sourcePath);
+                prepared.setString(2, entryPath);
+                prepared.setInt(3, from);
+                prepared.setInt(4, to);
+                DuckDBPreparedStatement statement = prepared.unwrap(DuckDBPreparedStatement.class);
+                try (DuckDBChunkedResult result = statement.query()) {
+                    while (result.nextChunk()) {
+                        rows.append(result.chunk());
+                    }
+                }
+            }
+            Map<Long, ChatLog> logsById = HashMap.newHashMap(rows.neededFileIds().size());
+            if (!rows.neededFileIds().isEmpty()) {
+                loadLogs(logsById, rows.neededFileIds());
+            }
+            rows.toEntries(logsById, entries);
+        } catch (SQLException | RuntimeException e) {
+            throw new LogDataException("could not read lines around " + lineIndex + " in " + log.source(), e);
+        }
+        return entries;
+    }
+
+    private static final String SELECT_AROUND = """
+        SELECT e.file_id, e.entry_time, e.line_index, e.message
+        FROM chat_entry e
+        JOIN log_file f ON f.id = e.file_id
+        WHERE f.source_path = ? AND f.entry_path = ? AND e.line_index BETWEEN ? AND ?
+        ORDER BY e.line_index""";
+
+    static String storedSourcePath(LogSource source) {
+        return switch (source) {
+            case LogSource.File file -> file.path().toString();
+            case LogSource.Archive archive -> archive.path().toString();
+            case LogSource.Session ignored -> "<session>";
+        };
+    }
+
+    static String storedEntryPath(LogSource source) {
+        return switch (source) {
+            case LogSource.File ignored -> "";
+            case LogSource.Archive archive -> archive.entryPath();
+            case LogSource.Session session -> SessionMarker.entryPath(session.id());
+        };
+    }
+
+    /**
      * Returns every imported chat log, ordered by date.
      */
     public List<ChatLog> chatLogs() {

@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 /**
@@ -140,9 +141,18 @@ public final class LogStore implements AutoCloseable {
      * @throws LogDataException if {@code directory} is not a directory, or the database rejects the writes
      */
     public ImportResult importDirectory(Path directory, ImportOptions options, Consumer<ImportProgress> progress) {
+        return importDirectory(directory, options, progress, () -> false);
+    }
+
+    /**
+     * Imports every log file found below {@code directory}. {@code cancelled} is polled during discovery and
+     * writing; a {@code true} result stops the run and returns whatever was stored so far.
+     */
+    public ImportResult importDirectory(Path directory, ImportOptions options, Consumer<ImportProgress> progress,
+                                        BooleanSupplier cancelled) {
         Objects.requireNonNull(directory, "directory");
         Objects.requireNonNull(options, "options");
-        return importer.importDirectory(directory, options, progress);
+        return importer.importDirectory(directory, options, progress, cancelled);
     }
 
     /**
@@ -181,9 +191,18 @@ public final class LogStore implements AutoCloseable {
      * @throws LogDataException if {@code archive} is not a file, or the database rejects the writes
      */
     public ImportResult importArchive(Path archive, ImportOptions options, Consumer<ImportProgress> progress) {
+        return importArchive(archive, options, progress, () -> false);
+    }
+
+    /**
+     * Imports every log file inside {@code archive}. {@code cancelled} is polled during discovery and writing;
+     * a {@code true} result stops the run and returns whatever was stored so far.
+     */
+    public ImportResult importArchive(Path archive, ImportOptions options, Consumer<ImportProgress> progress,
+                                      BooleanSupplier cancelled) {
         Objects.requireNonNull(archive, "archive");
         Objects.requireNonNull(options, "options");
-        return importer.importArchive(archive, options, progress);
+        return importer.importArchive(archive, options, progress, cancelled);
     }
 
     /**
@@ -261,6 +280,22 @@ public final class LogStore implements AutoCloseable {
     public List<ChatEntry> query(ChatQuery query) {
         Objects.requireNonNull(query, "query");
         return queries.query(query);
+    }
+
+    /**
+     * Oldest and newest match timestamps for {@code query}, ignoring paging and context lines.
+     */
+    public MatchBounds matchBounds(ChatQuery query) {
+        Objects.requireNonNull(query, "query");
+        return queries.bounds(query);
+    }
+
+    /**
+     * Chat lines from {@code log} within {@code radius} of {@code lineIndex}, inclusive of the centre line.
+     */
+    public List<ChatEntry> around(ChatLog log, int lineIndex, int radius) {
+        Objects.requireNonNull(log, "log");
+        return queries.around(log, lineIndex, radius);
     }
 
     /**

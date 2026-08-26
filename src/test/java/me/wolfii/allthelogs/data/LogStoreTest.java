@@ -376,6 +376,30 @@ class LogStoreTest {
     }
 
     @Test
+    void aroundReturnsNeighboursFromTheSameLog() throws IOException {
+        store.importDirectory(logsDirectory());
+        ChatEntry hit = store.query(ChatQuery.all().withSubstring("needle in here")).getFirst();
+        assertEquals(List.of("delta", "needle in here", "epsilon"),
+            store.around(hit.chatLog(), hit.lineIndex(), 1).stream().map(ChatEntry::message).toList());
+    }
+
+    @Test
+    void matchBoundsCoverMatchingDatesOnly() throws IOException {
+        store.importDirectory(logsDirectory());
+        MatchBounds needles = store.matchBounds(ChatQuery.all().withSubstring("needle in here"));
+        assertEquals(1, needles.uniqueDates());
+        assertEquals(needles.oldest(), needles.newest());
+        MatchBounds all = store.matchBounds(ChatQuery.all());
+        assertTrue(all.uniqueDates() >= 2);
+    }
+
+    @Test
+    void cancelledImportStopsBeforeFinishing() throws IOException {
+        ImportResult result = store.importDirectory(logsDirectory(), ImportOptions.defaults(), null, () -> true);
+        assertTrue(result.importedFiles() <= 3);
+    }
+
+    @Test
     void contextDoesNotLeakAcrossChatLogs() throws IOException {
         store.importDirectory(logsDirectory());
 
