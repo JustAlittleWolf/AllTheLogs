@@ -50,6 +50,21 @@ public final class LogStore implements AutoCloseable {
         this.databasePath = databasePath;
     }
 
+    /// Connection settings that decide how compactly the file is written.
+    ///
+    /// DuckDB defaults new files to the storage format of v0.10.2 so that old readers can still open them, and that
+    /// format predates the string compression this data benefits from most. Asking for the newest format unlocks
+    /// `DICT_FSST`, which deduplicates the many repeated chat lines and then compresses the remaining dictionary,
+    /// roughly halving the space messages take. Chat lines are far shorter than the 4096 byte threshold at which
+    /// DuckDB would consider Zstd, so the threshold is lowered enough that Zstd can win on the occasional file full of
+    /// long unique lines while short lines still land on the cheaper `DICT_FSST`.
+    private static Properties storageSettings() {
+        Properties settings = new Properties();
+        settings.setProperty("storage_compatibility_version", "latest");
+        settings.setProperty("zstd_min_string_length", "512");
+        return settings;
+    }
+
     /// Opens, and if needed creates, the database at `databasePath`.
     ///
     /// @throws LogDataException if the file cannot be opened or its schema cannot be created
@@ -57,7 +72,8 @@ public final class LogStore implements AutoCloseable {
         Objects.requireNonNull(databasePath, "databasePath");
         Path absolute = databasePath.toAbsolutePath().normalize();
         try {
-            var connection = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:" + absolute);
+            var connection = (DuckDBConnection) DriverManager.getConnection(
+                "jdbc:duckdb:" + absolute, storageSettings());
             try (Statement statement = connection.createStatement()) {
                 Schema.create(statement);
             } catch (SQLException e) {
@@ -73,7 +89,7 @@ public final class LogStore implements AutoCloseable {
     /// Opens a store that lives only in memory, for tests and throwaway analysis.
     public static LogStore openInMemory() {
         try {
-            var connection = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+            var connection = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:", storageSettings());
             try (Statement statement = connection.createStatement()) {
                 Schema.create(statement);
             }

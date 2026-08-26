@@ -8,20 +8,19 @@ import java.sql.Statement;
 /// The design is driven by the two access patterns that matter: scanning a date range and scanning for a text match.
 /// Entries are stored in one wide table sorted by timestamp, which lets DuckDB skip whole row groups via its zone maps
 /// for range queries and keeps text scans a single sequential pass. Per row overhead is minimised by referencing the
-/// file through a small integer id instead of repeating its metadata, and DuckDB's default per column compression
-/// takes care of the rest.
+/// file through a small integer id instead of repeating its metadata, and DuckDB's per column compression takes care
+/// of the rest.
+///
+/// `chat_entry` deliberately carries no index. Both supported access patterns are full scans that an index cannot
+/// serve, and an index on a table with one row per chat line costs more storage than the compressed data itself.
+/// Worse, DuckDB refuses to reuse the blocks of a table that has any ART index, so re-importing a log file would grow
+/// the file forever instead of reclaiming what the replaced rows freed. `log_file` keeps its key constraints because
+/// it holds one row per file rather than per line, so the same overhead is negligible there.
 public final class Schema {
-    public static final int VERSION = 1;
-
     private Schema() {
     }
 
     public static void create(Statement statement) throws SQLException {
-        statement.execute("""
-            CREATE TABLE IF NOT EXISTS meta (
-                key VARCHAR PRIMARY KEY,
-                value VARCHAR NOT NULL
-            )""");
         statement.execute("""
             CREATE TABLE IF NOT EXISTS log_file (
                 id BIGINT PRIMARY KEY,
@@ -45,7 +44,5 @@ public final class Schema {
                 message VARCHAR NOT NULL
             )""");
         statement.execute("CREATE UNIQUE INDEX IF NOT EXISTS log_file_location ON log_file (source_path, entry_path)");
-        statement.execute("CREATE INDEX IF NOT EXISTS chat_entry_location ON chat_entry (file_id, line_index)");
-        statement.execute("INSERT OR IGNORE INTO meta VALUES ('schema_version', '" + VERSION + "')");
     }
 }
