@@ -1,6 +1,6 @@
-package me.wolfii.allthelogs.view;
+package me.wolfii.allthelogs.client.view;
 
-import me.wolfii.allthelogs.search.SearchFilter;
+import me.wolfii.allthelogs.client.search.SearchFilter;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

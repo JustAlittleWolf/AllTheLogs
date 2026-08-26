@@ -1,7 +1,7 @@
-package me.wolfii.allthelogs.config;
+package me.wolfii.allthelogs.client;
 
+import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.data.ChatQuery;
-import me.wolfii.allthelogs.search.SearchFilter;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;

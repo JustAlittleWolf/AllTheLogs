@@ -1,4 +1,4 @@
-package me.wolfii.allthelogs.config;
+package me.wolfii.allthelogs.client;
 
 import me.wolfii.allthelogs.data.ChatQuery;
 import org.junit.jupiter.api.Test;

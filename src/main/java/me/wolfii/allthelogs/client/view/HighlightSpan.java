@@ -1,4 +1,4 @@
-package me.wolfii.allthelogs.view;
+package me.wolfii.allthelogs.client.view;
 
 /**
  * Inclusive-exclusive character range of a search hit inside a message.

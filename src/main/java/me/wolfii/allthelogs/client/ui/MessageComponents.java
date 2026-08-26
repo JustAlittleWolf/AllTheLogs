@@ -1,8 +1,8 @@
 package me.wolfii.allthelogs.client.ui;
 
-import me.wolfii.allthelogs.view.ContextColors;
-import me.wolfii.allthelogs.view.DisplayRow;
-import me.wolfii.allthelogs.view.HighlightSpan;
+import me.wolfii.allthelogs.client.view.ContextColors;
+import me.wolfii.allthelogs.client.view.DisplayRow;
+import me.wolfii.allthelogs.client.view.HighlightSpan;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;

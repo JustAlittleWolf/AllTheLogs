@@ -1,4 +1,4 @@
-package me.wolfii.allthelogs.search;
+package me.wolfii.allthelogs.client.search;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;

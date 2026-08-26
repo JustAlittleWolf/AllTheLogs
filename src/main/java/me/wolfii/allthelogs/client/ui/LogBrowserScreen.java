@@ -6,14 +6,14 @@ import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.*;
 import me.wolfii.allthelogs.client.AllTheLogsClient;
+import me.wolfii.allthelogs.client.search.ChatQueryFactory;
+import me.wolfii.allthelogs.client.search.DateParsers;
+import me.wolfii.allthelogs.client.search.SearchFilter;
+import me.wolfii.allthelogs.client.view.DisplayRow;
+import me.wolfii.allthelogs.client.view.EntryClassifier;
+import me.wolfii.allthelogs.client.view.ResultWindow;
 import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.ChatQuery;
-import me.wolfii.allthelogs.search.ChatQueryFactory;
-import me.wolfii.allthelogs.search.DateParsers;
-import me.wolfii.allthelogs.search.SearchFilter;
-import me.wolfii.allthelogs.view.DisplayRow;
-import me.wolfii.allthelogs.view.EntryClassifier;
-import me.wolfii.allthelogs.view.ResultWindow;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
@@ -39,14 +39,6 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
     public LogBrowserScreen() {
         super(Component.translatable("allthelogs.screen.browser"));
         this.filter = AllTheLogsClient.settings().toFilter();
-    }
-
-    private static int countMatches(List<DisplayRow> rows) {
-        int count = 0;
-        for (DisplayRow row : rows) {
-            if (row.match()) count++;
-        }
-        return count;
     }
 
     private static ChatQuery.Sort opposite(ChatQuery.Sort sort) {
@@ -235,7 +227,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
                     return;
                 }
                 List<DisplayRow> rows = EntryClassifier.classify(entries, page);
-                boolean hasAfter = countMatches(rows) >= page.limit() && page.limit() > 0;
+                boolean hasAfter = ResultWindow.matchCount(rows) >= page.limit() && page.limit() > 0;
                 list.reset(rows, false, hasAfter);
                 status.text(Component.literal(rows.size() + " lines"));
             });
@@ -281,7 +273,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
                 }
                 List<DisplayRow> incoming = EntryClassifier.classify(entries, filter);
                 if (flip) incoming = ResultWindow.reversed(incoming);
-                boolean more = countMatches(incoming) >= filter.limit() && filter.limit() > 0;
+                boolean more = ResultWindow.matchCount(incoming) >= filter.limit() && filter.limit() > 0;
                 List<DisplayRow> older = edge == TimelineLogList.Edge.AFTER ? list.window().rows() : incoming;
                 List<DisplayRow> newer = edge == TimelineLogList.Edge.AFTER ? incoming : list.window().rows();
                 List<DisplayRow> merged = ResultWindow.mergeUnique(older, newer);
@@ -304,7 +296,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
                 list.setLoading(false);
                 if (error != null) return;
                 List<DisplayRow> rows = EntryClassifier.classify(entries, filter);
-                boolean hasAfter = countMatches(rows) >= filter.limit() && filter.limit() > 0;
+                boolean hasAfter = ResultWindow.matchCount(rows) >= filter.limit() && filter.limit() > 0;
                 list.reset(rows, true, hasAfter);
             });
         });

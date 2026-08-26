@@ -1,4 +1,4 @@
-package me.wolfii.allthelogs.view;
+package me.wolfii.allthelogs.client.view;
 
 import org.junit.jupiter.api.Test;
 
