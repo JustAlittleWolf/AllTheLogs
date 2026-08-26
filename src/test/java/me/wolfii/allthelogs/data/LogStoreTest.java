@@ -421,6 +421,77 @@ class LogStoreTest {
     }
 
     @Test
+    void updateSessionLastEntryTimeRequiresAnActiveSession() {
+        assertThrows(LogDataException.class, () -> store.updateSessionLastEntryTime());
+    }
+
+    @Test
+    void updateSessionLastEntryTimeDoesNotStoreAChatLine() {
+        LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+        store.startSession("26.2", startedAt);
+
+        store.updateSessionLastEntryTime(startedAt.plusHours(2));
+
+        ChatLog file = store.chatLogs().getFirst();
+        assertEquals(startedAt, file.firstEntryTime());
+        assertEquals(startedAt.plusHours(2), file.lastEntryTime());
+        assertEquals(0, file.entryCount());
+        assertTrue(store.logEntries().isEmpty());
+    }
+
+    @Test
+    void updateSessionLastEntryTimeDoesNotMoveEarlier() {
+        LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+        store.startSession("26.2", startedAt);
+        store.importSessionMessage("later", startedAt.plusMinutes(5));
+
+        store.updateSessionLastEntryTime(startedAt.plusMinutes(1));
+
+        ChatLog file = store.chatLogs().getFirst();
+        assertEquals(startedAt.plusMinutes(5), file.lastEntryTime());
+        assertEquals(1, file.entryCount());
+    }
+
+    @Test
+    void updateSessionLastEntryTimeCanAdvancePastTheLastMessage() {
+        LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+        store.startSession("26.2", startedAt);
+        store.importSessionMessage("chat", startedAt.plusMinutes(5));
+
+        store.updateSessionLastEntryTime(startedAt.plusHours(1));
+
+        ChatLog file = store.chatLogs().getFirst();
+        assertEquals(startedAt, file.firstEntryTime());
+        assertEquals(startedAt.plusHours(1), file.lastEntryTime());
+        assertEquals(1, store.logEntries().size());
+    }
+
+    @Test
+    void importingAnEarlierSessionMessageDoesNotMoveLastEntryTimeBack() {
+        LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+        store.startSession("26.2", startedAt);
+        store.updateSessionLastEntryTime(startedAt.plusHours(1));
+
+        store.importSessionMessage("late note", startedAt.plusMinutes(1));
+
+        ChatLog file = store.chatLogs().getFirst();
+        assertEquals(startedAt.plusHours(1), file.lastEntryTime());
+        assertEquals(1, file.entryCount());
+    }
+
+    @Test
+    void updateSessionLastEntryTimeUsesTheCurrentTimeByDefault() {
+        store.startSession("26.2");
+        LocalDateTime before = LocalDateTime.now().withNano(0);
+        store.updateSessionLastEntryTime();
+
+        ChatLog file = store.chatLogs().getFirst();
+        assertFalse(file.lastEntryTime().isBefore(before));
+        assertFalse(file.lastEntryTime().isAfter(LocalDateTime.now()));
+        assertTrue(store.logEntries().isEmpty());
+    }
+
+    @Test
     void storesClientEntriesAlongsideImportedOnes() throws IOException {
         store.importDirectory(logsDirectory());
         store.startSession("26.2", LocalDateTime.of(2026, 8, 26, 12, 0, 0));

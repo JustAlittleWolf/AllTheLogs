@@ -12,8 +12,8 @@ import java.util.Objects;
 /// @param firstEntryTime   timestamp of the first logged line, not just chat entries; converted from the import
 ///                         timezone like chat entries. For a client session this is when the session started
 /// @param lastEntryTime    timestamp of the last logged line, not just chat entries; converted from the import
-///                         timezone like chat entries. For a client session this is updated each time a message is
-///                         imported with [LogStore#importSessionMessage(String)]
+///                         timezone like chat entries. For a client session this is updated by
+///                         [LogStore#importSessionMessage(String)] and [LogStore#updateSessionLastEntryTime()]
 /// @param entryCount       number of stored chat entries
 public record ChatLog(
     LogSource source,

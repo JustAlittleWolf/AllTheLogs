@@ -362,9 +362,9 @@ public final class LogStore implements AutoCloseable {
     /// Starts a capture session for a running Minecraft client and creates a [ChatLog] for it.
     ///
     /// Chat lines imported with [#importSessionMessage(String)] are stored against this log. Its
-    /// [ChatLog#firstEntryTime()] is the session start; [#importSessionMessage(String, LocalDateTime)] updates
-    /// [ChatLog#lastEntryTime()] as lines arrive. Starting another session leaves the previous log in place and
-    /// switches subsequent imports to the new one.
+    /// [ChatLog#firstEntryTime()] is the session start; [#importSessionMessage(String, LocalDateTime)] and
+    /// [#updateSessionLastEntryTime(LocalDateTime)] update [ChatLog#lastEntryTime()] as the session continues.
+    /// Starting another session leaves the previous log in place and switches subsequent imports to the new one.
     ///
     /// The log's [ChatLog#source()] is a [LogSource.Session], since the lines were captured from the running client
     /// rather than read from a directory or archive.
@@ -408,9 +408,7 @@ public final class LogStore implements AutoCloseable {
     public boolean importSessionMessage(String message, LocalDateTime timestamp) {
         Objects.requireNonNull(message, "message");
         Objects.requireNonNull(timestamp, "timestamp");
-        if (sessionFileId < 0) {
-            throw new LogDataException("no client session is active; call startSession first");
-        }
+        requireActiveSession();
 
         // Whole seconds only, so a client entry and the same line read back from the log file collide as intended.
         LocalDateTime stamp = timestamp.withNano(0);
@@ -419,6 +417,34 @@ public final class LogStore implements AutoCloseable {
             return writeSessionEntry(stripped, stamp);
         } catch (SQLException e) {
             throw new LogDataException("could not store client chat entry", e);
+        }
+    }
+
+    /// Updates [ChatLog#lastEntryTime()] of the current session to the current time, without storing a chat line.
+    public void updateSessionLastEntryTime() {
+        updateSessionLastEntryTime(LocalDateTime.now());
+    }
+
+    /// Updates [ChatLog#lastEntryTime()] of the current session, without storing a chat line.
+    ///
+    /// Whole seconds only, matching [#importSessionMessage(String, LocalDateTime)]. If `timestamp` is earlier than
+    /// the time already stored, the existing last entry time is kept.
+    ///
+    /// @throws LogDataException if no session is active, or the update cannot be written
+    public void updateSessionLastEntryTime(LocalDateTime timestamp) {
+        Objects.requireNonNull(timestamp, "timestamp");
+        requireActiveSession();
+        LocalDateTime stamp = timestamp.withNano(0);
+        try {
+            writeSessionLastEntryTime(stamp);
+        } catch (SQLException e) {
+            throw new LogDataException("could not update the session last entry time", e);
+        }
+    }
+
+    private void requireActiveSession() {
+        if (sessionFileId < 0) {
+            throw new LogDataException("no client session is active; call startSession first");
         }
     }
 
@@ -469,13 +495,23 @@ public final class LogStore implements AutoCloseable {
         try (PreparedStatement update = connection.prepareStatement("""
             UPDATE log_file SET
                 entry_count = entry_count + 1,
-                last_entry_time = ?
+                last_entry_time = greatest(last_entry_time, ?)
             WHERE id = ?""")) {
             update.setTimestamp(1, Timestamp.valueOf(timestamp));
             update.setLong(2, sessionFileId);
             update.execute();
         }
         return true;
+    }
+
+    private void writeSessionLastEntryTime(LocalDateTime timestamp) throws SQLException {
+        try (PreparedStatement update = connection.prepareStatement("""
+            UPDATE log_file SET last_entry_time = greatest(last_entry_time, ?)
+            WHERE id = ?""")) {
+            update.setTimestamp(1, Timestamp.valueOf(timestamp));
+            update.setLong(2, sessionFileId);
+            update.execute();
+        }
     }
 
     private long nextFileId() throws SQLException {
