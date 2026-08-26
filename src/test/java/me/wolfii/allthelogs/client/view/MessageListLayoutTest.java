@@ -32,10 +32,9 @@ class MessageListLayoutTest {
         MessageListLayout layout = MessageListLayout.of(List.of(first, later), 5);
 
         assertEquals(1, layout.dates().size());
-        assertEquals(MessageListLayout.DATE_GAP, layout.dates().getFirst().y());
-        assertEquals(MessageListLayout.DATE_GAP + MessageListLayout.DATE_HEIGHT, layout.rowY(0));
-        assertEquals(MessageListLayout.DATE_GAP + MessageListLayout.DATE_HEIGHT
-                + MessageListLayout.ROW_HEIGHT + MessageListLayout.CLUSTER_GAP,
+        assertEquals(0, layout.dates().getFirst().y());
+        assertEquals(MessageListLayout.DATE_HEIGHT, layout.rowY(0));
+        assertEquals(MessageListLayout.DATE_HEIGHT + MessageListLayout.ROW_HEIGHT + MessageListLayout.CLUSTER_GAP,
             layout.rowY(1));
     }
 
@@ -58,7 +57,7 @@ class MessageListLayoutTest {
         ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), time.toLocalDate(), "26.2", time, time);
         DisplayRow row = new DisplayRow(new ChatEntry(log, time, 0, "abcdefghij"), true, Duration.ZERO, List.of());
         MessageListLayout layout = MessageListLayout.of(List.of(row), 5, 4, String::length);
-        assertEquals(MessageListLayout.DATE_GAP + MessageListLayout.DATE_HEIGHT, layout.rowY(0));
+        assertEquals(MessageListLayout.DATE_HEIGHT, layout.rowY(0));
         assertEquals(3 * MessageListLayout.ROW_HEIGHT, layout.rowHeight(0));
     }
 
@@ -69,6 +68,8 @@ class MessageListLayoutTest {
         MessageListLayout layout = MessageListLayout.of(List.of(day1, day2), 5);
         assertEquals(LocalDate.of(2026, 8, 26), layout.stickyAt(0).date());
         assertEquals(LocalDate.of(2026, 8, 27), layout.stickyAt(layout.dates().get(1).y()).date());
+        assertEquals(MessageListLayout.DATE_HEIGHT + MessageListLayout.ROW_HEIGHT + MessageListLayout.DATE_GAP,
+            layout.dates().get(1).y());
     }
 
     private static DisplayRow row(String file, int line, LocalDateTime time) {

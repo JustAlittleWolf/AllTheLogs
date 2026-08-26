@@ -46,7 +46,9 @@ public final class MessageListLayout {
             DisplayRow row = rows.get(i);
             LocalDate date = row.entry().timestamp().toLocalDate();
             if (!date.equals(previousDate)) {
-                y += DATE_GAP;
+                if (previousDate != null) {
+                    y += DATE_GAP;
+                }
                 dates.add(new DateBand(date, y, i));
                 y += DATE_HEIGHT;
                 previousDate = date;
