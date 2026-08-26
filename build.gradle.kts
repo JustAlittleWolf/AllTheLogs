@@ -26,12 +26,9 @@ repositories {
 }
 
 loom {
-    splitEnvironmentSourceSets()
-
     mods {
         register("allthelogs") {
             sourceSet(sourceSets.main.get())
-            sourceSet(sourceSets.named("client").get())
         }
     }
 }

@@ -34,8 +34,8 @@ The screen uses Minecraft’s translucent dark overlay (`Surface.VANILLA_TRANSLU
 ## What it does on startup
 
 1. Opens (or creates) the database at `<instance>/.allthelogs/logs.duckdb`.
-2. Imports this instance’s `logs` directory, skipping `latest.log` (the current session) and files that were already imported.
-3. Starts a capture session and records new chat and game messages on a dedicated worker thread, so the client thread is never blocked on DuckDB.
+2. Imports this instance’s `logs` directory, skipping `latest.log` (the current session), files that were already imported, and files that contain an AllTheLogs session marker for a capture session already stored.
+3. Starts a capture session, writes `AllTheLogs session <uuid>` to the Minecraft log, and records new chat and game messages on a dedicated worker thread, so the client thread is never blocked on DuckDB.
 
 The store is not thread-safe; every read and write is serialised on that worker.
 
@@ -53,13 +53,18 @@ UI defaults (context lines, page size, regex, case sensitivity, sort) are stored
 ./gradlew build
 ```
 
-The remapped jar is written to `build/libs/`. Existing LogStore unit tests stay in `src/test` and run with the same task.
+The remapped jar is written to `build/libs/`. Unit tests live in `src/test` and run with the same task.
 
 ## Project layout
 
-- `src/main/java/me/wolfii/allthelogs/data` — LogStore, import, and query engine (no Minecraft).
-- `src/main/java/me/wolfii/allthelogs/runtime` — search filters, highlighting, paging, launcher path templates.
-- `src/client/java/me/wolfii/allthelogs/client` — Fabric client, owo-ui screens, native file picker, live chat capture.
+- `src/main/java/me/wolfii/allthelogs/data` — LogStore, import, and query engine.
+- `src/main/java/me/wolfii/allthelogs/config` — persisted browser settings.
+- `src/main/java/me/wolfii/allthelogs/worker` — background thread that owns the store.
+- `src/main/java/me/wolfii/allthelogs/search` — search filters and query building.
+- `src/main/java/me/wolfii/allthelogs/view` — list rows, highlighting, timeline, paging.
+- `src/main/java/me/wolfii/allthelogs/locations` — launcher directories and startup import.
+- `src/main/java/me/wolfii/allthelogs/client` — Fabric client, owo-ui screens, native file picker, live chat capture.
+- `src/test/java` — unit tests.
 
 ## Adding another launcher
 
