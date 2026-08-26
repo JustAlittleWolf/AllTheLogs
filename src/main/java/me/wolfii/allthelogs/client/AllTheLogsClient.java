@@ -15,7 +15,6 @@ import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
@@ -25,23 +24,9 @@ public final class AllTheLogsClient implements ClientModInitializer {
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     private static LogStoreWorker worker;
-    private static AllTheLogsSettings settings;
 
     public static LogStoreWorker worker() {
         return worker;
-    }
-
-    public static AllTheLogsSettings settings() {
-        return settings;
-    }
-
-    public static void saveSettings() {
-        if (settings == null) return;
-        try {
-            settings.save(AllTheLogsPaths.config());
-        } catch (IOException e) {
-            LOGGER.warn("Could not save AllTheLogs config", e);
-        }
     }
 
     private static void capture(Component message) {
@@ -73,12 +58,6 @@ public final class AllTheLogsClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         worker = new LogStoreWorker();
-        try {
-            settings = AllTheLogsSettings.load(AllTheLogsPaths.config());
-        } catch (IOException e) {
-            settings = new AllTheLogsSettings();
-            LOGGER.warn("Could not load AllTheLogs config from {}", AllTheLogsPaths.config(), e);
-        }
 
         worker.open(AllTheLogsPaths.database())
             .thenCompose(ignored -> importCurrentLogs())
@@ -104,9 +83,6 @@ public final class AllTheLogsClient implements ClientModInitializer {
                 return 1;
             })));
 
-        ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
-            saveSettings();
-            worker.close();
-        });
+        ClientLifecycleEvents.CLIENT_STOPPING.register(client -> worker.close());
     }
 }

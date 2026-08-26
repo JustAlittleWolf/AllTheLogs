@@ -6,12 +6,10 @@ import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.ScrollContainer;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.*;
-import me.wolfii.allthelogs.client.AllTheLogsClient;
 import me.wolfii.allthelogs.client.AllTheLogsPaths;
 import me.wolfii.allthelogs.client.CommonLogLocations;
 import me.wolfii.allthelogs.client.NativeFilePicker;
 import me.wolfii.allthelogs.data.ImportOptions;
-import me.wolfii.allthelogs.data.ImportProgress;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -58,15 +56,16 @@ public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
 
         FlowLayout form = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
         form.gap(8);
+        form.padding(Insets.right(12));
 
         form.child(UIComponents.label(Component.translatable("allthelogs.screen.import")));
         LabelComponent description = UIComponents.label(Component.translatable("allthelogs.import.description"));
         description.color(Color.ofRgb(0xA0A0A0));
-        description.maxWidth(Math.max(160, this.width - 48));
+        description.maxWidth(Math.max(160, this.width - 64));
         form.child(description);
 
         FlowLayout pathRow = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
-        pathRow.gap(4).verticalAlignment(VerticalAlignment.CENTER);
+        pathRow.gap(8).verticalAlignment(VerticalAlignment.CENTER);
         pathBox = UIComponents.textBox(Sizing.expand(), "");
         pathBox.setMaxLength(1024);
         pathRow.child(pathBox);
@@ -85,16 +84,22 @@ public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
                 locations.child(UIComponents.button(Component.literal(location.displayName()),
                     button -> applyLocation(location)));
             }
-            form.child(UIContainers.verticalScroll(Sizing.fill(), Sizing.fixed(90), locations)
-                .scrollbar(ScrollContainer.Scrollbar.vanillaFlat()));
+            int locationHeight = Math.min(90, Math.max(24, common.size() * 22));
+            ScrollContainer<FlowLayout> locationScroll = UIContainers.verticalScroll(
+                Sizing.fill(), Sizing.fixed(locationHeight), locations);
+            locationScroll.scrollbar(OverflowScrollbar.vanillaFlat());
+            form.child(locationScroll);
         }
 
         form.child(UIContainers.collapsible(Sizing.fill(), Sizing.content(),
                 Component.translatable("allthelogs.import.advanced"), false)
             .child(buildAdvanced()));
 
-        root.child(UIContainers.verticalScroll(Sizing.fill(), Sizing.expand(), form)
-            .scrollbar(ScrollContainer.Scrollbar.vanillaFlat()));
+        ScrollContainer<FlowLayout> scroll = UIContainers.verticalScroll(
+            Sizing.fill(), Sizing.expand(), form);
+        scroll.scrollbar(OverflowScrollbar.vanillaFlat());
+        scroll.padding(Insets.right(6));
+        root.child(scroll);
 
         status = UIComponents.label(Component.empty());
         FlowLayout actions = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
@@ -185,22 +190,12 @@ public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
 
     private void startImport() {
         Path path = currentPath();
-        status.text(Component.translatable("allthelogs.status.importing"));
-        Consumer<ImportProgress> progress = snapshot ->
-            Minecraft.getInstance().execute(() -> status.text(Component.literal(
-                snapshot.completedFiles() + "/" + snapshot.discoveredFiles())));
-        var future = Files.isRegularFile(path)
-            ? AllTheLogsClient.worker().importArchive(path, options(), progress)
-            : AllTheLogsClient.worker().importDirectory(path, options(), progress);
-        future.whenComplete((result, error) -> Minecraft.getInstance().execute(() -> {
-            if (error != null) {
-                AllTheLogsClient.LOGGER.warn("Import failed", error);
-                status.text(Component.translatable("allthelogs.status.error"));
-                return;
-            }
-            status.text(Component.translatable("allthelogs.status.imported",
-                result.importedFiles(), result.importedEntries()));
-        }));
+        String text = pathBox.getValue();
+        if (text == null || text.isBlank()) {
+            status.text(Component.translatable("allthelogs.import.missing_path"));
+            return;
+        }
+        Minecraft.getInstance().gui.setScreen(new ImportProgressScreen(this, path, options(), Files.isRegularFile(path)));
     }
 
     @Override

@@ -20,6 +20,9 @@ repositories {
     maven("https://maven.wispforest.io") {
         name = "Wisp Forest"
     }
+    maven("https://maven.terraformersmc.com/") {
+        name = "Terraformers"
+    }
     maven("https://jitpack.io") {
         name = "JitPack"
     }
@@ -40,6 +43,7 @@ dependencies {
     implementation("net.fabricmc.fabric-api:fabric-api:$fabricApiVersion")
 
     implementation("io.wispforest:owo-lib:$owoVersion")
+    compileOnly("com.terraformersmc:modmenu:${providers.gradleProperty("modmenu_version").get()}")
 
     api(libs.duckdb.jdbc)
     include(libs.duckdb.jdbc)

@@ -15,6 +15,9 @@
 	"entrypoints": {
 		"client": [
 			"me.wolfii.allthelogs.client.AllTheLogsClient"
+		],
+		"modmenu": [
+			"me.wolfii.allthelogs.client.AllTheLogsModMenu"
 		]
 	},
 	"depends": {
@@ -23,5 +26,8 @@
 		"java": ">=25",
 		"fabric-api": "*",
 		"owo": "*"
+	},
+	"suggests": {
+		"modmenu": "*"
 	}
 }
