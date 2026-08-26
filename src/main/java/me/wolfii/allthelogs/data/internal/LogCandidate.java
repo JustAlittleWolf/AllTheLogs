@@ -1,0 +1,26 @@
+package me.wolfii.allthelogs.data.internal;
+
+import me.wolfii.allthelogs.data.SourceKind;
+
+import java.time.LocalDateTime;
+
+/// A log file that was discovered and is ready to be parsed, with its contents already materialised in memory.
+///
+/// Archive entries cannot be read lazily from several threads, so discovery reads the raw bytes up front and hands
+/// them to the parsing stage. Log files are small enough that this is cheaper than coordinating access to the archive.
+///
+/// @param fileName     bare file name
+/// @param sourceKind   whether it came from a directory or an archive
+/// @param sourcePath   absolute path of the import root
+/// @param entryPath    path within the import root, always `/` separated, nested archives separated by `!/`
+/// @param lastModified last modification time, or `null` if the source does not report one
+/// @param content      raw file bytes, still gzip compressed if the file name ends in `.gz`
+public record LogCandidate(
+        String fileName,
+        SourceKind sourceKind,
+        String sourcePath,
+        String entryPath,
+        LocalDateTime lastModified,
+        byte[] content
+) {
+}
