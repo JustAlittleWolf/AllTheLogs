@@ -18,6 +18,17 @@ class TimelineLayoutTest {
         assertEquals(1, TimelineLayout.progress(last, first, last));
         assertEquals(0.5, TimelineLayout.progress(first.plusHours(12), first, last), 0.0001);
 
+        LocalDateTime newestFirstStart = last;
+        LocalDateTime newestFirstEnd = first;
+        assertEquals(0, TimelineLayout.progress(first, newestFirstStart, newestFirstEnd));
+        assertEquals(1, TimelineLayout.progress(last, newestFirstStart, newestFirstEnd));
+        assertEquals(0, TimelineLayout.yFromNewest(last, first, last, 0, 100));
+        assertEquals(99, TimelineLayout.yFromNewest(first, first, last, 0, 100));
+        assertEquals(last, TimelineLayout.timeFromNewest(0, first, last));
+        assertEquals(first, TimelineLayout.timeFromNewest(1, first, last));
+        assertEquals(first, TimelineLayout.oldest(List.of(last, first.plusHours(3), first)));
+        assertEquals(last, TimelineLayout.newest(List.of(first, last, first.plusHours(3))));
+
         List<LocalDateTime> times = List.of(first, first.plusHours(1), first.plusHours(2), last);
         List<LocalDateTime> sampled = TimelineLayout.downsample(times, 10, 20);
         assertEquals(first, sampled.getFirst());

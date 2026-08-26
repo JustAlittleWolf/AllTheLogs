@@ -15,8 +15,10 @@ import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.ChatQuery;
 import me.wolfii.allthelogs.data.LogStoreMetadata;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -32,19 +34,24 @@ import java.util.function.Consumer;
 public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
     private static final int SEARCH_DEBOUNCE_MS = 100;
 
+    private final Screen parent;
     private final AtomicInteger queryGeneration = new AtomicInteger();
-    private SearchFilter filter;
+    private SearchFilter filter = SearchFilter.defaults();
     private TimelineLogList list;
-    private LabelComponent status;
-    private LabelComponent stats;
+    private TextBoxComponent search;
+    private ButtonComponent info;
     private ParentUIComponent filterPanel;
     private ButtonComponent oldestFirst;
     private ButtonComponent newestFirst;
     private boolean filterOpen;
 
     public LogBrowserScreen() {
+        this(null);
+    }
+
+    public LogBrowserScreen(@Nullable Screen parent) {
         super(Component.translatable("allthelogs.screen.browser"));
-        this.filter = AllTheLogsClient.settings().toFilter();
+        this.parent = parent;
     }
 
     private static boolean pageIsFull(List<DisplayRow> rows, SearchFilter page) {
@@ -109,17 +116,27 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         list.onJump(this::jumpTo);
         root.child(list.verticalSizing(Sizing.expand()));
 
-        status = UIComponents.label(Component.empty());
-        root.child(status);
-
         reload(true);
+    }
+
+    @Override
+    protected void init() {
+        super.init();
+        if (search != null && search.focusHandler() != null) {
+            search.focusHandler().focus(search, UIComponent.FocusSource.KEYBOARD_CYCLE);
+        }
+    }
+
+    @Override
+    public void onClose() {
+        Minecraft.getInstance().gui.setScreen(parent);
     }
 
     private FlowLayout buildToolbar(FlowLayout root) {
         FlowLayout bar = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
         bar.gap(4).verticalAlignment(VerticalAlignment.CENTER);
 
-        TextBoxComponent search = UIComponents.textBox(Sizing.expand(), filter.text());
+        search = UIComponents.textBox(Sizing.expand(), filter.text());
         search.setHint(Component.translatable("allthelogs.search.placeholder"));
         search.setMaxLength(256);
         search.onChanged().subscribe(this::onSearchChanged);
@@ -130,9 +147,13 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         bar.child(UIComponents.button(Component.translatable("allthelogs.import.button"),
             button -> Minecraft.getInstance().gui.setScreen(new ImportScreen(this))));
 
-        stats = UIComponents.label(Component.translatable("allthelogs.meta.marker"));
-        stats.tooltip(Component.translatable("allthelogs.meta.unavailable"));
-        bar.child(stats);
+        info = UIComponents.button(Component.translatable("allthelogs.meta.marker"), button -> {
+        });
+        info.tooltip(List.of(
+            Component.translatable("allthelogs.meta.hint"),
+            Component.translatable("allthelogs.meta.unavailable")));
+        info.horizontalSizing(Sizing.fixed(20));
+        bar.child(info);
         return bar;
     }
 
@@ -205,7 +226,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         int panelHeight = Math.max(96, Math.min(this.height - 40, 280));
         ScrollContainer<FlowLayout> panel = UIContainers.verticalScroll(
             Sizing.fixed(240), Sizing.fixed(panelHeight), content);
-        panel.scrollbar(ScrollContainer.Scrollbar.vanillaFlat());
+        panel.scrollbar(OverflowScrollbar.vanillaFlat());
         panel.surface(Surface.flat(0xE0101010).and(Surface.outline(0xFF3C3C3C)));
         return panel;
     }
@@ -250,12 +271,6 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
 
     private void updateFilter(SearchFilter next) {
         filter = next.withoutOffset();
-        persistAndReload();
-    }
-
-    private void persistAndReload() {
-        AllTheLogsClient.settings().apply(filter);
-        AllTheLogsClient.saveSettings();
         syncSortButtons();
         reload(true);
     }
@@ -264,7 +279,6 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         if (list == null) return;
         int generation = queryGeneration.incrementAndGet();
         list.setLoading(true);
-        status.text(Component.translatable("allthelogs.status.loading"));
         refreshStats();
         SearchFilter page = filter.withoutOffset();
         AllTheLogsClient.worker().query(page.toQuery()).whenComplete((entries, error) -> {
@@ -273,12 +287,13 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
                 list.setLoading(false);
                 if (error != null) {
                     AllTheLogsClient.LOGGER.warn("AllTheLogs query failed", error);
-                    status.text(Component.translatable("allthelogs.status.error"));
+                    list.reset(List.of(), false, false);
+                    list.showOverlay(Component.translatable("allthelogs.status.error"));
                     return;
                 }
                 List<DisplayRow> rows = DisplayRow.from(entries, page);
                 list.reset(rows, false, pageIsFull(rows, page));
-                status.text(Component.literal(rows.size() + " lines"));
+                list.showMatchCount(ResultWindow.matchCount(rows));
             });
         });
         if (resetTimeline) {
@@ -292,14 +307,19 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
     }
 
     private void refreshStats() {
-        if (stats == null) return;
+        if (info == null) return;
         AllTheLogsClient.worker().metadata().whenComplete((metadata, error) -> Minecraft.getInstance().execute(() -> {
-            if (stats == null) return;
+            if (info == null) return;
             if (error != null || metadata == null) {
-                stats.tooltip(Component.translatable("allthelogs.meta.unavailable"));
+                info.tooltip(List.of(
+                    Component.translatable("allthelogs.meta.hint"),
+                    Component.translatable("allthelogs.meta.unavailable")));
                 return;
             }
-            stats.tooltip(metadataTooltip(metadata));
+            List<Component> lines = new ArrayList<>();
+            lines.add(Component.translatable("allthelogs.meta.hint"));
+            lines.addAll(metadataTooltip(metadata));
+            info.tooltip(lines);
         }));
     }
 

@@ -18,7 +18,12 @@ public final class TimelineLayout {
     private TimelineLayout() {
     }
 
-    public static double progress(LocalDateTime time, LocalDateTime first, LocalDateTime last) {
+    /**
+     * 0 at {@code oldest}, 1 at {@code newest}. Marker lists may be in either order.
+     */
+    public static double progress(LocalDateTime time, LocalDateTime oldest, LocalDateTime newest) {
+        LocalDateTime first = earlier(oldest, newest);
+        LocalDateTime last = later(oldest, newest);
         if (time == null || first == null || last == null) return 0;
         if (!last.isAfter(first)) return 0;
         double total = Duration.between(first, last).toMillis();
@@ -29,14 +34,65 @@ public final class TimelineLayout {
         return at / total;
     }
 
+    /**
+     * Pixel Y with oldest at the top. Prefer {@link #yFromNewest} for the log browser, which matches
+     * newest-first message order.
+     */
     public static int y(LocalDateTime time, LocalDateTime first, LocalDateTime last, int top, int height) {
         return top + (int) Math.round(progress(time, first, last) * Math.max(0, height - 1));
     }
 
+    /**
+     * Pixel Y with newest at the top and oldest at the bottom, like Immich's timeline scrubber.
+     */
+    public static int yFromNewest(LocalDateTime time, LocalDateTime oldest, LocalDateTime newest, int top, int height) {
+        double fromNewest = 1 - progress(time, oldest, newest);
+        return top + (int) Math.round(fromNewest * Math.max(0, height - 1));
+    }
+
+    public static LocalDateTime timeFromNewest(double progressFromTop, LocalDateTime oldest, LocalDateTime newest) {
+        LocalDateTime first = earlier(oldest, newest);
+        LocalDateTime last = later(oldest, newest);
+        if (first == null || last == null) return first;
+        double clamped = Math.clamp(progressFromTop, 0, 1);
+        long millis = Math.round(Duration.between(first, last).toMillis() * (1 - clamped));
+        return first.plus(Duration.ofMillis(millis));
+    }
+
+    public static LocalDateTime oldest(List<LocalDateTime> times) {
+        LocalDateTime oldest = null;
+        for (LocalDateTime time : times) {
+            if (time != null && (oldest == null || time.isBefore(oldest))) oldest = time;
+        }
+        return oldest;
+    }
+
+    public static LocalDateTime newest(List<LocalDateTime> times) {
+        LocalDateTime newest = null;
+        for (LocalDateTime time : times) {
+            if (time != null && (newest == null || time.isAfter(newest))) newest = time;
+        }
+        return newest;
+    }
+
+    static LocalDateTime earlier(LocalDateTime a, LocalDateTime b) {
+        if (a == null) return b;
+        if (b == null) return a;
+        return a.isBefore(b) ? a : b;
+    }
+
+    static LocalDateTime later(LocalDateTime a, LocalDateTime b) {
+        if (a == null) return b;
+        if (b == null) return a;
+        return a.isAfter(b) ? a : b;
+    }
+
     public static List<DateTick> ticks(LocalDateTime first, LocalDateTime last) {
         if (first == null || last == null) return List.of();
-        LocalDate start = first.toLocalDate();
-        LocalDate end = last.toLocalDate();
+        LocalDateTime oldest = earlier(first, last);
+        LocalDateTime newest = later(first, last);
+        LocalDate start = oldest.toLocalDate();
+        LocalDate end = newest.toLocalDate();
         if (end.isBefore(start)) return List.of();
         long days = Duration.between(start.atStartOfDay(), end.plusDays(1).atStartOfDay()).toDays();
         List<DateTick> ticks = new ArrayList<>();
@@ -61,7 +117,7 @@ public final class TimelineLayout {
                 cursor = cursor.plusDays(Math.max(1, days / 6));
             }
         } else {
-            ticks.add(new DateTick(first, first.format(DAY)));
+            ticks.add(new DateTick(oldest, oldest.format(DAY)));
         }
         return List.copyOf(ticks);
     }
@@ -72,15 +128,15 @@ public final class TimelineLayout {
      */
     public static List<LocalDateTime> downsample(List<LocalDateTime> times, int height, int minGapPx) {
         if (times.size() <= 2 || height <= 0 || minGapPx <= 0) return List.copyOf(times);
-        LocalDateTime first = times.getFirst();
-        LocalDateTime last = times.getLast();
+        LocalDateTime first = oldest(times);
+        LocalDateTime last = newest(times);
         List<LocalDateTime> kept = new ArrayList<>();
         int lastY = Integer.MIN_VALUE;
         for (int i = 0; i < times.size(); i++) {
             LocalDateTime time = times.get(i);
-            int y = y(time, first, last, 0, height);
+            int y = yFromNewest(time, first, last, 0, height);
             boolean isEdge = i == 0 || i == times.size() - 1;
-            if (isEdge || y - lastY >= minGapPx) {
+            if (isEdge || Math.abs(y - lastY) >= minGapPx) {
                 kept.add(time);
                 lastY = y;
             }
