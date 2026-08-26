@@ -142,6 +142,7 @@ class LogStorePersistenceTest {
             assertEquals(1, store.chatLogs().size());
             ChatLog log = store.chatLogs().getFirst();
             assertInstanceOf(LogSource.Session.class, log.source());
+            assertTrue(SessionMarker.isId(((LogSource.Session) log.source()).id()));
             assertEquals("26.2", log.minecraftVersion());
             assertEquals(LocalDate.of(2026, 8, 26), log.date());
             assertEquals(startedAt, log.startTime());
@@ -165,6 +166,32 @@ class LogStorePersistenceTest {
             assertEquals(4, store.chatEntries().size());
             assertEquals(1, store.query(ChatQuery.all().withSubstring("next session")).size());
             assertEquals(1, store.query(ChatQuery.all().withSubstring("the needle")).size());
+        }
+    }
+
+    @Test
+    void sessionIdSurvivesReopenAndSkipsTheMatchingLogFile() throws IOException {
+        Path database = database();
+        LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+        String sessionId;
+        try (LogStore store = LogStore.open(database)) {
+            ChatLog session = store.startSession("26.2", startedAt);
+            sessionId = ((LogSource.Session) session.source()).id();
+            assertTrue(store.importSessionMessage("live", startedAt));
+        }
+
+        String log = "[10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3\n"
+            + "[10:00:02] [allthelogs-store/INFO]: " + SessionMarker.message(sessionId) + "\n"
+            + "[10:00:10] [Render thread/INFO]: [CHAT] live\n"
+            + "[10:00:11] [Render thread/INFO]: [CHAT] only in the file\n";
+        LogFixtures.writeGzipped(tempDir.resolve("logs"), "2026-08-26-1.log.gz", log);
+
+        try (LogStore store = LogStore.open(database)) {
+            assertEquals(sessionId, ((LogSource.Session) store.chatLogs().getFirst().source()).id());
+            ImportResult result = store.importDirectory(tempDir);
+            assertEquals(0, result.importedFiles());
+            assertEquals(1, result.skippedFiles());
+            assertEquals(List.of("live"), store.chatEntries().stream().map(ChatEntry::message).toList());
         }
     }
 

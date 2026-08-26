@@ -1,6 +1,7 @@
 package me.wolfii.allthelogs.data.parse;
 
 import me.wolfii.allthelogs.data.ChatLog;
+import me.wolfii.allthelogs.data.SessionMarker;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -48,6 +49,7 @@ public final class LogParser {
         boolean resourceManagerReloaded = false;
         LocalTime firstLineTime = null;
         LocalTime lastLineTime = null;
+        String sessionId = null;
 
         String line;
         while ((line = reader.readLine()) != null) {
@@ -67,6 +69,10 @@ public final class LogParser {
             if (lineTime != null) {
                 if (firstLineTime == null) firstLineTime = lineTime;
                 lastLineTime = lineTime;
+            }
+
+            if (sessionId == null) {
+                sessionId = SessionMarker.find(line).orElse(null);
             }
 
             if (!resourceManagerReloaded && line.contains(RESOURCE_MANAGER_RELOAD_MARKER)) {
@@ -97,7 +103,7 @@ public final class LogParser {
 
         entries.replaceAll(entry -> new ParsedLog.Entry(entry.time(), FormattingCodes.strip(entry.message())));
         return new ParsedLog(version == null ? ChatLog.UNKNOWN_VERSION : version, entries,
-            resourceManagerReloaded, firstLineTime, lastLineTime);
+            resourceManagerReloaded, firstLineTime, lastLineTime, sessionId);
     }
 
     private static LocalTime parseTime(Matcher start) {

@@ -174,8 +174,9 @@ public final class LogStore implements AutoCloseable {
      * {@link #updateSessionEndTime(LocalDateTime)} update {@link ChatLog#endTime()} as the session continues.
      * Starting another session leaves the previous log in place and switches subsequent imports to the new one.
      * <p>
-     * The log's {@link ChatLog#source()} is a {@link LogSource.Session}, since the lines were captured from the running
-     * client rather than read from a directory or archive.
+     * The log's {@link ChatLog#source()} is a {@link LogSource.Session} with a unique id. Callers that capture from
+     * a running game should write {@link SessionMarker#message(String)} to the Minecraft log (not as chat) so a later
+     * import of that file is skipped when this session is already stored.
      *
      * @param minecraftVersion the version of the running game
      * @return the created chat log, with no entries yet
@@ -197,8 +198,8 @@ public final class LogStore implements AutoCloseable {
     /**
      * Imports a single chat line from the running client into the current session, stamped with the current time.
      * <p>
-     * A line that repeats the timestamp and text of an entry already stored is dropped, which keeps a capture
-     * running next to the game from duplicating what a later log file import will pick up.
+     * A line that repeats the timestamp and text of an entry already stored is dropped. Live capture of a play
+     * session is not duplicated on a later file import when that log contains this session's {@link SessionMarker}.
      *
      * @param message the chat line as the game rendered it; formatting codes are stripped like on import
      * @return {@code true} if the entry was stored, {@code false} if it was dropped as a duplicate

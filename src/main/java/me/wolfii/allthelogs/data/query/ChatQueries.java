@@ -5,6 +5,7 @@ import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.ChatQuery;
 import me.wolfii.allthelogs.data.LogDataException;
 import me.wolfii.allthelogs.data.LogSource;
+import me.wolfii.allthelogs.data.SessionMarker;
 import me.wolfii.allthelogs.data.StoreMetadata;
 import me.wolfii.allthelogs.data.store.SourceKind;
 import org.duckdb.DuckDBChunkedResult;
@@ -197,7 +198,7 @@ public final class ChatQueries {
         return switch (sourceKind) {
             case FILE -> new LogSource.File(Path.of(path));
             case ARCHIVE -> new LogSource.Archive(Path.of(path), entryPath);
-            case SESSION -> new LogSource.Session();
+            case SESSION -> new LogSource.Session(SessionMarker.idFromEntryPath(entryPath));
         };
     }
 

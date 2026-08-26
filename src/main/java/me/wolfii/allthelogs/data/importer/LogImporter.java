@@ -41,7 +41,7 @@ public final class LogImporter {
     private static final int WRITE_QUEUE_CAPACITY = 64;
     private static final PreparedLog END_OF_STREAM = new PreparedLog(
         "", SourceKind.FILE, "", "", LocalDate.EPOCH, "", List.of(), List.of(),
-        false, null, null);
+        false, null, null, null);
 
     private final DuckDBConnection connection;
 
@@ -98,6 +98,11 @@ public final class LogImporter {
                         // Empty files are stored logs that have no chat lines.
                         if (prepared.firstLineTime() == null || prepared.lastLineTime() == null
                             || (prepared.messages().isEmpty() && !prepared.resourceManagerReloaded())) {
+                            skipped.incrementAndGet();
+                            observer.fileCompleted();
+                            return;
+                        }
+                        if (prepared.sessionId() != null && writer.hasSession(prepared.sessionId())) {
                             skipped.incrementAndGet();
                             observer.fileCompleted();
                             return;
@@ -169,7 +174,7 @@ public final class LogImporter {
         return switch (log.sourceKind()) {
             case FILE -> new LogSource.File(Path.of(log.sourcePath()));
             case ARCHIVE -> new LogSource.Archive(Path.of(log.sourcePath()), log.entryPath());
-            case SESSION -> new LogSource.Session();
+            case SESSION -> new LogSource.Session(log.sessionId() == null ? "" : log.sessionId());
         };
     }
 

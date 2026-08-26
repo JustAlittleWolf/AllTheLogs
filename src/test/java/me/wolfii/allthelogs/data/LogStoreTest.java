@@ -674,6 +674,7 @@ class LogStoreTest {
         ChatLog file = store.startSession("26.2", startedAt);
 
         assertInstanceOf(LogSource.Session.class, file.source());
+        assertTrue(SessionMarker.isId(((LogSource.Session) file.source()).id()));
         assertEquals("26.2", file.minecraftVersion());
         assertEquals(LocalDate.of(2026, 8, 26), file.date());
         assertEquals(startedAt, file.startTime());
@@ -899,6 +900,82 @@ class LogStoreTest {
     }
 
     @Test
+    void eachSessionGetsAUniqueId() {
+        ChatLog first = store.startSession("26.2", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
+        ChatLog second = store.startSession("26.2", LocalDateTime.of(2026, 8, 27, 12, 0, 0));
+
+        LogSource.Session firstId = assertInstanceOf(LogSource.Session.class, first.source());
+        LogSource.Session secondId = assertInstanceOf(LogSource.Session.class, second.source());
+        assertTrue(SessionMarker.isId(firstId.id()));
+        assertTrue(SessionMarker.isId(secondId.id()));
+        assertNotEquals(firstId.id(), secondId.id());
+        assertEquals(firstId.id(), ((LogSource.Session) store.chatLogs().getFirst().source()).id());
+    }
+
+    @Test
+    void logTaggedWithAStoredSessionIdIsSkipped() throws IOException {
+        LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+        ChatLog session = store.startSession("26.2", startedAt);
+        String sessionId = ((LogSource.Session) session.source()).id();
+        assertTrue(store.importSessionMessage("live capture", startedAt.plusSeconds(10)));
+
+        LogFixtures.writeGzipped(tempDir.resolve("logs"), "2026-08-26-1.log.gz",
+            taggedLog(sessionId, "10:00:10", "live capture", "from the file"));
+        ImportResult result = store.importDirectory(tempDir);
+
+        assertEquals(0, result.importedFiles());
+        assertEquals(1, result.skippedFiles());
+        assertEquals(List.of("live capture"), store.chatEntries().stream().map(ChatEntry::message).toList());
+        assertInstanceOf(LogSource.Session.class, store.chatEntries().getFirst().chatLog().source());
+    }
+
+    @Test
+    void logTaggedWithAnUnknownSessionIdIsImported() throws IOException {
+        String otherId = SessionMarker.newId();
+        LogFixtures.writeGzipped(tempDir.resolve("logs"), "2026-08-26-1.log.gz",
+            taggedLog(otherId, "10:00:10", "from the file"));
+
+        ImportResult result = store.importDirectory(tempDir);
+
+        assertEquals(1, result.importedFiles());
+        assertEquals(0, result.skippedFiles());
+        assertEquals(List.of("from the file"), store.chatEntries().stream().map(ChatEntry::message).toList());
+        assertInstanceOf(LogSource.File.class, store.chatEntries().getFirst().chatLog().source());
+    }
+
+    @Test
+    void untaggedLogsAreStillImportedWhenASessionExists() throws IOException {
+        store.startSession("26.2", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
+        store.importDirectory(logsDirectory());
+
+        assertEquals(8, store.chatEntries().size());
+        assertTrue(store.chatLogs().stream().anyMatch(log -> log.source() instanceof LogSource.Session));
+        assertTrue(store.chatLogs().stream().anyMatch(log -> log.source() instanceof LogSource.File));
+    }
+
+    @Test
+    void repeatedSessionMessagesAtDifferentTimesAreKept() {
+        LocalDateTime first = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+        store.startSession("26.2", first);
+        assertTrue(store.importSessionMessage("gg", first));
+        assertTrue(store.importSessionMessage("gg", first.plusSeconds(30)));
+
+        assertEquals(2, store.chatEntries().size());
+    }
+
+    @Test
+    void fileLinesWithTheSameTextAtDifferentTimesAreNotCollapsed() throws IOException {
+        LogFixtures.writeGzipped(tempDir.resolve("a/logs"), "2026-08-26-1.log.gz",
+            chatLog("26.2", new String[]{"12:00:00"}, new String[]{"gg"}));
+        LogFixtures.writeGzipped(tempDir.resolve("b/logs"), "2026-08-26-1.log.gz",
+            chatLog("26.2", new String[]{"12:00:30"}, new String[]{"gg"}));
+
+        store.importDirectory(tempDir);
+
+        assertEquals(2, store.chatEntries().size());
+    }
+
+    @Test
     void importedFileMetadataStaysConsistentAfterDeduplication() throws IOException {
         LogFixtures.writeGzipped(tempDir.resolve("a/logs"), "2026-06-01-1.log.gz",
                 LogFixtures.modernLog("26.2", "shared", "only in a"));
@@ -992,6 +1069,26 @@ class LogStoreTest {
         long size = Files.size(database);
         Path wal = database.resolveSibling(database.getFileName().toString() + ".wal");
         return Files.isRegularFile(wal) ? size + Files.size(wal) : size;
+    }
+
+    private static String taggedLog(String sessionId, String chatTime, String... messages) {
+        StringBuilder log = new StringBuilder();
+        log.append("[10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3\n");
+        log.append("[10:00:02] [allthelogs-store/INFO]: ").append(SessionMarker.message(sessionId)).append('\n');
+        for (String message : messages) {
+            log.append(String.format("[%s] [Render thread/INFO]: [CHAT] %s%n", chatTime, message));
+        }
+        return log.toString();
+    }
+
+    private static String chatLog(String version, String[] times, String[] messages) {
+        StringBuilder log = new StringBuilder();
+        log.append("[10:00:00] [main/INFO]: Loading Minecraft ").append(version)
+            .append(" with Fabric Loader 0.19.3\n");
+        for (int i = 0; i < messages.length; i++) {
+            log.append(String.format("[%s] [Render thread/INFO]: [CHAT] %s%n", times[i], messages[i]));
+        }
+        return log.toString();
     }
 
     private static String fileName(ChatLog log) {
