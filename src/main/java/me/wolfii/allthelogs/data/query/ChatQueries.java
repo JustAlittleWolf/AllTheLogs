@@ -160,6 +160,11 @@ public final class ChatQueries {
         }
     }
 
+    /**
+     * Loads chat logs for the file ids that appear in a query result. This must run after the
+     * chunked entry stream is closed: DuckDB will not run a second query on the same connection
+     * while a chunked result is open.
+     */
     private void loadLogs(Map<Long, ChatLog> logsById, Set<Long> ids) throws SQLException {
         String placeholders = "?,".repeat(ids.size());
         String sql = """
@@ -179,6 +184,10 @@ public final class ChatQueries {
         }
     }
 
+    /**
+     * Columnar buffer for one query result. Chat-log metadata is joined in Java after the chunked
+     * stream finishes, so DuckDB does not repeat file strings on every row.
+     */
     private static final class ResultRows {
         private final ArrayList<LocalDateTime> timestamps;
         private final ArrayList<String> messages;

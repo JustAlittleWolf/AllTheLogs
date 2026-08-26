@@ -27,6 +27,7 @@ public final class LogWriter implements AutoCloseable {
     private final Map<String, Long> existingLocations = new ConcurrentHashMap<>();
     private final Set<String> knownSessionIds = ConcurrentHashMap.newKeySet();
     private final Set<Long> keepEvenIfEmpty = ConcurrentHashMap.newKeySet();
+    /** First file id handed out by this writer; counters and dedup bookkeeping are scoped to this import. */
     private final long sessionStartId;
     private long nextFileId;
     private long bufferedEntries;
@@ -162,6 +163,13 @@ public final class LogWriter implements AutoCloseable {
         return removed;
     }
 
+    /**
+     * Recomputes per-file entry counts after rows were deleted, and drops files left without any entries.
+     * {@code start_time} / {@code end_time} bound every logged line, not just chat entries, so they are left untouched.
+     *
+     * @return how many of this session's files were dropped because every one of their entries turned out to be a
+     *         duplicate
+     */
     private int refreshFileAggregates(Statement statement) throws SQLException {
         statement.execute("""
             UPDATE log_file SET entry_count = coalesce(stats.count, 0)

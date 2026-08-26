@@ -66,6 +66,9 @@ public final class LogStore implements AutoCloseable {
         }
     }
 
+    /**
+     * Opens a store that lives only in memory, for tests and throwaway analysis.
+     */
     static LogStore openInMemory() {
         try {
             return new LogStore(StoreConnections.openInMemory(), null);

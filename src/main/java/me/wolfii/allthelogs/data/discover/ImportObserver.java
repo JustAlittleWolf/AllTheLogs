@@ -22,10 +22,19 @@ public final class ImportObserver {
         this.callback = callback;
     }
 
+    /**
+     * Sets {@link ImportProgress#current()} to an archive, without counting it as a discovered log file.
+     *
+     * @param entryPath empty while the archive itself is being opened, otherwise the path of the log or nested
+     *                  archive inside it
+     */
     void workingOnArchive(Path archive, String entryPath) {
         setCurrent(new LogSource.Archive(archive, entryPath));
     }
 
+    /**
+     * Records that a matching log file has been found and is now the current item.
+     */
     void fileStarted(LogSource source) {
         if (callback == null) return;
         synchronized (this) {

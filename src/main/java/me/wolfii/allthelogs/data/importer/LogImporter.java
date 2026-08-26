@@ -56,6 +56,7 @@ public final class LogImporter {
         return candidate.sourcePath() + LogDiscovery.ARCHIVE_SEPARATOR + candidate.entryPath();
     }
 
+    /** Drains leftover work so parsing threads do not stay blocked on a full queue if writing failed. */
     private static void drain(BlockingQueue<PreparedLog> queue, Thread discoverer) throws InterruptedException {
         while (discoverer.isAlive() || !queue.isEmpty()) {
             queue.poll(50, TimeUnit.MILLISECONDS);
