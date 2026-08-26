@@ -34,7 +34,7 @@ class LogStorePersistenceTest {
                 LogFixtures.modernLog("26.2", "alpha", "beta", "gamma"));
         LogFixtures.writeGzipped(logs, "2026-08-25-1.log.gz",
                 LogFixtures.modernLog("26.2", "delta", "needle in here", "epsilon"));
-        LogFixtures.writePlain(logs, "latest.log", LogFixtures.legacyLog("zeta", "another needle"));
+        LogFixtures.writePlain(logs, "debug.log", LogFixtures.legacyLog("zeta", "another needle"));
         return tempDir.resolve("instance");
     }
 

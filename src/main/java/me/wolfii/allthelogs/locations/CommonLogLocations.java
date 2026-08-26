@@ -1,6 +1,5 @@
 package me.wolfii.allthelogs.locations;
 
-import me.wolfii.allthelogs.AllTheLogs;
 import me.wolfii.allthelogs.data.ImportOptions;
 
 import java.nio.file.Files;
@@ -79,77 +78,7 @@ public final class CommonLogLocations {
     }
 
     public static List<Location> defaults() {
-        return List.of(
-            new Location(
-                "vanilla",
-                "Vanilla Minecraft",
-                List.of(
-                    "${APPDATA}/.minecraft/logs",
-                    "${HOME}/Library/Application Support/minecraft/logs",
-                    "${HOME}/.minecraft/logs"
-                ),
-                AllTheLogs.ROTATED_LOGS_MATCHER,
-                false,
-                false
-            ),
-            new Location(
-                "prism",
-                "Prism Launcher",
-                List.of(
-                    "${APPDATA}/PrismLauncher/instances",
-                    "${HOME}/Library/Application Support/PrismLauncher/instances",
-                    "${XDG_DATA_HOME}/PrismLauncher/instances"
-                ),
-                "**/logs/**",
-                true,
-                true
-            ),
-            // Typical install roots. Fill in the precise log subpath when adding a new launcher.
-            new Location(
-                "lunar",
-                "Lunar Client",
-                List.of(
-                    "${USERPROFILE}/.lunarclient",
-                    "${HOME}/.lunarclient"
-                ),
-                "**/logs/**",
-                true,
-                true
-            ),
-            new Location(
-                "feather",
-                "Feather Client",
-                List.of(
-                    "${APPDATA}/.feather",
-                    "${HOME}/.feather"
-                ),
-                "**/logs/**",
-                true,
-                true
-            ),
-            new Location(
-                "labymod",
-                "LabyMod",
-                List.of(
-                    "${APPDATA}/.minecraft/LabyMod",
-                    "${HOME}/.minecraft/LabyMod"
-                ),
-                "**/logs/**",
-                true,
-                true
-            ),
-            new Location(
-                "badlion",
-                "Badlion Client",
-                List.of(
-                    "${APPDATA}/.minecraft/badlion",
-                    "${HOME}/.minecraft/badlion"
-                ),
-                "**/logs/**",
-                true,
-                true
-            )
-        );
+        return List.of();
     }
 
     public static Map<String, String> environmentVariables() {

@@ -43,7 +43,7 @@ class ImportProgressTest {
                 LogFixtures.modernLog("26.2", "alpha", "beta", "gamma"));
         LogFixtures.writeGzipped(logs, "2026-08-25-1.log.gz",
                 LogFixtures.modernLog("26.2", "delta", "needle in here", "epsilon"));
-        LogFixtures.writePlain(logs, "latest.log", LogFixtures.legacyLog("zeta", "another needle"));
+        LogFixtures.writePlain(logs, "debug.log", LogFixtures.legacyLog("zeta", "another needle"));
         return tempDir.resolve("instance");
     }
 
@@ -71,7 +71,7 @@ class ImportProgressTest {
         assertEquals(Set.of(
                 root.resolve("logs/2026-08-24-1.log.gz").toAbsolutePath().normalize(),
                 root.resolve("logs/2026-08-25-1.log.gz").toAbsolutePath().normalize(),
-                root.resolve("logs/latest.log").toAbsolutePath().normalize()), seenFiles);
+                root.resolve("logs/debug.log").toAbsolutePath().normalize()), seenFiles);
 
         assertTrue(updates.stream().map(ImportProgress::current).filter(Objects::nonNull)
                 .noneMatch(LogSource.Archive.class::isInstance));

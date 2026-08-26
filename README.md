@@ -29,12 +29,12 @@ The screen uses Minecraft’s translucent dark overlay (`Surface.VANILLA_TRANSLU
 - **History** is a virtualised list. Hits are white with the match in light green (`#C8F5C0`). Context lines are grey, darker the further they are in time from the hit (light grey at 0s, medium grey at 15 minutes and beyond).
 - Only `limit` matches are kept in memory. Scrolling loads the next page with `offset` and unloads the opposite end, keeping the same row on screen so the list does not jump.
 - The **timeline** on the right spans the first hit through the last. Every hit is a marker; date labels sit along the track. Click or drag to jump.
-- **Import** (bottom left) opens a second screen. Browse uses the OS native folder/archive picker. Advanced import options sit under a collapsible. Common launcher directories (vanilla, Prism, Lunar, Feather, LabyMod, Badlion) are templates: picking one fills the path and the advanced options. Add more launchers in `CommonLogLocations`.
+- **Import** (bottom left) opens a second screen. Browse uses the OS native folder/archive picker. Advanced import options sit under a collapsible.
 
 ## What it does on startup
 
 1. Opens (or creates) the database at `<instance>/.allthelogs/logs.duckdb`.
-2. Imports this instance’s `logs` directory, skipping `latest.log` (the current session), files that were already imported, and files that contain an AllTheLogs session marker for a capture session already stored.
+2. Imports this instance’s `logs` directory: every `.log` and `.log.gz` except `latest.log`, plus files that were already imported or that contain an AllTheLogs session marker for a capture session already stored are skipped.
 3. Starts a capture session, writes `AllTheLogs session <uuid>` to the Minecraft log, and records new chat and game messages on a dedicated worker thread, so the client thread is never blocked on DuckDB.
 
 The store is not thread-safe; every read and write is serialised on that worker.

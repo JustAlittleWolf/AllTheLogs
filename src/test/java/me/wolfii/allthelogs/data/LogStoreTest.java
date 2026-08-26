@@ -1,6 +1,7 @@
 package me.wolfii.allthelogs.data;
 
 import me.wolfii.allthelogs.data.parse.LogDates;
+import me.wolfii.allthelogs.locations.CurrentLogsImport;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -52,8 +53,56 @@ class LogStoreTest {
                 LogFixtures.modernLog("26.2", "alpha", "beta", "gamma"));
         LogFixtures.writeGzipped(logs, "2026-08-25-1.log.gz",
                 LogFixtures.modernLog("26.2", "delta", "needle in here", "epsilon"));
-        LogFixtures.writePlain(logs, "latest.log", LogFixtures.legacyLog("zeta", "another needle"));
+        LogFixtures.writePlain(logs, "debug.log", LogFixtures.legacyLog("zeta", "another needle"));
         return tempDir.resolve("instance");
+    }
+
+    @Test
+    void doesNotImportLatestLog() throws IOException {
+        LogFixtures.writePlain(tempDir.resolve("logs"), "latest.log", LogFixtures.legacyLog("live"));
+        LogFixtures.writePlain(tempDir.resolve("logs"), "Latest.LOG", LogFixtures.legacyLog("also live"));
+        LogFixtures.writePlain(tempDir.resolve("logs"), "debug.log", LogFixtures.legacyLog("kept"));
+        LogFixtures.writeGzipped(tempDir.resolve("logs"), "2026-08-26-1.log.gz",
+            LogFixtures.modernLog("26.2", "gzipped"));
+
+        ImportResult result = store.importDirectory(tempDir);
+
+        assertEquals(2, result.importedFiles());
+        List<String> messages = store.chatEntries().stream().map(ChatEntry::message).toList();
+        assertTrue(messages.contains("kept"));
+        assertTrue(messages.contains("gzipped"));
+        assertFalse(messages.contains("live"));
+        assertFalse(messages.contains("also live"));
+        assertTrue(store.chatLogs().stream()
+            .noneMatch(log -> fileName(log).equalsIgnoreCase("latest.log")));
+    }
+
+    @Test
+    void doesNotImportLatestLogInsideAnArchive() throws IOException {
+        Path archive = LogFixtures.writeZip(tempDir.resolve("backup.zip"), new LinkedHashMap<>(Map.of(
+            "logs/latest.log", LogFixtures.legacyLog("live in zip"),
+            "logs/debug.log", LogFixtures.legacyLog("kept in zip"))));
+
+        ImportResult result = store.importArchive(archive);
+
+        assertEquals(1, result.importedFiles());
+        assertEquals(List.of("kept in zip"), store.chatEntries().stream().map(ChatEntry::message).toList());
+    }
+
+    @Test
+    void currentLogsImportTakesEveryLogExceptLatest() throws IOException {
+        Path logs = tempDir.resolve("logs");
+        LogFixtures.writePlain(logs, "latest.log", LogFixtures.legacyLog("live"));
+        LogFixtures.writePlain(logs, "debug.log", LogFixtures.legacyLog("debug"));
+        LogFixtures.writeGzipped(logs, "2026-08-26-1.log.gz", LogFixtures.modernLog("26.2", "rotated"));
+
+        ImportResult result = store.importDirectory(logs, CurrentLogsImport.options());
+
+        assertEquals(2, result.importedFiles());
+        List<String> messages = store.chatEntries().stream().map(ChatEntry::message).toList();
+        assertTrue(messages.contains("debug"));
+        assertTrue(messages.contains("rotated"));
+        assertFalse(messages.contains("live"));
     }
 
     @Test
@@ -99,16 +148,16 @@ class LogStoreTest {
     @Test
     void datesFilesWithoutADateInTheirNameByLastModified() throws IOException {
         Path root = logsDirectory();
-        Path latestFile = root.resolve("logs/latest.log");
+        Path undatedFile = root.resolve("logs/debug.log");
         Instant modified = Instant.parse("2026-08-20T12:00:00Z");
-        Files.setLastModifiedTime(latestFile, FileTime.from(modified));
+        Files.setLastModifiedTime(undatedFile, FileTime.from(modified));
 
         store.importDirectory(root);
 
-        ChatLog latest = store.chatLogs().stream()
-                .filter(file -> fileName(file).equals("latest.log")).findFirst().orElseThrow();
-        assertEquals(modified.atZone(ZoneId.systemDefault()).toLocalDate(), latest.date());
-        assertEquals("1.8.9", latest.minecraftVersion());
+        ChatLog undated = store.chatLogs().stream()
+                .filter(file -> fileName(file).equals("debug.log")).findFirst().orElseThrow();
+        assertEquals(modified.atZone(ZoneId.systemDefault()).toLocalDate(), undated.date());
+        assertEquals("1.8.9", undated.minecraftVersion());
     }
 
     @Test
@@ -608,7 +657,7 @@ class LogStoreTest {
 
     @Test
     void skipsLogsWithoutTimestamps() throws IOException {
-        LogFixtures.writePlain(tempDir.resolve("logs"), "latest.log",
+        LogFixtures.writePlain(tempDir.resolve("logs"), "broken.log",
                 "this is not a minecraft log\nReloading ResourceManager: vanilla\n");
 
         ImportResult result = store.importDirectory(tempDir);
@@ -1050,9 +1099,9 @@ class LogStoreTest {
     @Test
     void importTimezoneShiftsTheDateFallbackForFilesWithoutADateInTheName() throws IOException {
         Path logs = tempDir.resolve("logs");
-        Path latest = LogFixtures.writePlain(logs, "latest.log", LogFixtures.legacyLog("from latest"));
+        Path undated = LogFixtures.writePlain(logs, "debug.log", LogFixtures.legacyLog("from undated"));
         Instant modified = Instant.parse("2026-08-25T22:00:00Z");
-        Files.setLastModifiedTime(latest, FileTime.from(modified));
+        Files.setLastModifiedTime(undated, FileTime.from(modified));
 
         store.importDirectory(tempDir, ImportOptions.defaults().withTimezone(ZoneOffset.UTC));
         ChatLog utc = store.chatLogs().getFirst();

@@ -11,9 +11,10 @@ public final class AllTheLogs {
     public static final String CONFIG_FILE_NAME = "allthelogs.json";
 
     /**
-     * Glob relative to a {@code logs} directory that matches rotated chat logs and skips {@code latest.log}.
+     * Glob relative to a {@code logs} directory that matches chat logs. {@code latest.log} is skipped in discovery
+     * because it is the live Minecraft log.
      */
-    public static final String ROTATED_LOGS_MATCHER = "{*.log.gz,????-??-??-*.log}";
+    public static final String LOG_FILES_MATCHER = "{*.log.gz,*.log}";
 
     private AllTheLogs() {
     }

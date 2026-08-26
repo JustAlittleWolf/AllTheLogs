@@ -10,7 +10,6 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CommonLogLocationsTest {
@@ -31,7 +30,14 @@ class CommonLogLocationsTest {
 
     @Test
     void firstExistingUsesTheFirstTemplateThatExists() {
-        CommonLogLocations.Location vanilla = CommonLogLocations.defaults().getFirst();
+        CommonLogLocations.Location location = new CommonLogLocations.Location(
+            "example",
+            "Example",
+            List.of("${APPDATA}/.minecraft/logs", "${HOME}/Library/Application Support/minecraft/logs"),
+            AllTheLogs.LOG_FILES_MATCHER,
+            false,
+            false
+        );
         Map<String, String> vars = Map.of(
             "HOME", "/home/jakob",
             "APPDATA", "C:/missing",
@@ -39,23 +45,22 @@ class CommonLogLocationsTest {
             "XDG_DATA_HOME", "/home/jakob/.local/share",
             "USERPROFILE", "/home/jakob"
         );
-        Optional<Path> found = vanilla.firstExisting(vars,
+        Optional<Path> found = location.firstExisting(vars,
             path -> path.toString().contains("Library/Application Support"));
         assertEquals(Path.of("/home/jakob/Library/Application Support/minecraft/logs"), found.orElseThrow());
     }
 
     @Test
-    void includesATemplateForEachNamedLauncher() {
-        List<String> ids = CommonLogLocations.defaults().stream().map(CommonLogLocations.Location::id).toList();
-        assertEquals(List.of("vanilla", "prism", "lunar", "feather", "labymod", "badlion"), ids);
+    void defaultsAreEmptyUntilLaunchersAreAdded() {
+        assertTrue(CommonLogLocations.defaults().isEmpty());
     }
 
     @Test
-    void rotatedLogMatcherSkipsLatestLog() {
-        var pattern = Globs.compile(AllTheLogs.ROTATED_LOGS_MATCHER);
+    void logFilesMatcherAcceptsLogAndGzippedLogNames() {
+        var pattern = Globs.compile(AllTheLogs.LOG_FILES_MATCHER);
         assertTrue(pattern.matcher("2026-08-26-1.log.gz").matches());
         assertTrue(pattern.matcher("2026-08-26-2.log").matches());
-        assertFalse(pattern.matcher("latest.log").matches());
-        assertFalse(pattern.matcher("debug.log").matches());
+        assertTrue(pattern.matcher("debug.log").matches());
+        assertTrue(pattern.matcher("latest.log").matches());
     }
 }

@@ -80,6 +80,7 @@ public final class LogDiscovery {
     }
 
     private static boolean isLogFile(String name) {
+        if (name.equalsIgnoreCase("latest.log")) return false;
         String lower = name.toLowerCase(Locale.ROOT);
         return LOG_SUFFIXES.stream().anyMatch(lower::endsWith);
     }

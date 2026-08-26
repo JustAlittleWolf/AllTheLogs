@@ -28,9 +28,11 @@ import org.jetbrains.annotations.NotNull;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.ZoneId;
+import java.util.List;
 
 /**
- * Import a folder or archive into the log store. Common launcher directories fill both the path and advanced options.
+ * Import a folder or archive into the log store. Launcher directory shortcuts from
+ * {@link CommonLogLocations#defaults()} fill both the path and advanced options when any are defined.
  */
 public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
     private final Screen parent;
@@ -79,14 +81,18 @@ public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
         }));
         root.child(pathRow);
 
-        root.child(UIComponents.label(Component.translatable("allthelogs.import.common")));
-        FlowLayout locations = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
-        locations.gap(2);
-        for (CommonLogLocations.Location location : CommonLogLocations.defaults()) {
-            locations.child(UIComponents.button(Component.literal(location.displayName()), button -> applyLocation(location)));
+        List<CommonLogLocations.Location> common = CommonLogLocations.defaults();
+        if (!common.isEmpty()) {
+            root.child(UIComponents.label(Component.translatable("allthelogs.import.common")));
+            FlowLayout locations = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
+            locations.gap(2);
+            for (CommonLogLocations.Location location : common) {
+                locations.child(UIComponents.button(Component.literal(location.displayName()),
+                    button -> applyLocation(location)));
+            }
+            root.child(UIContainers.verticalScroll(Sizing.fill(), Sizing.fixed(90), locations)
+                .scrollbar(ScrollContainer.Scrollbar.vanillaFlat()));
         }
-        root.child(UIContainers.verticalScroll(Sizing.fill(), Sizing.fixed(90), locations)
-            .scrollbar(ScrollContainer.Scrollbar.vanillaFlat()));
 
         root.child(UIContainers.collapsible(Sizing.fill(), Sizing.content(),
                 Component.translatable("allthelogs.import.advanced"), false)

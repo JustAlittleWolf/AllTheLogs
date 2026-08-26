@@ -21,6 +21,6 @@ public final class CurrentLogsImport {
             .withRecursive(false)
             .withNestedArchives(false)
             .withSkipAlreadyImported(true)
-            .withPathMatcher(AllTheLogs.ROTATED_LOGS_MATCHER);
+            .withPathMatcher(AllTheLogs.LOG_FILES_MATCHER);
     }
 }
