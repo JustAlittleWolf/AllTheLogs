@@ -141,13 +141,13 @@ public final class LogWriter implements AutoCloseable {
              // back which files it touched, instead of running the same scan twice: once to count and once to
              // delete.
              ResultSet deleted = statement.executeQuery("""
-                DELETE FROM chat_entry WHERE rowid IN (
-                    SELECT rowid FROM (
-                        SELECT rowid, row_number() OVER (
-                            PARTITION BY entry_time, message ORDER BY file_id, line_index) AS rn
-                        FROM chat_entry
-                    ) WHERE rn > 1
-                ) RETURNING file_id""")) {
+                 DELETE FROM chat_entry WHERE rowid IN (
+                     SELECT rowid FROM (
+                         SELECT rowid, row_number() OVER (
+                             PARTITION BY entry_time, message ORDER BY file_id, line_index) AS rn
+                         FROM chat_entry
+                     ) WHERE rn > 1
+                 ) RETURNING file_id""")) {
             while (deleted.next()) {
                 removed++;
                 if (deleted.getLong(1) >= sessionStartId) removedFromSession++;

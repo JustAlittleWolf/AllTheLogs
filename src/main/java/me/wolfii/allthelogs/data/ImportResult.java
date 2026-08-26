@@ -4,10 +4,9 @@ import java.util.List;
 
 /// Summary of a completed import run.
 ///
-/// @param importedFiles number of log files that were parsed and stored
-/// @param skippedFiles  number of candidate files that were skipped because they were already imported
-/// @param emptyFiles    number of candidate files that were skipped because they had no timestamps, or contained no
-///                      chat entries and no `Reloading ResourceManager` line
+/// @param importedFiles number of log files that were parsed and stored, including empty ones
+/// @param skippedFiles  number of candidate files that were skipped because they were already imported, or were not minecraft log files
+/// @param emptyFiles    number of candidate files that contained no chat lines
 /// @param importedEntries total number of chat entries stored, after entries duplicating an already stored timestamp
 ///                      and message were dropped
 /// @param failures      files that could not be read, with the reason

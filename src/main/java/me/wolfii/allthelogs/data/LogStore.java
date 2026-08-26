@@ -1,54 +1,19 @@
 package me.wolfii.allthelogs.data;
 
-import me.wolfii.allthelogs.data.internal.FormattingCodes;
-import me.wolfii.allthelogs.data.internal.LogCandidate;
-import me.wolfii.allthelogs.data.internal.LogDates;
-import me.wolfii.allthelogs.data.internal.LogDiscovery;
-import me.wolfii.allthelogs.data.internal.LogParser;
-import me.wolfii.allthelogs.data.internal.LogWriter;
-import me.wolfii.allthelogs.data.internal.ParsedLog;
-import me.wolfii.allthelogs.data.internal.PreparedLog;
-import me.wolfii.allthelogs.data.internal.QueryBuilder;
-import me.wolfii.allthelogs.data.internal.Schema;
-import me.wolfii.allthelogs.data.internal.SourceKind;
+import me.wolfii.allthelogs.data.internal.*;
 import org.duckdb.DuckDBConnection;
 
-import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.StringReader;
+import java.io.*;
 import java.nio.ByteBuffer;
-import java.nio.charset.CharacterCodingException;
-import java.nio.charset.Charset;
-import java.nio.charset.CharsetDecoder;
-import java.nio.charset.CodingErrorAction;
-import java.nio.charset.StandardCharsets;
+import java.nio.charset.*;
 import java.nio.file.Path;
+import java.sql.*;
 import java.sql.Date;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Properties;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.*;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -297,18 +262,19 @@ public final class LogStore implements AutoCloseable {
             var failureRef = new AtomicReference<RuntimeException>();
             ExecutorService parsers = Executors.newFixedThreadPool(options.parallelism());
             LogDiscovery discovery = new LogDiscovery(options, candidate -> {
-                if (options.skipAlreadyImported()
-                    && writer.isAlreadyImported(candidate.sourcePath(), candidate.entryPath())) {
+                if (options.skipAlreadyImported() && writer.isAlreadyImported(candidate.sourcePath(), candidate.entryPath())) {
                     skipped.incrementAndGet();
                     return;
                 }
                 parsers.execute(() -> {
                     try {
                         PreparedLog prepared = prepare(candidate, options.timezone());
-                        if (prepared.firstLineTime() == null || prepared.lastLineTime() == null
-                            || (prepared.messages().isEmpty() && !prepared.resourceManagerReloaded())) {
-                            empty.incrementAndGet();
+                        if (prepared.firstLineTime() == null || prepared.lastLineTime() == null || (prepared.messages().isEmpty() && !prepared.resourceManagerReloaded())) {
+                            skipped.incrementAndGet();
                             return;
+                        }
+                        if (prepared.messages().isEmpty()) {
+                            empty.incrementAndGet();
                         }
                         queue.put(prepared);
                     } catch (IOException e) {
