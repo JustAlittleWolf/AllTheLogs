@@ -62,14 +62,6 @@ public final class LogWriter implements AutoCloseable {
         this.entryAppender = connection.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "chat_entry");
     }
 
-    private static void appendNullable(DuckDBAppender appender, LocalDateTime value) throws SQLException {
-        if (value == null) {
-            appender.appendNull();
-        } else {
-            appender.append(value);
-        }
-    }
-
     private static String locationKey(String sourcePath, String entryPath) {
         return sourcePath + "\u0000" + entryPath;
     }
@@ -100,9 +92,8 @@ public final class LogWriter implements AutoCloseable {
         fileAppender.append(log.entryPath());
         fileAppender.append(log.date());
         fileAppender.append(log.minecraftVersion());
-        appendNullable(fileAppender, log.lastModified());
-        appendNullable(fileAppender, log.firstLineTime());
-        appendNullable(fileAppender, log.lastLineTime());
+        fileAppender.append(log.firstLineTime());
+        fileAppender.append(log.lastLineTime());
         fileAppender.append((long) times.size());
         fileAppender.endRow();
 
@@ -172,7 +163,7 @@ public final class LogWriter implements AutoCloseable {
     /// @return how many of this session's files were dropped because every one of their entries turned out to be a
     ///         duplicate
     private int refreshFileAggregates(Statement statement) throws SQLException {
-        // first_entry_time/last_entry_time bound every logged line of the file, not just its chat entries, so
+        // start_time/end_time bound every logged line of the file, not just its chat entries, so
         // deduplicating chat entries must not touch already stored bounds that came from lines with no chat marker;
         // only entry_count needs recomputing here.
         statement.execute("""
@@ -188,7 +179,8 @@ public final class LogWriter implements AutoCloseable {
         List<String> emptyLocations = new ArrayList<>();
         int emptySessionFiles = 0;
         try (ResultSet result = statement.executeQuery(
-            "SELECT id, source_path, entry_path FROM log_file WHERE entry_count = 0 AND source_kind IS NOT NULL")) {
+            "SELECT id, source_path, entry_path FROM log_file WHERE entry_count = 0 AND source_kind <> '"
+                + SourceKind.SESSION.name() + "'")) {
             while (result.next()) {
                 long id = result.getLong(1);
                 if (keepEvenIfEmpty.contains(id)) continue;

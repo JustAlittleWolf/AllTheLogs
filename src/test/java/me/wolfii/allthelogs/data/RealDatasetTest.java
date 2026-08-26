@@ -41,12 +41,12 @@ class RealDatasetTest {
             assertTrue(result.importedEntries() > 0, "expected to import at least one chat entry");
             assertTrue(result.failures().isEmpty(), () -> "unexpected failures: " + result.failures());
 
-            List<LogFile> files = store.logFiles();
-            assertTrue(files.stream().allMatch(file -> file.entryCount() > 0));
+            List<ChatLog> files = store.chatLogs();
+            assertEquals(files.size(), store.logEntries().stream().map(ChatEntry::chatLog).distinct().count());
 
             // Every log in the dataset comes from a launcher that writes a recognisable version line.
             Map<String, Long> versions = files.stream().collect(
-                    Collectors.groupingBy(LogFile::minecraftVersion, Collectors.counting()));
+                    Collectors.groupingBy(ChatLog::minecraftVersion, Collectors.counting()));
             assertTrue(versions.size() > 1, () -> "expected several Minecraft versions, got " + versions);
 
             assertEquals(result.importedEntries(), store.logEntries().size());
@@ -73,7 +73,7 @@ class RealDatasetTest {
                 entries += result.importedEntries();
             }
             assertTrue(entries > 0, "expected to import entries from archives");
-            assertTrue(store.logFiles().stream().allMatch(file -> file.sourceKind().orElse(null) == SourceKind.ARCHIVE));
+            assertTrue(store.chatLogs().stream().allMatch(file -> file.source() instanceof LogSource.Archive));
         }
     }
 
@@ -86,8 +86,8 @@ class RealDatasetTest {
             store.importDirectory(dataset, ImportOptions.defaults().withPathMatcher("**/logs/**"));
             assumeTrue(!store.logEntries().isEmpty(), "no entries imported");
 
-            LogFile earliest = store.logFiles().getFirst();
-            LogFile latest = store.logFiles().getLast();
+            ChatLog earliest = store.chatLogs().getFirst();
+            ChatLog latest = store.chatLogs().getLast();
             LocalDateTime from = earliest.date().atStartOfDay();
             LocalDateTime to = latest.date().plusDays(1).atStartOfDay();
 
@@ -101,9 +101,17 @@ class RealDatasetTest {
 
             // Context lines must never duplicate an entry, no matter how densely the matches cluster.
             long distinct = withContext.stream()
-                    .map(entry -> entry.logFile().entryPath() + "#" + entry.lineIndex())
+                    .map(entry -> entryPath(entry.chatLog().source()) + "#" + entry.lineIndex())
                     .distinct().count();
             assertEquals(withContext.size(), distinct);
         }
+    }
+
+    private static String entryPath(LogSource source) {
+        return switch (source) {
+            case LogSource.File file -> file.path().toString();
+            case LogSource.Archive archive -> archive.path() + "!" + archive.entryPath();
+            case LogSource.Session session -> "session";
+        };
     }
 }

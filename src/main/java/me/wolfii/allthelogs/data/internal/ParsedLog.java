@@ -6,7 +6,7 @@ import java.util.List;
 /// The result of parsing one log file: its detected Minecraft version, its chat lines in file order, and the time
 /// bounds of every logged line, not just chat lines.
 ///
-/// @param minecraftVersion       the detected version, or [me.wolfii.allthelogs.data.LogFile#UNKNOWN_VERSION]
+/// @param minecraftVersion       the detected version, or [me.wolfii.allthelogs.data.ChatLog#UNKNOWN_VERSION]
 /// @param entries                chat lines in the order they appeared
 /// @param resourceManagerReloaded whether the file contains a `Reloading ResourceManager` line, which marks it as a
 ///                               log worth keeping even when it has no chat entries

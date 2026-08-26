@@ -17,7 +17,7 @@ import java.util.List;
 public final class QueryBuilder {
     private static final String SELECT_COLUMNS = """
         SELECT f.file_name, f.source_kind, f.source_path, f.entry_path, f.log_date,
-               f.minecraft_version, f.last_modified, f.first_entry_time, f.last_entry_time, f.entry_count,
+               f.minecraft_version, f.start_time, f.end_time,
                e.entry_time, e.line_index, e.message
         """;
 

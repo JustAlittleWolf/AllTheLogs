@@ -29,6 +29,8 @@ class LogParserTest {
         assertEquals(List.of("hello", "[Click Here] to watch an ad"),
                 parsed.entries().stream().map(ParsedLog.Entry::message).toList());
         assertEquals(LocalTime.of(12, 16, 21), parsed.entries().getFirst().time());
+        assertEquals(LocalTime.of(12, 16, 21), parsed.firstLineTime());
+        assertEquals(LocalTime.of(12, 16, 23), parsed.lastLineTime());
     }
 
     @Test
@@ -98,7 +100,7 @@ class LogParserTest {
     @Test
     void fallsBackToUnknownVersion() throws IOException {
         ParsedLog parsed = parse("[10:00:00] [Render thread/INFO]: [CHAT] hi\n");
-        assertEquals(LogFile.UNKNOWN_VERSION, parsed.minecraftVersion());
+        assertEquals(ChatLog.UNKNOWN_VERSION, parsed.minecraftVersion());
     }
 
     @Test

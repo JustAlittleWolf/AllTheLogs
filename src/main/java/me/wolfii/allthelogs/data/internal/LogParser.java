@@ -1,6 +1,6 @@
 package me.wolfii.allthelogs.data.internal;
 
-import me.wolfii.allthelogs.data.LogFile;
+import me.wolfii.allthelogs.data.ChatLog;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -98,7 +98,7 @@ public final class LogParser {
         if (pending != null) entries.add(new ParsedLog.Entry(pendingTime, pending.toString()));
 
         entries.replaceAll(entry -> new ParsedLog.Entry(entry.time(), FormattingCodes.strip(entry.message())));
-        return new ParsedLog(version == null ? LogFile.UNKNOWN_VERSION : version, entries,
+        return new ParsedLog(version == null ? ChatLog.UNKNOWN_VERSION : version, entries,
             resourceManagerReloaded, firstLineTime, lastLineTime);
     }
 
