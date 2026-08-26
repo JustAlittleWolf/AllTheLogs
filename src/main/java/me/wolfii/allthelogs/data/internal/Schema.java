@@ -18,8 +18,6 @@ import java.sql.Statement;
 /// the file forever instead of reclaiming what the replaced rows freed. `log_file` keeps its key constraints because
 /// it holds one row per file rather than per line, so the same overhead is negligible there.
 public final class Schema {
-    private static final String CLUSTERED_FLAG = "entries_clustered";
-
     private Schema() {
     }
 
@@ -45,15 +43,6 @@ public final class Schema {
                 message VARCHAR NOT NULL
             )""");
         statement.execute("CREATE UNIQUE INDEX IF NOT EXISTS log_file_location ON log_file (source_path, entry_path)");
-        statement.execute("""
-            CREATE TABLE IF NOT EXISTS allthelogs_meta (
-                k VARCHAR PRIMARY KEY,
-                v VARCHAR NOT NULL
-            )""");
-        if (!metaFlag(statement, CLUSTERED_FLAG)) {
-            clusterEntries(statement);
-            setMetaFlag(statement, CLUSTERED_FLAG);
-        }
     }
 
     /// Rewrites `chat_entry` in timestamp order so row-group zone maps can skip data on range scans and
@@ -73,18 +62,5 @@ public final class Schema {
             ORDER BY entry_time, file_id, line_index""");
         statement.execute("DROP TABLE chat_entry");
         statement.execute("ALTER TABLE chat_entry_sorted RENAME TO chat_entry");
-        setMetaFlag(statement, CLUSTERED_FLAG);
-    }
-
-    private static boolean metaFlag(Statement statement, String key) throws SQLException {
-        try (ResultSet result = statement.executeQuery(
-            "SELECT 1 FROM allthelogs_meta WHERE k = '" + key + "' AND v = '1'")) {
-            return result.next();
-        }
-    }
-
-    private static void setMetaFlag(Statement statement, String key) throws SQLException {
-        statement.execute("DELETE FROM allthelogs_meta WHERE k = '" + key + "'");
-        statement.execute("INSERT INTO allthelogs_meta VALUES ('" + key + "', '1')");
     }
 }
