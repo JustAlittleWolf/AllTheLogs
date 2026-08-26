@@ -540,6 +540,8 @@ public final class LogStore implements AutoCloseable {
 
     /// Returns every entry matching `query`, resolved into records with their chat log attached.
     ///
+    /// Only chat logs that appear in the result are loaded; the listing API [#chatLogs()] still reads every file.
+    ///
     /// @throws LogDataException if the query is rejected, e.g. because its regex is malformed
     public List<ChatEntry> query(ChatQuery query) {
         Objects.requireNonNull(query, "query");
@@ -547,16 +549,21 @@ public final class LogStore implements AutoCloseable {
         int initialCapacity = query.limit() >= 0 ? (int) Math.min(query.limit(), 8_000_000) : 1024;
         List<ChatEntry> entries = new ArrayList<>(initialCapacity);
         try {
-            ChatLog[] logsById = logsById();
+            ResultRows rows = new ResultRows(initialCapacity);
             try (PreparedStatement prepared = connection.prepareStatement(builder.sql())) {
                 builder.bind(prepared);
                 DuckDBPreparedStatement statement = prepared.unwrap(DuckDBPreparedStatement.class);
                 try (DuckDBChunkedResult result = statement.query()) {
                     while (result.nextChunk()) {
-                        appendChunk(result.chunk(), logsById, entries);
+                        rows.append(result.chunk());
                     }
                 }
             }
+            Map<Long, ChatLog> logsById = HashMap.newHashMap(rows.neededFileIds().size());
+            if (!rows.neededFileIds().isEmpty()) {
+                loadLogs(logsById, rows.neededFileIds());
+            }
+            rows.toEntries(logsById, entries);
         } catch (LogDataException e) {
             throw e;
         } catch (SQLException | RuntimeException e) {
@@ -565,46 +572,93 @@ public final class LogStore implements AutoCloseable {
         return entries;
     }
 
-    /// Loads every chat log keyed by its internal file id. Ids are small sequential integers, so an array beats a
-    /// map: the query path looks up a log on every result row and must not box millions of `Long` keys.
-    private ChatLog[] logsById() throws SQLException {
-        long maxId;
-        try (Statement statement = connection.createStatement();
-             ResultSet result = statement.executeQuery("SELECT coalesce(max(id), -1) FROM log_file")) {
-            result.next();
-            maxId = result.getLong(1);
-        }
-        if (maxId < 0) return new ChatLog[0];
-        ChatLog[] logs = new ChatLog[Math.toIntExact(maxId) + 1];
+    /// Loads chat logs for the file ids that actually appear in a query result.
+    private void loadLogs(Map<Long, ChatLog> logsById, Set<Long> ids) throws SQLException {
+        String placeholders = "?,".repeat(ids.size());
         String sql = """
             SELECT id, file_name, source_kind, source_path, entry_path, log_date, minecraft_version,
                    start_time, end_time
-            FROM log_file""";
-        try (Statement statement = connection.createStatement();
-             ResultSet result = statement.executeQuery(sql)) {
-            while (result.next()) {
-                logs[(int) result.getLong(1)] = readChatLog(result, 2);
+            FROM log_file WHERE id IN (""" + placeholders.substring(0, placeholders.length() - 1) + ")";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            int index = 1;
+            for (long id : ids) {
+                statement.setLong(index++, id);
+            }
+            try (ResultSet result = statement.executeQuery()) {
+                while (result.next()) {
+                    logsById.put(result.getLong(1), readChatLog(result, 2));
+                }
             }
         }
-        return logs;
     }
 
-    private static void appendChunk(DuckDBDataChunkReader chunk, ChatLog[] logsById, List<ChatEntry> entries) {
-        DuckDBReadableVector fileIds = chunk.vector(0);
-        DuckDBReadableVector times = chunk.vector(1);
-        DuckDBReadableVector lineIndices = chunk.vector(2);
-        DuckDBReadableVector messages = chunk.vector(3);
-        long rows = chunk.rowCount();
-        for (long row = 0; row < rows; row++) {
-            int fileId = Math.toIntExact(fileIds.getLong(row));
-            if (fileId < 0 || fileId >= logsById.length || logsById[fileId] == null) {
-                throw new LogDataException("chat entry references unknown log file " + fileId);
+    /// Columnar buffer for one query result. Chat log metadata is loaded after the chunked entry stream is closed,
+    /// because DuckDB will not run a second query on the same connection while a chunked result is open.
+    private static final class ResultRows {
+        private long[] fileIds;
+        private int[] lineIndices;
+        private final ArrayList<LocalDateTime> timestamps;
+        private final ArrayList<String> messages;
+        private final Set<Long> neededFileIds = new HashSet<>();
+        private int size;
+
+        ResultRows(int capacity) {
+            int cap = Math.max(16, capacity);
+            this.fileIds = new long[cap];
+            this.lineIndices = new int[cap];
+            this.timestamps = new ArrayList<>(cap);
+            this.messages = new ArrayList<>(cap);
+        }
+
+        Set<Long> neededFileIds() {
+            return neededFileIds;
+        }
+
+        void append(DuckDBDataChunkReader chunk) {
+            DuckDBReadableVector ids = chunk.vector(0);
+            DuckDBReadableVector times = chunk.vector(1);
+            DuckDBReadableVector lines = chunk.vector(2);
+            DuckDBReadableVector texts = chunk.vector(3);
+            int rows = Math.toIntExact(chunk.rowCount());
+            ensureRoom(rows);
+            long previousFileId = size == 0 ? Long.MIN_VALUE : fileIds[size - 1];
+            for (int row = 0; row < rows; row++) {
+                long fileId = ids.getLong(row);
+                fileIds[size] = fileId;
+                lineIndices[size] = lines.getInt(row);
+                timestamps.add(times.getLocalDateTime(row));
+                messages.add(texts.getString(row));
+                if (fileId != previousFileId) {
+                    neededFileIds.add(fileId);
+                    previousFileId = fileId;
+                }
+                size++;
             }
-            entries.add(new ChatEntry(
-                logsById[fileId],
-                times.getLocalDateTime(row),
-                lineIndices.getInt(row),
-                messages.getString(row)));
+        }
+
+        void toEntries(Map<Long, ChatLog> logsById, List<ChatEntry> entries) {
+            long previousFileId = Long.MIN_VALUE;
+            ChatLog log = null;
+            for (int i = 0; i < size; i++) {
+                long fileId = fileIds[i];
+                if (fileId != previousFileId) {
+                    log = logsById.get(fileId);
+                    if (log == null) {
+                        throw new LogDataException("chat entry references unknown log file " + fileId);
+                    }
+                    previousFileId = fileId;
+                }
+                entries.add(new ChatEntry(log, timestamps.get(i), lineIndices[i], messages.get(i)));
+            }
+        }
+
+        private void ensureRoom(int extra) {
+            int needed = size + extra;
+            if (needed <= fileIds.length) return;
+            int cap = fileIds.length;
+            while (cap < needed) cap += cap >> 1;
+            fileIds = Arrays.copyOf(fileIds, cap);
+            lineIndices = Arrays.copyOf(lineIndices, cap);
         }
     }
 

@@ -24,6 +24,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -76,6 +78,21 @@ class LogStoreTest {
         assertEquals("26.2", entry.chatLog().minecraftVersion());
         assertEquals(LocalDate.of(2026, 8, 25), entry.chatLog().date());
         assertEquals(LocalDateTime.of(2026, 8, 25, 10, 0, 11), entry.timestamp());
+    }
+
+    @Test
+    void reusesTheSameChatLogInstanceForEntriesFromTheSameFile() throws IOException {
+        store.importDirectory(logsDirectory());
+
+        List<ChatEntry> hits = store.query(ChatQuery.all().withSubstring("needle in here").withContextLines(1));
+
+        assertEquals(List.of("delta", "needle in here", "epsilon"), hits.stream().map(ChatEntry::message).toList());
+        assertSame(hits.get(0).chatLog(), hits.get(1).chatLog());
+        assertSame(hits.get(1).chatLog(), hits.get(2).chatLog());
+
+        List<ChatEntry> twoFiles = store.query(ChatQuery.all().withSubstring("needle"));
+        assertEquals(2, twoFiles.size());
+        assertNotSame(twoFiles.get(0).chatLog(), twoFiles.get(1).chatLog());
     }
 
     @Test
