@@ -9,7 +9,7 @@ package me.wolfii.allthelogs.data;
 /// return quickly. Session capture ([LogStore#startSession(String)], [LogStore#importSessionMessage(String)])
 /// does not report progress.
 ///
-/// @param completedFiles    log files already imported, skipped, found empty, or failed
+/// @param completedFiles    log files already imported (including empty), skipped, or failed
 /// @param discoveredFiles   log files found so far; the final total once [#discoveryComplete] is true
 /// @param discoveryComplete whether every log file has been found
 /// @param current           the log file or archive currently being processed, or `null` between items and after

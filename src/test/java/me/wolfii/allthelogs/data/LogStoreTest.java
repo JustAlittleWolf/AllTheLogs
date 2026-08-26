@@ -421,7 +421,8 @@ class LogStoreTest {
         ImportResult result = store.importDirectory(tempDir);
 
         assertEquals(0, result.importedFiles());
-        assertEquals(1, result.emptyFiles());
+        assertEquals(1, result.skippedFiles());
+        assertEquals(0, result.emptyFiles());
         assertTrue(store.chatLogs().isEmpty());
     }
 
@@ -433,7 +434,8 @@ class LogStoreTest {
         ImportResult result = store.importDirectory(tempDir);
 
         assertEquals(0, result.importedFiles());
-        assertEquals(1, result.emptyFiles());
+        assertEquals(1, result.skippedFiles());
+        assertEquals(0, result.emptyFiles());
         assertFalse(store.chatLogs().stream().anyMatch(file -> fileName(file).equals("2026-04-01-1.log")));
     }
 
@@ -447,12 +449,14 @@ class LogStoreTest {
         ImportResult result = store.importDirectory(tempDir);
 
         assertEquals(1, result.importedFiles());
-        assertEquals(0, result.emptyFiles());
+        assertEquals(0, result.skippedFiles());
+        assertEquals(1, result.emptyFiles());
         ChatLog file = store.chatLogs().stream()
                 .filter(f -> fileName(f).equals("2026-04-02-1.log")).findFirst().orElseThrow();
         assertEquals(LocalDate.of(2026, 4, 2), file.date());
         assertEquals(LocalDateTime.of(2026, 4, 2, 10, 0, 0), file.startTime());
         assertEquals(LocalDateTime.of(2026, 4, 2, 10, 0, 10), file.endTime());
+        assertTrue(store.logEntries().isEmpty());
     }
 
     @Test
