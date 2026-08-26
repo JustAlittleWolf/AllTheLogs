@@ -1,7 +1,7 @@
 package me.wolfii.allthelogs.data.parse;
 
 import me.wolfii.allthelogs.data.ChatLog;
-import me.wolfii.allthelogs.data.SessionMarker;
+import me.wolfii.allthelogs.data.store.SessionMarker;
 
 import java.io.BufferedReader;
 import java.io.IOException;

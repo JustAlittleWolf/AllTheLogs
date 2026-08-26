@@ -12,7 +12,7 @@ import java.util.List;
  *                                 as a log worth keeping even when it has no chat entries
  * @param firstLineTime            wall clock time of the first line with a recognisable timestamp, {@code null} if none
  * @param lastLineTime             wall clock time of the last line with a recognisable timestamp, {@code null} if none
- * @param sessionId                id from an {@link me.wolfii.allthelogs.data.SessionMarker} line, or {@code null}
+ * @param sessionId                id from an {@link me.wolfii.allthelogs.data.store.SessionMarker} line, or {@code null}
  */
 public record ParsedLog(
     String minecraftVersion,

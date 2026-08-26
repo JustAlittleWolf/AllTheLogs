@@ -29,13 +29,11 @@ public final class DateParsers {
         try {
             return Optional.of(LocalDate.parse(trimmed).atStartOfDay());
         } catch (DateTimeParseException ignored) {
-            // try date-times next
         }
         for (DateTimeFormatter formatter : DATE_TIMES) {
             try {
                 return Optional.of(LocalDateTime.parse(trimmed, formatter));
             } catch (DateTimeParseException ignored) {
-                // try the next pattern
             }
         }
         return Optional.empty();

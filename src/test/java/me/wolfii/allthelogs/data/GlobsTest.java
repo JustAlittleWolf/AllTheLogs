@@ -54,4 +54,12 @@ class GlobsTest {
         assertThrows(IllegalArgumentException.class, () -> Globs.compile("logs/[abc"));
         assertThrows(IllegalArgumentException.class, () -> Globs.compile("logs/{a,b"));
     }
+
+    @Test
+    void braceAlternativesMatchLogAndGzippedLogNames() {
+        assertTrue(matches("{*.log.gz,*.log}", "2026-08-26-1.log.gz"));
+        assertTrue(matches("{*.log.gz,*.log}", "2026-08-26-2.log"));
+        assertTrue(matches("{*.log.gz,*.log}", "debug.log"));
+        assertTrue(matches("{*.log.gz,*.log}", "latest.log"));
+    }
 }

@@ -1,12 +1,10 @@
 package me.wolfii.allthelogs.client;
 
-import me.wolfii.allthelogs.AllTheLogs;
 import me.wolfii.allthelogs.client.ui.LogBrowserScreen;
 import me.wolfii.allthelogs.config.AllTheLogsSettings;
+import me.wolfii.allthelogs.data.ImportOptions;
 import me.wolfii.allthelogs.data.LogSource;
-import me.wolfii.allthelogs.data.SessionMarker;
-import me.wolfii.allthelogs.locations.CurrentLogsImport;
-import me.wolfii.allthelogs.worker.LogStoreWorker;
+import me.wolfii.allthelogs.data.store.SessionMarker;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
@@ -21,12 +19,11 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.CompletableFuture;
 
-/**
- * Client entrypoint: opens the store, imports this instance's rotated logs, and captures live chat off-thread.
- */
 public final class AllTheLogsClient implements ClientModInitializer {
-    public static final Logger LOGGER = LoggerFactory.getLogger(AllTheLogs.MOD_ID);
+    public static final String MOD_ID = "allthelogs";
+    public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     private static LogStoreWorker worker;
     private static AllTheLogsSettings settings;
@@ -57,12 +54,17 @@ public final class AllTheLogsClient implements ClientModInitializer {
         worker.importSessionMessage(message.getString());
     }
 
-    private static java.util.concurrent.CompletableFuture<Void> importCurrentLogs() {
-        Path logs = CurrentLogsImport.logsDirectory(gameDirectory);
+    private static CompletableFuture<Void> importCurrentLogs() {
+        Path logs = gameDirectory.resolve("logs");
         if (!Files.isDirectory(logs)) {
-            return java.util.concurrent.CompletableFuture.completedFuture(null);
+            return CompletableFuture.completedFuture(null);
         }
-        return worker.importDirectory(logs, CurrentLogsImport.options(), null)
+        ImportOptions options = ImportOptions.defaults()
+            .withRecursive(false)
+            .withNestedArchives(false)
+            .withSkipAlreadyImported(true)
+            .withPathMatcher("{*.log.gz,*.log}");
+        return worker.importDirectory(logs, options, null)
             .thenAccept(result -> LOGGER.info(
                 "Imported instance logs: {} files, {} entries ({} skipped)",
                 result.importedFiles(), result.importedEntries(), result.skippedFiles()));

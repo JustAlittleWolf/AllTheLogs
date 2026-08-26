@@ -1,4 +1,4 @@
-package me.wolfii.allthelogs.worker;
+package me.wolfii.allthelogs.client;
 
 import me.wolfii.allthelogs.data.*;
 
@@ -66,7 +66,7 @@ public final class LogStoreWorker implements AutoCloseable {
         return submit(() -> requireStore().query(copy));
     }
 
-    public CompletableFuture<StoreMetadata> metadata() {
+    public CompletableFuture<LogStoreMetadata> metadata() {
         return submit(() -> requireStore().metadata());
     }
 
@@ -103,7 +103,7 @@ public final class LogStoreWorker implements AutoCloseable {
         return CompletableFuture.runAsync(task, executor);
     }
 
-    private <T> CompletableFuture<T> submit(java.util.concurrent.Callable<T> task) {
+    private <T> CompletableFuture<T> submit(Callable<T> task) {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 return task.call();

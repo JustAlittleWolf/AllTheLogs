@@ -1,7 +1,5 @@
-package me.wolfii.allthelogs.locations;
+package me.wolfii.allthelogs.client;
 
-import me.wolfii.allthelogs.AllTheLogs;
-import me.wolfii.allthelogs.data.discover.Globs;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
@@ -34,7 +32,7 @@ class CommonLogLocationsTest {
             "example",
             "Example",
             List.of("${APPDATA}/.minecraft/logs", "${HOME}/Library/Application Support/minecraft/logs"),
-            AllTheLogs.LOG_FILES_MATCHER,
+            "{*.log.gz,*.log}",
             false,
             false
         );
@@ -52,14 +50,5 @@ class CommonLogLocationsTest {
     @Test
     void defaultsAreEmptyUntilLaunchersAreAdded() {
         assertTrue(CommonLogLocations.defaults().isEmpty());
-    }
-
-    @Test
-    void logFilesMatcherAcceptsLogAndGzippedLogNames() {
-        var pattern = Globs.compile(AllTheLogs.LOG_FILES_MATCHER);
-        assertTrue(pattern.matcher("2026-08-26-1.log.gz").matches());
-        assertTrue(pattern.matcher("2026-08-26-2.log").matches());
-        assertTrue(pattern.matcher("debug.log").matches());
-        assertTrue(pattern.matcher("latest.log").matches());
     }
 }

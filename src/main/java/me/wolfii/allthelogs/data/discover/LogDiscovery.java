@@ -145,12 +145,6 @@ public final class LogDiscovery {
         }
     }
 
-    /**
-     * @param sourcePath  absolute path of the archive file recorded on the resulting candidates
-     * @param description human readable location of this archive, used in failure messages
-     * @param prefix      path prefix that entries of this archive get inside the outermost archive
-     * @param globPrefix  path prefix used for {@link ImportOptions#pathMatcher()}, relative to the import root
-     */
     private void readArchive(Path archive, String sourcePath, String description, String prefix, String globPrefix,
                              String archiveName) {
         String archiveEntry = prefix.isEmpty() ? "" : prefix.substring(0, prefix.length() - ARCHIVE_SEPARATOR.length());
@@ -257,9 +251,6 @@ public final class LogDiscovery {
         InputStream open() throws IOException;
     }
 
-    /**
-     * Hides {@link InputStream#close()} from consumers so that reading one entry cannot end the whole archive stream.
-     */
     private static final class NonClosingStream extends FilterInputStream {
         private NonClosingStream(InputStream delegate) {
             super(delegate);
@@ -270,10 +261,6 @@ public final class LogDiscovery {
         }
     }
 
-    /**
-     * Exposes the current entry of a {@link SevenZFile} as a stream, since the sequential API reads through the file
-     * itself.
-     */
     private static final class SevenZEntryStream extends InputStream {
         private final SevenZFile file;
 

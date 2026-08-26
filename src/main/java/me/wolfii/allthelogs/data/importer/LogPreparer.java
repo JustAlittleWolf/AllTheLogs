@@ -21,9 +21,6 @@ import java.util.zip.GZIPInputStream;
  * Turns a discovered log file into a {@link PreparedLog} ready to write.
  */
 public final class LogPreparer {
-    /**
-     * Legacy Windows code page that old Minecraft launchers wrote logs in, before UTF-8 became the norm.
-     */
     private static final Charset WINDOWS_1252 = Charset.forName("windows-1252");
 
     private LogPreparer() {
@@ -62,11 +59,6 @@ public final class LogPreparer {
         return new BufferedReader(new StringReader(decode(bytes)), 1 << 16);
     }
 
-    /**
-     * Decodes as UTF-8 when the bytes are valid UTF-8, otherwise Windows-1252.
-     * Older Windows clients wrote logs in the system code page; treating those bytes as UTF-8 would
-     * replace the section sign used for formatting codes.
-     */
     private static String decode(byte[] bytes) {
         CharsetDecoder strictUtf8 = StandardCharsets.UTF_8.newDecoder()
             .onMalformedInput(CodingErrorAction.REPORT)

@@ -1,4 +1,4 @@
-package me.wolfii.allthelogs.locations;
+package me.wolfii.allthelogs.client;
 
 import me.wolfii.allthelogs.data.ImportOptions;
 
