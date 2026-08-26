@@ -47,6 +47,12 @@ public final class LogWriter implements AutoCloseable {
                 nextFileId = Math.max(nextFileId, id + 1);
             }
         }
+        // The appender autocommits every 204,800 rows by default, and each of those commits durably syncs to disk.
+        // A whole import is one logical unit of work, so wrapping it in an explicit transaction turns flush() into a
+        // cheap in-memory materialisation and defers the durable sync to the single commit on close().
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("BEGIN TRANSACTION");
+        }
         this.fileAppender = connection.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "log_file");
         this.entryAppender = connection.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "chat_entry");
     }
@@ -132,16 +138,10 @@ public final class LogWriter implements AutoCloseable {
         flushAppenders();
         long removed;
         try (Statement statement = connection.createStatement()) {
-            try (ResultSet result = statement.executeQuery("""
-                SELECT count(*) FROM (
-                    SELECT row_number() OVER (PARTITION BY entry_time, message ORDER BY file_id, line_index) AS rn
-                    FROM chat_entry
-                ) WHERE rn > 1""")) {
-                result.next();
-                removed = result.getLong(1);
-            }
-            if (removed == 0) return 0;
-            statement.execute("""
+            // The window function over every row is the expensive part, so run it once and let the DELETE's own
+            // update count report how many rows matched, instead of running the same scan twice: once to count and
+            // once to delete.
+            removed = statement.executeUpdate("""
                 DELETE FROM chat_entry WHERE rowid IN (
                     SELECT rowid FROM (
                         SELECT rowid, row_number() OVER (
@@ -149,6 +149,7 @@ public final class LogWriter implements AutoCloseable {
                         FROM chat_entry
                     ) WHERE rn > 1
                 )""");
+            if (removed == 0) return 0;
             writtenFiles -= refreshFileAggregates(statement);
         }
         writtenEntries -= removed;
@@ -210,5 +211,8 @@ public final class LogWriter implements AutoCloseable {
     public void close() throws SQLException {
         fileAppender.close();
         entryAppender.close();
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("COMMIT");
+        }
     }
 }
