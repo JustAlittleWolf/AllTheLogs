@@ -15,8 +15,7 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.Instant;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
@@ -62,8 +61,8 @@ public final class LogDiscovery {
         return combined.toByteArray();
     }
 
-    private static LocalDateTime toLocalDateTime(long epochMillis) {
-        return LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(epochMillis), ZoneId.systemDefault());
+    private static Instant toInstant(long epochMillis) {
+        return Instant.ofEpochMilli(epochMillis);
     }
 
     private static boolean isLogFile(String name) {
@@ -150,8 +149,8 @@ public final class LogDiscovery {
             SevenZArchiveEntry entry;
             while ((entry = file.getNextEntry()) != null) {
                 if (entry.isDirectory()) continue;
-                LocalDateTime modified = entry.getHasLastModifiedDate()
-                    ? toLocalDateTime(entry.getLastModifiedDate().toInstant().toEpochMilli()) : null;
+                Instant modified = entry.getHasLastModifiedDate()
+                    ? entry.getLastModifiedDate().toInstant() : null;
                 handleArchiveEntry(entry.getName(), modified, sourcePath, description, prefix, entry.getSize(),
                     () -> new SevenZEntryStream(file));
             }
@@ -171,8 +170,8 @@ public final class LogDiscovery {
                 ArchiveEntry entry;
                 while ((entry = stream.getNextEntry()) != null) {
                     if (entry.isDirectory() || !stream.canReadEntryData(entry)) continue;
-                    LocalDateTime modified = entry.getLastModifiedDate() == null ? null
-                        : toLocalDateTime(entry.getLastModifiedDate().getTime());
+                    Instant modified = entry.getLastModifiedDate() == null ? null
+                        : toInstant(entry.getLastModifiedDate().getTime());
                     handleArchiveEntry(entry.getName(), modified, sourcePath, description, prefix, entry.getSize(),
                         () -> new NonClosingStream(stream));
                 }
@@ -184,7 +183,7 @@ public final class LogDiscovery {
         }
     }
 
-    private void handleArchiveEntry(String rawName, LocalDateTime modified, String sourcePath, String description,
+    private void handleArchiveEntry(String rawName, Instant modified, String sourcePath, String description,
                                     String prefix, long size, ContentSupplier content) throws IOException {
         String normalized = rawName.replace('\\', '/');
         if (normalized.startsWith("./")) normalized = normalized.substring(2);
@@ -218,9 +217,9 @@ public final class LogDiscovery {
         return pathMatcher == null || pathMatcher.matcher(entryPath).matches();
     }
 
-    private LocalDateTime lastModified(Path path) {
+    private Instant lastModified(Path path) {
         try {
-            return toLocalDateTime(Files.getLastModifiedTime(path).toMillis());
+            return Files.getLastModifiedTime(path).toInstant();
         } catch (IOException e) {
             return null;
         }

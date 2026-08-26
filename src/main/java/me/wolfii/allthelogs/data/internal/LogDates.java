@@ -2,12 +2,15 @@ package me.wolfii.allthelogs.data.internal;
 
 import me.wolfii.allthelogs.data.DateSource;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/// Determines which calendar date a log file belongs to.
+/// Determines which calendar date a log file belongs to, and converts naive log timestamps into the JVM's local zone.
 public final class LogDates {
     /// Matches the `yyyy-MM-dd` prefix that the vanilla client uses for rolled log files, and the `yyyy_MM_dd` and
     /// `yyyyMMdd` spellings used by some launchers.
@@ -16,14 +19,33 @@ public final class LogDates {
     private LogDates() {
     }
 
-    /// Resolves the date from the file name, falling back to the last modification time.
+    /// Resolves the date from the file name, falling back to the last modification time interpreted in `timezone`.
     ///
-    /// @param lastModified may be `null` when the source reports no modification time; the current date is used then
-    public static Resolved resolve(String fileName, LocalDateTime lastModified) {
+    /// @param lastModified may be `null` when the source reports no modification time; the current date in `timezone`
+    ///                     is used then
+    public static Resolved resolve(String fileName, Instant lastModified, ZoneId timezone) {
         LocalDate fromName = fromFileName(fileName);
         if (fromName != null) return new Resolved(fromName, DateSource.FILE_NAME);
-        LocalDate fallback = lastModified == null ? LocalDate.now() : lastModified.toLocalDate();
+        LocalDate fallback = lastModified == null
+            ? LocalDate.now(timezone)
+            : lastModified.atZone(timezone).toLocalDate();
         return new Resolved(fallback, DateSource.LAST_MODIFIED);
+    }
+
+    /// Combines a log's calendar date with a line time and converts the result from `sourceZone` to the JVM default
+    /// timezone. Times that are already in the default timezone are returned as is.
+    public static LocalDateTime toSystemLocal(LocalDate date, LocalTime time, ZoneId sourceZone) {
+        if (date == null || time == null) return null;
+        return toSystemLocal(LocalDateTime.of(date, time), sourceZone);
+    }
+
+    /// Converts a naive timestamp from `sourceZone` to the JVM default timezone. Passing the default timezone leaves
+    /// the value unchanged, including during DST gaps where a round-trip through that zone would shift the clock.
+    public static LocalDateTime toSystemLocal(LocalDateTime dateTime, ZoneId sourceZone) {
+        if (dateTime == null) return null;
+        ZoneId local = ZoneId.systemDefault();
+        if (sourceZone.equals(local)) return dateTime;
+        return dateTime.atZone(sourceZone).withZoneSameInstant(local).toLocalDateTime();
     }
 
     /// @return the date encoded in the file name, or `null` if it carries none

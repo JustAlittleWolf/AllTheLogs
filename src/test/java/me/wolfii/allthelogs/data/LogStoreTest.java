@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.data;
 
+import me.wolfii.allthelogs.data.internal.LogDates;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -8,8 +9,13 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -128,6 +134,18 @@ class LogStoreTest {
         assertEquals(SourceKind.ARCHIVE, entry.logFile().sourceKind());
         assertEquals("logs/2026-01-02-1.log.gz", entry.logFile().entryPath());
         assertEquals("1.21.8", entry.logFile().minecraftVersion());
+    }
+
+    @Test
+    void importingAnArchiveHonoursTheTimezone() throws IOException {
+        Path archive = LogFixtures.writeZip(tempDir.resolve("backup.zip"), new LinkedHashMap<>(Map.of(
+                "logs/2026-01-02-1.log.gz", LogFixtures.modernLog("1.21.8", "in archive"))));
+        ZoneOffset offset = ZoneOffset.ofHours(4);
+
+        store.importArchive(archive, ImportOptions.defaults().withTimezone(offset));
+
+        ChatEntry entry = store.search("in archive").getFirst();
+        assertEquals(LogDates.toSystemLocal(LocalDateTime.of(2026, 1, 2, 10, 0, 10), offset), entry.timestamp());
     }
 
     @Test
@@ -530,5 +548,74 @@ class LogStoreTest {
         assertEquals(28, result.importedFiles());
         assertEquals(56, result.importedEntries());
         assertEquals(1, store.search("day 17 message").size());
+    }
+
+    @Test
+    void defaultImportLeavesTimestampsInLocalTime() throws IOException {
+        store.importDirectory(logsDirectory());
+
+        ChatEntry entry = store.search("needle in here").getFirst();
+        assertEquals(LocalDateTime.of(2026, 8, 25, 10, 0, 11), entry.timestamp());
+        assertEquals(LocalDateTime.of(2026, 8, 25, 10, 0, 0),
+                entry.logFile().firstEntryTime().orElseThrow());
+    }
+
+    @Test
+    void importingWithATimezoneConvertsTimestampsToLocal() throws IOException {
+        Path root = logsDirectory();
+        ZoneOffset plusThree = ZoneOffset.ofHours(3);
+        ZoneOffset minusThree = ZoneOffset.ofHours(-3);
+
+        ImportResult first = store.importDirectory(root, ImportOptions.defaults().withTimezone(plusThree));
+        ChatEntry plus = store.search("needle in here").getFirst();
+
+        store.close();
+        store = LogStore.openInMemory();
+        ImportResult second = store.importDirectory(root, ImportOptions.defaults().withTimezone(minusThree));
+        ChatEntry minus = store.search("needle in here").getFirst();
+
+        assertTrue(first.failures().isEmpty(), () -> "unexpected failures: " + first.failures());
+        assertTrue(second.failures().isEmpty(), () -> "unexpected failures: " + second.failures());
+        // 10:00 in UTC+3 is six hours earlier than 10:00 in UTC-3, after both are converted to local time.
+        assertEquals(Duration.ofHours(6), Duration.between(plus.timestamp(), minus.timestamp()));
+        assertEquals(plus.timestamp(), LogDates.toSystemLocal(
+                LocalDateTime.of(2026, 8, 25, 10, 0, 11), plusThree));
+        assertEquals(minus.timestamp(), LogDates.toSystemLocal(
+                LocalDateTime.of(2026, 8, 25, 10, 0, 11), minusThree));
+        assertEquals(LogDates.toSystemLocal(LocalDateTime.of(2026, 8, 25, 10, 0, 0), minusThree),
+                minus.logFile().firstEntryTime().orElseThrow());
+    }
+
+    @Test
+    void importTimezoneDoesNotChangeTheNamedLogDate() throws IOException {
+        store.importDirectory(logsDirectory(), ImportOptions.defaults().withTimezone(ZoneOffset.ofHours(-10)));
+
+        ChatEntry entry = store.search("needle in here").getFirst();
+        assertEquals(LocalDate.of(2026, 8, 25), entry.logFile().date());
+        assertEquals(DateSource.FILE_NAME, entry.logFile().dateSource());
+    }
+
+    @Test
+    void importTimezoneShiftsTheDateFallbackForFilesWithoutADateInTheName() throws IOException {
+        Path logs = tempDir.resolve("logs");
+        Path latest = LogFixtures.writePlain(logs, "latest.log", LogFixtures.legacyLog("from latest"));
+        Instant modified = Instant.parse("2026-08-25T22:00:00Z");
+        Files.setLastModifiedTime(latest, FileTime.from(modified));
+
+        store.importDirectory(tempDir, ImportOptions.defaults().withTimezone(ZoneOffset.UTC));
+        LogFile utc = store.logFiles().getFirst();
+        assertEquals(LocalDate.of(2026, 8, 25), utc.date());
+        assertEquals(DateSource.LAST_MODIFIED, utc.dateSource());
+        // lastModified is an absolute instant, stored in local time regardless of the import timezone.
+        assertEquals(LocalDateTime.ofInstant(modified, ZoneId.systemDefault()), utc.lastModified().orElseThrow());
+
+        store.close();
+        store = LogStore.openInMemory();
+        store.importDirectory(tempDir, ImportOptions.defaults().withTimezone(ZoneOffset.ofHours(14)));
+        LogFile plusFourteen = store.logFiles().getFirst();
+        assertEquals(LocalDate.of(2026, 8, 26), plusFourteen.date());
+        assertEquals(DateSource.LAST_MODIFIED, plusFourteen.dateSource());
+        assertEquals(LocalDateTime.ofInstant(modified, ZoneId.systemDefault()),
+                plusFourteen.lastModified().orElseThrow());
     }
 }
