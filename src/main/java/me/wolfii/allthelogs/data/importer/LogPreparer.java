@@ -58,7 +58,7 @@ public final class LogPreparer {
         return new PreparedLog(candidate.fileName(), candidate.sourceKind(), candidate.sourcePath(),
             candidate.entryPath(), date, parsed.minecraftVersion(),
             times, messages, parsed.resourceManagerReloaded(),
-            firstLineTime, lastLineTime);
+            firstLineTime, lastLineTime, parsed.sessionId());
     }
 
     private static BufferedReader open(LogCandidate candidate) throws IOException {

@@ -109,4 +109,16 @@ class LogParserTest {
         assertEquals(1, parsed.entries().size());
         assertEquals(LocalTime.of(21, 4, 9), parsed.entries().getFirst().time());
     }
+
+    @Test
+    void extractsASessionMarkerWithoutTreatingItAsChat() throws IOException {
+        String id = "550e8400-e29b-41d4-a716-446655440000";
+        ParsedLog parsed = parse("""
+                [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+                [10:00:02] [allthelogs-store/INFO]: AllTheLogs session %s
+                [10:00:10] [Render thread/INFO]: [CHAT] hello
+                """.formatted(id));
+        assertEquals(id, parsed.sessionId());
+        assertEquals(List.of("hello"), parsed.entries().stream().map(ParsedLog.Entry::message).toList());
+    }
 }

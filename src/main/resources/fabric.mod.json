@@ -1,0 +1,27 @@
+{
+	"schemaVersion": 1,
+	"id": "allthelogs",
+	"version": "${version}",
+	"name": "AllTheLogs",
+	"description": "Search, import, and browse Minecraft chat logs from this instance and elsewhere.",
+	"authors": [
+		"JustAlittleWolf"
+	],
+	"contact": {
+		"sources": "https://github.com/JustAlittleWolf/AllTheLogs"
+	},
+	"license": "MIT",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"me.wolfii.allthelogs.client.AllTheLogsClient"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.19.3",
+		"minecraft": "~26.2",
+		"java": ">=25",
+		"fabric-api": "*",
+		"owo": "*"
+	}
+}

@@ -3,6 +3,7 @@ package me.wolfii.allthelogs.data.store;
 import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.LogDataException;
 import me.wolfii.allthelogs.data.LogSource;
+import me.wolfii.allthelogs.data.SessionMarker;
 import me.wolfii.allthelogs.data.parse.FormattingCodes;
 import org.duckdb.DuckDBConnection;
 
@@ -31,7 +32,8 @@ public final class SessionCapture {
     }
 
     /**
-     * Starts a capture session at {@code startedAt} (whole seconds) and returns the created log.
+     * Starts a capture session at {@code startedAt} (whole seconds) and returns the created log, which carries a
+     * unique {@link LogSource.Session#id()}.
      *
      * @throws LogDataException if the session cannot be written
      */
@@ -39,10 +41,11 @@ public final class SessionCapture {
         Objects.requireNonNull(minecraftVersion, "minecraftVersion");
         Objects.requireNonNull(startedAt, "startedAt");
         LocalDateTime start = startedAt.withNano(0);
+        String sessionId = SessionMarker.newId();
         try {
             long fileId = nextFileId();
             LocalDate date = start.toLocalDate();
-            String entryPath = "session/" + fileId;
+            String entryPath = SessionMarker.entryPath(sessionId);
             Timestamp timestamp = Timestamp.valueOf(start);
             try (PreparedStatement insert = connection.prepareStatement("""
                 INSERT INTO log_file (id, file_name, source_kind, source_path, entry_path, log_date,
@@ -61,7 +64,7 @@ public final class SessionCapture {
             }
             sessionFileId = fileId;
             sessionLineIndex = 0;
-            return new ChatLog(new LogSource.Session(), date, minecraftVersion, start, start);
+            return new ChatLog(new LogSource.Session(sessionId), date, minecraftVersion, start, start);
         } catch (SQLException e) {
             throw new LogDataException("could not start a client session", e);
         }

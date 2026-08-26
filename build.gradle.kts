@@ -1,27 +1,77 @@
 plugins {
-    `java-library`
+    id("net.fabricmc.fabric-loom") version "1.17.20"
+    `maven-publish`
 }
 
-group = "me.wolfii"
-version = "0.1.0"
+val minecraftVersion: String = providers.gradleProperty("minecraft_version").get()
+val loaderVersion: String = providers.gradleProperty("loader_version").get()
+val fabricApiVersion: String = providers.gradleProperty("fabric_api_version").get()
+val owoVersion: String = providers.gradleProperty("owo_version").get()
+val archivesBaseName: String = providers.gradleProperty("archives_base_name").get()
+val modVersion: String = providers.gradleProperty("mod_version").get()
+val mavenGroup: String = providers.gradleProperty("maven_group").get()
+
+group = mavenGroup
+version = modVersion
+base.archivesName.set(archivesBaseName)
 
 repositories {
+    maven("https://maven.wispforest.io") {
+        name = "Wisp Forest"
+    }
+    maven("https://jitpack.io") {
+        name = "JitPack"
+    }
     mavenCentral()
 }
 
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+loom {
+    mods {
+        register("allthelogs") {
+            sourceSet(sourceSets.main.get())
+        }
     }
 }
 
 dependencies {
+    minecraft("com.mojang:minecraft:$minecraftVersion")
+    implementation("net.fabricmc:fabric-loader:$loaderVersion")
+    implementation("net.fabricmc.fabric-api:fabric-api:$fabricApiVersion")
+
+    implementation("io.wispforest:owo-lib:$owoVersion")
+    include(implementation("io.wispforest:owo-sentinel:$owoVersion")!!)
+
     api(libs.duckdb.jdbc)
+    include(libs.duckdb.jdbc)
     implementation(libs.commons.compress)
+    include(libs.commons.compress)
     runtimeOnly(libs.xz)
+    include(libs.xz)
 
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
+}
+
+tasks.processResources {
+    val properties = mapOf("version" to version)
+    inputs.properties(properties)
+    filesMatching("fabric.mod.json") {
+        expand(properties)
+    }
+}
+
+tasks.withType<JavaCompile>().configureEach {
+    options.release = 25
+    options.encoding = "UTF-8"
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(25))
+    }
 }
 
 tasks.test {
@@ -32,5 +82,13 @@ tasks.test {
     }
     testLogging {
         events("passed", "skipped", "failed")
+    }
+}
+
+publishing {
+    publications {
+        create<MavenPublication>("mavenJava") {
+            from(components["java"])
+        }
     }
 }

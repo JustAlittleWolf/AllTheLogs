@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.data.store;
 
+import me.wolfii.allthelogs.data.SessionMarker;
 import org.duckdb.DuckDBAppender;
 import org.duckdb.DuckDBConnection;
 
@@ -25,6 +26,7 @@ public final class LogWriter implements AutoCloseable {
     private final DuckDBAppender fileAppender;
     private final DuckDBAppender entryAppender;
     private final Map<String, Long> existingLocations = new ConcurrentHashMap<>();
+    private final Set<String> knownSessionIds = ConcurrentHashMap.newKeySet();
     private final Set<Long> keepEvenIfEmpty = ConcurrentHashMap.newKeySet();
     /** First file id handed out by this writer; counters and dedup bookkeeping are scoped to this import. */
     private final long sessionStartId;
@@ -37,10 +39,17 @@ public final class LogWriter implements AutoCloseable {
         this.connection = connection;
         try (Statement statement = connection.createStatement();
              ResultSet result = statement.executeQuery(
-                 "SELECT id, source_path, entry_path FROM log_file")) {
+                 "SELECT id, source_kind, source_path, entry_path FROM log_file")) {
             while (result.next()) {
                 long id = result.getLong(1);
-                existingLocations.put(locationKey(result.getString(2), result.getString(3)), id);
+                String kind = result.getString(2);
+                String sourcePath = result.getString(3);
+                String entryPath = result.getString(4);
+                existingLocations.put(locationKey(sourcePath, entryPath), id);
+                if (SourceKind.SESSION.name().equals(kind)) {
+                    String sessionId = SessionMarker.idFromEntryPath(entryPath);
+                    if (sessionId != null) knownSessionIds.add(sessionId);
+                }
                 nextFileId = Math.max(nextFileId, id + 1);
             }
         }
@@ -62,6 +71,14 @@ public final class LogWriter implements AutoCloseable {
      */
     public boolean isAlreadyImported(String sourcePath, String entryPath) {
         return existingLocations.containsKey(locationKey(sourcePath, entryPath));
+    }
+
+    /**
+     * Whether a live capture session with this id is already stored. A log file that contains a
+     * {@link SessionMarker} for such a session should be skipped.
+     */
+    public boolean hasSession(String sessionId) {
+        return sessionId != null && knownSessionIds.contains(sessionId);
     }
 
     /**

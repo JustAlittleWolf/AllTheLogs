@@ -12,6 +12,7 @@ import java.util.List;
  *                                 kept even when they have no chat entries
  * @param firstLineTime            timestamp of the first logged line of the file, not just chat entries
  * @param lastLineTime             timestamp of the last logged line of the file, not just chat entries
+ * @param sessionId                id from an AllTheLogs session marker in the file, or {@code null}
  */
 public record PreparedLog(
     String fileName,
@@ -24,6 +25,7 @@ public record PreparedLog(
     List<String> messages,
     boolean resourceManagerReloaded,
     LocalDateTime firstLineTime,
-    LocalDateTime lastLineTime
+    LocalDateTime lastLineTime,
+    String sessionId
 ) {
 }

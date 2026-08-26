@@ -35,8 +35,12 @@ public sealed interface LogSource permits LogSource.File, LogSource.Archive, Log
 
     /**
      * Captured from a running Minecraft client with {@link LogStore#startSession(String)}. A session is not a file,
-     * so it has no name or path.
+     * so it has no name or path. {@code id} is a UUID written to the Minecraft log as a
+     * {@link SessionMarker} so a later import of that log can skip the file.
+     *
+     * @param id unique id of this capture session, or {@code null} when none is stored.
+     *           {@link LogStore#startSession(String)} always assigns one
      */
-    record Session() implements LogSource {
+    record Session(String id) implements LogSource {
     }
 }
