@@ -1,0 +1,4 @@
+{
+  "name": "AllTheLogs",
+  "install": "./gradlew build -x test --no-daemon"
+}
