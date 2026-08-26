@@ -47,7 +47,7 @@ public final class AllTheLogsClient implements ClientModInitializer {
     public static void saveSettings() {
         if (settings == null || gameDirectory == null) return;
         try {
-            settings.save(AllTheLogsPaths.config(gameDirectory));
+            settings.save(AllTheLogsPaths.config());
         } catch (IOException e) {
             LOGGER.warn("Could not save AllTheLogs config", e);
         }
@@ -76,13 +76,13 @@ public final class AllTheLogsClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
-        gameDirectory = FabricLoader.getInstance().getConfigDir();
+        gameDirectory = FabricLoader.getInstance().getGameDir();
         worker = new LogStoreWorker();
         try {
-            settings = AllTheLogsSettings.load(AllTheLogsPaths.config(gameDirectory));
+            settings = AllTheLogsSettings.load(AllTheLogsPaths.config());
         } catch (IOException e) {
             settings = new AllTheLogsSettings();
-            LOGGER.warn("Could not load AllTheLogs config from {}", AllTheLogsPaths.config(gameDirectory), e);
+            LOGGER.warn("Could not load AllTheLogs config from {}", AllTheLogsPaths.config(), e);
         }
 
         worker.open(AllTheLogsPaths.database(gameDirectory))
