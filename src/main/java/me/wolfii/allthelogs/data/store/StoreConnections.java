@@ -36,7 +36,7 @@ public final class StoreConnections {
     private static DuckDBConnection open(String url) throws SQLException {
         DuckDBConnection connection = (DuckDBConnection) DriverManager.getConnection(url, settings());
         try (Statement statement = connection.createStatement()) {
-            Schema.create(statement);
+            SchemaMigration.migrate(statement);
         } catch (SQLException e) {
             connection.close();
             throw e;
