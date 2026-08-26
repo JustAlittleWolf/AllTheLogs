@@ -211,4 +211,53 @@ class LogStorePersistenceTest {
                     store.query(ChatQuery.all().withSubstring("\uD83C\uDFAE")).getFirst().message());
         }
     }
+
+    @Test
+    void migratesInlineMessageColumnFromOlderDatabases() throws Exception {
+        Path database = database();
+        try (var connection = java.sql.DriverManager.getConnection("jdbc:duckdb:" + database.toAbsolutePath());
+             var statement = connection.createStatement()) {
+            statement.execute("""
+                CREATE TABLE log_file (
+                    id BIGINT PRIMARY KEY,
+                    file_name VARCHAR NOT NULL,
+                    source_kind VARCHAR NOT NULL,
+                    source_path VARCHAR NOT NULL,
+                    entry_path VARCHAR NOT NULL,
+                    log_date DATE NOT NULL,
+                    minecraft_version VARCHAR NOT NULL,
+                    start_time TIMESTAMP NOT NULL,
+                    end_time TIMESTAMP NOT NULL,
+                    entry_count BIGINT NOT NULL
+                )""");
+            statement.execute("""
+                CREATE TABLE chat_entry (
+                    file_id BIGINT NOT NULL,
+                    line_index INTEGER NOT NULL,
+                    entry_time TIMESTAMP NOT NULL,
+                    message VARCHAR NOT NULL
+                )""");
+            statement.execute("""
+                INSERT INTO log_file VALUES (
+                    0, '2026-08-24-1.log.gz', 'FILE', '/tmp/legacy.log.gz', '',
+                    DATE '2026-08-24', '26.2',
+                    TIMESTAMP '2026-08-24 10:00:00', TIMESTAMP '2026-08-24 10:00:05', 2
+                )""");
+            statement.execute("""
+                INSERT INTO chat_entry VALUES
+                    (0, 0, TIMESTAMP '2026-08-24 10:00:01', 'alpha'),
+                    (0, 1, TIMESTAMP '2026-08-24 10:00:02', 'needle in here')
+                """);
+        }
+
+        try (LogStore store = LogStore.open(database)) {
+            assertEquals(List.of("alpha", "needle in here"),
+                    store.logEntries().stream().map(ChatEntry::message).toList());
+            ChatEntry needle = store.query(ChatQuery.all().withSubstring("NEEDLE")).getFirst();
+            assertEquals("needle in here", needle.message());
+            assertEquals(LocalDateTime.of(2026, 8, 24, 10, 0, 2), needle.timestamp());
+            assertEquals("26.2", needle.chatLog().minecraftVersion());
+            assertEquals(LocalDate.of(2026, 8, 24), needle.chatLog().date());
+        }
+    }
 }

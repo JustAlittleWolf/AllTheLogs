@@ -9,6 +9,7 @@ import me.wolfii.allthelogs.data.discover.ImportObserver;
 import me.wolfii.allthelogs.data.discover.LogCandidate;
 import me.wolfii.allthelogs.data.discover.LogDiscovery;
 import me.wolfii.allthelogs.data.store.LogWriter;
+import me.wolfii.allthelogs.data.store.MessageDictionary;
 import me.wolfii.allthelogs.data.store.PreparedLog;
 import me.wolfii.allthelogs.data.store.Schema;
 import me.wolfii.allthelogs.data.store.SourceKind;
@@ -44,9 +45,11 @@ public final class LogImporter {
         false, null, null);
 
     private final DuckDBConnection connection;
+    private final MessageDictionary messages;
 
-    public LogImporter(DuckDBConnection connection) {
+    public LogImporter(DuckDBConnection connection, MessageDictionary messages) {
         this.connection = connection;
+        this.messages = messages;
     }
 
     /**
@@ -82,7 +85,7 @@ public final class LogImporter {
         AtomicInteger empty = new AtomicInteger();
         ImportObserver observer = new ImportObserver(progress);
 
-        try (LogWriter writer = new LogWriter(connection)) {
+        try (LogWriter writer = new LogWriter(connection, messages)) {
             var failureRef = new AtomicReference<RuntimeException>();
             ExecutorService parsers = Executors.newFixedThreadPool(options.parallelism());
             LogDiscovery discovery = new LogDiscovery(options, candidate -> {

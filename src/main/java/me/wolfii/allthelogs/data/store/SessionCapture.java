@@ -23,11 +23,15 @@ public final class SessionCapture {
     private static final String SESSION_SOURCE_PATH = "<session>";
 
     private final DuckDBConnection connection;
+    private final MessageDictionary messages;
+    private final LogCatalog logs;
     private long sessionFileId = -1;
     private int sessionLineIndex;
 
-    public SessionCapture(DuckDBConnection connection) {
+    public SessionCapture(DuckDBConnection connection, MessageDictionary messages, LogCatalog logs) {
         this.connection = connection;
+        this.messages = messages;
+        this.logs = logs;
     }
 
     /**
@@ -61,6 +65,7 @@ public final class SessionCapture {
             }
             sessionFileId = fileId;
             sessionLineIndex = 0;
+            logs.invalidate();
             return new ChatLog(new LogSource.Session(), date, minecraftVersion, start, start);
         } catch (SQLException e) {
             throw new LogDataException("could not start a client session", e);
@@ -104,6 +109,7 @@ public final class SessionCapture {
             update.setTimestamp(1, Timestamp.valueOf(stamp));
             update.setLong(2, sessionFileId);
             update.execute();
+            logs.invalidate();
         } catch (SQLException e) {
             throw new LogDataException("could not update the session end time", e);
         }
@@ -116,21 +122,22 @@ public final class SessionCapture {
     }
 
     private boolean writeEntry(String message, LocalDateTime timestamp) throws SQLException {
+        int messageId = messages.intern(message);
         try (PreparedStatement duplicate = connection.prepareStatement(
-            "SELECT 1 FROM chat_entry WHERE entry_time = ? AND message = ? LIMIT 1")) {
+            "SELECT 1 FROM chat_entry WHERE entry_time = ? AND message_id = ? LIMIT 1")) {
             duplicate.setTimestamp(1, Timestamp.valueOf(timestamp));
-            duplicate.setString(2, message);
+            duplicate.setLong(2, messageId);
             try (ResultSet result = duplicate.executeQuery()) {
                 if (result.next()) return false;
             }
         }
 
         try (PreparedStatement insert = connection.prepareStatement(
-            "INSERT INTO chat_entry (file_id, line_index, entry_time, message) VALUES (?, ?, ?, ?)")) {
+            "INSERT INTO chat_entry (file_id, line_index, entry_time, message_id) VALUES (?, ?, ?, ?)")) {
             insert.setLong(1, sessionFileId);
             insert.setInt(2, sessionLineIndex);
             insert.setTimestamp(3, Timestamp.valueOf(timestamp));
-            insert.setString(4, message);
+            insert.setLong(4, messageId);
             insert.execute();
         }
         sessionLineIndex++;
@@ -143,6 +150,7 @@ public final class SessionCapture {
             update.setLong(2, sessionFileId);
             update.execute();
         }
+        logs.invalidate();
         return true;
     }
 

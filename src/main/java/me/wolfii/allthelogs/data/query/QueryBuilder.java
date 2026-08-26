@@ -12,12 +12,14 @@ import java.util.Locale;
 /**
  * Turns a {@link ChatQuery} into SQL.
  * <p>
- * Queries select only the four entry columns; log metadata is loaded separately and joined in Java by
- * {@code file_id}. Context lines expand each match into concrete {@code (file_id, line_index)} keys and hash-join
- * them back, rather than using a range predicate that DuckDB cannot hash.
+ * Queries select only the four entry columns as primitives; message text is interned in {@code chat_message} and
+ * joined in Java by {@code message_id}. Text filters scan that dictionary rather than every stored line. Context
+ * lines expand each match into concrete {@code (file_id, line_index)} keys and hash-join them back, rather than
+ * using a range predicate that DuckDB cannot hash.
  */
 public final class QueryBuilder {
-    private static final String SELECT_COLUMNS = "SELECT e.file_id, e.entry_time, e.line_index, e.message";
+    private static final String SELECT_COLUMNS =
+        "SELECT e.file_id, CAST(epoch_us(e.entry_time) AS BIGINT), e.line_index, e.message_id";
 
     private final String sql;
     private final List<Object> parameters;
@@ -39,19 +41,7 @@ public final class QueryBuilder {
             conditions.add("entry_time < ?");
             parameters.add(Timestamp.valueOf(query.to()));
         }
-        if (query.substring() != null) {
-            if (query.caseSensitive()) {
-                conditions.add("contains(message, ?)");
-                parameters.add(query.substring());
-            } else {
-                conditions.add("contains(lower(message), ?)");
-                parameters.add(query.substring().toLowerCase(Locale.ROOT));
-            }
-        }
-        if (query.regex() != null) {
-            conditions.add("regexp_matches(message, ?)");
-            parameters.add(query.regex());
-        }
+        appendTextFilters(query, conditions, parameters);
 
         String where = conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions);
         String order = "ORDER BY e.entry_time " + (query.descending() ? "DESC" : "ASC") + ", e.file_id, e.line_index";
@@ -83,6 +73,27 @@ public final class QueryBuilder {
                 + " " + order + limit;
         }
         return new QueryBuilder(sql, parameters);
+    }
+
+    private static void appendTextFilters(ChatQuery query, List<String> conditions, List<Object> parameters) {
+        List<String> messageFilters = new ArrayList<>();
+        if (query.substring() != null) {
+            if (query.caseSensitive()) {
+                messageFilters.add("contains(message, ?)");
+                parameters.add(query.substring());
+            } else {
+                messageFilters.add("contains(lower(message), ?)");
+                parameters.add(query.substring().toLowerCase(Locale.ROOT));
+            }
+        }
+        if (query.regex() != null) {
+            messageFilters.add("regexp_matches(message, ?)");
+            parameters.add(query.regex());
+        }
+        if (!messageFilters.isEmpty()) {
+            conditions.add("message_id IN (SELECT id FROM chat_message WHERE "
+                + String.join(" AND ", messageFilters) + ")");
+        }
     }
 
     public String sql() {

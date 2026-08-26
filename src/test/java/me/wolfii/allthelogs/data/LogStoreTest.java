@@ -650,6 +650,20 @@ class LogStoreTest {
     }
 
     @Test
+    void theSameMessageTextAtDifferentTimesIsKeptAndInterned() {
+        LocalDateTime timestamp = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+        store.startSession("26.2", timestamp);
+        assertTrue(store.importSessionMessage("hello", timestamp));
+        assertTrue(store.importSessionMessage("hello", timestamp.plusSeconds(1)));
+
+        List<ChatEntry> hits = store.query(ChatQuery.all().withSubstring("hello"));
+        assertEquals(2, hits.size());
+        assertSame(hits.get(0).message(), hits.get(1).message());
+        assertEquals(timestamp, hits.get(0).timestamp());
+        assertEquals(timestamp.plusSeconds(1), hits.get(1).timestamp());
+    }
+
+    @Test
     void clientEntryDuplicatingAnImportedOneIsDropped() throws IOException {
         store.importDirectory(logsDirectory());
         store.startSession("26.2", LocalDateTime.of(2026, 8, 25, 10, 0, 10));

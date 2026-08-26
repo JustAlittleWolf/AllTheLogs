@@ -2,6 +2,8 @@ package me.wolfii.allthelogs.data;
 
 import me.wolfii.allthelogs.data.importer.LogImporter;
 import me.wolfii.allthelogs.data.query.ChatQueries;
+import me.wolfii.allthelogs.data.store.LogCatalog;
+import me.wolfii.allthelogs.data.store.MessageDictionary;
 import me.wolfii.allthelogs.data.store.SessionCapture;
 import me.wolfii.allthelogs.data.store.StoreConnections;
 import org.duckdb.DuckDBConnection;
@@ -37,6 +39,7 @@ import java.util.function.Consumer;
 public final class LogStore implements AutoCloseable {
     private final DuckDBConnection connection;
     private final Path databasePath;
+    private final LogCatalog logs;
     private final LogImporter importer;
     private final SessionCapture sessions;
     private final ChatQueries queries;
@@ -44,9 +47,11 @@ public final class LogStore implements AutoCloseable {
     private LogStore(DuckDBConnection connection, Path databasePath) {
         this.connection = connection;
         this.databasePath = databasePath;
-        this.importer = new LogImporter(connection);
-        this.sessions = new SessionCapture(connection);
-        this.queries = new ChatQueries(connection);
+        MessageDictionary messages = new MessageDictionary(connection);
+        this.logs = new LogCatalog(connection);
+        this.importer = new LogImporter(connection, messages);
+        this.sessions = new SessionCapture(connection, messages, logs);
+        this.queries = new ChatQueries(connection, messages, logs);
     }
 
     /**
@@ -120,7 +125,9 @@ public final class LogStore implements AutoCloseable {
     public ImportResult importDirectory(Path directory, ImportOptions options, Consumer<ImportProgress> progress) {
         Objects.requireNonNull(directory, "directory");
         Objects.requireNonNull(options, "options");
-        return importer.importDirectory(directory, options, progress);
+        ImportResult result = importer.importDirectory(directory, options, progress);
+        logs.invalidate();
+        return result;
     }
 
     /**
@@ -161,7 +168,9 @@ public final class LogStore implements AutoCloseable {
     public ImportResult importArchive(Path archive, ImportOptions options, Consumer<ImportProgress> progress) {
         Objects.requireNonNull(archive, "archive");
         Objects.requireNonNull(options, "options");
-        return importer.importArchive(archive, options, progress);
+        ImportResult result = importer.importArchive(archive, options, progress);
+        logs.invalidate();
+        return result;
     }
 
     /**

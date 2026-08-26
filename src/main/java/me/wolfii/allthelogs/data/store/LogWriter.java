@@ -22,7 +22,9 @@ public final class LogWriter implements AutoCloseable {
     private static final int FLUSH_INTERVAL = 100_000;
 
     private final DuckDBConnection connection;
+    private final MessageDictionary messages;
     private final DuckDBAppender fileAppender;
+    private final DuckDBAppender messageAppender;
     private final DuckDBAppender entryAppender;
     private final Map<String, Long> existingLocations = new ConcurrentHashMap<>();
     private final Set<Long> keepEvenIfEmpty = ConcurrentHashMap.newKeySet();
@@ -33,8 +35,10 @@ public final class LogWriter implements AutoCloseable {
     private long writtenEntries;
     private int writtenFiles;
 
-    public LogWriter(DuckDBConnection connection) throws SQLException {
+    public LogWriter(DuckDBConnection connection, MessageDictionary messages) throws SQLException {
         this.connection = connection;
+        this.messages = messages;
+        messages.ensureLoaded();
         try (Statement statement = connection.createStatement();
              ResultSet result = statement.executeQuery(
                  "SELECT id, source_path, entry_path FROM log_file")) {
@@ -50,7 +54,9 @@ public final class LogWriter implements AutoCloseable {
             statement.execute("BEGIN TRANSACTION");
         }
         this.fileAppender = connection.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "log_file");
+        this.messageAppender = connection.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "chat_message");
         this.entryAppender = connection.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "chat_entry");
+        messages.attachAppender(messageAppender);
     }
 
     private static String locationKey(String sourcePath, String entryPath) {
@@ -97,7 +103,7 @@ public final class LogWriter implements AutoCloseable {
             entryAppender.append(fileId);
             entryAppender.append(i);
             entryAppender.append(times.get(i));
-            entryAppender.append(messages.get(i));
+            entryAppender.append((long) this.messages.intern(messages.get(i)));
             entryAppender.endRow();
         }
 
@@ -133,7 +139,7 @@ public final class LogWriter implements AutoCloseable {
                  DELETE FROM chat_entry WHERE rowid IN (
                      SELECT rowid FROM (
                          SELECT rowid, row_number() OVER (
-                             PARTITION BY entry_time, message ORDER BY file_id, line_index) AS rn
+                             PARTITION BY entry_time, message_id ORDER BY file_id, line_index) AS rn
                          FROM chat_entry
                      ) WHERE rn > 1
                  ) RETURNING file_id""")) {
@@ -197,6 +203,7 @@ public final class LogWriter implements AutoCloseable {
     }
 
     private void flushAppenders() throws SQLException {
+        messageAppender.flush();
         fileAppender.flush();
         entryAppender.flush();
         bufferedEntries = 0;
@@ -204,6 +211,8 @@ public final class LogWriter implements AutoCloseable {
 
     @Override
     public void close() throws SQLException {
+        messages.detachAppender();
+        messageAppender.close();
         fileAppender.close();
         entryAppender.close();
         try (Statement statement = connection.createStatement()) {
