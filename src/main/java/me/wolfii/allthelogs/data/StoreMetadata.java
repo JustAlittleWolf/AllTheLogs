@@ -13,8 +13,9 @@ import java.util.Objects;
  * @param lastLogDate       latest {@link ChatLog#date()} among stored logs, or {@code null} when the store is empty
  * @param chatLogCount      number of stored chat logs, including those with no chat entries
  * @param chatEntryCount    number of stored chat entries
- * @param databaseSizeBytes size of the database in bytes; for a file-backed store this is the on-disk file, including
- *                          its write-ahead log when present
+ * @param databaseSizeBytes size of the database in bytes. For a file-backed store this is the on-disk file, including
+ *                          its write-ahead log when present. For an in-memory store this is DuckDB's current memory
+ *                          usage for that database
  */
 public record StoreMetadata(
     List<String> minecraftVersions,

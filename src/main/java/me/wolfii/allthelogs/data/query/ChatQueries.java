@@ -136,11 +136,12 @@ public final class ChatQueries {
     }
 
     /**
-     * DuckDB's own estimate of how much of the database is in use, used for in-memory stores.
+     * DuckDB's estimate of how much memory the in-memory database occupies.
      */
     public long reportedDatabaseSize() {
         try (Statement statement = connection.createStatement();
-             ResultSet result = statement.executeQuery("SELECT block_size * used_blocks FROM pragma_database_size()")) {
+             ResultSet result = statement.executeQuery(
+                 "SELECT COALESCE(SUM(memory_usage_bytes), 0) FROM duckdb_memory()")) {
             if (!result.next()) {
                 throw new LogDataException("could not read database size");
             }
