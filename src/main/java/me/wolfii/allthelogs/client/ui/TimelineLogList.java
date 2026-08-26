@@ -4,49 +4,59 @@ import io.wispforest.owo.ui.base.BaseUIComponent;
 import io.wispforest.owo.ui.core.CursorStyle;
 import io.wispforest.owo.ui.core.OwoUIGraphics;
 import io.wispforest.owo.ui.core.Sizing;
+import io.wispforest.owo.ui.core.UIComponent;
 import me.wolfii.allthelogs.client.view.DisplayRow;
+import me.wolfii.allthelogs.client.view.MessageListLayout;
+import me.wolfii.allthelogs.client.view.MessageSelection;
 import me.wolfii.allthelogs.client.view.ResultWindow;
 import me.wolfii.allthelogs.client.view.TimelineLayout;
+import me.wolfii.allthelogs.data.MatchBounds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * Virtualised log list plus an Immich-style timeline scrubber on the right. Newest is at the top.
- * The scrubber maps the full match range; paging keeps the anchored row on screen so loading more
- * does not jump.
+ * Virtualised log list plus a timeline scrubber on the right. Newest is at the top. The scrubber maps the
+ * matched-log range only; date ticks stay hidden until the pointer is near the track.
  */
 public final class TimelineLogList extends BaseUIComponent {
-    public static final int ROW_HEIGHT = 12;
+    public static final int ROW_HEIGHT = MessageListLayout.ROW_HEIGHT;
     public static final int TIMELINE_WIDTH = 52;
     private static final int TRACK_WIDTH = 10;
     private static final int THUMB_HEIGHT = 18;
     private static final int BANNER_MS = 2200;
-    private static final DateTimeFormatter HOVER_DATE = DateTimeFormatter.ofPattern("MMM d, yyyy HH:mm");
+    private static final int HOVER_SLOP = 10;
 
-    private static final int LIST_BG = 0x66000000;
+    private static final int LIST_BG = 0xB0000000;
     private static final int TRACK = 0xFF2B2B2B;
     private static final int TRACK_BORDER = 0xFF3A3A3A;
-    private static final int DOT = 0xFF9BE08A;
     private static final int THUMB = 0xD0FFFFFF;
-    private static final int TICK = 0xFF9A9A9A;
     private static final int TEXT = 0xFFFFFFFF;
     private static final int MUTED = 0xFFA0A0A0;
     private static final int BANNER_BG = 0xE0181818;
     private static final int BANNER_BORDER = 0xFF3C3C3C;
     private static final int HOVER_BG = 0xF01C1C1C;
+    private static final int DATE_BG = 0xE0141414;
+    private static final int SELECTION = 0x663A6EA5;
 
     private final ResultWindow window = new ResultWindow();
-    private List<LocalDateTime> markers = List.of();
+    private final MessageSelection selection = new MessageSelection();
+    private MessageListLayout layout = MessageListLayout.of(List.of(), 0);
+    private int contextLines;
+    private LocalDateTime rangeOldest;
+    private LocalDateTime rangeNewest;
+    private int uniqueMatchDates;
     private double scrollY;
     private boolean loading;
     private boolean draggingTimeline;
+    private boolean draggingSelection;
     private int matchCount;
     private boolean showMatchBanner;
     private long bannerUntilMs;
@@ -54,6 +64,8 @@ public final class TimelineLogList extends BaseUIComponent {
     private Consumer<Edge> onApproachEdge = edge -> {
     };
     private Consumer<LocalDateTime> onJump = time -> {
+    };
+    private Consumer<DisplayRow> onExpand = row -> {
     };
 
     public TimelineLogList() {
@@ -65,6 +77,10 @@ public final class TimelineLogList extends BaseUIComponent {
         return window;
     }
 
+    public MessageListLayout layout() {
+        return layout;
+    }
+
     public void onApproachEdge(Consumer<Edge> onApproachEdge) {
         this.onApproachEdge = onApproachEdge;
     }
@@ -73,8 +89,25 @@ public final class TimelineLogList extends BaseUIComponent {
         this.onJump = onJump;
     }
 
-    public void setMarkers(List<LocalDateTime> markers) {
-        this.markers = List.copyOf(markers);
+    public void onExpand(Consumer<DisplayRow> onExpand) {
+        this.onExpand = onExpand;
+    }
+
+    public void setContextLines(int contextLines) {
+        this.contextLines = contextLines;
+        rebuildLayout();
+    }
+
+    public void setMatchBounds(MatchBounds bounds) {
+        if (bounds == null) {
+            this.rangeOldest = null;
+            this.rangeNewest = null;
+            this.uniqueMatchDates = 0;
+            return;
+        }
+        this.rangeOldest = bounds.oldest();
+        this.rangeNewest = bounds.newest();
+        this.uniqueMatchDates = bounds.uniqueDates();
     }
 
     public void setLoading(boolean loading) {
@@ -93,18 +126,42 @@ public final class TimelineLogList extends BaseUIComponent {
         this.scrollY = clampScroll(scrollY);
     }
 
+    public int firstVisibleIndex() {
+        return Math.max(0, layout.rowAtY(scrollY));
+    }
+
+    public int lastVisibleIndex() {
+        if (layout.size() == 0) return 0;
+        return Math.max(firstVisibleIndex(), layout.rowAtY(scrollY + Math.max(0, height)));
+    }
+
+    public DisplayRow.RowKey visibleAnchor() {
+        return window.keyAtY(scrollY, layout::rowY, layout.size());
+    }
+
     public void reset(List<DisplayRow> rows, boolean hasBefore, boolean hasAfter) {
         window.reset(rows, hasBefore, hasAfter);
+        rebuildLayout();
         this.scrollY = 0;
+        selection.clear();
     }
 
     public void applyPage(List<DisplayRow> rows, boolean hasBefore, boolean hasAfter, DisplayRow.RowKey anchor) {
-        this.scrollY = window.replaceKeepingAnchor(rows, hasBefore, hasAfter, anchor, scrollY, ROW_HEIGHT);
+        int oldIndex = ResultWindow.indexOf(window.rows(), anchor);
+        double screenY = oldIndex < 0 ? 0 : layout.rowY(oldIndex) - scrollY;
+        window.reset(rows, hasBefore, hasAfter);
+        rebuildLayout();
+        int newIndex = ResultWindow.indexOf(window.rows(), anchor);
+        if (oldIndex >= 0 && newIndex >= 0) {
+            this.scrollY = clampScroll(layout.rowY(newIndex) - screenY);
+        } else {
+            this.scrollY = clampScroll(scrollY);
+        }
     }
 
     /**
      * Shows {@code N matches found} over the list for a moment after a search. Stays while the
-     * pointer is over the list, then fades out.
+     * pointer is over the list, then fades out. Counts above 99 are shown as {@code >99}.
      */
     public void showMatchCount(int matches) {
         this.matchCount = matches;
@@ -116,6 +173,11 @@ public final class TimelineLogList extends BaseUIComponent {
     public void showOverlay(Component message) {
         this.overlayMessage = message == null ? Component.empty() : message;
         this.showMatchBanner = false;
+    }
+
+    @Override
+    public boolean canFocus(UIComponent.FocusSource source) {
+        return true;
     }
 
     @Override
@@ -144,6 +206,18 @@ public final class TimelineLogList extends BaseUIComponent {
             jumpToY(click.y());
             return true;
         }
+        int row = rowAtScreenY(click.y());
+        if (row < 0) return super.onMouseDown(click, doubled);
+        if (doubled) {
+            onExpand.accept(window.rows().get(row));
+            return true;
+        }
+        if (click.x() >= messageX()) {
+            draggingSelection = true;
+            selection.start(row, charAt(row, click.x()));
+            return true;
+        }
+        selection.clear();
         return super.onMouseDown(click, doubled);
     }
 
@@ -153,13 +227,35 @@ public final class TimelineLogList extends BaseUIComponent {
             jumpToY(click.y() + deltaY);
             return true;
         }
+        if (draggingSelection) {
+            int row = rowAtScreenY(click.y() + deltaY);
+            if (row >= 0) {
+                selection.extend(row, charAt(row, click.x() + deltaX));
+            }
+            return true;
+        }
         return super.onMouseDrag(click, deltaX, deltaY);
     }
 
     @Override
     public boolean onMouseUp(MouseButtonEvent click) {
         draggingTimeline = false;
+        draggingSelection = false;
         return super.onMouseUp(click);
+    }
+
+    @Override
+    public boolean onKeyPress(KeyEvent event) {
+        if (event.isCopy() && !selection.isEmpty()) {
+            Minecraft.getInstance().keyboardHandler.setClipboard(selection.copy(window.rows()));
+            return true;
+        }
+        return super.onKeyPress(event);
+    }
+
+    private void rebuildLayout() {
+        layout = MessageListLayout.of(window.rows(), contextLines);
+        this.scrollY = clampScroll(scrollY);
     }
 
     private void drawRows(OwoUIGraphics graphics, int listWidth) {
@@ -171,22 +267,64 @@ public final class TimelineLogList extends BaseUIComponent {
                 return;
             }
             Font font = Minecraft.getInstance().font;
-            int first = (int) Math.floor(scrollY / ROW_HEIGHT);
-            int last = Math.min(rows.size() - 1, first + height / ROW_HEIGHT + 1);
-            first = Math.max(0, first);
-            int timestampWidth = font.width("0000-00-00 00:00:00  ");
+            int timestampWidth = font.width("00:00:00  ");
+            int first = Math.max(0, layout.rowAtY(scrollY));
+            int last = Math.min(rows.size() - 1, layout.rowAtY(scrollY + height) + 1);
             for (int i = first; i <= last; i++) {
                 DisplayRow row = rows.get(i);
-                int rowY = y + (int) Math.round(i * (double) ROW_HEIGHT - scrollY);
+                int rowY = y + layout.rowY(i) - (int) Math.round(scrollY);
+                int msgX = x + 4 + timestampWidth;
+                drawSelection(graphics, font, i, row.message(), msgX, rowY);
                 graphics.drawText(MessageComponents.timestamp(row), x + 4, rowY + 1, 1, MUTED);
-                graphics.drawText(MessageComponents.message(row), x + 4 + timestampWidth, rowY + 1, 1, TEXT);
+                graphics.drawText(MessageComponents.message(row), msgX, rowY + 1, 1, TEXT);
             }
+            drawDateHeaders(graphics, listWidth);
             if (loading) {
                 graphics.drawText(Component.translatable("allthelogs.status.loading"), x + 8, y + height - 14, 1, TEXT);
             }
         } finally {
             graphics.disableScissor();
         }
+    }
+
+    private void drawSelection(OwoUIGraphics graphics, Font font, int row, String message, int msgX, int rowY) {
+        if (selection.isEmpty() || message.isEmpty()) return;
+        int start = -1;
+        for (int i = 0; i <= message.length(); i++) {
+            if (i < message.length() && selection.covers(row, i)) {
+                if (start < 0) start = i;
+            } else if (start >= 0) {
+                int left = msgX + font.width(message.substring(0, start));
+                int right = msgX + font.width(message.substring(0, i));
+                graphics.fill(left, rowY, right, rowY + ROW_HEIGHT, SELECTION);
+                start = -1;
+            }
+        }
+    }
+
+    private void drawDateHeaders(OwoUIGraphics graphics, int listWidth) {
+        MessageListLayout.DateBand sticky = layout.stickyAt(scrollY);
+        for (MessageListLayout.DateBand band : layout.dates()) {
+            int headerY = y + band.y() - (int) Math.round(scrollY);
+            if (sticky != null && band == sticky) continue;
+            if (headerY + MessageListLayout.DATE_HEIGHT < y || headerY > y + height) continue;
+            drawDateBand(graphics, band.date(), headerY, listWidth);
+        }
+        if (sticky == null) return;
+        int headerY = y;
+        MessageListLayout.DateBand next = layout.nextDate(sticky);
+        if (next != null) {
+            int nextScreenY = y + next.y() - (int) Math.round(scrollY);
+            if (nextScreenY < headerY + MessageListLayout.DATE_HEIGHT) {
+                headerY = nextScreenY - MessageListLayout.DATE_HEIGHT;
+            }
+        }
+        drawDateBand(graphics, sticky.date(), headerY, listWidth);
+    }
+
+    private void drawDateBand(OwoUIGraphics graphics, LocalDate date, int headerY, int listWidth) {
+        graphics.fill(x, headerY, x + listWidth, headerY + MessageListLayout.DATE_HEIGHT, DATE_BG);
+        graphics.drawText(MessageComponents.dateHeader(date), x + 4, headerY + 3, 1, TEXT);
     }
 
     private void drawBanner(OwoUIGraphics graphics, int listWidth, int mouseX, int mouseY) {
@@ -199,13 +337,13 @@ public final class TimelineLogList extends BaseUIComponent {
         }
         Component text = persistent
             ? overlayMessage
-            : Component.translatable("allthelogs.status.matches", Integer.toString(matchCount));
+            : Component.translatable("allthelogs.status.matches", MessageComponents.matchCountText(matchCount));
         Font font = Minecraft.getInstance().font;
         int textWidth = font.width(text);
         int boxWidth = Math.min(listWidth - 16, textWidth + 16);
         int boxHeight = 16;
-        int boxX = x + 8;
-        int boxY = y + 8;
+        int boxX = x + Math.max(8, listWidth - 8 - boxWidth);
+        int boxY = y + height - 8 - boxHeight;
         graphics.fill(boxX, boxY, boxX + boxWidth, boxY + boxHeight, BANNER_BG);
         graphics.fill(boxX, boxY, boxX + boxWidth, boxY + 1, BANNER_BORDER);
         graphics.fill(boxX, boxY + boxHeight - 1, boxX + boxWidth, boxY + boxHeight, BANNER_BORDER);
@@ -219,29 +357,14 @@ public final class TimelineLogList extends BaseUIComponent {
         graphics.fill(trackX, y, trackX + TRACK_WIDTH, y + height, TRACK);
         graphics.fill(trackX, y, trackX + 1, y + height, TRACK_BORDER);
 
-        LocalDateTime oldest = TimelineLayout.oldest(markers);
-        LocalDateTime newest = TimelineLayout.newest(markers);
+        LocalDateTime oldest = rangeOldest;
+        LocalDateTime newest = rangeNewest;
         if (oldest == null || newest == null) {
             oldest = window.firstMatchTime();
             newest = window.lastMatchTime();
-            if (oldest != null && newest != null && oldest.isAfter(newest)) {
-                LocalDateTime swap = oldest;
-                oldest = newest;
-                newest = swap;
-            }
         }
         if (oldest == null || newest == null) {
             return;
-        }
-
-        List<LocalDateTime> drawn = TimelineLayout.downsample(markers, height, 8);
-        for (LocalDateTime marker : drawn) {
-            int markerY = TimelineLayout.yFromNewest(marker, oldest, newest, y, height);
-            graphics.fill(trackX + 3, markerY, trackX + TRACK_WIDTH - 3, markerY + 2, DOT);
-        }
-        for (TimelineLayout.DateTick tick : TimelineLayout.ticks(oldest, newest)) {
-            int tickY = TimelineLayout.yFromNewest(tick.at(), oldest, newest, y, height);
-            graphics.drawText(Component.literal(tick.label()), columnX + 2, tickY - 4, 0.7f, TICK);
         }
 
         LocalDateTime viewTime = visibleTime();
@@ -251,12 +374,12 @@ public final class TimelineLogList extends BaseUIComponent {
             graphics.fill(trackX + 1, thumbTop, trackX + TRACK_WIDTH - 1, thumbTop + THUMB_HEIGHT, THUMB);
         }
 
-        boolean overScrubber = mouseX >= columnX && mouseX < x + width && mouseY >= y && mouseY < y + height;
-        this.cursorStyle(overScrubber || draggingTimeline ? CursorStyle.MOVE : CursorStyle.POINTER);
-        if (overScrubber || draggingTimeline) {
+        boolean nearTrack = mouseX >= trackX - HOVER_SLOP && mouseX < x + width && mouseY >= y && mouseY < y + height;
+        this.cursorStyle(nearTrack || draggingTimeline ? CursorStyle.MOVE : CursorStyle.POINTER);
+        if (nearTrack || draggingTimeline) {
             LocalDateTime hoverTime = timeAtY(mouseY);
             if (hoverTime != null) {
-                String label = hoverTime.format(HOVER_DATE);
+                String label = TimelineLayout.hoverLabel(hoverTime, uniqueMatchDates);
                 Font font = Minecraft.getInstance().font;
                 int labelWidth = (int) (font.width(label) * 0.85f) + 10;
                 int labelHeight = 14;
@@ -272,18 +395,13 @@ public final class TimelineLogList extends BaseUIComponent {
     private LocalDateTime visibleTime() {
         List<DisplayRow> rows = window.rows();
         if (rows.isEmpty()) return null;
-        int index = (int) Math.floor(scrollY / ROW_HEIGHT);
-        index = Math.clamp(index, 0, rows.size() - 1);
+        int index = Math.clamp(layout.rowAtY(scrollY), 0, rows.size() - 1);
         return rows.get(index).entry().timestamp();
     }
 
     private LocalDateTime timeAtY(double mouseY) {
-        LocalDateTime oldest = TimelineLayout.oldest(markers);
-        LocalDateTime newest = TimelineLayout.newest(markers);
-        if (oldest == null || newest == null) {
-            oldest = window.firstMatchTime();
-            newest = window.lastMatchTime();
-        }
+        LocalDateTime oldest = rangeOldest != null ? rangeOldest : window.firstMatchTime();
+        LocalDateTime newest = rangeNewest != null ? rangeNewest : window.lastMatchTime();
         if (oldest == null || newest == null) return null;
         double progress = (mouseY - y) / Math.max(1, height - 1);
         return TimelineLayout.timeFromNewest(progress, oldest, newest);
@@ -297,8 +415,8 @@ public final class TimelineLogList extends BaseUIComponent {
 
     private void maybeRequestMore() {
         if (loading || window.rows().isEmpty()) return;
-        int firstVisible = (int) Math.floor(scrollY / ROW_HEIGHT);
-        int lastVisible = (int) Math.floor((scrollY + height) / ROW_HEIGHT);
+        int firstVisible = firstVisibleIndex();
+        int lastVisible = lastVisibleIndex();
         if (window.hasBefore() && firstVisible <= 2) {
             onApproachEdge.accept(Edge.BEFORE);
         } else if (window.hasAfter() && lastVisible >= window.rows().size() - 3) {
@@ -306,8 +424,37 @@ public final class TimelineLogList extends BaseUIComponent {
         }
     }
 
+    private int rowAtScreenY(double screenY) {
+        if (layout.size() == 0) return -1;
+        int contentY = (int) Math.round(screenY - y + scrollY);
+        int index = layout.rowAtY(contentY);
+        if (index < 0 || index >= window.rows().size()) return -1;
+        int top = layout.rowY(index);
+        if (contentY < top || contentY >= top + ROW_HEIGHT) return -1;
+        return index;
+    }
+
+    private int messageX() {
+        return x + 4 + Minecraft.getInstance().font.width("00:00:00  ");
+    }
+
+    private int charAt(int row, double screenX) {
+        List<DisplayRow> rows = window.rows();
+        if (row < 0 || row >= rows.size()) return 0;
+        String message = rows.get(row).message();
+        Font font = Minecraft.getInstance().font;
+        int localX = (int) Math.round(screenX - messageX());
+        if (localX <= 0) return 0;
+        int width = 0;
+        for (int i = 0; i < message.length(); i++) {
+            width += font.width(message.substring(i, i + 1));
+            if (width >= localX) return i;
+        }
+        return message.length();
+    }
+
     private double clampScroll(double value) {
-        double max = Math.max(0, window.contentHeight(ROW_HEIGHT) - height);
+        double max = Math.max(0, layout.contentHeight() - height);
         if (value < 0) return 0;
         if (value > max) return max;
         return value;

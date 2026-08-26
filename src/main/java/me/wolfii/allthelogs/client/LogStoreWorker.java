@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
@@ -14,6 +15,7 @@ import java.util.function.Consumer;
  */
 public final class LogStoreWorker implements AutoCloseable {
     private final ExecutorService executor;
+    private final AtomicBoolean cancelImport = new AtomicBoolean();
     private LogStore store;
 
     public LogStoreWorker() {
@@ -38,12 +40,18 @@ public final class LogStoreWorker implements AutoCloseable {
 
     public CompletableFuture<ImportResult> importDirectory(Path directory, ImportOptions options,
                                                            Consumer<ImportProgress> progress) {
-        return submit(() -> requireStore().importDirectory(directory, options, progress));
+        cancelImport.set(false);
+        return submit(() -> requireStore().importDirectory(directory, options, progress, cancelImport::get));
     }
 
     public CompletableFuture<ImportResult> importArchive(Path archive, ImportOptions options,
                                                          Consumer<ImportProgress> progress) {
-        return submit(() -> requireStore().importArchive(archive, options, progress));
+        cancelImport.set(false);
+        return submit(() -> requireStore().importArchive(archive, options, progress, cancelImport::get));
+    }
+
+    public void cancelImport() {
+        cancelImport.set(true);
     }
 
     public CompletableFuture<ChatLog> startSession(String minecraftVersion) {
@@ -64,6 +72,16 @@ public final class LogStoreWorker implements AutoCloseable {
     public CompletableFuture<List<ChatEntry>> query(ChatQuery query) {
         ChatQuery copy = Objects.requireNonNull(query, "query");
         return submit(() -> requireStore().query(copy));
+    }
+
+    public CompletableFuture<MatchBounds> matchBounds(ChatQuery query) {
+        ChatQuery copy = Objects.requireNonNull(query, "query");
+        return submit(() -> requireStore().matchBounds(copy));
+    }
+
+    public CompletableFuture<List<ChatEntry>> around(ChatLog log, int lineIndex, int radius) {
+        ChatLog copy = Objects.requireNonNull(log, "log");
+        return submit(() -> requireStore().around(copy, lineIndex, radius));
     }
 
     public CompletableFuture<LogStoreMetadata> metadata() {

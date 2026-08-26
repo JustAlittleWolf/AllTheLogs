@@ -22,8 +22,9 @@ class ImportProgressLabelsTest {
 
     @Test
     void percentIsTheCompletedFraction() {
-        assertEquals(0, ImportProgressLabels.percent(new ImportProgress(0, 0, false, null)));
-        assertEquals(50, ImportProgressLabels.percent(new ImportProgress(1, 2, true, null)));
-        assertEquals(100, ImportProgressLabels.percent(new ImportProgress(4, 4, true, null)));
+        assertEquals(0, ImportProgressLabels.percent(new ImportProgress(0, 0, 0, false, null)));
+        assertEquals(50, ImportProgressLabels.percent(new ImportProgress(1, 2, 0, true, null)));
+        assertEquals(100, ImportProgressLabels.percent(new ImportProgress(4, 4, 8, true, null)));
+        assertEquals(25, ImportProgressLabels.percent(new ImportProgress(2, 2, 8, false, null)));
     }
 }

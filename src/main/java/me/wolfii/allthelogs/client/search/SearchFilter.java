@@ -23,11 +23,13 @@ public record SearchFilter(
     ChatQuery.Sort sort,
     LocalDateTime startingAt,
     LocalDateTime upUntil,
-    LocalDateTime offset
+    LocalDateTime offset,
+    String version
 ) {
     public static final int MAX_CONTEXT_LINES = 1000;
     public static final int DEFAULT_LIMIT = 100;
-    public static final int DEFAULT_CONTEXT_LINES = 2;
+    public static final int DEFAULT_CONTEXT_LINES = 5;
+    public static final String ALL_VERSIONS = "ALL";
 
     public SearchFilter {
         Objects.requireNonNull(text, "text");
@@ -37,47 +39,63 @@ public record SearchFilter(
             throw new IllegalArgumentException("contextLines must be at most " + MAX_CONTEXT_LINES);
         }
         if (limit == 0) throw new IllegalArgumentException("limit must not be zero");
+        if (version != null && version.isBlank()) version = null;
+        if (version != null && ALL_VERSIONS.equalsIgnoreCase(version)) version = null;
     }
 
     public static SearchFilter defaults() {
         return new SearchFilter("", false, false, DEFAULT_CONTEXT_LINES, DEFAULT_LIMIT, ChatQuery.Sort.DESCENDING,
-            null, null, null);
+            null, null, null, null);
     }
 
     public SearchFilter withText(String text) {
-        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset);
+        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset,
+            version);
     }
 
     public SearchFilter withRegex(boolean regex) {
-        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset);
+        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset,
+            version);
     }
 
     public SearchFilter withCaseSensitive(boolean caseSensitive) {
-        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset);
+        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset,
+            version);
     }
 
     public SearchFilter withContextLines(int contextLines) {
-        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset);
+        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset,
+            version);
     }
 
     public SearchFilter withLimit(long limit) {
-        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset);
+        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset,
+            version);
     }
 
     public SearchFilter withSort(ChatQuery.Sort sort) {
-        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset);
+        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset,
+            version);
     }
 
     public SearchFilter withStartingAt(LocalDateTime startingAt) {
-        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset);
+        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset,
+            version);
     }
 
     public SearchFilter withUpUntil(LocalDateTime upUntil) {
-        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset);
+        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset,
+            version);
     }
 
     public SearchFilter withOffset(LocalDateTime offset) {
-        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset);
+        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset,
+            version);
+    }
+
+    public SearchFilter withVersion(String version) {
+        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset,
+            version);
     }
 
     public SearchFilter withoutOffset() {
@@ -86,6 +104,10 @@ public record SearchFilter(
 
     public boolean hasText() {
         return !text.isEmpty();
+    }
+
+    public boolean hasVersion() {
+        return version != null && !version.isEmpty();
     }
 
     /**
@@ -100,6 +122,7 @@ public record SearchFilter(
         if (startingAt != null) query = query.startingAt(startingAt);
         if (upUntil != null) query = query.upUntil(upUntil);
         if (offset != null) query = query.withOffset(offset);
+        if (hasVersion()) query = query.withVersion(version);
         if (!hasText()) return query;
         if (regex) return query.withRegex(regexPattern(text, caseSensitive));
         if (caseSensitive) return query.withSubstringCaseSensitive(text);
@@ -107,7 +130,7 @@ public record SearchFilter(
     }
 
     /**
-     * Same as {@link #toQuery()} but without context lines, a page limit, or an offset, for timeline markers.
+     * Same as {@link #toQuery()} but without context lines, a page limit, or an offset, for timeline bounds.
      */
     public ChatQuery toTimelineQuery() {
         return withoutOffset().withContextLines(0).withLimit(-1).toQuery();

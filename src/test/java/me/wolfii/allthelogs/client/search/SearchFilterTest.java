@@ -18,6 +18,7 @@ class SearchFilterTest {
         assertEquals(SearchFilter.DEFAULT_CONTEXT_LINES, query.contextLines());
         assertEquals(SearchFilter.DEFAULT_LIMIT, query.limit());
         assertEquals(ChatQuery.Sort.DESCENDING, query.sort());
+        assertEquals(5, SearchFilter.DEFAULT_CONTEXT_LINES);
     }
 
     @Test
@@ -55,6 +56,14 @@ class SearchFilterTest {
         assertEquals(-1, query.limit());
         assertNull(query.offset());
         assertEquals("hi", query.substring());
+    }
+
+    @Test
+    void versionFilterIsOmittedByDefaultAndAppliedWhenSet() {
+        assertNull(SearchFilter.defaults().toQuery().version());
+        assertEquals("26.2", SearchFilter.defaults().withVersion("26.2").toQuery().version());
+        assertNull(SearchFilter.defaults().withVersion("ALL").toQuery().version());
+        assertNull(SearchFilter.defaults().withVersion("  ").version());
     }
 
     @Test

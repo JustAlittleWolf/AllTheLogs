@@ -35,5 +35,7 @@ class TimelineLayoutTest {
         assertEquals(last, sampled.getLast());
         assertTrue(sampled.size() <= times.size());
         assertEquals(LocalDate.of(2026, 1, 1), TimelineLayout.ticks(first, last).getFirst().at().toLocalDate());
+        assertEquals("Jan 1, 2026 00:00", TimelineLayout.hoverLabel(first, 2));
+        assertEquals("Jan 1, 2026", TimelineLayout.hoverLabel(first, 5));
     }
 }

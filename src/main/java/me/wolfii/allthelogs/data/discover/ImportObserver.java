@@ -15,11 +15,22 @@ public final class ImportObserver {
     private final Consumer<ImportProgress> callback;
     private int discoveredFiles;
     private int completedFiles;
+    private int estimatedFiles;
     private boolean discoveryComplete;
     private LogSource current;
 
     public ImportObserver(Consumer<ImportProgress> callback) {
         this.callback = callback;
+    }
+
+    /**
+     * Sets a file-count guess used by {@link ImportProgress#fraction()} until discovery finishes.
+     */
+    public void setEstimatedFiles(int estimatedFiles) {
+        synchronized (this) {
+            this.estimatedFiles = Math.max(0, estimatedFiles);
+            if (callback != null) callback.accept(snapshot());
+        }
     }
 
     /**
@@ -96,6 +107,6 @@ public final class ImportObserver {
     }
 
     private ImportProgress snapshot() {
-        return new ImportProgress(completedFiles, discoveredFiles, discoveryComplete, current);
+        return new ImportProgress(completedFiles, discoveredFiles, estimatedFiles, discoveryComplete, current);
     }
 }

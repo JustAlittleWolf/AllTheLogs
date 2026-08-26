@@ -7,16 +7,31 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
+
 /**
  * Builds chat-line {@link Component}s with hex colours: white for hits, light green on the match, grey for context.
  */
 public final class MessageComponents {
+    private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss");
+    private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("EEE, MMM d, yyyy", Locale.US);
+
     private MessageComponents() {
     }
 
+    public static String matchCountText(int matches) {
+        return matches > 99 ? ">99" : Integer.toString(matches);
+    }
+
     public static Component timestamp(DisplayRow row) {
-        return Component.literal(row.entry().timestamp().toString().replace('T', ' '))
+        return Component.literal(row.entry().timestamp().toLocalTime().withNano(0).format(TIME))
             .withStyle(Style.EMPTY.withColor(rgb(ContextColors.TIMESTAMP)));
+    }
+
+    public static Component dateHeader(LocalDate date) {
+        return Component.literal(date.format(DATE));
     }
 
     public static Component message(DisplayRow row) {
