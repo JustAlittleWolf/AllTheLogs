@@ -24,6 +24,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -76,6 +78,21 @@ class LogStoreTest {
         assertEquals("26.2", entry.chatLog().minecraftVersion());
         assertEquals(LocalDate.of(2026, 8, 25), entry.chatLog().date());
         assertEquals(LocalDateTime.of(2026, 8, 25, 10, 0, 11), entry.timestamp());
+    }
+
+    @Test
+    void reusesTheSameChatLogInstanceForEntriesFromTheSameFile() throws IOException {
+        store.importDirectory(logsDirectory());
+
+        List<ChatEntry> hits = store.query(ChatQuery.all().withSubstring("needle in here").withContextLines(1));
+
+        assertEquals(List.of("delta", "needle in here", "epsilon"), hits.stream().map(ChatEntry::message).toList());
+        assertSame(hits.get(0).chatLog(), hits.get(1).chatLog());
+        assertSame(hits.get(1).chatLog(), hits.get(2).chatLog());
+
+        List<ChatEntry> twoFiles = store.query(ChatQuery.all().withSubstring("needle"));
+        assertEquals(2, twoFiles.size());
+        assertNotSame(twoFiles.get(0).chatLog(), twoFiles.get(1).chatLog());
     }
 
     @Test
@@ -326,6 +343,35 @@ class LogStoreTest {
         store.importDirectory(logsDirectory());
 
         assertEquals(2, store.query(ChatQuery.all().withLimit(2)).size());
+    }
+
+    @Test
+    void fetchesResultsThatSpanSeveralDuckDbChunks() throws IOException {
+        StringBuilder log = new StringBuilder();
+        log.append("[10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3\n");
+        int lines = 2500;
+        for (int i = 0; i < lines; i++) {
+            int second = i % 60;
+            int minute = (i / 60) % 60;
+            int hour = 10 + (i / 3600);
+            log.append(String.format(java.util.Locale.ROOT,
+                "[%02d:%02d:%02d] [Render thread/INFO]: [CHAT] line %d%n", hour, minute, second, i));
+        }
+        LogFixtures.writePlain(tempDir.resolve("logs"), "2026-05-01-1.log", log.toString());
+
+        store.importDirectory(tempDir);
+
+        List<ChatEntry> entries = store.logEntries();
+        assertEquals(lines, entries.size());
+        assertEquals("line 0", entries.getFirst().message());
+        assertEquals("line 2047", entries.get(2047).message());
+        assertEquals("line 2048", entries.get(2048).message());
+        assertEquals("line " + (lines - 1), entries.getLast().message());
+        List<ChatEntry> aroundChunkBoundary = store.query(ChatQuery.all()
+            .withRegex("^line 2048$")
+            .withContextLines(1));
+        assertEquals(List.of("line 2047", "line 2048", "line 2049"),
+            aroundChunkBoundary.stream().map(ChatEntry::message).toList());
     }
 
     @Test

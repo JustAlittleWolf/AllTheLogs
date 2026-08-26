@@ -7,19 +7,16 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /// Turns a [ChatQuery] into SQL.
 ///
-/// Context lines are resolved inside the database rather than by post processing in Java: the matching rows are found
-/// once, then joined back against the entry table on `(file_id, line_index)` within the requested window. Because that
-/// join produces every context row at most once regardless of how many matches it neighbours, overlapping windows are
-/// deduplicated for free.
+/// Queries select only the four entry columns. Log metadata is loaded separately and joined in Java by `file_id`,
+/// so DuckDB does not repeat file strings on every row of a multi-million result. Context lines are resolved inside
+/// the database: matching rows are expanded into the concrete `(file_id, line_index)` keys they want, then hash-joined
+/// back to `chat_entry`. DISTINCT collapses overlapping windows, so every row is returned at most once.
 public final class QueryBuilder {
-    private static final String SELECT_COLUMNS = """
-        SELECT f.file_name, f.source_kind, f.source_path, f.entry_path, f.log_date,
-               f.minecraft_version, f.start_time, f.end_time,
-               e.entry_time, e.line_index, e.message
-        """;
+    private static final String SELECT_COLUMNS = "SELECT e.file_id, e.entry_time, e.line_index, e.message";
 
     private final String sql;
     private final List<Object> parameters;
@@ -46,8 +43,9 @@ public final class QueryBuilder {
                 conditions.add("contains(message, ?)");
                 parameters.add(query.substring());
             } else {
-                conditions.add("contains(lower(message), lower(?))");
-                parameters.add(query.substring());
+                // Lower the needle in Java so DuckDB only lowercases the column, not the same constant per row.
+                conditions.add("contains(lower(message), ?)");
+                parameters.add(query.substring().toLowerCase(Locale.ROOT));
             }
         }
         if (query.regex() != null) {
@@ -56,13 +54,13 @@ public final class QueryBuilder {
         }
 
         String where = conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions);
-        String order = "ORDER BY e.entry_time " + (query.descending() ? "DESC" : "ASC") + ", f.entry_path, e.line_index";
+        String order = "ORDER BY e.entry_time " + (query.descending() ? "DESC" : "ASC") + ", e.file_id, e.line_index";
         String limit = query.limit() < 0 ? "" : " LIMIT " + query.limit();
 
         String sql;
         if (query.contextLines() == 0 || !query.hasTextFilter()) {
-            sql = SELECT_COLUMNS + " FROM chat_entry e JOIN log_file f ON f.id = e.file_id"
-                + (conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions))
+            sql = SELECT_COLUMNS + " FROM chat_entry e"
+                + where
                 + " " + order + limit;
         } else {
             // Expanding each match into the concrete line indices it wants, rather than asking for every row whose
@@ -71,26 +69,23 @@ public final class QueryBuilder {
             // as the number of matches grows. DISTINCT collapses the overlapping windows of neighbouring matches, so
             // the join still returns every row at most once.
             int context = query.contextLines();
-            List<String> contextConditions = new ArrayList<>();
-            contextConditions.add("e.file_id = w.file_id");
-            contextConditions.add("e.line_index = w.line_index");
-            // The date range must also constrain the context rows, otherwise a match at the edge of the range would
-            // pull in neighbours from outside it.
+            List<String> contextFilters = new ArrayList<>();
             if (query.from() != null) {
-                contextConditions.add("e.entry_time >= ?");
+                contextFilters.add("e.entry_time >= ?");
                 parameters.add(Timestamp.valueOf(query.from()));
             }
             if (query.to() != null) {
-                contextConditions.add("e.entry_time < ?");
+                contextFilters.add("e.entry_time < ?");
                 parameters.add(Timestamp.valueOf(query.to()));
             }
+            String contextWhere = contextFilters.isEmpty() ? "" : " WHERE " + String.join(" AND ", contextFilters);
             sql = "WITH matches AS (SELECT file_id, line_index FROM chat_entry" + where + "), "
                 + "wanted AS (SELECT DISTINCT m.file_id, m.line_index + o.offset AS line_index FROM matches m, "
                 + "(SELECT unnest(range(-" + context + ", " + context + " + 1)) AS offset) o) "
                 + SELECT_COLUMNS
-                + " FROM chat_entry e JOIN log_file f ON f.id = e.file_id"
-                + " WHERE EXISTS (SELECT 1 FROM wanted w WHERE " + String.join(" AND ", contextConditions) + ") "
-                + order + limit;
+                + " FROM wanted w INNER JOIN chat_entry e ON e.file_id = w.file_id AND e.line_index = w.line_index"
+                + contextWhere
+                + " " + order + limit;
         }
         return new QueryBuilder(sql, parameters);
     }

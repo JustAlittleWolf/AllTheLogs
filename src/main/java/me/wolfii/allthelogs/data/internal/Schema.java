@@ -1,12 +1,13 @@
 package me.wolfii.allthelogs.data.internal;
 
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
 /// The database layout. Callers of the public API never see any of this.
 ///
 /// The design is driven by the two access patterns that matter: scanning a date range and scanning for a text match.
-/// Entries are stored in one wide table sorted by timestamp, which lets DuckDB skip whole row groups via its zone maps
+/// Entries are stored in one table clustered by timestamp, which lets DuckDB skip whole row groups via its zone maps
 /// for range queries and keeps text scans a single sequential pass. Per row overhead is minimised by referencing the
 /// file through a small integer id instead of repeating its metadata, and DuckDB's per column compression takes care
 /// of the rest.
@@ -42,5 +43,24 @@ public final class Schema {
                 message VARCHAR NOT NULL
             )""");
         statement.execute("CREATE UNIQUE INDEX IF NOT EXISTS log_file_location ON log_file (source_path, entry_path)");
+    }
+
+    /// Rewrites `chat_entry` in timestamp order so row-group zone maps can skip data on range scans and
+    /// `ORDER BY entry_time, file_id, line_index` can stream instead of sorting the whole result.
+    public static void clusterEntries(Statement statement) throws SQLException {
+        long count;
+        try (ResultSet result = statement.executeQuery("SELECT count(*) FROM chat_entry")) {
+            result.next();
+            count = result.getLong(1);
+        }
+        if (count == 0) return;
+        statement.execute("DROP TABLE IF EXISTS chat_entry_sorted");
+        statement.execute("""
+            CREATE TABLE chat_entry_sorted AS
+            SELECT file_id, line_index, entry_time, message
+            FROM chat_entry
+            ORDER BY entry_time, file_id, line_index""");
+        statement.execute("DROP TABLE chat_entry");
+        statement.execute("ALTER TABLE chat_entry_sorted RENAME TO chat_entry");
     }
 }
