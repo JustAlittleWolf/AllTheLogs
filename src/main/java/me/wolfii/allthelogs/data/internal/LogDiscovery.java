@@ -3,7 +3,6 @@ package me.wolfii.allthelogs.data.internal;
 import me.wolfii.allthelogs.data.ImportOptions;
 import me.wolfii.allthelogs.data.ImportResult;
 import me.wolfii.allthelogs.data.LogDataException;
-import me.wolfii.allthelogs.data.SourceKind;
 import org.apache.commons.compress.archivers.ArchiveEntry;
 import org.apache.commons.compress.archivers.ArchiveInputStream;
 import org.apache.commons.compress.archivers.ArchiveStreamFactory;

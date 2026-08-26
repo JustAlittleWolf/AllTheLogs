@@ -1,7 +1,5 @@
 package me.wolfii.allthelogs.data.internal;
 
-import me.wolfii.allthelogs.data.SourceKind;
-
 import java.time.Instant;
 
 /// A log file that was discovered and is ready to be parsed, with its contents already materialised in memory.

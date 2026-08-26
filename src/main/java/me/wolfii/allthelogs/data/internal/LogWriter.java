@@ -1,6 +1,5 @@
 package me.wolfii.allthelogs.data.internal;
 
-import me.wolfii.allthelogs.data.SourceKind;
 import org.duckdb.DuckDBAppender;
 import org.duckdb.DuckDBConnection;
 

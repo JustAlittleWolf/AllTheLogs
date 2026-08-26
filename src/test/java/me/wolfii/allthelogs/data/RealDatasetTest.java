@@ -73,7 +73,7 @@ class RealDatasetTest {
                 entries += result.importedEntries();
             }
             assertTrue(entries > 0, "expected to import entries from archives");
-            assertTrue(store.chatLogs().stream().allMatch(file -> file.source().kind() == SourceKind.ARCHIVE));
+            assertTrue(store.chatLogs().stream().allMatch(file -> file.source() instanceof LogSource.Archive));
         }
     }
 
@@ -101,9 +101,17 @@ class RealDatasetTest {
 
             // Context lines must never duplicate an entry, no matter how densely the matches cluster.
             long distinct = withContext.stream()
-                    .map(entry -> entry.chatLog().source().entryPath() + "#" + entry.lineIndex())
+                    .map(entry -> entryPath(entry.chatLog().source()) + "#" + entry.lineIndex())
                     .distinct().count();
             assertEquals(withContext.size(), distinct);
         }
+    }
+
+    private static String entryPath(LogSource source) {
+        return switch (source) {
+            case LogSource.Directory directory -> directory.entryPath();
+            case LogSource.Archive archive -> archive.entryPath();
+            case LogSource.Session session -> "session";
+        };
     }
 }

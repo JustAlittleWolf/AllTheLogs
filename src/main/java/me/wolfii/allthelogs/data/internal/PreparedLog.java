@@ -1,7 +1,5 @@
 package me.wolfii.allthelogs.data.internal;
 
-import me.wolfii.allthelogs.data.SourceKind;
-
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;

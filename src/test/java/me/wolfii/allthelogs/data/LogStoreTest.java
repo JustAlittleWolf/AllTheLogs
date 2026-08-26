@@ -22,6 +22,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -64,12 +65,14 @@ class LogStoreTest {
 
     @Test
     void resolvesTheChatLogOfEveryEntry() throws IOException {
-        store.importDirectory(logsDirectory());
+        Path root = logsDirectory();
+        store.importDirectory(root);
 
         ChatEntry entry = store.query(ChatQuery.all().withSubstring("needle in here")).getFirst();
-        assertEquals("2026-08-25-1.log.gz", entry.chatLog().source().fileName());
-        assertEquals("logs/2026-08-25-1.log.gz", entry.chatLog().source().entryPath());
-        assertEquals(SourceKind.DIRECTORY, entry.chatLog().source().kind());
+        LogSource.Directory source = assertInstanceOf(LogSource.Directory.class, entry.chatLog().source());
+        assertEquals("2026-08-25-1.log.gz", source.fileName());
+        assertEquals(root.toAbsolutePath().normalize().toString(), source.path());
+        assertEquals("logs/2026-08-25-1.log.gz", source.entryPath());
         assertEquals("26.2", entry.chatLog().minecraftVersion());
         assertEquals(LocalDate.of(2026, 8, 25), entry.chatLog().date());
         assertEquals(LocalDateTime.of(2026, 8, 25, 10, 0, 11), entry.timestamp());
@@ -85,7 +88,7 @@ class LogStoreTest {
         store.importDirectory(root);
 
         ChatLog latest = store.chatLogs().stream()
-                .filter(file -> file.source().fileName().equals("latest.log")).findFirst().orElseThrow();
+                .filter(file -> fileName(file).equals("latest.log")).findFirst().orElseThrow();
         assertEquals(modified.atZone(ZoneId.systemDefault()).toLocalDate(), latest.date());
         assertEquals("1.8.9", latest.minecraftVersion());
     }
@@ -95,7 +98,7 @@ class LogStoreTest {
         store.importDirectory(logsDirectory());
 
         ChatLog file = store.chatLogs().stream()
-                .filter(f -> f.source().fileName().equals("2026-08-24-1.log.gz")).findFirst().orElseThrow();
+                .filter(f -> fileName(f).equals("2026-08-24-1.log.gz")).findFirst().orElseThrow();
         assertEquals(3, file.entryCount());
         // Bounds cover every logged line of the file, not just its chat entries, so they start at the very first
         // line ("Loading Minecraft...") rather than the first [CHAT] line.
@@ -133,8 +136,10 @@ class LogStoreTest {
 
         assertEquals(1, result.importedFiles());
         ChatEntry entry = store.query(ChatQuery.all().withSubstring("in archive")).getFirst();
-        assertEquals(SourceKind.ARCHIVE, entry.chatLog().source().kind());
-        assertEquals("logs/2026-01-02-1.log.gz", entry.chatLog().source().entryPath());
+        LogSource.Archive source = assertInstanceOf(LogSource.Archive.class, entry.chatLog().source());
+        assertEquals("2026-01-02-1.log.gz", source.fileName());
+        assertEquals(archive.toAbsolutePath().normalize().toString(), source.path());
+        assertEquals("logs/2026-01-02-1.log.gz", source.entryPath());
         assertEquals("1.21.8", entry.chatLog().minecraftVersion());
     }
 
@@ -165,7 +170,7 @@ class LogStoreTest {
 
         assertEquals(1, result.importedFiles());
         ChatEntry entry = store.query(ChatQuery.all().withSubstring("deeply nested")).getFirst();
-        assertEquals("instances/inner.zip!/logs/2026-02-03-1.log", entry.chatLog().source().entryPath());
+        assertEquals("instances/inner.zip!/logs/2026-02-03-1.log", entryPath(entry.chatLog()));
     }
 
     @Test
@@ -357,7 +362,7 @@ class LogStoreTest {
 
         assertEquals(0, result.importedFiles());
         assertEquals(1, result.emptyFiles());
-        assertFalse(store.chatLogs().stream().anyMatch(file -> file.source().fileName().equals("2026-04-01-1.log")));
+        assertFalse(store.chatLogs().stream().anyMatch(file -> fileName(file).equals("2026-04-01-1.log")));
     }
 
     @Test
@@ -372,7 +377,7 @@ class LogStoreTest {
         assertEquals(1, result.importedFiles());
         assertEquals(0, result.emptyFiles());
         ChatLog file = store.chatLogs().stream()
-                .filter(f -> f.source().fileName().equals("2026-04-02-1.log")).findFirst().orElseThrow();
+                .filter(f -> fileName(f).equals("2026-04-02-1.log")).findFirst().orElseThrow();
         assertEquals(0, file.entryCount());
         assertEquals(LocalDate.of(2026, 4, 2), file.date());
         assertEquals(LocalDateTime.of(2026, 4, 2, 10, 0, 0), file.firstEntryTime());
@@ -389,7 +394,7 @@ class LogStoreTest {
         store.importDirectory(tempDir);
 
         ChatLog file = store.chatLogs().stream()
-                .filter(f -> f.source().fileName().equals("2026-04-03-1.log")).findFirst().orElseThrow();
+                .filter(f -> fileName(f).equals("2026-04-03-1.log")).findFirst().orElseThrow();
         assertEquals(LocalDateTime.of(2026, 4, 3, 9, 0, 0), file.firstEntryTime());
         assertEquals(LocalDateTime.of(2026, 4, 3, 9, 0, 10), file.lastEntryTime());
     }
@@ -400,7 +405,7 @@ class LogStoreTest {
 
         ChatLog file = store.startSession("26.2", startedAt);
 
-        assertEquals(SourceKind.SESSION, file.source().kind());
+        assertInstanceOf(LogSource.Session.class, file.source());
         assertEquals("26.2", file.minecraftVersion());
         assertEquals(LocalDate.of(2026, 8, 26), file.date());
         assertEquals(startedAt, file.firstEntryTime());
@@ -423,7 +428,7 @@ class LogStoreTest {
         assertTrue(store.importSessionMessage("client message", LocalDateTime.of(2026, 8, 26, 12, 0, 0)));
 
         ChatEntry entry = store.query(ChatQuery.all().withSubstring("client message")).getFirst();
-        assertEquals(SourceKind.SESSION, entry.chatLog().source().kind());
+        assertInstanceOf(LogSource.Session.class, entry.chatLog().source());
         assertEquals("26.2", entry.chatLog().minecraftVersion());
         assertEquals(LocalDate.of(2026, 8, 26), entry.chatLog().date());
         assertEquals(LocalDateTime.of(2026, 8, 26, 12, 0, 0), entry.timestamp());
@@ -500,7 +505,7 @@ class LogStoreTest {
 
         assertEquals(3, store.chatLogs().size());
         assertTrue(store.chatLogs().stream().allMatch(file -> file.entryCount() == 1));
-        assertTrue(store.chatLogs().stream().allMatch(file -> file.source().kind() == SourceKind.SESSION));
+        assertTrue(store.chatLogs().stream().allMatch(file -> file.source() instanceof LogSource.Session));
     }
 
     @Test
@@ -527,9 +532,9 @@ class LogStoreTest {
         store.startSession("26.2", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
         store.importDirectory(logsDirectory());
 
-        assertTrue(store.chatLogs().stream().anyMatch(file -> file.source().kind() == SourceKind.SESSION));
+        assertTrue(store.chatLogs().stream().anyMatch(file -> file.source() instanceof LogSource.Session));
         assertEquals(0, store.chatLogs().stream()
-                .filter(file -> file.source().kind() == SourceKind.SESSION)
+                .filter(file -> file.source() instanceof LogSource.Session)
                 .findFirst().orElseThrow().entryCount());
     }
 
@@ -661,5 +666,21 @@ class LogStoreTest {
         store.importDirectory(tempDir, ImportOptions.defaults().withTimezone(ZoneOffset.ofHours(14)));
         ChatLog plusFourteen = store.chatLogs().getFirst();
         assertEquals(LocalDate.of(2026, 8, 26), plusFourteen.date());
+    }
+
+    private static String fileName(ChatLog log) {
+        return switch (log.source()) {
+            case LogSource.Directory directory -> directory.fileName();
+            case LogSource.Archive archive -> archive.fileName();
+            case LogSource.Session session -> throw new AssertionError("session has no file name");
+        };
+    }
+
+    private static String entryPath(ChatLog log) {
+        return switch (log.source()) {
+            case LogSource.Directory directory -> directory.entryPath();
+            case LogSource.Archive archive -> archive.entryPath();
+            case LogSource.Session session -> throw new AssertionError("session has no entry path");
+        };
     }
 }

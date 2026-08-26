@@ -10,6 +10,7 @@ import me.wolfii.allthelogs.data.internal.ParsedLog;
 import me.wolfii.allthelogs.data.internal.PreparedLog;
 import me.wolfii.allthelogs.data.internal.QueryBuilder;
 import me.wolfii.allthelogs.data.internal.Schema;
+import me.wolfii.allthelogs.data.internal.SourceKind;
 import org.duckdb.DuckDBConnection;
 
 import java.io.BufferedReader;
@@ -74,7 +75,7 @@ public final class LogStore implements AutoCloseable {
     /// How many parsed logs may wait for the writer before parsing threads block. Keeps memory bounded while still
     /// letting the writer stay busy.
     private static final int WRITE_QUEUE_CAPACITY = 64;
-    /// Recorded as the source path of the synthetic log files that hold a running client session.
+    /// Recorded as the source path of the rows that hold a running client session.
     private static final String SESSION_SOURCE_PATH = "<session>";
     /// Sentinel that tells the writer loop that no more logs are coming.
     private static final PreparedLog END_OF_STREAM = new PreparedLog(
@@ -213,16 +214,30 @@ public final class LogStore implements AutoCloseable {
 
     private static ChatLog readChatLog(ResultSet result, int offset) throws SQLException {
         return new ChatLog(
-            new LogSource(
-                result.getString(offset),
-                SourceKind.valueOf(result.getString(offset + 1)),
-                result.getString(offset + 2),
-                result.getString(offset + 3)),
+            readLogSource(result, offset),
             result.getDate(offset + 4).toLocalDate(),
             result.getString(offset + 5),
             result.getTimestamp(offset + 6).toLocalDateTime(),
             result.getTimestamp(offset + 7).toLocalDateTime(),
             result.getLong(offset + 8));
+    }
+
+    private static LogSource readLogSource(ResultSet result, int offset) throws SQLException {
+        String fileName = result.getString(offset);
+        String kind = result.getString(offset + 1);
+        String path = result.getString(offset + 2);
+        String entryPath = result.getString(offset + 3);
+        SourceKind sourceKind;
+        try {
+            sourceKind = SourceKind.valueOf(kind);
+        } catch (IllegalArgumentException e) {
+            throw new SQLException("unknown source kind: " + kind, e);
+        }
+        return switch (sourceKind) {
+            case DIRECTORY -> new LogSource.Directory(fileName, path, entryPath);
+            case ARCHIVE -> new LogSource.Archive(fileName, path, entryPath);
+            case SESSION -> new LogSource.Session();
+        };
     }
 
     /// The file this store is backed by, or empty for an in memory store.
@@ -238,7 +253,7 @@ public final class LogStore implements AutoCloseable {
     /// Imports every log file found below `directory`.
     ///
     /// @param directory the directory to walk; also the root that [ImportOptions#pathMatcher()] and
-    ///                  [LogSource#entryPath()] are relative to
+    ///                  [LogSource.Directory#entryPath()] are relative to
     /// @throws LogDataException if `directory` is not a directory, or the database rejects the writes
     public ImportResult importDirectory(Path directory, ImportOptions options) {
         Objects.requireNonNull(directory, "directory");
@@ -253,7 +268,7 @@ public final class LogStore implements AutoCloseable {
 
     /// Imports every log file inside `archive`. Zip, 7z, tar and tar.gz archives are supported.
     ///
-    /// @param archive the archive to read; [LogSource#entryPath()] of the results is relative to its root
+    /// @param archive the archive to read; [LogSource.Archive#entryPath()] of the results is relative to its root
     /// @throws LogDataException if `archive` is not a file, or the database rejects the writes
     public ImportResult importArchive(Path archive, ImportOptions options) {
         Objects.requireNonNull(archive, "archive");
@@ -351,7 +366,7 @@ public final class LogStore implements AutoCloseable {
     /// [ChatLog#lastEntryTime()] as lines arrive. Starting another session leaves the previous log in place and
     /// switches subsequent imports to the new one.
     ///
-    /// The log's [LogSource#kind()] is [SourceKind#SESSION], since the lines were captured from the running client
+    /// The log's [ChatLog#source()] is a [LogSource.Session], since the lines were captured from the running client
     /// rather than read from a directory or archive.
     ///
     /// @param minecraftVersion the version of the running game
@@ -410,7 +425,6 @@ public final class LogStore implements AutoCloseable {
     private ChatLog insertSessionFile(String minecraftVersion, LocalDateTime startedAt) throws SQLException {
         long fileId = nextFileId();
         LocalDate date = startedAt.toLocalDate();
-        String fileName = date + "-session.log";
         String entryPath = "session/" + fileId;
         Timestamp start = Timestamp.valueOf(startedAt);
         try (PreparedStatement insert = connection.prepareStatement("""
@@ -418,7 +432,7 @@ public final class LogStore implements AutoCloseable {
                                   minecraft_version, first_entry_time, last_entry_time, entry_count)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""")) {
             insert.setLong(1, fileId);
-            insert.setString(2, fileName);
+            insert.setString(2, "");
             insert.setString(3, SourceKind.SESSION.name());
             insert.setString(4, SESSION_SOURCE_PATH);
             insert.setString(5, entryPath);
@@ -430,13 +444,7 @@ public final class LogStore implements AutoCloseable {
         }
         sessionFileId = fileId;
         sessionLineIndex = 0;
-        return new ChatLog(
-            new LogSource(fileName, SourceKind.SESSION, SESSION_SOURCE_PATH, entryPath),
-            date,
-            minecraftVersion,
-            startedAt,
-            startedAt,
-            0);
+        return new ChatLog(new LogSource.Session(), date, minecraftVersion, startedAt, startedAt, 0);
     }
 
     private boolean writeSessionEntry(String message, LocalDateTime timestamp) throws SQLException {
