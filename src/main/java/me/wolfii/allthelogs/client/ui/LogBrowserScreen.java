@@ -1,29 +1,19 @@
 package me.wolfii.allthelogs.client.ui;
 
 import io.wispforest.owo.ui.base.BaseOwoScreen;
-import io.wispforest.owo.ui.component.ButtonComponent;
-import io.wispforest.owo.ui.component.CheckboxComponent;
-import io.wispforest.owo.ui.component.LabelComponent;
-import io.wispforest.owo.ui.component.TextBoxComponent;
-import io.wispforest.owo.ui.component.UIComponents;
+import io.wispforest.owo.ui.component.*;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
-import io.wispforest.owo.ui.core.HorizontalAlignment;
-import io.wispforest.owo.ui.core.Insets;
-import io.wispforest.owo.ui.core.OwoUIAdapter;
-import io.wispforest.owo.ui.core.Positioning;
-import io.wispforest.owo.ui.core.Sizing;
-import io.wispforest.owo.ui.core.Surface;
-import io.wispforest.owo.ui.core.VerticalAlignment;
+import io.wispforest.owo.ui.core.*;
 import me.wolfii.allthelogs.client.AllTheLogsClient;
 import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.ChatQuery;
 import me.wolfii.allthelogs.search.ChatQueryFactory;
-import me.wolfii.allthelogs.view.DisplayRow;
 import me.wolfii.allthelogs.search.DateParsers;
+import me.wolfii.allthelogs.search.SearchFilter;
+import me.wolfii.allthelogs.view.DisplayRow;
 import me.wolfii.allthelogs.view.EntryClassifier;
 import me.wolfii.allthelogs.view.ResultWindow;
-import me.wolfii.allthelogs.search.SearchFilter;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
@@ -39,16 +29,28 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Transparent log browser. Search, filter, virtualised history, and a timeline of every hit.
  */
 public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
+    private final AtomicInteger queryGeneration = new AtomicInteger();
     private SearchFilter filter;
     private TimelineLogList list;
     private LabelComponent status;
     private FlowLayout filterPanel;
-    private final AtomicInteger queryGeneration = new AtomicInteger();
     private boolean filterOpen;
 
     public LogBrowserScreen() {
         super(Component.translatable("allthelogs.screen.browser"));
         this.filter = AllTheLogsClient.settings().toFilter();
+    }
+
+    private static int countMatches(List<DisplayRow> rows) {
+        int count = 0;
+        for (DisplayRow row : rows) {
+            if (row.match()) count++;
+        }
+        return count;
+    }
+
+    private static ChatQuery.Sort opposite(ChatQuery.Sort sort) {
+        return sort == ChatQuery.Sort.ASCENDING ? ChatQuery.Sort.DESCENDING : ChatQuery.Sort.ASCENDING;
     }
 
     @Override
@@ -307,17 +309,5 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
                 list.reset(rows, true, hasAfter);
             });
         });
-    }
-
-    private static int countMatches(List<DisplayRow> rows) {
-        int count = 0;
-        for (DisplayRow row : rows) {
-            if (row.match()) count++;
-        }
-        return count;
-    }
-
-    private static ChatQuery.Sort opposite(ChatQuery.Sort sort) {
-        return sort == ChatQuery.Sort.ASCENDING ? ChatQuery.Sort.DESCENDING : ChatQuery.Sort.ASCENDING;
     }
 }

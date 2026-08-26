@@ -2,14 +2,14 @@ package me.wolfii.allthelogs.client;
 
 import me.wolfii.allthelogs.AllTheLogs;
 import me.wolfii.allthelogs.client.ui.LogBrowserScreen;
+import me.wolfii.allthelogs.config.AllTheLogsSettings;
 import me.wolfii.allthelogs.data.LogSource;
 import me.wolfii.allthelogs.data.SessionMarker;
-import me.wolfii.allthelogs.config.AllTheLogsSettings;
 import me.wolfii.allthelogs.locations.CurrentLogsImport;
 import me.wolfii.allthelogs.worker.LogStoreWorker;
 import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.loader.api.FabricLoader;
@@ -44,48 +44,6 @@ public final class AllTheLogsClient implements ClientModInitializer {
         return gameDirectory;
     }
 
-    @Override
-    public void onInitializeClient() {
-        gameDirectory = FabricLoader.getInstance().getGameDir();
-        worker = new LogStoreWorker();
-        try {
-            settings = AllTheLogsSettings.load(AllTheLogsPaths.config(gameDirectory));
-        } catch (IOException e) {
-            settings = new AllTheLogsSettings();
-            LOGGER.warn("Could not load AllTheLogs config from {}", AllTheLogsPaths.config(gameDirectory), e);
-        }
-
-        worker.open(AllTheLogsPaths.database(gameDirectory))
-            .thenCompose(ignored -> importCurrentLogs())
-            .thenCompose(ignored -> worker.startSession(minecraftVersion()))
-            .whenComplete((log, error) -> {
-                if (error != null) {
-                    LOGGER.error("AllTheLogs failed to start", error);
-                    return;
-                }
-                if (log != null && log.source() instanceof LogSource.Session session && session.id() != null) {
-                    LOGGER.info(SessionMarker.message(session.id()));
-                }
-            });
-
-        ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, timestamp) ->
-            capture(message));
-        ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
-            if (!overlay) capture(message);
-        });
-
-        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
-            dispatcher.register(ClientCommands.literal("allthelogs").executes(context -> {
-                Minecraft.getInstance().execute(() -> Minecraft.getInstance().gui.setScreen(new LogBrowserScreen()));
-                return 1;
-            })));
-
-        ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
-            saveSettings();
-            worker.close();
-        });
-    }
-
     public static void saveSettings() {
         if (settings == null || gameDirectory == null) return;
         try {
@@ -93,10 +51,6 @@ public final class AllTheLogsClient implements ClientModInitializer {
         } catch (IOException e) {
             LOGGER.warn("Could not save AllTheLogs config", e);
         }
-    }
-
-    public static void openBrowser() {
-        Minecraft.getInstance().gui.setScreen(new LogBrowserScreen());
     }
 
     private static void capture(Component message) {
@@ -118,5 +72,46 @@ public final class AllTheLogsClient implements ClientModInitializer {
         return FabricLoader.getInstance().getModContainer("minecraft")
             .map(container -> container.getMetadata().getVersion().getFriendlyString())
             .orElse("unknown");
+    }
+
+    @Override
+    public void onInitializeClient() {
+        gameDirectory = FabricLoader.getInstance().getConfigDir();
+        worker = new LogStoreWorker();
+        try {
+            settings = AllTheLogsSettings.load(AllTheLogsPaths.config(gameDirectory));
+        } catch (IOException e) {
+            settings = new AllTheLogsSettings();
+            LOGGER.warn("Could not load AllTheLogs config from {}", AllTheLogsPaths.config(gameDirectory), e);
+        }
+
+        worker.open(AllTheLogsPaths.database(gameDirectory))
+            .thenCompose(ignored -> importCurrentLogs())
+            .thenCompose(ignored -> worker.startSession(minecraftVersion()))
+            .whenComplete((log, error) -> {
+                if (error != null) {
+                    LOGGER.error("AllTheLogs failed to start", error);
+                    return;
+                }
+                if (log != null && log.source() instanceof LogSource.Session session && session.id() != null) {
+                    LOGGER.info(SessionMarker.message(session.id()));
+                }
+            });
+
+        ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, timestamp) -> capture(message));
+        ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
+            if (!overlay) capture(message);
+        });
+
+        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
+            dispatcher.register(ClientCommands.literal("allthelogs").executes(context -> {
+                Minecraft.getInstance().execute(() -> Minecraft.getInstance().gui.setScreen(new LogBrowserScreen()));
+                return 1;
+            })));
+
+        ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
+            saveSettings();
+            worker.close();
+        });
     }
 }

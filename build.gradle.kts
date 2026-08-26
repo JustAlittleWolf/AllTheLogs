@@ -1,6 +1,7 @@
+@file:Suppress("AvoidDuplicateDependencies")
+
 plugins {
-    id("net.fabricmc.fabric-loom") version "1.17.20"
-    `maven-publish`
+    id("net.fabricmc.fabric-loom")
 }
 
 val minecraftVersion: String = providers.gradleProperty("minecraft_version").get()
@@ -13,7 +14,7 @@ val mavenGroup: String = providers.gradleProperty("maven_group").get()
 
 group = mavenGroup
 version = modVersion
-base.archivesName.set(archivesBaseName)
+base.archivesName.set("$archivesBaseName+$minecraftVersion")
 
 repositories {
     maven("https://maven.wispforest.io") {
@@ -39,7 +40,7 @@ dependencies {
     implementation("net.fabricmc.fabric-api:fabric-api:$fabricApiVersion")
 
     implementation("io.wispforest:owo-lib:$owoVersion")
-    include(implementation("io.wispforest:owo-sentinel:$owoVersion")!!)
+    implementation("io.wispforest:owo-sentinel:$owoVersion")
 
     api(libs.duckdb.jdbc)
     include(libs.duckdb.jdbc)
@@ -82,13 +83,5 @@ tasks.test {
     }
     testLogging {
         events("passed", "skipped", "failed")
-    }
-}
-
-publishing {
-    publications {
-        create<MavenPublication>("mavenJava") {
-            from(components["java"])
-        }
     }
 }

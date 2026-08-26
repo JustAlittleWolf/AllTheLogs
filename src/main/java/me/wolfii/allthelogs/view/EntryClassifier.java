@@ -5,11 +5,7 @@ import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.search.SearchFilter;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;

@@ -1,11 +1,7 @@
 package me.wolfii.allthelogs.view;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Sliding window of displayed log rows. Replacing the buffered page adjusts the scroll offset so the same
@@ -16,42 +12,6 @@ public final class ResultWindow {
     private boolean hasBefore;
     private boolean hasAfter;
 
-    public List<DisplayRow> rows() {
-        return rows;
-    }
-
-    public boolean hasBefore() {
-        return hasBefore;
-    }
-
-    public boolean hasAfter() {
-        return hasAfter;
-    }
-
-    public void reset(List<DisplayRow> rows, boolean hasBefore, boolean hasAfter) {
-        this.rows = List.copyOf(rows);
-        this.hasBefore = hasBefore;
-        this.hasAfter = hasAfter;
-    }
-
-    /**
-     * Replaces the buffer with {@code next} and returns the scroll offset that keeps {@code anchor} at the same
-     * pixel position, assuming a fixed {@code rowHeight}.
-     */
-    public double replaceKeepingAnchor(List<DisplayRow> next, boolean hasBefore, boolean hasAfter,
-                                       DisplayRow.RowKey anchor, double scrollY, int rowHeight) {
-        int oldIndex = indexOf(rows, anchor);
-        int newIndex = indexOf(next, anchor);
-        this.rows = List.copyOf(next);
-        this.hasBefore = hasBefore;
-        this.hasAfter = hasAfter;
-        if (oldIndex < 0 || newIndex < 0) {
-            return scrollY;
-        }
-        double screenY = oldIndex * (double) rowHeight - scrollY;
-        return newIndex * (double) rowHeight - screenY;
-    }
-
     public static int indexOf(List<DisplayRow> rows, DisplayRow.RowKey key) {
         if (key == null) return -1;
         for (int i = 0; i < rows.size(); i++) {
@@ -60,17 +20,6 @@ public final class ResultWindow {
             }
         }
         return -1;
-    }
-
-    public DisplayRow.RowKey keyAtPixel(double scrollY, int rowHeight) {
-        if (rows.isEmpty() || rowHeight <= 0) return null;
-        int index = (int) Math.floor(Math.max(0, scrollY) / rowHeight);
-        if (index >= rows.size()) index = rows.size() - 1;
-        return rows.get(index).key();
-    }
-
-    public int contentHeight(int rowHeight) {
-        return rows.size() * rowHeight;
     }
 
     /**
@@ -143,6 +92,53 @@ public final class ResultWindow {
         while (fromRow > 0 && !rows.get(fromRow - 1).match()) fromRow--;
         while (toRow + 1 < rows.size() && !rows.get(toRow + 1).match()) toRow++;
         return List.copyOf(rows.subList(fromRow, toRow + 1));
+    }
+
+    public List<DisplayRow> rows() {
+        return rows;
+    }
+
+    public boolean hasBefore() {
+        return hasBefore;
+    }
+
+    public boolean hasAfter() {
+        return hasAfter;
+    }
+
+    public void reset(List<DisplayRow> rows, boolean hasBefore, boolean hasAfter) {
+        this.rows = List.copyOf(rows);
+        this.hasBefore = hasBefore;
+        this.hasAfter = hasAfter;
+    }
+
+    /**
+     * Replaces the buffer with {@code next} and returns the scroll offset that keeps {@code anchor} at the same
+     * pixel position, assuming a fixed {@code rowHeight}.
+     */
+    public double replaceKeepingAnchor(List<DisplayRow> next, boolean hasBefore, boolean hasAfter,
+                                       DisplayRow.RowKey anchor, double scrollY, int rowHeight) {
+        int oldIndex = indexOf(rows, anchor);
+        int newIndex = indexOf(next, anchor);
+        this.rows = List.copyOf(next);
+        this.hasBefore = hasBefore;
+        this.hasAfter = hasAfter;
+        if (oldIndex < 0 || newIndex < 0) {
+            return scrollY;
+        }
+        double screenY = oldIndex * (double) rowHeight - scrollY;
+        return newIndex * (double) rowHeight - screenY;
+    }
+
+    public DisplayRow.RowKey keyAtPixel(double scrollY, int rowHeight) {
+        if (rows.isEmpty() || rowHeight <= 0) return null;
+        int index = (int) Math.floor(Math.max(0, scrollY) / rowHeight);
+        if (index >= rows.size()) index = rows.size() - 1;
+        return rows.get(index).key();
+    }
+
+    public int contentHeight(int rowHeight) {
+        return rows.size() * rowHeight;
     }
 
     public LocalDateTime firstMatchTime() {

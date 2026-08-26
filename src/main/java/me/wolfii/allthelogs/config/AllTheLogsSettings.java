@@ -24,6 +24,44 @@ public final class AllTheLogsSettings {
     private boolean regex;
     private ChatQuery.Sort sort = ChatQuery.Sort.ASCENDING;
 
+    public static AllTheLogsSettings load(Path file) throws IOException {
+        AllTheLogsSettings settings = new AllTheLogsSettings();
+        if (!Files.isRegularFile(file)) {
+            return settings;
+        }
+        String json = Files.readString(file, StandardCharsets.UTF_8);
+        Matcher matcher = STRING.matcher(json);
+        while (matcher.find()) {
+            String key = matcher.group(1);
+            String value = matcher.group(2);
+            switch (key) {
+                case "contextLines" -> settings.setContextLines(Integer.parseInt(value));
+                case "limit" -> settings.setLimit(Integer.parseInt(value));
+                case "caseSensitive" -> settings.setCaseSensitive(Boolean.parseBoolean(value));
+                case "regex" -> settings.setRegex(Boolean.parseBoolean(value));
+                case "sort" -> settings.setSort(parseSort(unquote(value)));
+                default -> {
+                }
+            }
+        }
+        return settings;
+    }
+
+    private static String unquote(String value) {
+        if (value.length() >= 2 && value.charAt(0) == '"' && value.charAt(value.length() - 1) == '"') {
+            return value.substring(1, value.length() - 1);
+        }
+        return value;
+    }
+
+    private static ChatQuery.Sort parseSort(String raw) {
+        try {
+            return ChatQuery.Sort.valueOf(raw.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            return ChatQuery.Sort.ASCENDING;
+        }
+    }
+
     public int contextLines() {
         return contextLines;
     }
@@ -81,29 +119,6 @@ public final class AllTheLogsSettings {
         setSort(filter.sort());
     }
 
-    public static AllTheLogsSettings load(Path file) throws IOException {
-        AllTheLogsSettings settings = new AllTheLogsSettings();
-        if (!Files.isRegularFile(file)) {
-            return settings;
-        }
-        String json = Files.readString(file, StandardCharsets.UTF_8);
-        Matcher matcher = STRING.matcher(json);
-        while (matcher.find()) {
-            String key = matcher.group(1);
-            String value = matcher.group(2);
-            switch (key) {
-                case "contextLines" -> settings.setContextLines(Integer.parseInt(value));
-                case "limit" -> settings.setLimit(Integer.parseInt(value));
-                case "caseSensitive" -> settings.setCaseSensitive(Boolean.parseBoolean(value));
-                case "regex" -> settings.setRegex(Boolean.parseBoolean(value));
-                case "sort" -> settings.setSort(parseSort(unquote(value)));
-                default -> {
-                }
-            }
-        }
-        return settings;
-    }
-
     public void save(Path file) throws IOException {
         Files.createDirectories(file.getParent());
         String json = """
@@ -116,20 +131,5 @@ public final class AllTheLogsSettings {
             }
             """.formatted(contextLines, limit, caseSensitive, regex, sort.name());
         Files.writeString(file, json, StandardCharsets.UTF_8);
-    }
-
-    private static String unquote(String value) {
-        if (value.length() >= 2 && value.charAt(0) == '"' && value.charAt(value.length() - 1) == '"') {
-            return value.substring(1, value.length() - 1);
-        }
-        return value;
-    }
-
-    private static ChatQuery.Sort parseSort(String raw) {
-        try {
-            return ChatQuery.Sort.valueOf(raw.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException e) {
-            return ChatQuery.Sort.ASCENDING;
-        }
     }
 }

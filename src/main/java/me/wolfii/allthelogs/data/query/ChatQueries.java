@@ -1,34 +1,15 @@
 package me.wolfii.allthelogs.data.query;
 
-import me.wolfii.allthelogs.data.ChatEntry;
-import me.wolfii.allthelogs.data.ChatLog;
-import me.wolfii.allthelogs.data.ChatQuery;
-import me.wolfii.allthelogs.data.LogDataException;
-import me.wolfii.allthelogs.data.LogSource;
-import me.wolfii.allthelogs.data.SessionMarker;
-import me.wolfii.allthelogs.data.StoreMetadata;
+import me.wolfii.allthelogs.data.*;
 import me.wolfii.allthelogs.data.store.SourceKind;
-import org.duckdb.DuckDBChunkedResult;
-import org.duckdb.DuckDBConnection;
-import org.duckdb.DuckDBDataChunkReader;
-import org.duckdb.DuckDBPreparedStatement;
-import org.duckdb.DuckDBReadableVector;
+import org.duckdb.*;
 
 import java.nio.file.Path;
+import java.sql.*;
 import java.sql.Date;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Runs {@link ChatQuery} against an open store and maps rows to {@link ChatEntry} / {@link ChatLog}.
@@ -38,6 +19,32 @@ public final class ChatQueries {
 
     public ChatQueries(DuckDBConnection connection) {
         this.connection = connection;
+    }
+
+    private static ChatLog readChatLog(ResultSet result, int offset) throws SQLException {
+        return new ChatLog(
+            readLogSource(result, offset),
+            result.getDate(offset + 4).toLocalDate(),
+            result.getString(offset + 5),
+            result.getTimestamp(offset + 6).toLocalDateTime(),
+            result.getTimestamp(offset + 7).toLocalDateTime());
+    }
+
+    private static LogSource readLogSource(ResultSet result, int offset) throws SQLException {
+        String kind = result.getString(offset + 1);
+        String path = result.getString(offset + 2);
+        String entryPath = result.getString(offset + 3);
+        SourceKind sourceKind;
+        try {
+            sourceKind = SourceKind.valueOf(kind);
+        } catch (IllegalArgumentException e) {
+            throw new SQLException("unknown source kind: " + kind, e);
+        }
+        return switch (sourceKind) {
+            case FILE -> new LogSource.File(Path.of(path));
+            case ARCHIVE -> new LogSource.Archive(Path.of(path), entryPath);
+            case SESSION -> new LogSource.Session(SessionMarker.idFromEntryPath(entryPath));
+        };
     }
 
     /**
@@ -176,42 +183,16 @@ public final class ChatQueries {
         }
     }
 
-    private static ChatLog readChatLog(ResultSet result, int offset) throws SQLException {
-        return new ChatLog(
-            readLogSource(result, offset),
-            result.getDate(offset + 4).toLocalDate(),
-            result.getString(offset + 5),
-            result.getTimestamp(offset + 6).toLocalDateTime(),
-            result.getTimestamp(offset + 7).toLocalDateTime());
-    }
-
-    private static LogSource readLogSource(ResultSet result, int offset) throws SQLException {
-        String kind = result.getString(offset + 1);
-        String path = result.getString(offset + 2);
-        String entryPath = result.getString(offset + 3);
-        SourceKind sourceKind;
-        try {
-            sourceKind = SourceKind.valueOf(kind);
-        } catch (IllegalArgumentException e) {
-            throw new SQLException("unknown source kind: " + kind, e);
-        }
-        return switch (sourceKind) {
-            case FILE -> new LogSource.File(Path.of(path));
-            case ARCHIVE -> new LogSource.Archive(Path.of(path), entryPath);
-            case SESSION -> new LogSource.Session(SessionMarker.idFromEntryPath(entryPath));
-        };
-    }
-
     /**
      * Columnar buffer for one query result. Chat-log metadata is joined in Java after the chunked
      * stream finishes, so DuckDB does not repeat file strings on every row.
      */
     private static final class ResultRows {
-        private long[] fileIds;
-        private int[] lineIndices;
         private final ArrayList<LocalDateTime> timestamps;
         private final ArrayList<String> messages;
         private final Set<Long> neededFileIds = new HashSet<>();
+        private long[] fileIds;
+        private int[] lineIndices;
         private int size;
 
         ResultRows(int capacity) {

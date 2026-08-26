@@ -4,12 +4,7 @@ import me.wolfii.allthelogs.data.ImportOptions;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 /**
  * Built-in shortcuts for directories where Minecraft launchers keep logs. Path templates are expanded with
@@ -17,6 +12,52 @@ import java.util.Optional;
  */
 public final class CommonLogLocations {
     private CommonLogLocations() {
+    }
+
+    public static List<Location> defaults() {
+        return List.of();
+    }
+
+    public static Map<String, String> environmentVariables() {
+        Map<String, String> variables = new LinkedHashMap<>();
+        String home = System.getProperty("user.home", "");
+        variables.put("HOME", home);
+        variables.put("USERPROFILE", firstNonBlank(System.getenv("USERPROFILE"), home));
+        variables.put("APPDATA", firstNonBlank(System.getenv("APPDATA"), defaultAppData(home)));
+        variables.put("LOCALAPPDATA", firstNonBlank(System.getenv("LOCALAPPDATA"), defaultLocalAppData(home)));
+        variables.put("XDG_DATA_HOME", firstNonBlank(System.getenv("XDG_DATA_HOME"), home + "/.local/share"));
+        return Map.copyOf(variables);
+    }
+
+    public static String expand(String template, Map<String, String> variables) {
+        String expanded = template;
+        for (Map.Entry<String, String> entry : variables.entrySet()) {
+            expanded = expanded.replace("${" + entry.getKey() + "}", entry.getValue());
+        }
+        return expanded.replace('\\', '/');
+    }
+
+    private static String defaultAppData(String home) {
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        if (os.contains("win")) {
+            return home + "/AppData/Roaming";
+        }
+        if (os.contains("mac")) {
+            return home + "/Library/Application Support";
+        }
+        return home;
+    }
+
+    private static String defaultLocalAppData(String home) {
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        if (os.contains("win")) {
+            return home + "/AppData/Local";
+        }
+        return home;
+    }
+
+    private static String firstNonBlank(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
     }
 
     /**
@@ -75,51 +116,5 @@ public final class CommonLogLocations {
             }
             return Optional.empty();
         }
-    }
-
-    public static List<Location> defaults() {
-        return List.of();
-    }
-
-    public static Map<String, String> environmentVariables() {
-        Map<String, String> variables = new LinkedHashMap<>();
-        String home = System.getProperty("user.home", "");
-        variables.put("HOME", home);
-        variables.put("USERPROFILE", firstNonBlank(System.getenv("USERPROFILE"), home));
-        variables.put("APPDATA", firstNonBlank(System.getenv("APPDATA"), defaultAppData(home)));
-        variables.put("LOCALAPPDATA", firstNonBlank(System.getenv("LOCALAPPDATA"), defaultLocalAppData(home)));
-        variables.put("XDG_DATA_HOME", firstNonBlank(System.getenv("XDG_DATA_HOME"), home + "/.local/share"));
-        return Map.copyOf(variables);
-    }
-
-    public static String expand(String template, Map<String, String> variables) {
-        String expanded = template;
-        for (Map.Entry<String, String> entry : variables.entrySet()) {
-            expanded = expanded.replace("${" + entry.getKey() + "}", entry.getValue());
-        }
-        return expanded.replace('\\', '/');
-    }
-
-    private static String defaultAppData(String home) {
-        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
-        if (os.contains("win")) {
-            return home + "/AppData/Roaming";
-        }
-        if (os.contains("mac")) {
-            return home + "/Library/Application Support";
-        }
-        return home;
-    }
-
-    private static String defaultLocalAppData(String home) {
-        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
-        if (os.contains("win")) {
-            return home + "/AppData/Local";
-        }
-        return home;
-    }
-
-    private static String firstNonBlank(String value, String fallback) {
-        return value == null || value.isBlank() ? fallback : value;
     }
 }

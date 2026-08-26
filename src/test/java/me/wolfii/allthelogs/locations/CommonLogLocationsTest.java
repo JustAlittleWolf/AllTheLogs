@@ -16,15 +16,15 @@ class CommonLogLocationsTest {
     @Test
     void expandsOsPlaceholders() {
         Map<String, String> vars = Map.of(
-            "HOME", "/home/jakob",
-            "APPDATA", "C:/Users/jakob/AppData/Roaming",
-            "LOCALAPPDATA", "C:/Users/jakob/AppData/Local",
-            "XDG_DATA_HOME", "/home/jakob/.local/share",
-            "USERPROFILE", "C:/Users/jakob"
+            "HOME", "/home/me",
+            "APPDATA", "C:/Users/me/AppData/Roaming",
+            "LOCALAPPDATA", "C:/Users/me/AppData/Local",
+            "XDG_DATA_HOME", "/home/me/.local/share",
+            "USERPROFILE", "C:/Users/me"
         );
-        assertEquals("C:/Users/jakob/AppData/Roaming/.minecraft/logs",
+        assertEquals("C:/Users/me/AppData/Roaming/.minecraft/logs",
             CommonLogLocations.expand("${APPDATA}/.minecraft/logs", vars));
-        assertEquals("/home/jakob/.local/share/PrismLauncher/instances",
+        assertEquals("/home/me/.local/share/PrismLauncher/instances",
             CommonLogLocations.expand("${XDG_DATA_HOME}/PrismLauncher/instances", vars));
     }
 
@@ -39,15 +39,14 @@ class CommonLogLocationsTest {
             false
         );
         Map<String, String> vars = Map.of(
-            "HOME", "/home/jakob",
+            "HOME", "/home/me",
             "APPDATA", "C:/missing",
             "LOCALAPPDATA", "C:/missing",
-            "XDG_DATA_HOME", "/home/jakob/.local/share",
-            "USERPROFILE", "/home/jakob"
+            "XDG_DATA_HOME", "/home/me/.local/share",
+            "USERPROFILE", "/home/me"
         );
-        Optional<Path> found = location.firstExisting(vars,
-            path -> path.toString().contains("Library/Application Support"));
-        assertEquals(Path.of("/home/jakob/Library/Application Support/minecraft/logs"), found.orElseThrow());
+        Optional<Path> found = location.firstExisting(vars, path -> path.toString().replace('\\', '/').contains("Library/Application Support"));
+        assertEquals(Path.of("/home/me/Library/Application Support/minecraft/logs"), found.orElseThrow());
     }
 
     @Test

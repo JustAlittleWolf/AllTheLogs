@@ -1,23 +1,11 @@
 package me.wolfii.allthelogs.worker;
 
-import me.wolfii.allthelogs.data.ChatEntry;
-import me.wolfii.allthelogs.data.ChatLog;
-import me.wolfii.allthelogs.data.ChatQuery;
-import me.wolfii.allthelogs.data.ImportOptions;
-import me.wolfii.allthelogs.data.ImportProgress;
-import me.wolfii.allthelogs.data.ImportResult;
-import me.wolfii.allthelogs.data.LogStore;
-import me.wolfii.allthelogs.data.StoreMetadata;
+import me.wolfii.allthelogs.data.*;
 
 import java.nio.file.Path;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.*;
 import java.util.function.Consumer;
 
 /**
@@ -30,6 +18,14 @@ public final class LogStoreWorker implements AutoCloseable {
 
     public LogStoreWorker() {
         this.executor = Executors.newSingleThreadExecutor(daemonFactory());
+    }
+
+    private static ThreadFactory daemonFactory() {
+        return runnable -> {
+            Thread thread = new Thread(runnable, "allthelogs-store");
+            thread.setDaemon(true);
+            return thread;
+        };
     }
 
     public CompletableFuture<Void> open(Path databasePath) {
@@ -68,10 +64,6 @@ public final class LogStoreWorker implements AutoCloseable {
     public CompletableFuture<List<ChatEntry>> query(ChatQuery query) {
         ChatQuery copy = Objects.requireNonNull(query, "query");
         return submit(() -> requireStore().query(copy));
-    }
-
-    public CompletableFuture<List<LocalDateTime>> matchTimestamps(ChatQuery query) {
-        return query(query).thenApply(entries -> entries.stream().map(ChatEntry::timestamp).toList());
     }
 
     public CompletableFuture<StoreMetadata> metadata() {
@@ -119,13 +111,5 @@ public final class LogStoreWorker implements AutoCloseable {
                 throw new CompletionException(e);
             }
         }, executor);
-    }
-
-    private static ThreadFactory daemonFactory() {
-        return runnable -> {
-            Thread thread = new Thread(runnable, "allthelogs-store");
-            thread.setDaemon(true);
-            return thread;
-        };
     }
 }

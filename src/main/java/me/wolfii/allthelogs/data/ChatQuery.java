@@ -16,23 +16,9 @@ import java.util.Objects;
  *         .withOffset(lastSeen)
  *         .withLimit(100)
  *         .withContextLines(2);
- * }
+ *}
  */
 public final class ChatQuery {
-    /**
-     * Result order by timestamp, then file id, then line index.
-     */
-    public enum Sort {
-        /**
-         * Oldest first; the default.
-         */
-        ASCENDING,
-        /**
-         * Newest first.
-         */
-        DESCENDING
-    }
-
     private final String substring;
     private final boolean caseSensitive;
     private final String regex;
@@ -43,7 +29,6 @@ public final class ChatQuery {
     private final long limit;
     private final Sort sort;
     private final LocalDateTime offset;
-
     private ChatQuery(String substring, boolean caseSensitive, String regex, String version,
                       LocalDateTime startingAt, LocalDateTime upUntil, int contextLines, long limit, Sort sort,
                       LocalDateTime offset) {
@@ -64,6 +49,12 @@ public final class ChatQuery {
      */
     public static ChatQuery all() {
         return new ChatQuery(null, false, null, null, null, null, 0, -1, Sort.ASCENDING, null);
+    }
+
+    private static void requireOrderedBounds(LocalDateTime startingAt, LocalDateTime upUntil) {
+        if (startingAt != null && upUntil != null && startingAt.isAfter(upUntil)) {
+            throw new IllegalArgumentException("startingAt " + startingAt + " is after upUntil " + upUntil);
+        }
     }
 
     /**
@@ -221,9 +212,17 @@ public final class ChatQuery {
             + ", contextLines=" + contextLines + ", limit=" + limit + ", sort=" + sort + ", offset=" + offset + "]";
     }
 
-    private static void requireOrderedBounds(LocalDateTime startingAt, LocalDateTime upUntil) {
-        if (startingAt != null && upUntil != null && startingAt.isAfter(upUntil)) {
-            throw new IllegalArgumentException("startingAt " + startingAt + " is after upUntil " + upUntil);
-        }
+    /**
+     * Result order by timestamp, then file id, then line index.
+     */
+    public enum Sort {
+        /**
+         * Oldest first; the default.
+         */
+        ASCENDING,
+        /**
+         * Newest first.
+         */
+        DESCENDING
     }
 }

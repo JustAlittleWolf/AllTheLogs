@@ -34,8 +34,10 @@ public final class TimelineLogList extends BaseUIComponent {
     private double scrollY;
     private boolean loading;
     private boolean draggingTimeline;
-    private Consumer<Edge> onApproachEdge = edge -> {};
-    private Consumer<LocalDateTime> onJump = time -> {};
+    private Consumer<Edge> onApproachEdge = edge -> {
+    };
+    private Consumer<LocalDateTime> onJump = time -> {
+    };
 
     public TimelineLogList() {
         this.sizing(Sizing.fill(), Sizing.fill());

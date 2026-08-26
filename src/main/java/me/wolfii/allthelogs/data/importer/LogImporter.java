@@ -1,10 +1,6 @@
 package me.wolfii.allthelogs.data.importer;
 
-import me.wolfii.allthelogs.data.ImportOptions;
-import me.wolfii.allthelogs.data.ImportProgress;
-import me.wolfii.allthelogs.data.ImportResult;
-import me.wolfii.allthelogs.data.LogDataException;
-import me.wolfii.allthelogs.data.LogSource;
+import me.wolfii.allthelogs.data.*;
 import me.wolfii.allthelogs.data.discover.ImportObserver;
 import me.wolfii.allthelogs.data.discover.LogCandidate;
 import me.wolfii.allthelogs.data.discover.LogDiscovery;
@@ -22,11 +18,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -47,6 +39,34 @@ public final class LogImporter {
 
     public LogImporter(DuckDBConnection connection) {
         this.connection = connection;
+    }
+
+    private static LogSource sourceOf(PreparedLog log) {
+        return switch (log.sourceKind()) {
+            case FILE -> new LogSource.File(Path.of(log.sourcePath()));
+            case ARCHIVE -> new LogSource.Archive(Path.of(log.sourcePath()), log.entryPath());
+            case SESSION -> new LogSource.Session(log.sessionId());
+        };
+    }
+
+    private static String failurePath(LogCandidate candidate) {
+        if (candidate.sourceKind() == SourceKind.FILE || candidate.entryPath().isEmpty()) {
+            return candidate.sourcePath();
+        }
+        return candidate.sourcePath() + LogDiscovery.ARCHIVE_SEPARATOR + candidate.entryPath();
+    }
+
+    /** Drains leftover work so parsing threads do not stay blocked on a full queue if writing failed. */
+    private static void drain(BlockingQueue<PreparedLog> queue, Thread discoverer) throws InterruptedException {
+        while (discoverer.isAlive() || !queue.isEmpty()) {
+            queue.poll(50, TimeUnit.MILLISECONDS);
+        }
+        discoverer.join();
+    }
+
+    private static void awaitTermination(ExecutorService parsers) throws InterruptedException {
+        while (!parsers.awaitTermination(1, TimeUnit.MINUTES)) {
+        }
     }
 
     /**
@@ -167,34 +187,6 @@ public final class LogImporter {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new LogDataException("import was interrupted", e);
-        }
-    }
-
-    private static LogSource sourceOf(PreparedLog log) {
-        return switch (log.sourceKind()) {
-            case FILE -> new LogSource.File(Path.of(log.sourcePath()));
-            case ARCHIVE -> new LogSource.Archive(Path.of(log.sourcePath()), log.entryPath());
-            case SESSION -> new LogSource.Session(log.sessionId());
-        };
-    }
-
-    private static String failurePath(LogCandidate candidate) {
-        if (candidate.sourceKind() == SourceKind.FILE || candidate.entryPath().isEmpty()) {
-            return candidate.sourcePath();
-        }
-        return candidate.sourcePath() + LogDiscovery.ARCHIVE_SEPARATOR + candidate.entryPath();
-    }
-
-    /** Drains leftover work so parsing threads do not stay blocked on a full queue if writing failed. */
-    private static void drain(BlockingQueue<PreparedLog> queue, Thread discoverer) throws InterruptedException {
-        while (discoverer.isAlive() || !queue.isEmpty()) {
-            queue.poll(50, TimeUnit.MILLISECONDS);
-        }
-        discoverer.join();
-    }
-
-    private static void awaitTermination(ExecutorService parsers) throws InterruptedException {
-        while (!parsers.awaitTermination(1, TimeUnit.MINUTES)) {
         }
     }
 }

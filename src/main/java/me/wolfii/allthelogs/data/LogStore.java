@@ -31,7 +31,7 @@ import java.util.function.Consumer;
  *                     + " " + progress.current()));
  *     List<ChatEntry> hits = store.query(ChatQuery.all().withSubstring("welcome").withContextLines(2));
  * }
- * }
+ *}
  * <p>
  * A store is not safe for use from several threads at once; imports parallelise internally. Session capture
  * ({@link #startSession(String)}, {@link #importSessionMessage(String)}) does not report progress.
@@ -74,6 +74,22 @@ public final class LogStore implements AutoCloseable {
             return new LogStore(StoreConnections.openInMemory(), null);
         } catch (SQLException e) {
             throw new LogDataException("could not open in-memory log database", e);
+        }
+    }
+
+    private static long onDiskSize(Path database) {
+        return sizeIfPresent(database) + sizeIfPresent(walPath(database));
+    }
+
+    private static Path walPath(Path database) {
+        return database.resolveSibling(database.getFileName().toString() + ".wal");
+    }
+
+    private static long sizeIfPresent(Path path) {
+        try {
+            return Files.isRegularFile(path) ? Files.size(path) : 0L;
+        } catch (IOException e) {
+            throw new LogDataException("could not read size of " + path, e);
         }
     }
 
@@ -269,22 +285,6 @@ public final class LogStore implements AutoCloseable {
             return queries.reportedDatabaseSize();
         }
         return onDiskSize(databasePath);
-    }
-
-    private static long onDiskSize(Path database) {
-        return sizeIfPresent(database) + sizeIfPresent(walPath(database));
-    }
-
-    private static Path walPath(Path database) {
-        return database.resolveSibling(database.getFileName().toString() + ".wal");
-    }
-
-    private static long sizeIfPresent(Path path) {
-        try {
-            return Files.isRegularFile(path) ? Files.size(path) : 0L;
-        } catch (IOException e) {
-            throw new LogDataException("could not read size of " + path, e);
-        }
     }
 
     @Override
