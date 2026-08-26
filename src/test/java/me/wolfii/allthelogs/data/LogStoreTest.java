@@ -273,8 +273,9 @@ class LogStoreTest {
     void filtersByDateRangeExcludingTheUpperBound() throws IOException {
         store.importDirectory(logsDirectory());
 
-        List<ChatEntry> hits = store.query(ChatQuery.all().withRange(
-                LocalDateTime.of(2026, 8, 25, 0, 0), LocalDateTime.of(2026, 8, 26, 0, 0)));
+        List<ChatEntry> hits = store.query(ChatQuery.all()
+                .startingAt(LocalDateTime.of(2026, 8, 25, 0, 0))
+                .upUntil(LocalDateTime.of(2026, 8, 26, 0, 0)));
         assertEquals(List.of("delta", "needle in here", "epsilon"), hits.stream().map(ChatEntry::message).toList());
     }
 
@@ -284,7 +285,8 @@ class LogStoreTest {
 
         List<ChatEntry> hits = store.query(ChatQuery.all()
                 .withSubstring("needle")
-                .withRange(LocalDateTime.of(2026, 8, 25, 0, 0), LocalDateTime.of(2026, 8, 26, 0, 0)));
+                .startingAt(LocalDateTime.of(2026, 8, 25, 0, 0))
+                .upUntil(LocalDateTime.of(2026, 8, 26, 0, 0)));
         assertEquals(List.of("needle in here"), hits.stream().map(ChatEntry::message).toList());
     }
 
@@ -322,7 +324,8 @@ class LogStoreTest {
         List<ChatEntry> hits = store.query(ChatQuery.all()
                 .withSubstring("delta")
                 .withContextLines(5)
-                .withRange(LocalDateTime.of(2026, 8, 25, 10, 0, 10), LocalDateTime.of(2026, 8, 25, 10, 0, 12)));
+                .startingAt(LocalDateTime.of(2026, 8, 25, 10, 0, 10))
+                .upUntil(LocalDateTime.of(2026, 8, 25, 10, 0, 12)));
         assertEquals(List.of("delta", "needle in here"), hits.stream().map(ChatEntry::message).toList());
     }
 
@@ -331,7 +334,7 @@ class LogStoreTest {
         store.importDirectory(logsDirectory());
 
         List<ChatEntry> ascending = store.logEntries();
-        List<ChatEntry> descending = store.query(ChatQuery.all().withDescending(true));
+        List<ChatEntry> descending = store.query(ChatQuery.all().withSort(ChatQuery.Sort.DESCENDING));
 
         assertEquals(ascending.getFirst().message(), descending.getLast().message());
         assertEquals(ascending.getLast().message(), descending.getFirst().message());
@@ -343,6 +346,138 @@ class LogStoreTest {
         store.importDirectory(logsDirectory());
 
         assertEquals(2, store.query(ChatQuery.all().withLimit(2)).size());
+    }
+
+    @Test
+    void sortsDescendingWithTheSortOption() throws IOException {
+        store.importDirectory(logsDirectory());
+
+        List<ChatEntry> bySort = store.query(ChatQuery.all().withSort(ChatQuery.Sort.DESCENDING));
+
+        assertTrue(bySort.getFirst().timestamp().isAfter(bySort.getLast().timestamp()));
+    }
+
+    @Test
+    void timestampOffsetPagesForwardAndBackward() throws IOException {
+        importOffsetLog();
+
+        List<String> forward = store.query(ChatQuery.all()
+                .withOffset(LocalDateTime.of(2026, 6, 1, 10, 0, 11)))
+            .stream().map(ChatEntry::message).toList();
+        assertEquals(List.of("hit", "four", "five"), forward);
+
+        List<String> backward = store.query(ChatQuery.all()
+                .withSort(ChatQuery.Sort.DESCENDING)
+                .withOffset(LocalDateTime.of(2026, 6, 1, 10, 0, 13)))
+            .stream().map(ChatEntry::message).toList();
+        assertEquals(List.of("hit", "two", "one"), backward);
+    }
+
+    @Test
+    void timestampOffsetComplementsTheLimit() throws IOException {
+        importOffsetLog();
+
+        List<ChatEntry> page1 = store.query(ChatQuery.all().withLimit(2));
+        assertEquals(List.of("one", "two"), page1.stream().map(ChatEntry::message).toList());
+
+        List<ChatEntry> page2 = store.query(ChatQuery.all()
+            .withOffset(page1.getLast().timestamp())
+            .withLimit(2));
+        assertEquals(List.of("hit", "four"), page2.stream().map(ChatEntry::message).toList());
+
+        List<ChatEntry> page3 = store.query(ChatQuery.all()
+            .withOffset(page2.getLast().timestamp())
+            .withLimit(2));
+        assertEquals(List.of("five"), page3.stream().map(ChatEntry::message).toList());
+    }
+
+    @Test
+    void timestampOffsetPagesNewestFirst() throws IOException {
+        importOffsetLog();
+
+        List<ChatEntry> page1 = store.query(ChatQuery.all()
+            .withSort(ChatQuery.Sort.DESCENDING)
+            .withLimit(2));
+        assertEquals(List.of("five", "four"), page1.stream().map(ChatEntry::message).toList());
+
+        List<ChatEntry> page2 = store.query(ChatQuery.all()
+            .withSort(ChatQuery.Sort.DESCENDING)
+            .withOffset(page1.getLast().timestamp())
+            .withLimit(2));
+        assertEquals(List.of("hit", "two"), page2.stream().map(ChatEntry::message).toList());
+    }
+
+    @Test
+    void contextLinesMayExtendBeyondTheTimestampOffset() throws IOException {
+        importOffsetLog();
+
+        List<String> after = store.query(ChatQuery.all()
+                .withSubstring("hit")
+                .withContextLines(2)
+                .withOffset(LocalDateTime.of(2026, 6, 1, 10, 0, 11)))
+            .stream().map(ChatEntry::message).toList();
+        assertEquals(List.of("one", "two", "hit", "four", "five"), after);
+
+        List<String> before = store.query(ChatQuery.all()
+                .withSubstring("hit")
+                .withContextLines(2)
+                .withSort(ChatQuery.Sort.DESCENDING)
+                .withOffset(LocalDateTime.of(2026, 6, 1, 10, 0, 13)))
+            .stream().map(ChatEntry::message).toList();
+        assertEquals(List.of("five", "four", "hit", "two", "one"), before);
+    }
+
+    @Test
+    void limitAppliesToMatchesBeforeContextIsExpanded() throws IOException {
+        importOffsetLog();
+
+        List<String> hits = store.query(ChatQuery.all()
+                .withSubstring("t")
+                .withContextLines(1)
+                .withLimit(1))
+            .stream().map(ChatEntry::message).toList();
+        // "two" is the first match for "t" in ascending order; context adds "one" and "hit".
+        assertEquals(List.of("one", "two", "hit"), hits);
+    }
+
+    @Test
+    void timeWindowStillClipsContextWhenAnOffsetIsSet() throws IOException {
+        importOffsetLog();
+
+        List<String> hits = store.query(ChatQuery.all()
+                .withSubstring("hit")
+                .withContextLines(2)
+                .withOffset(LocalDateTime.of(2026, 6, 1, 10, 0, 11))
+                .startingAt(LocalDateTime.of(2026, 6, 1, 10, 0, 12))
+                .upUntil(LocalDateTime.of(2026, 6, 1, 10, 0, 14)))
+            .stream().map(ChatEntry::message).toList();
+        assertEquals(List.of("hit", "four"), hits);
+    }
+
+    @Test
+    void startingAtAloneKeepsEntriesFromThatInstant() throws IOException {
+        importOffsetLog();
+
+        List<String> hits = store.query(ChatQuery.all()
+                .startingAt(LocalDateTime.of(2026, 6, 1, 10, 0, 12)))
+            .stream().map(ChatEntry::message).toList();
+        assertEquals(List.of("hit", "four", "five"), hits);
+    }
+
+    @Test
+    void upUntilAloneKeepsEntriesBeforeThatInstant() throws IOException {
+        importOffsetLog();
+
+        List<String> hits = store.query(ChatQuery.all()
+                .upUntil(LocalDateTime.of(2026, 6, 1, 10, 0, 12)))
+            .stream().map(ChatEntry::message).toList();
+        assertEquals(List.of("one", "two"), hits);
+    }
+
+    private void importOffsetLog() throws IOException {
+        LogFixtures.writeGzipped(tempDir.resolve("logs"), "2026-06-01-1.log.gz",
+            LogFixtures.modernLog("26.2", "one", "two", "hit", "four", "five"));
+        store.importDirectory(tempDir);
     }
 
     @Test

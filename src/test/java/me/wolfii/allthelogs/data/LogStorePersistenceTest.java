@@ -62,14 +62,16 @@ class LogStorePersistenceTest {
             List<ChatEntry> regex = store.query(ChatQuery.all().withRegex("^(alpha|gamma)$"));
             assertEquals(List.of("alpha", "gamma"), regex.stream().map(ChatEntry::message).toList());
 
-            List<ChatEntry> range = store.query(ChatQuery.all().withRange(
-                    LocalDateTime.of(2026, 8, 25, 0, 0), LocalDateTime.of(2026, 8, 26, 0, 0)));
+            List<ChatEntry> range = store.query(ChatQuery.all()
+                    .startingAt(LocalDateTime.of(2026, 8, 25, 0, 0))
+                    .upUntil(LocalDateTime.of(2026, 8, 26, 0, 0)));
             assertEquals(List.of("delta", "needle in here", "epsilon"),
                     range.stream().map(ChatEntry::message).toList());
 
             List<ChatEntry> combined = store.query(ChatQuery.all()
                     .withSubstring("needle")
-                    .withRange(LocalDateTime.of(2026, 8, 25, 0, 0), LocalDateTime.of(2026, 8, 26, 0, 0)));
+                    .startingAt(LocalDateTime.of(2026, 8, 25, 0, 0))
+                    .upUntil(LocalDateTime.of(2026, 8, 26, 0, 0)));
             assertEquals(List.of("needle in here"), combined.stream().map(ChatEntry::message).toList());
 
             List<ChatEntry> withContext = store.query(ChatQuery.all()

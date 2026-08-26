@@ -93,7 +93,7 @@ class RealDatasetTest {
             LocalDateTime from = earliest.date().atStartOfDay();
             LocalDateTime to = latest.date().plusDays(1).atStartOfDay();
 
-            assertEquals(store.logEntries().size(), store.query(ChatQuery.all().withRange(from, to)).size());
+            assertEquals(store.logEntries().size(), store.query(ChatQuery.all().startingAt(from).upUntil(to)).size());
 
             List<ChatEntry> withContext = store.query(ChatQuery.all()
                     .withRegex("(?i)joined the game|left the game|<")
