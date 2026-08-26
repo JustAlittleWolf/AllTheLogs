@@ -137,9 +137,9 @@ class LogStoreTest {
         assertEquals(1, result.importedFiles());
         ChatEntry entry = store.query(ChatQuery.all().withSubstring("in archive")).getFirst();
         LogSource.Archive source = assertInstanceOf(LogSource.Archive.class, entry.chatLog().source());
-        assertEquals("2026-01-02-1.log.gz", source.fileName());
-        assertEquals(archive.toAbsolutePath().normalize().toString(), source.path());
-        assertEquals("logs/2026-01-02-1.log.gz", source.entryPath());
+        Path expected = Path.of(archive.toAbsolutePath().normalize() + "!/logs/2026-01-02-1.log.gz");
+        assertEquals(expected, source.path());
+        assertEquals("2026-01-02-1.log.gz", source.path().getFileName().toString());
         assertEquals("1.21.8", entry.chatLog().minecraftVersion());
     }
 
@@ -170,7 +170,9 @@ class LogStoreTest {
 
         assertEquals(1, result.importedFiles());
         ChatEntry entry = store.query(ChatQuery.all().withSubstring("deeply nested")).getFirst();
-        assertEquals("instances/inner.zip!/logs/2026-02-03-1.log", entryPath(entry.chatLog()));
+        LogSource.Archive source = assertInstanceOf(LogSource.Archive.class, entry.chatLog().source());
+        Path expected = Path.of(outer.toAbsolutePath().normalize() + "!/instances/inner.zip!/logs/2026-02-03-1.log");
+        assertEquals(expected, source.path());
     }
 
     @Test
@@ -186,6 +188,19 @@ class LogStoreTest {
         ImportResult result = store.importArchive(outer, ImportOptions.defaults().withNestedArchives(false));
 
         assertEquals(0, result.importedFiles());
+    }
+
+    @Test
+    void directoryImportRecordsArchivesAgainstTheArchiveFile() throws IOException {
+        Path archive = LogFixtures.writeZip(tempDir.resolve("instance/backup.zip"), new LinkedHashMap<>(Map.of(
+                "logs/2026-01-02-1.log.gz", LogFixtures.modernLog("1.21.8", "from nested zip"))));
+
+        store.importDirectory(tempDir);
+
+        ChatEntry entry = store.query(ChatQuery.all().withSubstring("from nested zip")).getFirst();
+        LogSource.Archive source = assertInstanceOf(LogSource.Archive.class, entry.chatLog().source());
+        Path expected = Path.of(archive.toAbsolutePath().normalize() + "!/logs/2026-01-02-1.log.gz");
+        assertEquals(expected, source.path());
     }
 
     @Test
@@ -755,16 +770,8 @@ class LogStoreTest {
     private static String fileName(ChatLog log) {
         return switch (log.source()) {
             case LogSource.File file -> file.path().getFileName().toString();
-            case LogSource.Archive archive -> archive.fileName();
+            case LogSource.Archive archive -> archive.path().getFileName().toString();
             case LogSource.Session session -> throw new AssertionError("session has no file name");
-        };
-    }
-
-    private static String entryPath(ChatLog log) {
-        return switch (log.source()) {
-            case LogSource.File file -> throw new AssertionError("file has no archive entry path");
-            case LogSource.Archive archive -> archive.entryPath();
-            case LogSource.Session session -> throw new AssertionError("session has no entry path");
         };
     }
 }

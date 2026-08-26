@@ -110,7 +110,7 @@ class RealDatasetTest {
     private static String entryPath(LogSource source) {
         return switch (source) {
             case LogSource.File file -> file.path().toString();
-            case LogSource.Archive archive -> archive.entryPath();
+            case LogSource.Archive archive -> archive.path().toString();
             case LogSource.Session session -> "session";
         };
     }

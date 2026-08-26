@@ -93,7 +93,7 @@ public final class LogDiscovery {
         if (!Files.isRegularFile(absolute)) {
             throw new LogDataException("not a file: " + absolute);
         }
-        readArchive(absolute, absolute.toString(), absolute.toString(), "", absolute.getFileName().toString());
+        readArchive(absolute, absolute.toString(), absolute.toString(), "", "", absolute.getFileName().toString());
     }
 
     private void walk(Path root, Path directory, String prefix) {
@@ -124,41 +124,45 @@ public final class LogDiscovery {
                     child.toAbsolutePath().normalize().toString(), "",
                     lastModified(child), content));
             } else if (options.nestedArchives() && isArchive(name)) {
-                readArchive(child, root.toString(), child.toString(), entryPath + ARCHIVE_SEPARATOR, name);
+                readArchive(child, child.toAbsolutePath().normalize().toString(), child.toString(),
+                    "", entryPath + ARCHIVE_SEPARATOR, name);
             }
         }
     }
 
-    /// @param sourcePath  the import root recorded on the resulting candidates
+    /// @param sourcePath  absolute path of the archive file recorded on the resulting candidates
     /// @param description human readable location of this archive, used in failure messages
-    /// @param prefix      path prefix that entries of this archive get, already ending in [#ARCHIVE_SEPARATOR]
-    private void readArchive(Path archive, String sourcePath, String description, String prefix, String archiveName) {
+    /// @param prefix      path prefix that entries of this archive get inside the outermost archive
+    /// @param globPrefix  path prefix used for [ImportOptions#pathMatcher()], relative to the import root
+    private void readArchive(Path archive, String sourcePath, String description, String prefix, String globPrefix,
+                             String archiveName) {
         try {
             if (archiveName.toLowerCase(Locale.ROOT).endsWith(".7z")) {
-                readSevenZip(archive, sourcePath, description, prefix);
+                readSevenZip(archive, sourcePath, description, prefix, globPrefix);
             } else {
-                readStreamedArchive(archive, sourcePath, description, prefix);
+                readStreamedArchive(archive, sourcePath, description, prefix, globPrefix);
             }
         } catch (IOException | RuntimeException e) {
             failures.add(new ImportResult.Failure(description, "could not read archive: " + e));
         }
     }
 
-    private void readSevenZip(Path archive, String sourcePath, String description, String prefix) throws IOException {
+    private void readSevenZip(Path archive, String sourcePath, String description, String prefix, String globPrefix)
+        throws IOException {
         try (SevenZFile file = SevenZFile.builder().setPath(archive).get()) {
             SevenZArchiveEntry entry;
             while ((entry = file.getNextEntry()) != null) {
                 if (entry.isDirectory()) continue;
                 Instant modified = entry.getHasLastModifiedDate()
                     ? entry.getLastModifiedDate().toInstant() : null;
-                handleArchiveEntry(entry.getName(), modified, sourcePath, description, prefix, entry.getSize(),
-                    () -> new SevenZEntryStream(file));
+                handleArchiveEntry(entry.getName(), modified, sourcePath, description, prefix, globPrefix,
+                    entry.getSize(), () -> new SevenZEntryStream(file));
             }
         }
     }
 
-    private void readStreamedArchive(Path archive, String sourcePath, String description, String prefix)
-        throws IOException {
+    private void readStreamedArchive(Path archive, String sourcePath, String description, String prefix,
+                                     String globPrefix) throws IOException {
         InputStream input = new BufferedInputStream(Files.newInputStream(archive), STREAM_BUFFER);
         try {
             try {
@@ -172,8 +176,8 @@ public final class LogDiscovery {
                     if (entry.isDirectory() || !stream.canReadEntryData(entry)) continue;
                     Instant modified = entry.getLastModifiedDate() == null ? null
                         : toInstant(entry.getLastModifiedDate().getTime());
-                    handleArchiveEntry(entry.getName(), modified, sourcePath, description, prefix, entry.getSize(),
-                        () -> new NonClosingStream(stream));
+                    handleArchiveEntry(entry.getName(), modified, sourcePath, description, prefix, globPrefix,
+                        entry.getSize(), () -> new NonClosingStream(stream));
                 }
             } catch (Exception e) {
                 throw new IOException(e.getMessage(), e);
@@ -184,7 +188,8 @@ public final class LogDiscovery {
     }
 
     private void handleArchiveEntry(String rawName, Instant modified, String sourcePath, String description,
-                                    String prefix, long size, ContentSupplier content) throws IOException {
+                                    String prefix, String globPrefix, long size, ContentSupplier content)
+        throws IOException {
         String normalized = rawName.replace('\\', '/');
         if (normalized.startsWith("./")) normalized = normalized.substring(2);
         String name = normalized.substring(normalized.lastIndexOf('/') + 1);
@@ -193,7 +198,7 @@ public final class LogDiscovery {
         if (nested && !options.recursive()) return;
 
         if (isLogFile(name)) {
-            if (!matches(entryPath)) return;
+            if (!matches(globPrefix + normalized)) return;
             byte[] bytes;
             try (InputStream stream = content.open()) {
                 bytes = readFully(stream, size);
@@ -206,7 +211,7 @@ public final class LogDiscovery {
                     Files.copy(stream, temporary, StandardCopyOption.REPLACE_EXISTING);
                 }
                 readArchive(temporary, sourcePath, description + ARCHIVE_SEPARATOR + normalized,
-                    entryPath + ARCHIVE_SEPARATOR, name);
+                    entryPath + ARCHIVE_SEPARATOR, globPrefix + normalized + ARCHIVE_SEPARATOR, name);
             } finally {
                 Files.deleteIfExists(temporary);
             }

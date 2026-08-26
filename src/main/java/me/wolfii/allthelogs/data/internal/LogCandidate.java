@@ -9,7 +9,7 @@ import java.time.Instant;
 ///
 /// @param fileName     bare file name
 /// @param sourceKind   whether it came from a file on disk or an archive
-/// @param sourcePath   absolute path of the log file, or of the import root for an archive
+/// @param sourcePath   absolute path of the log file, or of the archive file for an archive entry
 /// @param entryPath    path within the archive, always `/` separated, nested archives separated by `!/`; empty for a
 ///                     file on disk
 /// @param lastModified last modification instant, or `null` if the source does not report one

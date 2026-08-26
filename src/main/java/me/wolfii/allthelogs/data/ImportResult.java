@@ -19,7 +19,7 @@ public record ImportResult(
     List<Failure> failures
 ) {
     /// @param path   the path of the file that failed; for files on disk this is the file path, for archives it is
-    ///               formatted like [LogSource.Archive#entryPath()]
+    ///               the archive path then `!/` then the entry inside it
     /// @param reason human readable description of what went wrong
     public record Failure(String path, String reason) {
     }

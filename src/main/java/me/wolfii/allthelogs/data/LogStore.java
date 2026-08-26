@@ -235,13 +235,16 @@ public final class LogStore implements AutoCloseable {
         }
         return switch (sourceKind) {
             case FILE -> new LogSource.File(Path.of(path));
-            case ARCHIVE -> new LogSource.Archive(fileName, path, entryPath);
+            case ARCHIVE -> new LogSource.Archive(Path.of(path + LogDiscovery.ARCHIVE_SEPARATOR + entryPath));
             case SESSION -> new LogSource.Session();
         };
     }
 
     private static String failurePath(LogCandidate candidate) {
-        return candidate.sourceKind() == SourceKind.FILE ? candidate.sourcePath() : candidate.entryPath();
+        if (candidate.sourceKind() == SourceKind.FILE || candidate.entryPath().isEmpty()) {
+            return candidate.sourcePath();
+        }
+        return candidate.sourcePath() + LogDiscovery.ARCHIVE_SEPARATOR + candidate.entryPath();
     }
 
     /// The file this store is backed by, or empty for an in memory store.
@@ -272,7 +275,8 @@ public final class LogStore implements AutoCloseable {
 
     /// Imports every log file inside `archive`. Zip, 7z, tar and tar.gz archives are supported.
     ///
-    /// @param archive the archive to read; [LogSource.Archive#entryPath()] of the results is relative to its root
+    /// @param archive the archive to read; [LogSource.Archive#path()] of the results is the archive file, then `!/`,
+    ///                then the path of the log inside it
     /// @throws LogDataException if `archive` is not a file, or the database rejects the writes
     public ImportResult importArchive(Path archive, ImportOptions options) {
         Objects.requireNonNull(archive, "archive");
