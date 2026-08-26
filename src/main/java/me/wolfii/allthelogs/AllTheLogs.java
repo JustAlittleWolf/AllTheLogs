@@ -5,10 +5,6 @@ package me.wolfii.allthelogs;
  */
 public final class AllTheLogs {
     public static final String MOD_ID = "allthelogs";
-    public static final String DATABASE_DIRECTORY = ".allthelogs";
-    public static final String DATABASE_FILE_NAME = "logs.duckdb";
-    public static final String CONFIG_DIRECTORY = ".config";
-    public static final String CONFIG_FILE_NAME = "allthelogs.json";
 
     /**
      * Glob relative to a {@code logs} directory that matches chat logs. {@code latest.log} is skipped in discovery

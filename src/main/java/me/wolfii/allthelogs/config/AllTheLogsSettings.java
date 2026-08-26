@@ -13,7 +13,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Persisted browser defaults, stored as JSON under the instance {@code .config} directory.
+ * Persisted browser defaults, stored as JSON in Fabric's config directory.
  */
 public final class AllTheLogsSettings {
     private static final Pattern STRING = Pattern.compile("\"(contextLines|limit|caseSensitive|regex|sort)\"\\s*:\\s*(\"[^\"]*\"|true|false|-?\\d+)");
