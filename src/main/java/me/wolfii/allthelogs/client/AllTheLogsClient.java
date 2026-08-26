@@ -63,7 +63,7 @@ public final class AllTheLogsClient implements ClientModInitializer {
                     LOGGER.error("AllTheLogs failed to start", error);
                     return;
                 }
-                if (log != null && log.source() instanceof LogSource.Session session) {
+                if (log != null && log.source() instanceof LogSource.Session session && session.id() != null) {
                     LOGGER.info(SessionMarker.message(session.id()));
                 }
             });

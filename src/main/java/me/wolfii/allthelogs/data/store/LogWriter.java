@@ -47,7 +47,8 @@ public final class LogWriter implements AutoCloseable {
                 String entryPath = result.getString(4);
                 existingLocations.put(locationKey(sourcePath, entryPath), id);
                 if (SourceKind.SESSION.name().equals(kind)) {
-                    knownSessionIds.add(SessionMarker.idFromEntryPath(entryPath));
+                    String sessionId = SessionMarker.idFromEntryPath(entryPath);
+                    if (sessionId != null) knownSessionIds.add(sessionId);
                 }
                 nextFileId = Math.max(nextFileId, id + 1);
             }

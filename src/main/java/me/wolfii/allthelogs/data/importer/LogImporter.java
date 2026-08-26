@@ -174,7 +174,7 @@ public final class LogImporter {
         return switch (log.sourceKind()) {
             case FILE -> new LogSource.File(Path.of(log.sourcePath()));
             case ARCHIVE -> new LogSource.Archive(Path.of(log.sourcePath()), log.entryPath());
-            case SESSION -> new LogSource.Session(log.sessionId() == null ? "" : log.sessionId());
+            case SESSION -> new LogSource.Session(log.sessionId());
         };
     }
 

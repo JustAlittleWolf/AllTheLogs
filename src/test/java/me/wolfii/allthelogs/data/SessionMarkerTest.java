@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SessionMarkerTest {
@@ -35,6 +36,7 @@ class SessionMarkerTest {
     void roundTripsThroughTheStoredEntryPath() {
         String id = SessionMarker.newId();
         assertEquals(id, SessionMarker.idFromEntryPath(SessionMarker.entryPath(id)));
-        assertEquals("0", SessionMarker.idFromEntryPath("session/0"));
+        assertNull(SessionMarker.idFromEntryPath("session/0"));
+        assertNull(SessionMarker.idFromEntryPath(null));
     }
 }

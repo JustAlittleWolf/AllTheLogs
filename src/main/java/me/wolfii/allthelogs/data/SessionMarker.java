@@ -49,14 +49,12 @@ public final class SessionMarker {
     }
 
     /**
-     * Recovers the session id from a stored {@code entry_path}, or the path itself when it has no prefix
-     * (legacy rows used {@code session/<file-id>}).
+     * Recovers the session UUID from a stored {@code entry_path}, or {@code null} if that path is not a session id.
      */
     public static String idFromEntryPath(String entryPath) {
-        if (entryPath != null && entryPath.startsWith(SESSION_PATH_PREFIX)) {
-            return entryPath.substring(SESSION_PATH_PREFIX.length());
-        }
-        return entryPath == null ? "" : entryPath;
+        if (entryPath == null || !entryPath.startsWith(SESSION_PATH_PREFIX)) return null;
+        String id = entryPath.substring(SESSION_PATH_PREFIX.length()).toLowerCase(Locale.ROOT);
+        return isId(id) ? id : null;
     }
 
     /**
@@ -70,7 +68,7 @@ public final class SessionMarker {
     }
 
     /**
-     * Whether {@code value} looks like a session UUID rather than a legacy numeric path.
+     * Whether {@code value} is a session UUID.
      */
     public static boolean isId(String value) {
         return value != null && ID.matcher(value).matches();
