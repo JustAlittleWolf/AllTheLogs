@@ -7,6 +7,7 @@ import io.wispforest.owo.ui.container.ScrollContainer;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.*;
 import me.wolfii.allthelogs.client.AllTheLogsClient;
+import me.wolfii.allthelogs.client.AllTheLogsPaths;
 import me.wolfii.allthelogs.client.CommonLogLocations;
 import me.wolfii.allthelogs.client.NativeFilePicker;
 import me.wolfii.allthelogs.data.ImportOptions;
@@ -158,7 +159,7 @@ public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
     private Path currentPath() {
         String text = pathBox.getValue();
         if (text == null || text.isBlank()) {
-            return AllTheLogsClient.gameDirectory();
+            return AllTheLogsPaths.gameDirectory();
         }
         return Path.of(text);
     }

@@ -22,14 +22,8 @@ public final class ContextColors {
     }
 
     public static int contextText(Duration distanceFromMatch) {
-        double t = clamp01(distanceFromMatch.toMillis() / (double) MAX_DISTANCE_MILLIS);
+        double t = Math.clamp(distanceFromMatch.toMillis() / (double) MAX_DISTANCE_MILLIS, 0, 1);
         int channel = (int) Math.round(NEAR_GRAY + (FAR_GRAY - NEAR_GRAY) * t);
         return 0xFF000000 | (channel << 16) | (channel << 8) | channel;
-    }
-
-    private static double clamp01(double value) {
-        if (value < 0) return 0;
-        if (value > 1) return 1;
-        return value;
     }
 }

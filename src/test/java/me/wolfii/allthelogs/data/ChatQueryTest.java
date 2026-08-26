@@ -83,4 +83,10 @@ class ChatQueryTest {
         assertEquals("26.2", first.version());
         assertEquals("1.8.9", first.withVersion("1.8.9").version());
     }
+
+    @Test
+    void sortOppositeSwapsAscendingAndDescending() {
+        assertEquals(ChatQuery.Sort.DESCENDING, ChatQuery.Sort.ASCENDING.opposite());
+        assertEquals(ChatQuery.Sort.ASCENDING, ChatQuery.Sort.DESCENDING.opposite());
+    }
 }

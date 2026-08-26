@@ -18,30 +18,22 @@ import java.util.Objects;
  *         .withContextLines(2);
  *}
  */
-public final class ChatQuery {
-    private final String substring;
-    private final boolean caseSensitive;
-    private final String regex;
-    private final String version;
-    private final LocalDateTime startingAt;
-    private final LocalDateTime upUntil;
-    private final int contextLines;
-    private final long limit;
-    private final Sort sort;
-    private final LocalDateTime offset;
-    private ChatQuery(String substring, boolean caseSensitive, String regex, String version,
-                      LocalDateTime startingAt, LocalDateTime upUntil, int contextLines, long limit, Sort sort,
-                      LocalDateTime offset) {
-        this.substring = substring;
-        this.caseSensitive = caseSensitive;
-        this.regex = regex;
-        this.version = version;
-        this.startingAt = startingAt;
-        this.upUntil = upUntil;
-        this.contextLines = contextLines;
-        this.limit = limit;
-        this.sort = sort;
-        this.offset = offset;
+public record ChatQuery(
+    String substring,
+    boolean caseSensitive,
+    String regex,
+    String version,
+    LocalDateTime startingAt,
+    LocalDateTime upUntil,
+    int contextLines,
+    long limit,
+    Sort sort,
+    LocalDateTime offset
+) {
+    public ChatQuery {
+        Objects.requireNonNull(sort, "sort");
+        if (contextLines < 0) throw new IllegalArgumentException("contextLines must not be negative");
+        requireOrderedBounds(startingAt, upUntil);
     }
 
     /**
@@ -100,7 +92,6 @@ public final class ChatQuery {
      */
     public ChatQuery startingAt(LocalDateTime startingAt) {
         Objects.requireNonNull(startingAt, "startingAt");
-        requireOrderedBounds(startingAt, upUntil);
         return new ChatQuery(substring, caseSensitive, regex, version, startingAt, upUntil, contextLines, limit, sort,
             offset);
     }
@@ -111,7 +102,6 @@ public final class ChatQuery {
      */
     public ChatQuery upUntil(LocalDateTime upUntil) {
         Objects.requireNonNull(upUntil, "upUntil");
-        requireOrderedBounds(startingAt, upUntil);
         return new ChatQuery(substring, caseSensitive, regex, version, startingAt, upUntil, contextLines, limit, sort,
             offset);
     }
@@ -121,7 +111,6 @@ public final class ChatQuery {
      * Overlapping context windows are merged, so no entry is ever returned twice.
      */
     public ChatQuery withContextLines(int contextLines) {
-        if (contextLines < 0) throw new IllegalArgumentException("contextLines must not be negative");
         return new ChatQuery(substring, caseSensitive, regex, version, startingAt, upUntil, contextLines, limit, sort,
             offset);
     }
@@ -139,7 +128,6 @@ public final class ChatQuery {
      * Sets the result order. Ascending is oldest first; descending is newest first.
      */
     public ChatQuery withSort(Sort sort) {
-        Objects.requireNonNull(sort, "sort");
         return new ChatQuery(substring, caseSensitive, regex, version, startingAt, upUntil, contextLines, limit, sort,
             offset);
     }
@@ -158,58 +146,11 @@ public final class ChatQuery {
             offset);
     }
 
-    public String substring() {
-        return substring;
-    }
-
-    public boolean caseSensitive() {
-        return caseSensitive;
-    }
-
-    public String regex() {
-        return regex;
-    }
-
-    public String version() {
-        return version;
-    }
-
-    public LocalDateTime startingAt() {
-        return startingAt;
-    }
-
-    public LocalDateTime upUntil() {
-        return upUntil;
-    }
-
-    public int contextLines() {
-        return contextLines;
-    }
-
-    public long limit() {
-        return limit;
-    }
-
-    public Sort sort() {
-        return sort;
-    }
-
-    public LocalDateTime offset() {
-        return offset;
-    }
-
     /**
      * Whether this query filters on the message text at all.
      */
     public boolean hasTextFilter() {
         return substring != null || regex != null;
-    }
-
-    @Override
-    public String toString() {
-        return "ChatQuery[substring=" + substring + ", caseSensitive=" + caseSensitive + ", regex=" + regex
-            + ", version=" + version + ", startingAt=" + startingAt + ", upUntil=" + upUntil
-            + ", contextLines=" + contextLines + ", limit=" + limit + ", sort=" + sort + ", offset=" + offset + "]";
     }
 
     /**
@@ -223,6 +164,10 @@ public final class ChatQuery {
         /**
          * Newest first.
          */
-        DESCENDING
+        DESCENDING;
+
+        public Sort opposite() {
+            return this == ASCENDING ? DESCENDING : ASCENDING;
+        }
     }
 }
