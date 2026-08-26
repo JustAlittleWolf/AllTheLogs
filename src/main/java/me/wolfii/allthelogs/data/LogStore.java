@@ -74,8 +74,8 @@ public final class LogStore implements AutoCloseable {
     /// How many parsed logs may wait for the writer before parsing threads block. Keeps memory bounded while still
     /// letting the writer stay busy.
     private static final int WRITE_QUEUE_CAPACITY = 64;
-    /// Recorded as the source path of the synthetic log files that hold live captured entries.
-    private static final String LIVE_SOURCE_PATH = "<live>";
+    /// Recorded as the source path of the synthetic log files that hold a running client session.
+    private static final String SESSION_SOURCE_PATH = "<session>";
     /// Sentinel that tells the writer loop that no more logs are coming.
     private static final PreparedLog END_OF_STREAM = new PreparedLog(
         "", SourceKind.DIRECTORY, "", "", LocalDate.EPOCH, DateSource.FILE_NAME, "", null, List.of(), List.of(),
@@ -83,6 +83,10 @@ public final class LogStore implements AutoCloseable {
 
     private final DuckDBConnection connection;
     private final Path databasePath;
+    /// File id of the current [DateSource#SESSION], or `-1` when none is active.
+    private long sessionFileId = -1;
+    /// Next line index to assign in the current session.
+    private int sessionLineIndex;
 
     private LogStore(DuckDBConnection connection, Path databasePath) {
         this.connection = connection;
@@ -210,9 +214,13 @@ public final class LogStore implements AutoCloseable {
     }
 
     private static LogFile readLogFile(ResultSet result, int offset) throws SQLException {
+        String kind = result.getString(offset + 1);
+        Optional<SourceKind> sourceKind = kind == null
+            ? Optional.empty()
+            : Optional.of(SourceKind.valueOf(kind));
         return new LogFile(
             result.getString(offset),
-            SourceKind.valueOf(result.getString(offset + 1)),
+            sourceKind,
             result.getString(offset + 2),
             result.getString(offset + 3),
             result.getDate(offset + 4).toLocalDate(),
@@ -347,41 +355,107 @@ public final class LogStore implements AutoCloseable {
         }
     }
 
-    /// Imports a single chat line captured from a running game, stamped with the current time.
+    /// Starts a capture session for a running Minecraft client and creates a [LogFile] for it.
     ///
-    /// Live entries are grouped into one synthetic [LogFile] per day and Minecraft version, whose
-    /// [LogFile#sourceKind()] is [SourceKind#LIVE], so they sit alongside imported logs in every query. A line that
-    /// repeats the timestamp and text of an entry already stored is dropped, which keeps a live capture running next
-    /// to the game from duplicating what the log file import will later pick up.
+    /// Chat lines imported with [#importClient(String)] are stored against this file. Its
+    /// [LogFile#firstEntryTime()] is the session start; [#importClient(String, LocalDateTime)] updates
+    /// [LogFile#lastEntryTime()] as lines arrive. Starting another session leaves the previous file in place and
+    /// switches subsequent imports to the new one.
+    ///
+    /// The file's [LogFile#dateSource()] is [DateSource#SESSION] and [LogFile#sourceKind()] is empty, since the
+    /// lines were captured from the running client rather than read from a directory or archive.
     ///
     /// @param minecraftVersion the version of the running game
-    /// @param message          the chat line as the game rendered it; formatting codes are stripped like on import
-    /// @return `true` if the entry was stored, `false` if it was dropped as a duplicate
-    /// @throws LogDataException if the entry cannot be written
-    public boolean importLive(String minecraftVersion, String message) {
-        return importLive(minecraftVersion, message, LocalDateTime.now());
+    /// @return the created log file, with no entries yet
+    /// @throws LogDataException if the session cannot be written
+    public LogFile startSession(String minecraftVersion) {
+        return startSession(minecraftVersion, LocalDateTime.now());
     }
 
-    /// Imports a single chat line captured from a running game at an explicit time.
+    /// Starts a capture session at an explicit time.
     ///
-    /// @see #importLive(String, String)
-    public boolean importLive(String minecraftVersion, String message, LocalDateTime timestamp) {
+    /// @see #startSession(String)
+    public LogFile startSession(String minecraftVersion, LocalDateTime startedAt) {
         Objects.requireNonNull(minecraftVersion, "minecraftVersion");
-        Objects.requireNonNull(message, "message");
-        Objects.requireNonNull(timestamp, "timestamp");
-
-        // Whole seconds only, so a live entry and the same line read back from the log file collide as intended.
-        LocalDateTime stamp = timestamp.withNano(0);
-        String stripped = FormattingCodes.strip(message);
+        Objects.requireNonNull(startedAt, "startedAt");
+        LocalDateTime start = startedAt.withNano(0);
         try {
-            return writeLiveEntry(minecraftVersion, stripped, stamp);
+            return insertSessionFile(minecraftVersion, start);
         } catch (SQLException e) {
-            throw new LogDataException("could not store live chat entry", e);
+            throw new LogDataException("could not start a client session", e);
         }
     }
 
-    private boolean writeLiveEntry(String minecraftVersion, String message, LocalDateTime timestamp)
-        throws SQLException {
+    /// Imports a single chat line from the running client into the current session, stamped with the current time.
+    ///
+    /// A line that repeats the timestamp and text of an entry already stored is dropped, which keeps a capture
+    /// running next to the game from duplicating what a later log file import will pick up.
+    ///
+    /// @param message the chat line as the game rendered it; formatting codes are stripped like on import
+    /// @return `true` if the entry was stored, `false` if it was dropped as a duplicate
+    /// @throws LogDataException if no session is active, or the entry cannot be written
+    public boolean importClient(String message) {
+        return importClient(message, LocalDateTime.now());
+    }
+
+    /// Imports a single chat line from the running client into the current session at an explicit time.
+    ///
+    /// @see #importClient(String)
+    public boolean importClient(String message, LocalDateTime timestamp) {
+        Objects.requireNonNull(message, "message");
+        Objects.requireNonNull(timestamp, "timestamp");
+        if (sessionFileId < 0) {
+            throw new LogDataException("no client session is active; call startSession first");
+        }
+
+        // Whole seconds only, so a client entry and the same line read back from the log file collide as intended.
+        LocalDateTime stamp = timestamp.withNano(0);
+        String stripped = FormattingCodes.strip(message);
+        try {
+            return writeSessionEntry(stripped, stamp);
+        } catch (SQLException e) {
+            throw new LogDataException("could not store client chat entry", e);
+        }
+    }
+
+    private LogFile insertSessionFile(String minecraftVersion, LocalDateTime startedAt) throws SQLException {
+        long fileId = nextFileId();
+        LocalDate date = startedAt.toLocalDate();
+        String fileName = date + "-session.log";
+        String entryPath = "session/" + fileId;
+        Timestamp start = Timestamp.valueOf(startedAt);
+        try (PreparedStatement insert = connection.prepareStatement("""
+            INSERT INTO log_file (id, file_name, source_kind, source_path, entry_path, log_date, date_source,
+                                  minecraft_version, last_modified, first_entry_time, last_entry_time, entry_count)
+            VALUES (?, ?, NULL, ?, ?, ?, ?, ?, NULL, ?, ?, 0)""")) {
+            insert.setLong(1, fileId);
+            insert.setString(2, fileName);
+            insert.setString(3, SESSION_SOURCE_PATH);
+            insert.setString(4, entryPath);
+            insert.setDate(5, Date.valueOf(date));
+            insert.setString(6, DateSource.SESSION.name());
+            insert.setString(7, minecraftVersion);
+            insert.setTimestamp(8, start);
+            insert.setTimestamp(9, start);
+            insert.execute();
+        }
+        sessionFileId = fileId;
+        sessionLineIndex = 0;
+        return new LogFile(
+            fileName,
+            Optional.empty(),
+            SESSION_SOURCE_PATH,
+            entryPath,
+            date,
+            DateSource.SESSION,
+            minecraftVersion,
+            Optional.empty(),
+            Optional.of(startedAt),
+            Optional.of(startedAt),
+            0);
+    }
+
+    private boolean writeSessionEntry(String message, LocalDateTime timestamp) throws SQLException {
         try (PreparedStatement duplicate = connection.prepareStatement(
             "SELECT 1 FROM chat_entry WHERE entry_time = ? AND message = ? LIMIT 1")) {
             duplicate.setTimestamp(1, Timestamp.valueOf(timestamp));
@@ -391,67 +465,25 @@ public final class LogStore implements AutoCloseable {
             }
         }
 
-        LocalDate date = timestamp.toLocalDate();
-        String entryPath = "live/" + date + "/" + minecraftVersion;
-        long fileId;
-        int lineIndex;
-        try (PreparedStatement existing = connection.prepareStatement(
-            "SELECT id, entry_count FROM log_file WHERE source_path = ? AND entry_path = ?")) {
-            existing.setString(1, LIVE_SOURCE_PATH);
-            existing.setString(2, entryPath);
-            try (ResultSet result = existing.executeQuery()) {
-                if (result.next()) {
-                    fileId = result.getLong(1);
-                    lineIndex = result.getInt(2);
-                } else {
-                    fileId = nextFileId();
-                    lineIndex = 0;
-                    insertLiveFile(fileId, minecraftVersion, date, entryPath);
-                }
-            }
-        }
-
         try (PreparedStatement insert = connection.prepareStatement(
             "INSERT INTO chat_entry (file_id, line_index, entry_time, message) VALUES (?, ?, ?, ?)")) {
-            insert.setLong(1, fileId);
-            insert.setInt(2, lineIndex);
+            insert.setLong(1, sessionFileId);
+            insert.setInt(2, sessionLineIndex);
             insert.setTimestamp(3, Timestamp.valueOf(timestamp));
             insert.setString(4, message);
             insert.execute();
         }
+        sessionLineIndex++;
         try (PreparedStatement update = connection.prepareStatement("""
             UPDATE log_file SET
                 entry_count = entry_count + 1,
-                first_entry_time = least(coalesce(first_entry_time, ?), ?),
-                last_entry_time = greatest(coalesce(last_entry_time, ?), ?)
+                last_entry_time = ?
             WHERE id = ?""")) {
-            Timestamp stamp = Timestamp.valueOf(timestamp);
-            update.setTimestamp(1, stamp);
-            update.setTimestamp(2, stamp);
-            update.setTimestamp(3, stamp);
-            update.setTimestamp(4, stamp);
-            update.setLong(5, fileId);
+            update.setTimestamp(1, Timestamp.valueOf(timestamp));
+            update.setLong(2, sessionFileId);
             update.execute();
         }
         return true;
-    }
-
-    private void insertLiveFile(long fileId, String minecraftVersion, LocalDate date, String entryPath)
-        throws SQLException {
-        try (PreparedStatement insert = connection.prepareStatement("""
-            INSERT INTO log_file (id, file_name, source_kind, source_path, entry_path, log_date, date_source,
-                                  minecraft_version, last_modified, first_entry_time, last_entry_time, entry_count)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 0)""")) {
-            insert.setLong(1, fileId);
-            insert.setString(2, date + "-live.log");
-            insert.setString(3, SourceKind.LIVE.name());
-            insert.setString(4, LIVE_SOURCE_PATH);
-            insert.setString(5, entryPath);
-            insert.setDate(6, Date.valueOf(date));
-            insert.setString(7, DateSource.FILE_NAME.name());
-            insert.setString(8, minecraftVersion);
-            insert.execute();
-        }
     }
 
     private long nextFileId() throws SQLException {

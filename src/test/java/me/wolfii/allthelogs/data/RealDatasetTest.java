@@ -74,7 +74,7 @@ class RealDatasetTest {
                 entries += result.importedEntries();
             }
             assertTrue(entries > 0, "expected to import entries from archives");
-            assertTrue(store.logFiles().stream().allMatch(file -> file.sourceKind() == SourceKind.ARCHIVE));
+            assertTrue(store.logFiles().stream().allMatch(file -> file.sourceKind().orElse(null) == SourceKind.ARCHIVE));
         }
     }
 

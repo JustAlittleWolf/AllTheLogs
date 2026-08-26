@@ -19,6 +19,7 @@ import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -69,7 +70,7 @@ class LogStoreTest {
         ChatEntry entry = store.query(ChatQuery.all().withSubstring("needle in here")).getFirst();
         assertEquals("2026-08-25-1.log.gz", entry.logFile().fileName());
         assertEquals("logs/2026-08-25-1.log.gz", entry.logFile().entryPath());
-        assertEquals(SourceKind.DIRECTORY, entry.logFile().sourceKind());
+        assertEquals(Optional.of(SourceKind.DIRECTORY), entry.logFile().sourceKind());
         assertEquals("26.2", entry.logFile().minecraftVersion());
         assertEquals(LocalDate.of(2026, 8, 25), entry.logFile().date());
         assertEquals(DateSource.FILE_NAME, entry.logFile().dateSource());
@@ -131,7 +132,7 @@ class LogStoreTest {
 
         assertEquals(1, result.importedFiles());
         ChatEntry entry = store.query(ChatQuery.all().withSubstring("in archive")).getFirst();
-        assertEquals(SourceKind.ARCHIVE, entry.logFile().sourceKind());
+        assertEquals(Optional.of(SourceKind.ARCHIVE), entry.logFile().sourceKind());
         assertEquals("logs/2026-01-02-1.log.gz", entry.logFile().entryPath());
         assertEquals("1.21.8", entry.logFile().minecraftVersion());
     }
@@ -381,13 +382,37 @@ class LogStoreTest {
     }
 
     @Test
-    void storesLiveEntriesAlongsideImportedOnes() throws IOException {
+    void startSessionCreatesALogFileBeforeAnyChatIsImported() {
+        LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+
+        LogFile file = store.startSession("26.2", startedAt);
+
+        assertEquals(DateSource.SESSION, file.dateSource());
+        assertTrue(file.sourceKind().isEmpty());
+        assertEquals("26.2", file.minecraftVersion());
+        assertEquals(LocalDate.of(2026, 8, 26), file.date());
+        assertEquals(startedAt, file.firstEntryTime().orElseThrow());
+        assertEquals(startedAt, file.lastEntryTime().orElseThrow());
+        assertEquals(0, file.entryCount());
+        assertEquals(1, store.logFiles().size());
+        assertTrue(store.logEntries().isEmpty());
+    }
+
+    @Test
+    void importClientRequiresAnActiveSession() {
+        assertThrows(LogDataException.class, () -> store.importClient("hello"));
+    }
+
+    @Test
+    void storesClientEntriesAlongsideImportedOnes() throws IOException {
         store.importDirectory(logsDirectory());
+        store.startSession("26.2", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
 
-        assertTrue(store.importLive("26.2", "live message", LocalDateTime.of(2026, 8, 26, 12, 0, 0)));
+        assertTrue(store.importClient("client message", LocalDateTime.of(2026, 8, 26, 12, 0, 0)));
 
-        ChatEntry entry = store.query(ChatQuery.all().withSubstring("live message")).getFirst();
-        assertEquals(SourceKind.LIVE, entry.logFile().sourceKind());
+        ChatEntry entry = store.query(ChatQuery.all().withSubstring("client message")).getFirst();
+        assertTrue(entry.logFile().sourceKind().isEmpty());
+        assertEquals(DateSource.SESSION, entry.logFile().dateSource());
         assertEquals("26.2", entry.logFile().minecraftVersion());
         assertEquals(LocalDate.of(2026, 8, 26), entry.logFile().date());
         assertEquals(LocalDateTime.of(2026, 8, 26, 12, 0, 0), entry.timestamp());
@@ -395,9 +420,23 @@ class LogStoreTest {
     }
 
     @Test
-    void liveEntriesUseTheCurrentTimeByDefault() {
+    void clientImportsUpdateTheSessionLastTimestamp() {
+        LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+        store.startSession("26.2", startedAt);
+
+        store.importClient("later", startedAt.plusMinutes(5));
+
+        LogFile file = store.logFiles().getFirst();
+        assertEquals(startedAt, file.firstEntryTime().orElseThrow());
+        assertEquals(startedAt.plusMinutes(5), file.lastEntryTime().orElseThrow());
+        assertEquals(1, file.entryCount());
+    }
+
+    @Test
+    void clientEntriesUseTheCurrentTimeByDefault() {
+        store.startSession("26.2");
         LocalDateTime before = LocalDateTime.now().withNano(0);
-        assertTrue(store.importLive("26.2", "now"));
+        assertTrue(store.importClient("now"));
 
         ChatEntry entry = store.query(ChatQuery.all().withSubstring("now")).getFirst();
         assertFalse(entry.timestamp().isBefore(before));
@@ -405,18 +444,20 @@ class LogStoreTest {
     }
 
     @Test
-    void liveEntriesStripFormattingCodes() {
-        store.importLive("26.2", "\u00a7chello \u00a7aworld", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
+    void clientEntriesStripFormattingCodes() {
+        store.startSession("26.2", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
+        store.importClient("\u00a7chello \u00a7aworld", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
 
         assertEquals("hello world", store.logEntries().getFirst().message());
     }
 
     @Test
-    void consecutiveLiveEntriesGetIncreasingLineIndices() {
+    void consecutiveClientEntriesGetIncreasingLineIndices() {
         LocalDateTime base = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
-        store.importLive("26.2", "first", base);
-        store.importLive("26.2", "second", base.plusSeconds(1));
-        store.importLive("26.2", "third", base.plusSeconds(2));
+        store.startSession("26.2", base);
+        store.importClient("first", base);
+        store.importClient("second", base.plusSeconds(1));
+        store.importClient("third", base.plusSeconds(2));
 
         assertEquals(List.of(0, 1, 2), store.logEntries().stream().map(ChatEntry::lineIndex).toList());
         LogFile file = store.logFiles().getFirst();
@@ -426,41 +467,59 @@ class LogStoreTest {
     }
 
     @Test
-    void liveEntriesSupportContextLines() {
+    void clientEntriesSupportContextLines() {
         LocalDateTime base = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
-        store.importLive("26.2", "before", base);
-        store.importLive("26.2", "the needle", base.plusSeconds(1));
-        store.importLive("26.2", "after", base.plusSeconds(2));
+        store.startSession("26.2", base);
+        store.importClient("before", base);
+        store.importClient("the needle", base.plusSeconds(1));
+        store.importClient("after", base.plusSeconds(2));
 
         List<ChatEntry> hits = store.query(ChatQuery.all().withSubstring("needle").withContextLines(1));
         assertEquals(List.of("before", "the needle", "after"), hits.stream().map(ChatEntry::message).toList());
     }
 
     @Test
-    void liveEntriesAreSeparatedByDayAndVersion() {
-        store.importLive("26.2", "a", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
-        store.importLive("26.2", "b", LocalDateTime.of(2026, 8, 27, 12, 0, 0));
-        store.importLive("1.21.8", "c", LocalDateTime.of(2026, 8, 27, 13, 0, 0));
+    void eachSessionGetsItsOwnLogFile() {
+        store.startSession("26.2", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
+        store.importClient("a", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
+        store.startSession("26.2", LocalDateTime.of(2026, 8, 27, 12, 0, 0));
+        store.importClient("b", LocalDateTime.of(2026, 8, 27, 12, 0, 0));
+        store.startSession("1.21.8", LocalDateTime.of(2026, 8, 27, 13, 0, 0));
+        store.importClient("c", LocalDateTime.of(2026, 8, 27, 13, 0, 0));
 
         assertEquals(3, store.logFiles().size());
         assertTrue(store.logFiles().stream().allMatch(file -> file.entryCount() == 1));
+        assertTrue(store.logFiles().stream().allMatch(file -> file.dateSource() == DateSource.SESSION));
     }
 
     @Test
-    void repeatedLiveEntriesAreDroppedAsDuplicates() {
+    void repeatedClientEntriesAreDroppedAsDuplicates() {
         LocalDateTime timestamp = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
-        assertTrue(store.importLive("26.2", "duplicated", timestamp));
-        assertFalse(store.importLive("26.2", "duplicated", timestamp));
+        store.startSession("26.2", timestamp);
+        assertTrue(store.importClient("duplicated", timestamp));
+        assertFalse(store.importClient("duplicated", timestamp));
 
         assertEquals(1, store.logEntries().size());
     }
 
     @Test
-    void liveEntryDuplicatingAnImportedOneIsDropped() throws IOException {
+    void clientEntryDuplicatingAnImportedOneIsDropped() throws IOException {
+        store.importDirectory(logsDirectory());
+        store.startSession("26.2", LocalDateTime.of(2026, 8, 25, 10, 0, 10));
+
+        assertFalse(store.importClient("delta", LocalDateTime.of(2026, 8, 25, 10, 0, 10)));
+        assertEquals(8, store.logEntries().size());
+    }
+
+    @Test
+    void emptySessionFilesSurviveALaterImportDedup() throws IOException {
+        store.startSession("26.2", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
         store.importDirectory(logsDirectory());
 
-        assertFalse(store.importLive("26.2", "delta", LocalDateTime.of(2026, 8, 25, 10, 0, 10)));
-        assertEquals(8, store.logEntries().size());
+        assertTrue(store.logFiles().stream().anyMatch(file -> file.dateSource() == DateSource.SESSION));
+        assertEquals(0, store.logFiles().stream()
+                .filter(file -> file.dateSource() == DateSource.SESSION)
+                .findFirst().orElseThrow().entryCount());
     }
 
     @Test
@@ -494,8 +553,9 @@ class LogStoreTest {
     @Test
     void deduplicationKeepsDistinctEntriesThatOnlyShareATimestamp() {
         LocalDateTime timestamp = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
-        store.importLive("26.2", "one", timestamp);
-        store.importLive("26.2", "two", timestamp);
+        store.startSession("26.2", timestamp);
+        store.importClient("one", timestamp);
+        store.importClient("two", timestamp);
 
         assertEquals(2, store.logEntries().size());
     }
