@@ -1,6 +1,6 @@
 package me.wolfii.allthelogs.data;
 
-import me.wolfii.allthelogs.data.internal.FormattingCodes;
+import me.wolfii.allthelogs.data.parse.FormattingCodes;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

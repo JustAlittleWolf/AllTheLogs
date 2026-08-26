@@ -15,10 +15,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/// Runs the importer against a real collection of Minecraft logs.
-///
-/// The dataset is not part of the repository, so these tests skip themselves unless `allthelogs.dataset` points at a
-/// directory holding real instance folders and archives.
+/**
+ * Runs the importer against a real collection of Minecraft logs.
+ * <p>
+ * The dataset is not part of the repository, so these tests skip themselves unless {@code allthelogs.dataset} points
+ * at a directory holding real instance folders and archives.
+ */
 class RealDatasetTest {
     @TempDir
     Path tempDir;

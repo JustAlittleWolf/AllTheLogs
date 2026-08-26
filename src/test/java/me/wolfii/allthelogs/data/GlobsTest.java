@@ -1,6 +1,6 @@
 package me.wolfii.allthelogs.data;
 
-import me.wolfii.allthelogs.data.internal.Globs;
+import me.wolfii.allthelogs.data.discover.Globs;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;

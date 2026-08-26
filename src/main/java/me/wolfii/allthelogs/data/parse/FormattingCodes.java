@@ -1,16 +1,19 @@
-package me.wolfii.allthelogs.data.internal;
+package me.wolfii.allthelogs.data.parse;
 
-/// Removes Minecraft formatting codes from chat text as it is ingested.
-///
-/// A code is the section sign followed by one of `[0-9a-fklmnor]`, and both characters are dropped. Section signs that
-/// are not followed by a code character are kept, as are all other characters.
+/**
+ * Removes Minecraft formatting codes from chat text as it is ingested.
+ * A code is the section sign followed by one of {@code [0-9a-fklmnor]}; both characters are dropped.
+ * Section signs that are not followed by a code character are kept.
+ */
 public final class FormattingCodes {
     private static final char SECTION = '\u00a7';
 
     private FormattingCodes() {
     }
 
-    /// @return `message` without formatting codes, or `message` itself when it contains none
+    /**
+     * @return {@code message} without formatting codes, or {@code message} itself when it contains none
+     */
     public static String strip(String message) {
         if (message.indexOf(SECTION) < 0) return message;
 

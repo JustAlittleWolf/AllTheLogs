@@ -1,4 +1,4 @@
-package me.wolfii.allthelogs.data.internal;
+package me.wolfii.allthelogs.data.store;
 
 import org.duckdb.DuckDBAppender;
 import org.duckdb.DuckDBConnection;
@@ -11,29 +11,22 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-/// Writes parsed logs into the database.
-///
-/// All writes go through one instance on a single thread. DuckDB's appender is thread confined and bulk appending is
-/// far cheaper than prepared statement batches, so parallelism in the import pipeline lives entirely in the parsing
-/// stage that feeds this writer.
+/**
+ * Writes parsed logs into the database on a single thread. DuckDB's appender is thread-confined, so import
+ * parallelism lives entirely in the parsing stage that feeds this writer.
+ */
 public final class LogWriter implements AutoCloseable {
-    /// Rows buffered in the appender before it is flushed, chosen to stay well above DuckDB's 2048 row vector size
-    /// while keeping memory bounded.
     private static final int FLUSH_INTERVAL = 100_000;
 
     private final DuckDBConnection connection;
     private final DuckDBAppender fileAppender;
     private final DuckDBAppender entryAppender;
-    /// Read by the discovery thread for skip decisions while the writer thread updates it, hence concurrent.
     private final Map<String, Long> existingLocations = new ConcurrentHashMap<>();
-    /// Ids of files written with no chat entries but a `Reloading ResourceManager` line, kept in memory only so the
-    /// post dedup cleanup does not drop them the way it drops files whose entries all turned out to be duplicates.
-    private final java.util.Set<Long> keepEvenIfEmpty = java.util.concurrent.ConcurrentHashMap.newKeySet();
-    /// First file id handed out by this writer, so counters and dedup bookkeeping can be scoped to files this
-    /// session actually wrote instead of every file that happens to live in the database, which may include files
-    /// from earlier, unrelated import runs against the same store.
+    private final Set<Long> keepEvenIfEmpty = ConcurrentHashMap.newKeySet();
+    /** First file id handed out by this writer; counters and dedup bookkeeping are scoped to this import. */
     private final long sessionStartId;
     private long nextFileId;
     private long bufferedEntries;
@@ -52,9 +45,7 @@ public final class LogWriter implements AutoCloseable {
             }
         }
         this.sessionStartId = nextFileId;
-        // The appender autocommits every 204,800 rows by default, and each of those commits durably syncs to disk.
-        // A whole import is one logical unit of work, so wrapping it in an explicit transaction turns flush() into a
-        // cheap in-memory materialisation and defers the durable sync to the single commit on close().
+        // One transaction for the whole import: the appender would otherwise sync to disk every 204,800 rows.
         try (Statement statement = connection.createStatement()) {
             statement.execute("BEGIN TRANSACTION");
         }
@@ -66,16 +57,20 @@ public final class LogWriter implements AutoCloseable {
         return sourcePath + "\u0000" + entryPath;
     }
 
-    /// Whether a log at this location has already been stored, either by an earlier run or earlier in this one.
+    /**
+     * Whether a log at this location has already been stored, either by an earlier run or earlier in this one.
+     */
     public boolean isAlreadyImported(String sourcePath, String entryPath) {
         return existingLocations.containsKey(locationKey(sourcePath, entryPath));
     }
 
-    /// Stores a parsed log, replacing any previously stored log at the same location.
+    /**
+     * Stores a parsed log, replacing any previously stored log at the same location.
+     */
     public void write(PreparedLog log) throws SQLException {
         Long previous = existingLocations.get(locationKey(log.sourcePath(), log.entryPath()));
         if (previous != null) {
-            // The replaced rows may still sit in the appender buffers, so flush before deleting them.
+            // Replaced rows may still sit in the appender buffers.
             flushAppenders();
             deleteFile(previous);
         }
@@ -122,24 +117,18 @@ public final class LogWriter implements AutoCloseable {
         return writtenEntries;
     }
 
-    /// Drops entries that repeat a timestamp and message already stored elsewhere, keeping the earliest imported one.
-    ///
-    /// This runs once at the end of an import instead of checking each row as it is written: a set based anti join
-    /// lets the database do the work in one pass, and it also catches duplicates between two files of the same run,
-    /// which a per row check against already committed data would miss. Duplicates are removed across the whole
-    /// store, not just files written this session, so a re-import that duplicates an earlier run's entries still
-    /// gets cleaned up; but this writer's own [#writtenFiles()]/[#writtenEntries()] counters only move for rows that
-    /// belonged to files this session wrote, so they keep reporting what this import actually contributed.
-    ///
-    /// @return the number of removed entries, across the whole store
+    /**
+     * Drops entries that repeat a timestamp and message already stored elsewhere, keeping the earliest imported one.
+     * Runs once at the end of an import across the whole store. {@link #writtenFiles()} / {@link #writtenEntries()}
+     * only move for rows that belonged to files this session wrote.
+     *
+     * @return the number of removed entries, across the whole store
+     */
     public long deduplicate() throws SQLException {
         flushAppenders();
         long removed = 0;
         long removedFromSession = 0;
         try (Statement statement = connection.createStatement();
-             // The window function over every row is the expensive part, so run it once and let the DELETE stream
-             // back which files it touched, instead of running the same scan twice: once to count and once to
-             // delete.
              ResultSet deleted = statement.executeQuery("""
                  DELETE FROM chat_entry WHERE rowid IN (
                      SELECT rowid FROM (
@@ -158,14 +147,14 @@ public final class LogWriter implements AutoCloseable {
         return removed;
     }
 
-    /// Recomputes the per file counters after rows were deleted, and drops files left without any entries.
-    ///
-    /// @return how many of this session's files were dropped because every one of their entries turned out to be a
-    ///         duplicate
+    /**
+     * Recomputes per-file entry counts after rows were deleted, and drops files left without any entries.
+     * {@code start_time} / {@code end_time} bound every logged line, not just chat entries, so they are left untouched.
+     *
+     * @return how many of this session's files were dropped because every one of their entries turned out to be a
+     *         duplicate
+     */
     private int refreshFileAggregates(Statement statement) throws SQLException {
-        // start_time/end_time bound every logged line of the file, not just its chat entries, so
-        // deduplicating chat entries must not touch already stored bounds that came from lines with no chat marker;
-        // only entry_count needs recomputing here.
         statement.execute("""
             UPDATE log_file SET entry_count = coalesce(stats.count, 0)
             FROM (

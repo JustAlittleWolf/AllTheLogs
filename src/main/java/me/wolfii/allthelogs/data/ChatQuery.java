@@ -3,15 +3,16 @@ package me.wolfii.allthelogs.data;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
-/// Describes which chat entries to retrieve. Start from [#all()] and narrow it down with the `with*` methods; every
-/// method returns a new query, so instances are safe to share and reuse.
-///
-/// ```java
-/// ChatQuery query = ChatQuery.all()
-///         .withRegex("(?i)welcome to")
-///         .withRange(from, to)
-///         .withContextLines(2);
-/// ```
+/**
+ * Describes which chat entries to retrieve. Start from {@link #all()} and narrow it down with the {@code with*}
+ * methods; every method returns a new query, so instances are safe to share and reuse.
+ * {@snippet :
+ * ChatQuery query = ChatQuery.all()
+ *         .withRegex("(?i)welcome to")
+ *         .withRange(from, to)
+ *         .withContextLines(2);
+ * }
+ */
 public final class ChatQuery {
     private final String substring;
     private final boolean caseSensitive;
@@ -34,32 +35,43 @@ public final class ChatQuery {
         this.descending = descending;
     }
 
-    /// A query matching every stored entry, ordered by timestamp ascending.
+    /**
+     * A query matching every stored entry, ordered by timestamp ascending.
+     */
     public static ChatQuery all() {
         return new ChatQuery(null, false, null, null, null, 0, -1, false);
     }
 
-    /// Keeps only entries whose message contains `substring`, compared case insensitively.
-    /// Replaces any previously set substring; a substring and a regex can be combined and both must then match.
+    /**
+     * Keeps only entries whose message contains {@code substring}, compared case insensitively.
+     * Replaces any previously set substring; a substring and a regex can be combined and both must then match.
+     */
     public ChatQuery withSubstring(String substring) {
         Objects.requireNonNull(substring, "substring");
         return new ChatQuery(substring, false, regex, from, to, contextLines, limit, descending);
     }
 
-    /// Like [#withSubstring(String)] but comparing case sensitively.
+    /**
+     * Like {@link #withSubstring(String)} but comparing case sensitively.
+     */
     public ChatQuery withSubstringCaseSensitive(String substring) {
         Objects.requireNonNull(substring, "substring");
         return new ChatQuery(substring, true, regex, from, to, contextLines, limit, descending);
     }
 
-    /// Keeps only entries whose message matches the given RE2 regular expression anywhere in the message.
-    /// Use inline flags such as `(?i)` for case insensitive matching.
+    /**
+     * Keeps only entries whose message matches the given RE2 regular expression anywhere in the message.
+     * Use inline flags such as {@code (?i)} for case insensitive matching.
+     */
     public ChatQuery withRegex(String regex) {
         Objects.requireNonNull(regex, "regex");
         return new ChatQuery(substring, caseSensitive, regex, from, to, contextLines, limit, descending);
     }
 
-    /// Keeps only entries whose timestamp lies in `[from, to)`. Either bound may be `null` to leave that side open.
+    /**
+     * Keeps only entries whose timestamp lies in {@code [from, to)}. Either bound may be {@code null} to leave that
+     * side open.
+     */
     public ChatQuery withRange(LocalDateTime from, LocalDateTime to) {
         if (from != null && to != null && from.isAfter(to)) {
             throw new IllegalArgumentException("from " + from + " is after to " + to);
@@ -67,19 +79,25 @@ public final class ChatQuery {
         return new ChatQuery(substring, caseSensitive, regex, from, to, contextLines, limit, descending);
     }
 
-    /// Also returns up to `contextLines` entries before and after every match, taken from the same log file.
-    /// Overlapping context windows are merged, so no entry is ever returned twice.
+    /**
+     * Also returns up to {@code contextLines} entries before and after every match, taken from the same log file.
+     * Overlapping context windows are merged, so no entry is ever returned twice.
+     */
     public ChatQuery withContextLines(int contextLines) {
         if (contextLines < 0) throw new IllegalArgumentException("contextLines must not be negative");
         return new ChatQuery(substring, caseSensitive, regex, from, to, contextLines, limit, descending);
     }
 
-    /// Caps the number of returned entries, including context lines. A negative value means no limit.
+    /**
+     * Caps the number of returned entries, including context lines. A negative value means no limit.
+     */
     public ChatQuery withLimit(long limit) {
         return new ChatQuery(substring, caseSensitive, regex, from, to, contextLines, limit, descending);
     }
 
-    /// Returns entries newest first instead of oldest first.
+    /**
+     * Returns entries newest first instead of oldest first.
+     */
     public ChatQuery withDescending(boolean descending) {
         return new ChatQuery(substring, caseSensitive, regex, from, to, contextLines, limit, descending);
     }
@@ -116,7 +134,9 @@ public final class ChatQuery {
         return descending;
     }
 
-    /// Whether this query filters on the message text at all.
+    /**
+     * Whether this query filters on the message text at all.
+     */
     public boolean hasTextFilter() {
         return substring != null || regex != null;
     }
