@@ -329,6 +329,35 @@ class LogStoreTest {
     }
 
     @Test
+    void fetchesResultsThatSpanSeveralDuckDbChunks() throws IOException {
+        StringBuilder log = new StringBuilder();
+        log.append("[10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3\n");
+        int lines = 2500;
+        for (int i = 0; i < lines; i++) {
+            int second = i % 60;
+            int minute = (i / 60) % 60;
+            int hour = 10 + (i / 3600);
+            log.append(String.format(java.util.Locale.ROOT,
+                "[%02d:%02d:%02d] [Render thread/INFO]: [CHAT] line %d%n", hour, minute, second, i));
+        }
+        LogFixtures.writePlain(tempDir.resolve("logs"), "2026-05-01-1.log", log.toString());
+
+        store.importDirectory(tempDir);
+
+        List<ChatEntry> entries = store.logEntries();
+        assertEquals(lines, entries.size());
+        assertEquals("line 0", entries.getFirst().message());
+        assertEquals("line 2047", entries.get(2047).message());
+        assertEquals("line 2048", entries.get(2048).message());
+        assertEquals("line " + (lines - 1), entries.getLast().message());
+        List<ChatEntry> aroundChunkBoundary = store.query(ChatQuery.all()
+            .withRegex("^line 2048$")
+            .withContextLines(1));
+        assertEquals(List.of("line 2047", "line 2048", "line 2049"),
+            aroundChunkBoundary.stream().map(ChatEntry::message).toList());
+    }
+
+    @Test
     void persistsToASingleFileAcrossReopens() throws IOException {
         Path database = tempDir.resolve("logs.duckdb");
         Path root = logsDirectory();

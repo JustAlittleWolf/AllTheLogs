@@ -1,7 +1,12 @@
 package me.wolfii.allthelogs.data;
 
 import me.wolfii.allthelogs.data.internal.*;
+import org.duckdb.DuckDBChunkedResult;
 import org.duckdb.DuckDBConnection;
+import org.duckdb.DuckDBDataChunkReader;
+import org.duckdb.DuckDBDriver;
+import org.duckdb.DuckDBPreparedStatement;
+import org.duckdb.DuckDBReadableVector;
 
 import java.io.*;
 import java.nio.ByteBuffer;
@@ -71,6 +76,8 @@ public final class LogStore implements AutoCloseable {
     private static Properties storageSettings() {
         Properties settings = new Properties();
         settings.setProperty("storage_compatibility_version", "latest");
+        // Stream result chunks from the engine instead of materialising the whole result natively first.
+        settings.setProperty(DuckDBDriver.JDBC_STREAM_RESULTS, "true");
         return settings;
     }
 
@@ -165,19 +172,6 @@ public final class LogStore implements AutoCloseable {
         } catch (CharacterCodingException e) {
             return new String(bytes, WINDOWS_1252);
         }
-    }
-
-    private static ChatEntry readEntry(ResultSet result, Map<String, ChatLog> logCache) throws SQLException {
-        // Many consecutive rows come from the same log, so resolving metadata once per log avoids rebuilding the
-        // same record thousands of times.
-        String cacheKey = result.getString(3) + "\u0000" + result.getString(4);
-        ChatLog log = logCache.get(cacheKey);
-        if (log == null) {
-            log = readChatLog(result, 1);
-            logCache.put(cacheKey, log);
-        }
-        LocalDateTime timestamp = result.getTimestamp(9).toLocalDateTime();
-        return new ChatEntry(log, timestamp, result.getInt(10), result.getString(11));
     }
 
     private static ChatLog readChatLog(ResultSet result, int offset) throws SQLException {
@@ -289,6 +283,18 @@ public final class LogStore implements AutoCloseable {
     /// the store is opened by the caller. Discovery is pushed to its own thread so that reading archives overlaps with
     /// writing rather than serialising behind it.
     private ImportResult runImport(ImportOptions options, Consumer<LogDiscovery> walk, Consumer<ImportProgress> progress) {
+        ImportResult result = importIntoStore(options, walk, progress);
+        if (result.importedFiles() > 0) {
+            try (Statement statement = connection.createStatement()) {
+                Schema.clusterEntries(statement);
+            } catch (SQLException e) {
+                throw new LogDataException("could not cluster imported chat entries", e);
+            }
+        }
+        return result;
+    }
+
+    private ImportResult importIntoStore(ImportOptions options, Consumer<LogDiscovery> walk, Consumer<ImportProgress> progress) {
         BlockingQueue<PreparedLog> queue = new ArrayBlockingQueue<>(WRITE_QUEUE_CAPACITY);
         List<ImportResult.Failure> parseFailures = Collections.synchronizedList(new ArrayList<>());
         AtomicInteger skipped = new AtomicInteger();
@@ -538,19 +544,68 @@ public final class LogStore implements AutoCloseable {
     public List<ChatEntry> query(ChatQuery query) {
         Objects.requireNonNull(query, "query");
         QueryBuilder builder = QueryBuilder.build(query);
-        List<ChatEntry> entries = new ArrayList<>();
-        Map<String, ChatLog> logCache = new HashMap<>();
-        try (PreparedStatement statement = connection.prepareStatement(builder.sql())) {
-            builder.bind(statement);
-            try (ResultSet result = statement.executeQuery()) {
-                while (result.next()) {
-                    entries.add(readEntry(result, logCache));
+        int initialCapacity = query.limit() >= 0 ? (int) Math.min(query.limit(), 8_000_000) : 1024;
+        List<ChatEntry> entries = new ArrayList<>(initialCapacity);
+        try {
+            ChatLog[] logsById = logsById();
+            try (PreparedStatement prepared = connection.prepareStatement(builder.sql())) {
+                builder.bind(prepared);
+                DuckDBPreparedStatement statement = prepared.unwrap(DuckDBPreparedStatement.class);
+                try (DuckDBChunkedResult result = statement.query()) {
+                    while (result.nextChunk()) {
+                        appendChunk(result.chunk(), logsById, entries);
+                    }
                 }
             }
-        } catch (SQLException e) {
+        } catch (LogDataException e) {
+            throw e;
+        } catch (SQLException | RuntimeException e) {
             throw new LogDataException("could not run query " + query, e);
         }
         return entries;
+    }
+
+    /// Loads every chat log keyed by its internal file id. Ids are small sequential integers, so an array beats a
+    /// map: the query path looks up a log on every result row and must not box millions of `Long` keys.
+    private ChatLog[] logsById() throws SQLException {
+        long maxId;
+        try (Statement statement = connection.createStatement();
+             ResultSet result = statement.executeQuery("SELECT coalesce(max(id), -1) FROM log_file")) {
+            result.next();
+            maxId = result.getLong(1);
+        }
+        if (maxId < 0) return new ChatLog[0];
+        ChatLog[] logs = new ChatLog[Math.toIntExact(maxId) + 1];
+        String sql = """
+            SELECT id, file_name, source_kind, source_path, entry_path, log_date, minecraft_version,
+                   start_time, end_time
+            FROM log_file""";
+        try (Statement statement = connection.createStatement();
+             ResultSet result = statement.executeQuery(sql)) {
+            while (result.next()) {
+                logs[(int) result.getLong(1)] = readChatLog(result, 2);
+            }
+        }
+        return logs;
+    }
+
+    private static void appendChunk(DuckDBDataChunkReader chunk, ChatLog[] logsById, List<ChatEntry> entries) {
+        DuckDBReadableVector fileIds = chunk.vector(0);
+        DuckDBReadableVector times = chunk.vector(1);
+        DuckDBReadableVector lineIndices = chunk.vector(2);
+        DuckDBReadableVector messages = chunk.vector(3);
+        long rows = chunk.rowCount();
+        for (long row = 0; row < rows; row++) {
+            int fileId = Math.toIntExact(fileIds.getLong(row));
+            if (fileId < 0 || fileId >= logsById.length || logsById[fileId] == null) {
+                throw new LogDataException("chat entry references unknown log file " + fileId);
+            }
+            entries.add(new ChatEntry(
+                logsById[fileId],
+                times.getLocalDateTime(row),
+                lineIndices.getInt(row),
+                messages.getString(row)));
+        }
     }
 
     /// Returns every stored entry, oldest first. Convenience for `query(ChatQuery.all())`.
