@@ -6,11 +6,9 @@ import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.*;
 import me.wolfii.allthelogs.client.AllTheLogsClient;
-import me.wolfii.allthelogs.client.search.ChatQueryFactory;
-import me.wolfii.allthelogs.client.search.DateParsers;
+import me.wolfii.allthelogs.client.search.DateParser;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.view.DisplayRow;
-import me.wolfii.allthelogs.client.view.EntryClassifier;
 import me.wolfii.allthelogs.client.view.ResultWindow;
 import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.ChatQuery;
@@ -19,11 +17,11 @@ import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 /**
  * Transparent log browser. Search, filter, virtualised history, and a timeline of every hit.
@@ -41,8 +39,12 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         this.filter = AllTheLogsClient.settings().toFilter();
     }
 
-    private static ChatQuery.Sort opposite(ChatQuery.Sort sort) {
-        return sort == ChatQuery.Sort.ASCENDING ? ChatQuery.Sort.DESCENDING : ChatQuery.Sort.ASCENDING;
+    private static boolean pageIsFull(List<DisplayRow> rows, SearchFilter page) {
+        return ResultWindow.matchCount(rows) >= page.limit() && page.limit() > 0;
+    }
+
+    private static String formatBound(LocalDateTime time) {
+        return time == null ? "" : time.toString().replace('T', ' ');
     }
 
     @Override
@@ -106,7 +108,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
             return;
         }
         filterOpen = true;
-        filterPanel = buildFilterPanel(root);
+        filterPanel = buildFilterPanel();
         filterPanel.positioning(Positioning.absolute(
             Math.max(8, this.width - 248),
             button.y() + button.height() + 4));
@@ -121,43 +123,26 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         filterOpen = false;
     }
 
-    private FlowLayout buildFilterPanel(FlowLayout root) {
+    private FlowLayout buildFilterPanel() {
         FlowLayout panel = UIContainers.verticalFlow(Sizing.fixed(230), Sizing.content());
         panel.padding(Insets.of(8));
         panel.gap(4);
         panel.surface(Surface.flat(0xE0101010).and(Surface.outline(0xFF3C3C3C)));
 
-        CheckboxComponent regex = UIComponents.checkbox(Component.translatable("allthelogs.filter.regex"));
-        regex.checked(filter.regex());
-        regex.onChanged(value -> {
-            filter = filter.withRegex(value).withoutOffset();
-            persistAndReload();
-        });
-        panel.child(regex);
-
-        CheckboxComponent caseSensitive = UIComponents.checkbox(Component.translatable("allthelogs.filter.case_sensitive"));
-        caseSensitive.checked(filter.caseSensitive());
-        caseSensitive.onChanged(value -> {
-            filter = filter.withCaseSensitive(value).withoutOffset();
-            persistAndReload();
-        });
-        panel.child(caseSensitive);
-
+        panel.child(checkbox("allthelogs.filter.regex", filter.regex(), value ->
+            updateFilter(filter.withRegex(value))));
+        panel.child(checkbox("allthelogs.filter.case_sensitive", filter.caseSensitive(), value ->
+            updateFilter(filter.withCaseSensitive(value))));
         panel.child(labeledField("allthelogs.filter.context", String.valueOf(filter.contextLines()), text -> {
             try {
-                filter = filter.withContextLines(Integer.parseInt(text.trim())).withoutOffset();
-                persistAndReload();
+                updateFilter(filter.withContextLines(Integer.parseInt(text.trim())));
             } catch (RuntimeException ignored) {
             }
         }));
-
         panel.child(labeledField("allthelogs.filter.limit", String.valueOf(filter.limit()), text -> {
             try {
                 int limit = Integer.parseInt(text.trim());
-                if (limit > 0) {
-                    filter = filter.withLimit(limit).withoutOffset();
-                    persistAndReload();
-                }
+                if (limit > 0) updateFilter(filter.withLimit(limit));
             } catch (RuntimeException ignored) {
             }
         }));
@@ -165,44 +150,51 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         panel.child(UIComponents.label(Component.translatable("allthelogs.filter.sort")));
         FlowLayout sortRow = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
         sortRow.gap(4);
-        sortRow.child(UIComponents.button(Component.translatable("allthelogs.filter.sort.ascending"), b -> {
-            filter = filter.withSort(ChatQuery.Sort.ASCENDING).withoutOffset();
-            persistAndReload();
-        }));
-        sortRow.child(UIComponents.button(Component.translatable("allthelogs.filter.sort.descending"), b -> {
-            filter = filter.withSort(ChatQuery.Sort.DESCENDING).withoutOffset();
-            persistAndReload();
-        }));
+        sortRow.child(sortButton("allthelogs.filter.sort.ascending", ChatQuery.Sort.ASCENDING));
+        sortRow.child(sortButton("allthelogs.filter.sort.descending", ChatQuery.Sort.DESCENDING));
         panel.child(sortRow);
 
-        panel.child(labeledField("allthelogs.filter.from",
-            filter.startingAt() == null ? "" : filter.startingAt().toString().replace('T', ' '),
-            text -> {
-                if (!DateParsers.isBlankOrValid(text)) return;
-                filter = filter.withStartingAt(DateParsers.parse(text).orElse(null)).withoutOffset();
-                persistAndReload();
-            }));
-        panel.child(labeledField("allthelogs.filter.until",
-            filter.upUntil() == null ? "" : filter.upUntil().toString().replace('T', ' '),
-            text -> {
-                if (!DateParsers.isBlankOrValid(text)) return;
-                filter = filter.withUpUntil(DateParsers.parse(text).orElse(null)).withoutOffset();
-                persistAndReload();
-            }));
-        panel.child(UIComponents.label(Component.translatable("allthelogs.filter.date_hint")).color(io.wispforest.owo.ui.core.Color.ofRgb(0x888888)));
-
+        panel.child(dateField("allthelogs.filter.from", filter.startingAt(), parsed ->
+            updateFilter(filter.withStartingAt(parsed))));
+        panel.child(dateField("allthelogs.filter.until", filter.upUntil(), parsed ->
+            updateFilter(filter.withUpUntil(parsed))));
+        panel.child(UIComponents.label(Component.translatable("allthelogs.filter.date_hint"))
+            .color(Color.ofRgb(0x888888)));
         return panel;
     }
 
-    private FlowLayout labeledField(String key, String value, java.util.function.Consumer<String> onChange) {
+    private CheckboxComponent checkbox(String key, boolean checked, Consumer<Boolean> onChange) {
+        CheckboxComponent box = UIComponents.checkbox(Component.translatable(key));
+        box.checked(checked);
+        box.onChanged(onChange::accept);
+        return box;
+    }
+
+    private ButtonComponent sortButton(String key, ChatQuery.Sort sort) {
+        return UIComponents.button(Component.translatable(key), button -> updateFilter(filter.withSort(sort)));
+    }
+
+    private FlowLayout dateField(String key, LocalDateTime value, Consumer<LocalDateTime> onParsed) {
+        return labeledField(key, formatBound(value), text -> {
+            if (!DateParser.isBlankOrValid(text)) return;
+            onParsed.accept(DateParser.parse(text).orElse(null));
+        });
+    }
+
+    private FlowLayout labeledField(String key, String value, Consumer<String> onChange) {
         FlowLayout row = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
         row.gap(2);
         row.child(UIComponents.label(Component.translatable(key)));
         TextBoxComponent box = UIComponents.textBox(Sizing.fill(), value);
         box.setMaxLength(32);
-        box.onChanged().subscribe(text -> onChange.accept(text));
+        box.onChanged().subscribe(onChange::accept);
         row.child(box);
         return row;
+    }
+
+    private void updateFilter(SearchFilter next) {
+        filter = next.withoutOffset();
+        persistAndReload();
     }
 
     private void persistAndReload() {
@@ -217,7 +209,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         list.setLoading(true);
         status.text(Component.translatable("allthelogs.status.loading"));
         SearchFilter page = filter.withoutOffset();
-        AllTheLogsClient.worker().query(ChatQueryFactory.toQuery(page)).whenComplete((entries, error) -> {
+        AllTheLogsClient.worker().query(page.toQuery()).whenComplete((entries, error) -> {
             Minecraft.getInstance().execute(() -> {
                 if (generation != queryGeneration.get()) return;
                 list.setLoading(false);
@@ -226,21 +218,16 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
                     status.text(Component.translatable("allthelogs.status.error"));
                     return;
                 }
-                List<DisplayRow> rows = EntryClassifier.classify(entries, page);
-                boolean hasAfter = ResultWindow.matchCount(rows) >= page.limit() && page.limit() > 0;
-                list.reset(rows, false, hasAfter);
+                List<DisplayRow> rows = DisplayRow.from(entries, page);
+                list.reset(rows, false, pageIsFull(rows, page));
                 status.text(Component.literal(rows.size() + " lines"));
             });
         });
         if (resetTimeline) {
-            AllTheLogsClient.worker().query(ChatQueryFactory.toTimelineQuery(page)).whenComplete((entries, error) -> {
+            AllTheLogsClient.worker().query(page.toTimelineQuery()).whenComplete((entries, error) -> {
                 Minecraft.getInstance().execute(() -> {
                     if (error != null || list == null) return;
-                    List<LocalDateTime> times = new ArrayList<>(entries.size());
-                    for (ChatEntry entry : entries) {
-                        times.add(entry.timestamp());
-                    }
-                    list.setMarkers(times);
+                    list.setMarkers(entries.stream().map(ChatEntry::timestamp).toList());
                 });
             });
         }
@@ -256,33 +243,31 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
             list.setLoading(false);
             return;
         }
-        boolean flip = edge == TimelineLogList.Edge.BEFORE;
+        boolean olderPage = edge == TimelineLogList.Edge.BEFORE;
         SearchFilter page = filter.withOffset(cursor);
-        if (flip) {
-            page = page.withSort(opposite(filter.sort()));
-        }
+        if (olderPage) page = page.withSort(filter.sort().opposite());
         DisplayRow.RowKey anchor = list.window().keyAtPixel(list.scrollY(), TimelineLogList.ROW_HEIGHT);
         int firstVisible = (int) Math.floor(list.scrollY() / TimelineLogList.ROW_HEIGHT);
         int lastVisible = firstVisible + Math.max(1, list.height() / TimelineLogList.ROW_HEIGHT);
-        AllTheLogsClient.worker().query(ChatQueryFactory.toQuery(page)).whenComplete((entries, error) -> {
+        AllTheLogsClient.worker().query(page.toQuery()).whenComplete((entries, error) -> {
             Minecraft.getInstance().execute(() -> {
                 list.setLoading(false);
                 if (error != null) {
                     AllTheLogsClient.LOGGER.warn("AllTheLogs page query failed", error);
                     return;
                 }
-                List<DisplayRow> incoming = EntryClassifier.classify(entries, filter);
-                if (flip) incoming = ResultWindow.reversed(incoming);
-                boolean more = ResultWindow.matchCount(incoming) >= filter.limit() && filter.limit() > 0;
-                List<DisplayRow> older = edge == TimelineLogList.Edge.AFTER ? list.window().rows() : incoming;
-                List<DisplayRow> newer = edge == TimelineLogList.Edge.AFTER ? incoming : list.window().rows();
-                List<DisplayRow> merged = ResultWindow.mergeUnique(older, newer);
+                List<DisplayRow> incoming = DisplayRow.from(entries, filter);
+                if (olderPage) incoming = ResultWindow.reversed(incoming);
+                boolean more = pageIsFull(incoming, filter);
+                List<DisplayRow> older = olderPage ? incoming : list.window().rows();
+                List<DisplayRow> newer = olderPage ? list.window().rows() : incoming;
                 List<DisplayRow> trimmed = ResultWindow.trimToMatchLimit(
-                    merged, (int) Math.max(1, filter.limit()), firstVisible, lastVisible);
-                boolean hasBefore = list.window().hasBefore() || (edge == TimelineLogList.Edge.BEFORE && more);
-                boolean hasAfter = list.window().hasAfter() || (edge == TimelineLogList.Edge.AFTER && more);
-                if (edge == TimelineLogList.Edge.BEFORE && !more) hasBefore = false;
-                if (edge == TimelineLogList.Edge.AFTER && !more) hasAfter = false;
+                    ResultWindow.mergeUnique(older, newer),
+                    (int) Math.max(1, filter.limit()), firstVisible, lastVisible);
+                boolean hasBefore = list.window().hasBefore() || (olderPage && more);
+                boolean hasAfter = list.window().hasAfter() || (!olderPage && more);
+                if (olderPage && !more) hasBefore = false;
+                if (!olderPage && !more) hasAfter = false;
                 list.applyPage(trimmed, hasBefore, hasAfter, anchor);
             });
         });
@@ -291,13 +276,12 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
     private void jumpTo(LocalDateTime time) {
         SearchFilter page = filter.withOffset(time.minusNanos(1));
         list.setLoading(true);
-        AllTheLogsClient.worker().query(ChatQueryFactory.toQuery(page)).whenComplete((entries, error) -> {
+        AllTheLogsClient.worker().query(page.toQuery()).whenComplete((entries, error) -> {
             Minecraft.getInstance().execute(() -> {
                 list.setLoading(false);
                 if (error != null) return;
-                List<DisplayRow> rows = EntryClassifier.classify(entries, filter);
-                boolean hasAfter = ResultWindow.matchCount(rows) >= filter.limit() && filter.limit() > 0;
-                list.reset(rows, true, hasAfter);
+                List<DisplayRow> rows = DisplayRow.from(entries, filter);
+                list.reset(rows, true, pageIsFull(rows, filter));
             });
         });
     }

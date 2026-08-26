@@ -1,6 +1,5 @@
 package me.wolfii.allthelogs.client.view;
 
-import me.wolfii.allthelogs.client.search.MessageMatcher;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 
 import java.util.ArrayList;
@@ -42,7 +41,7 @@ public final class MatchHighlighter {
     }
 
     static List<HighlightSpan> regexSpans(String message, String regex, boolean caseSensitive) {
-        Pattern pattern = MessageMatcher.compiledRegex(regex, caseSensitive).orElse(null);
+        Pattern pattern = SearchFilter.compiledRegex(regex, caseSensitive).orElse(null);
         if (pattern == null) {
             return List.of();
         }

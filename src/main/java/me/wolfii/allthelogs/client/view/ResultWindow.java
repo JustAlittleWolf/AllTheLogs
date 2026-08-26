@@ -35,9 +35,7 @@ public final class ResultWindow {
      * opposite sort, reverse that page so it can be prepended.
      */
     public static List<DisplayRow> reversed(List<DisplayRow> rows) {
-        List<DisplayRow> copy = new ArrayList<>(rows);
-        java.util.Collections.reverse(copy);
-        return List.copyOf(copy);
+        return List.copyOf(rows).reversed();
     }
 
     /**

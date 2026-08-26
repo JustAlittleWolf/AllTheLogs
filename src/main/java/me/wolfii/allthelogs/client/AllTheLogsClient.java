@@ -35,10 +35,6 @@ public final class AllTheLogsClient implements ClientModInitializer {
         return settings;
     }
 
-    public static Path gameDirectory() {
-        return AllTheLogsPaths.gameDirectory();
-    }
-
     public static void saveSettings() {
         if (settings == null) return;
         try {
