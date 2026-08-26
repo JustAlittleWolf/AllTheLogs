@@ -1,4 +1,4 @@
-package me.wolfii.allthelogs.view;
+package me.wolfii.allthelogs.client.view;
 
 import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.ChatLog;
@@ -42,6 +42,15 @@ class ResultWindowTest {
         // Visible rows 6-8, limit 4 matches → keep a window covering 6-8.
         List<DisplayRow> trimmed = ResultWindow.trimToMatchLimit(rows, 4, 6, 8);
         assertEquals(List.of(5, 6, 7, 8), trimmed.stream().map(DisplayRow::lineIndex).toList());
+    }
+
+    @Test
+    void matchCountCountsOnlyHits() {
+        List<DisplayRow> rows = List.of(row("a.log", 0), row("a.log", 1));
+        assertEquals(2, ResultWindow.matchCount(rows));
+        ResultWindow window = new ResultWindow();
+        window.reset(rows, false, false);
+        assertEquals(2, window.matchCount());
     }
 
     @Test

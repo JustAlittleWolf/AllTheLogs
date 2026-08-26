@@ -1,7 +1,6 @@
 package me.wolfii.allthelogs.client;
 
 import me.wolfii.allthelogs.client.ui.LogBrowserScreen;
-import me.wolfii.allthelogs.config.AllTheLogsSettings;
 import me.wolfii.allthelogs.data.ImportOptions;
 import me.wolfii.allthelogs.data.LogSource;
 import me.wolfii.allthelogs.data.store.SessionMarker;
@@ -27,7 +26,6 @@ public final class AllTheLogsClient implements ClientModInitializer {
 
     private static LogStoreWorker worker;
     private static AllTheLogsSettings settings;
-    private static Path gameDirectory;
 
     public static LogStoreWorker worker() {
         return worker;
@@ -38,11 +36,11 @@ public final class AllTheLogsClient implements ClientModInitializer {
     }
 
     public static Path gameDirectory() {
-        return gameDirectory;
+        return AllTheLogsPaths.gameDirectory();
     }
 
     public static void saveSettings() {
-        if (settings == null || gameDirectory == null) return;
+        if (settings == null) return;
         try {
             settings.save(AllTheLogsPaths.config());
         } catch (IOException e) {
@@ -55,7 +53,7 @@ public final class AllTheLogsClient implements ClientModInitializer {
     }
 
     private static CompletableFuture<Void> importCurrentLogs() {
-        Path logs = gameDirectory.resolve("logs");
+        Path logs = AllTheLogsPaths.gameDirectory().resolve("logs");
         if (!Files.isDirectory(logs)) {
             return CompletableFuture.completedFuture(null);
         }
@@ -78,7 +76,6 @@ public final class AllTheLogsClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
-        gameDirectory = FabricLoader.getInstance().getGameDir();
         worker = new LogStoreWorker();
         try {
             settings = AllTheLogsSettings.load(AllTheLogsPaths.config());
@@ -87,7 +84,7 @@ public final class AllTheLogsClient implements ClientModInitializer {
             LOGGER.warn("Could not load AllTheLogs config from {}", AllTheLogsPaths.config(), e);
         }
 
-        worker.open(AllTheLogsPaths.database(gameDirectory))
+        worker.open(AllTheLogsPaths.database())
             .thenCompose(ignored -> importCurrentLogs())
             .thenCompose(ignored -> worker.startSession(minecraftVersion()))
             .whenComplete((log, error) -> {

@@ -1,13 +1,13 @@
-package me.wolfii.allthelogs.view;
+package me.wolfii.allthelogs.client.view;
 
-import me.wolfii.allthelogs.search.SearchFilter;
+import me.wolfii.allthelogs.client.search.MessageMatcher;
+import me.wolfii.allthelogs.client.search.SearchFilter;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
 
 /**
  * Finds the character ranges of a search query inside a message. Substring search is literal, not regex.
@@ -42,11 +42,8 @@ public final class MatchHighlighter {
     }
 
     static List<HighlightSpan> regexSpans(String message, String regex, boolean caseSensitive) {
-        Pattern pattern;
-        try {
-            int flags = caseSensitive ? 0 : Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE;
-            pattern = Pattern.compile(regex, flags);
-        } catch (PatternSyntaxException e) {
+        Pattern pattern = MessageMatcher.compiledRegex(regex, caseSensitive).orElse(null);
+        if (pattern == null) {
             return List.of();
         }
         Matcher matcher = pattern.matcher(message);

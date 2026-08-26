@@ -15,8 +15,12 @@ public final class AllTheLogsPaths {
     private AllTheLogsPaths() {
     }
 
-    public static Path database(Path gameDirectory) {
-        return gameDirectory.resolve(DATABASE_DIRECTORY).resolve(DATABASE_FILE_NAME);
+    public static Path gameDirectory() {
+        return FabricLoader.getInstance().getGameDir();
+    }
+
+    public static Path database() {
+        return gameDirectory().resolve(DATABASE_DIRECTORY).resolve(DATABASE_FILE_NAME);
     }
 
     public static Path config() {

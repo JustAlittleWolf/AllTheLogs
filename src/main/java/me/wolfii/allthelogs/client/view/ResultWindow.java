@@ -1,4 +1,4 @@
-package me.wolfii.allthelogs.view;
+package me.wolfii.allthelogs.client.view;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -11,6 +11,14 @@ public final class ResultWindow {
     private List<DisplayRow> rows = List.of();
     private boolean hasBefore;
     private boolean hasAfter;
+
+    public static int matchCount(List<DisplayRow> rows) {
+        int count = 0;
+        for (DisplayRow row : rows) {
+            if (row.match()) count++;
+        }
+        return count;
+    }
 
     public static int indexOf(List<DisplayRow> rows, DisplayRow.RowKey key) {
         if (key == null) return -1;
@@ -156,10 +164,6 @@ public final class ResultWindow {
     }
 
     public int matchCount() {
-        int count = 0;
-        for (DisplayRow row : rows) {
-            if (row.match()) count++;
-        }
-        return count;
+        return matchCount(rows);
     }
 }
