@@ -44,14 +44,14 @@ class RealDatasetTest {
             assertTrue(result.failures().isEmpty(), () -> "unexpected failures: " + result.failures());
 
             List<ChatLog> files = store.chatLogs();
-            assertEquals(files.size(), store.logEntries().stream().map(ChatEntry::chatLog).distinct().count());
+            assertEquals(files.size(), store.chatEntries().stream().map(ChatEntry::chatLog).distinct().count());
 
             // Every log in the dataset comes from a launcher that writes a recognisable version line.
             Map<String, Long> versions = files.stream().collect(
                     Collectors.groupingBy(ChatLog::minecraftVersion, Collectors.counting()));
             assertTrue(versions.size() > 1, () -> "expected several Minecraft versions, got " + versions);
 
-            assertEquals(result.importedEntries(), store.logEntries().size());
+            assertEquals(result.importedEntries(), store.chatEntries().size());
         }
     }
 
@@ -86,14 +86,14 @@ class RealDatasetTest {
 
         try (LogStore store = LogStore.open(tempDir.resolve("queries.duckdb"))) {
             store.importDirectory(dataset, ImportOptions.defaults().withPathMatcher("**/logs/**"));
-            assumeTrue(!store.logEntries().isEmpty(), "no entries imported");
+            assumeTrue(!store.chatEntries().isEmpty(), "no entries imported");
 
             ChatLog earliest = store.chatLogs().getFirst();
             ChatLog latest = store.chatLogs().getLast();
             LocalDateTime from = earliest.date().atStartOfDay();
             LocalDateTime to = latest.date().plusDays(1).atStartOfDay();
 
-            assertEquals(store.logEntries().size(), store.query(ChatQuery.all().withRange(from, to)).size());
+            assertEquals(store.chatEntries().size(), store.query(ChatQuery.all().startingAt(from).upUntil(to)).size());
 
             List<ChatEntry> withContext = store.query(ChatQuery.all()
                     .withRegex("(?i)joined the game|left the game|<")

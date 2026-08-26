@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -62,7 +63,7 @@ class LogStoreTest {
         assertTrue(result.failures().isEmpty(), () -> "unexpected failures: " + result.failures());
         assertEquals(3, result.importedFiles());
         assertEquals(8, result.importedEntries());
-        assertEquals(8, store.logEntries().size());
+        assertEquals(8, store.chatEntries().size());
     }
 
     @Test
@@ -128,7 +129,7 @@ class LogStoreTest {
                 ImportOptions.defaults().withRecursive(false));
 
         assertEquals(0, result.importedFiles());
-        assertTrue(store.logEntries().isEmpty());
+        assertTrue(store.chatEntries().isEmpty());
     }
 
     @Test
@@ -140,7 +141,7 @@ class LogStoreTest {
         store.importDirectory(root, ImportOptions.defaults().withPathMatcher("**/logs/**"));
 
         assertTrue(store.query(ChatQuery.all().withSubstring("should not be imported")).isEmpty());
-        assertEquals(8, store.logEntries().size());
+        assertEquals(8, store.chatEntries().size());
     }
 
     @Test
@@ -225,7 +226,7 @@ class LogStoreTest {
         store.importDirectory(root);
 
         assertEquals(3, store.chatLogs().size());
-        assertEquals(8, store.logEntries().size());
+        assertEquals(8, store.chatEntries().size());
     }
 
     @Test
@@ -237,7 +238,7 @@ class LogStoreTest {
 
         assertEquals(0, second.importedFiles());
         assertEquals(3, second.skippedFiles());
-        assertEquals(8, store.logEntries().size());
+        assertEquals(8, store.chatEntries().size());
     }
 
     @Test
@@ -273,8 +274,9 @@ class LogStoreTest {
     void filtersByDateRangeExcludingTheUpperBound() throws IOException {
         store.importDirectory(logsDirectory());
 
-        List<ChatEntry> hits = store.query(ChatQuery.all().withRange(
-                LocalDateTime.of(2026, 8, 25, 0, 0), LocalDateTime.of(2026, 8, 26, 0, 0)));
+        List<ChatEntry> hits = store.query(ChatQuery.all()
+                .startingAt(LocalDateTime.of(2026, 8, 25, 0, 0))
+                .upUntil(LocalDateTime.of(2026, 8, 26, 0, 0)));
         assertEquals(List.of("delta", "needle in here", "epsilon"), hits.stream().map(ChatEntry::message).toList());
     }
 
@@ -284,8 +286,32 @@ class LogStoreTest {
 
         List<ChatEntry> hits = store.query(ChatQuery.all()
                 .withSubstring("needle")
-                .withRange(LocalDateTime.of(2026, 8, 25, 0, 0), LocalDateTime.of(2026, 8, 26, 0, 0)));
+                .startingAt(LocalDateTime.of(2026, 8, 25, 0, 0))
+                .upUntil(LocalDateTime.of(2026, 8, 26, 0, 0)));
         assertEquals(List.of("needle in here"), hits.stream().map(ChatEntry::message).toList());
+    }
+
+    @Test
+    void filtersByMinecraftVersion() throws IOException {
+        store.importDirectory(logsDirectory());
+
+        assertEquals(List.of("alpha", "beta", "gamma", "delta", "needle in here", "epsilon"),
+            store.query(ChatQuery.all().withVersion("26.2")).stream().map(ChatEntry::message).toList());
+        assertEquals(List.of("zeta", "another needle"),
+            store.query(ChatQuery.all().withVersion("1.8.9")).stream().map(ChatEntry::message).toList());
+        assertTrue(store.query(ChatQuery.all().withVersion("1.20.1")).isEmpty());
+    }
+
+    @Test
+    void versionFilterCombinesWithTextAndContext() throws IOException {
+        store.importDirectory(logsDirectory());
+
+        assertEquals(List.of("needle in here"),
+            store.query(ChatQuery.all().withSubstring("needle").withVersion("26.2"))
+                .stream().map(ChatEntry::message).toList());
+        assertEquals(List.of("zeta", "another needle"),
+            store.query(ChatQuery.all().withSubstring("needle").withVersion("1.8.9").withContextLines(1))
+                .stream().map(ChatEntry::message).toList());
     }
 
     @Test
@@ -322,7 +348,8 @@ class LogStoreTest {
         List<ChatEntry> hits = store.query(ChatQuery.all()
                 .withSubstring("delta")
                 .withContextLines(5)
-                .withRange(LocalDateTime.of(2026, 8, 25, 10, 0, 10), LocalDateTime.of(2026, 8, 25, 10, 0, 12)));
+                .startingAt(LocalDateTime.of(2026, 8, 25, 10, 0, 10))
+                .upUntil(LocalDateTime.of(2026, 8, 25, 10, 0, 12)));
         assertEquals(List.of("delta", "needle in here"), hits.stream().map(ChatEntry::message).toList());
     }
 
@@ -330,8 +357,8 @@ class LogStoreTest {
     void ordersAscendingByDefaultAndDescendingOnRequest() throws IOException {
         store.importDirectory(logsDirectory());
 
-        List<ChatEntry> ascending = store.logEntries();
-        List<ChatEntry> descending = store.query(ChatQuery.all().withDescending(true));
+        List<ChatEntry> ascending = store.chatEntries();
+        List<ChatEntry> descending = store.query(ChatQuery.all().withSort(ChatQuery.Sort.DESCENDING));
 
         assertEquals(ascending.getFirst().message(), descending.getLast().message());
         assertEquals(ascending.getLast().message(), descending.getFirst().message());
@@ -343,6 +370,138 @@ class LogStoreTest {
         store.importDirectory(logsDirectory());
 
         assertEquals(2, store.query(ChatQuery.all().withLimit(2)).size());
+    }
+
+    @Test
+    void sortsDescendingWithTheSortOption() throws IOException {
+        store.importDirectory(logsDirectory());
+
+        List<ChatEntry> bySort = store.query(ChatQuery.all().withSort(ChatQuery.Sort.DESCENDING));
+
+        assertTrue(bySort.getFirst().timestamp().isAfter(bySort.getLast().timestamp()));
+    }
+
+    @Test
+    void timestampOffsetPagesForwardAndBackward() throws IOException {
+        importOffsetLog();
+
+        List<String> forward = store.query(ChatQuery.all()
+                .withOffset(LocalDateTime.of(2026, 6, 1, 10, 0, 11)))
+            .stream().map(ChatEntry::message).toList();
+        assertEquals(List.of("hit", "four", "five"), forward);
+
+        List<String> backward = store.query(ChatQuery.all()
+                .withSort(ChatQuery.Sort.DESCENDING)
+                .withOffset(LocalDateTime.of(2026, 6, 1, 10, 0, 13)))
+            .stream().map(ChatEntry::message).toList();
+        assertEquals(List.of("hit", "two", "one"), backward);
+    }
+
+    @Test
+    void timestampOffsetComplementsTheLimit() throws IOException {
+        importOffsetLog();
+
+        List<ChatEntry> page1 = store.query(ChatQuery.all().withLimit(2));
+        assertEquals(List.of("one", "two"), page1.stream().map(ChatEntry::message).toList());
+
+        List<ChatEntry> page2 = store.query(ChatQuery.all()
+            .withOffset(page1.getLast().timestamp())
+            .withLimit(2));
+        assertEquals(List.of("hit", "four"), page2.stream().map(ChatEntry::message).toList());
+
+        List<ChatEntry> page3 = store.query(ChatQuery.all()
+            .withOffset(page2.getLast().timestamp())
+            .withLimit(2));
+        assertEquals(List.of("five"), page3.stream().map(ChatEntry::message).toList());
+    }
+
+    @Test
+    void timestampOffsetPagesNewestFirst() throws IOException {
+        importOffsetLog();
+
+        List<ChatEntry> page1 = store.query(ChatQuery.all()
+            .withSort(ChatQuery.Sort.DESCENDING)
+            .withLimit(2));
+        assertEquals(List.of("five", "four"), page1.stream().map(ChatEntry::message).toList());
+
+        List<ChatEntry> page2 = store.query(ChatQuery.all()
+            .withSort(ChatQuery.Sort.DESCENDING)
+            .withOffset(page1.getLast().timestamp())
+            .withLimit(2));
+        assertEquals(List.of("hit", "two"), page2.stream().map(ChatEntry::message).toList());
+    }
+
+    @Test
+    void contextLinesMayExtendBeyondTheTimestampOffset() throws IOException {
+        importOffsetLog();
+
+        List<String> after = store.query(ChatQuery.all()
+                .withSubstring("hit")
+                .withContextLines(2)
+                .withOffset(LocalDateTime.of(2026, 6, 1, 10, 0, 11)))
+            .stream().map(ChatEntry::message).toList();
+        assertEquals(List.of("one", "two", "hit", "four", "five"), after);
+
+        List<String> before = store.query(ChatQuery.all()
+                .withSubstring("hit")
+                .withContextLines(2)
+                .withSort(ChatQuery.Sort.DESCENDING)
+                .withOffset(LocalDateTime.of(2026, 6, 1, 10, 0, 13)))
+            .stream().map(ChatEntry::message).toList();
+        assertEquals(List.of("five", "four", "hit", "two", "one"), before);
+    }
+
+    @Test
+    void limitAppliesToMatchesBeforeContextIsExpanded() throws IOException {
+        importOffsetLog();
+
+        List<String> hits = store.query(ChatQuery.all()
+                .withSubstring("t")
+                .withContextLines(1)
+                .withLimit(1))
+            .stream().map(ChatEntry::message).toList();
+        // "two" is the first match for "t" in ascending order; context adds "one" and "hit".
+        assertEquals(List.of("one", "two", "hit"), hits);
+    }
+
+    @Test
+    void timeWindowStillClipsContextWhenAnOffsetIsSet() throws IOException {
+        importOffsetLog();
+
+        List<String> hits = store.query(ChatQuery.all()
+                .withSubstring("hit")
+                .withContextLines(2)
+                .withOffset(LocalDateTime.of(2026, 6, 1, 10, 0, 11))
+                .startingAt(LocalDateTime.of(2026, 6, 1, 10, 0, 12))
+                .upUntil(LocalDateTime.of(2026, 6, 1, 10, 0, 14)))
+            .stream().map(ChatEntry::message).toList();
+        assertEquals(List.of("hit", "four"), hits);
+    }
+
+    @Test
+    void startingAtAloneKeepsEntriesFromThatInstant() throws IOException {
+        importOffsetLog();
+
+        List<String> hits = store.query(ChatQuery.all()
+                .startingAt(LocalDateTime.of(2026, 6, 1, 10, 0, 12)))
+            .stream().map(ChatEntry::message).toList();
+        assertEquals(List.of("hit", "four", "five"), hits);
+    }
+
+    @Test
+    void upUntilAloneKeepsEntriesBeforeThatInstant() throws IOException {
+        importOffsetLog();
+
+        List<String> hits = store.query(ChatQuery.all()
+                .upUntil(LocalDateTime.of(2026, 6, 1, 10, 0, 12)))
+            .stream().map(ChatEntry::message).toList();
+        assertEquals(List.of("one", "two"), hits);
+    }
+
+    private void importOffsetLog() throws IOException {
+        LogFixtures.writeGzipped(tempDir.resolve("logs"), "2026-06-01-1.log.gz",
+            LogFixtures.modernLog("26.2", "one", "two", "hit", "four", "five"));
+        store.importDirectory(tempDir);
     }
 
     @Test
@@ -361,7 +520,7 @@ class LogStoreTest {
 
         store.importDirectory(tempDir);
 
-        List<ChatEntry> entries = store.logEntries();
+        List<ChatEntry> entries = store.chatEntries();
         assertEquals(lines, entries.size());
         assertEquals("line 0", entries.getFirst().message());
         assertEquals("line 2047", entries.get(2047).message());
@@ -384,9 +543,43 @@ class LogStoreTest {
 
         assertTrue(Files.isRegularFile(database));
         try (LogStore reopened = LogStore.open(database)) {
-            assertEquals(8, reopened.logEntries().size());
+            assertEquals(8, reopened.chatEntries().size());
             assertEquals(database, reopened.databasePath().orElseThrow());
+            StoreMetadata metadata = reopened.metadata();
+            assertEquals(3, metadata.chatLogCount());
+            assertEquals(8, metadata.chatEntryCount());
+            assertTrue(metadata.minecraftVersions().containsAll(List.of("26.2", "1.8.9")));
+            assertEquals(onDiskSize(database), metadata.databaseSizeBytes());
+            assertTrue(metadata.databaseSizeBytes() > 0);
         }
+    }
+
+    @Test
+    void emptyStoreMetadataHasZeroCounts() {
+        StoreMetadata metadata = store.metadata();
+
+        assertTrue(metadata.minecraftVersions().isEmpty());
+        assertNull(metadata.firstLogDate());
+        assertNull(metadata.lastLogDate());
+        assertEquals(0, metadata.chatLogCount());
+        assertEquals(0, metadata.chatEntryCount());
+        assertTrue(metadata.databaseSizeBytes() >= 0);
+    }
+
+    @Test
+    void metadataSummarisesImportedLogs() throws IOException {
+        Path logs = tempDir.resolve("logs");
+        LogFixtures.writeGzipped(logs, "2026-08-20-1.log.gz", LogFixtures.legacyLog("old"));
+        LogFixtures.writeGzipped(logs, "2026-08-24-1.log.gz", LogFixtures.modernLog("26.2", "one", "two"));
+        store.importDirectory(tempDir);
+
+        StoreMetadata metadata = store.metadata();
+        assertEquals(List.of("1.8.9", "26.2"), metadata.minecraftVersions());
+        assertEquals(LocalDate.of(2026, 8, 20), metadata.firstLogDate());
+        assertEquals(LocalDate.of(2026, 8, 24), metadata.lastLogDate());
+        assertEquals(2, metadata.chatLogCount());
+        assertEquals(3, metadata.chatEntryCount());
+        assertTrue(metadata.databaseSizeBytes() > 0);
     }
 
     @Test
@@ -456,7 +649,7 @@ class LogStoreTest {
         assertEquals(LocalDate.of(2026, 4, 2), file.date());
         assertEquals(LocalDateTime.of(2026, 4, 2, 10, 0, 0), file.startTime());
         assertEquals(LocalDateTime.of(2026, 4, 2, 10, 0, 10), file.endTime());
-        assertTrue(store.logEntries().isEmpty());
+        assertTrue(store.chatEntries().isEmpty());
     }
 
     @Test
@@ -486,7 +679,7 @@ class LogStoreTest {
         assertEquals(startedAt, file.startTime());
         assertEquals(startedAt, file.endTime());
         assertEquals(1, store.chatLogs().size());
-        assertTrue(store.logEntries().isEmpty());
+        assertTrue(store.chatEntries().isEmpty());
     }
 
     @Test
@@ -509,7 +702,7 @@ class LogStoreTest {
         ChatLog file = store.chatLogs().getFirst();
         assertEquals(startedAt, file.startTime());
         assertEquals(startedAt.plusHours(2), file.endTime());
-        assertTrue(store.logEntries().isEmpty());
+        assertTrue(store.chatEntries().isEmpty());
     }
 
     @Test
@@ -522,7 +715,7 @@ class LogStoreTest {
 
         ChatLog file = store.chatLogs().getFirst();
         assertEquals(startedAt.plusMinutes(5), file.endTime());
-        assertEquals(1, store.logEntries().size());
+        assertEquals(1, store.chatEntries().size());
     }
 
     @Test
@@ -536,7 +729,7 @@ class LogStoreTest {
         ChatLog file = store.chatLogs().getFirst();
         assertEquals(startedAt, file.startTime());
         assertEquals(startedAt.plusHours(1), file.endTime());
-        assertEquals(1, store.logEntries().size());
+        assertEquals(1, store.chatEntries().size());
     }
 
     @Test
@@ -549,7 +742,7 @@ class LogStoreTest {
 
         ChatLog file = store.chatLogs().getFirst();
         assertEquals(startedAt.plusHours(1), file.endTime());
-        assertEquals(1, store.logEntries().size());
+        assertEquals(1, store.chatEntries().size());
     }
 
     @Test
@@ -564,7 +757,7 @@ class LogStoreTest {
         assertEquals("26.2", entry.chatLog().minecraftVersion());
         assertEquals(LocalDate.of(2026, 8, 26), entry.chatLog().date());
         assertEquals(LocalDateTime.of(2026, 8, 26, 12, 0, 0), entry.timestamp());
-        assertEquals(9, store.logEntries().size());
+        assertEquals(9, store.chatEntries().size());
     }
 
     @Test
@@ -577,7 +770,7 @@ class LogStoreTest {
         ChatLog file = store.chatLogs().getFirst();
         assertEquals(startedAt, file.startTime());
         assertEquals(startedAt.plusMinutes(5), file.endTime());
-        assertEquals(1, store.logEntries().size());
+        assertEquals(1, store.chatEntries().size());
     }
 
     @Test
@@ -596,7 +789,7 @@ class LogStoreTest {
         store.startSession("26.2", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
         store.importSessionMessage("\u00a7chello \u00a7aworld", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
 
-        assertEquals("hello world", store.logEntries().getFirst().message());
+        assertEquals("hello world", store.chatEntries().getFirst().message());
     }
 
     @Test
@@ -607,7 +800,7 @@ class LogStoreTest {
         store.importSessionMessage("second", base.plusSeconds(1));
         store.importSessionMessage("third", base.plusSeconds(2));
 
-        assertEquals(List.of(0, 1, 2), store.logEntries().stream().map(ChatEntry::lineIndex).toList());
+        assertEquals(List.of(0, 1, 2), store.chatEntries().stream().map(ChatEntry::lineIndex).toList());
         ChatLog file = store.chatLogs().getFirst();
         assertEquals(base, file.startTime());
         assertEquals(base.plusSeconds(2), file.endTime());
@@ -635,7 +828,7 @@ class LogStoreTest {
         store.importSessionMessage("c", LocalDateTime.of(2026, 8, 27, 13, 0, 0));
 
         assertEquals(3, store.chatLogs().size());
-        assertEquals(3, store.logEntries().size());
+        assertEquals(3, store.chatEntries().size());
         assertTrue(store.chatLogs().stream().allMatch(file -> file.source() instanceof LogSource.Session));
     }
 
@@ -646,7 +839,7 @@ class LogStoreTest {
         assertTrue(store.importSessionMessage("duplicated", timestamp));
         assertFalse(store.importSessionMessage("duplicated", timestamp));
 
-        assertEquals(1, store.logEntries().size());
+        assertEquals(1, store.chatEntries().size());
     }
 
     @Test
@@ -655,7 +848,7 @@ class LogStoreTest {
         store.startSession("26.2", LocalDateTime.of(2026, 8, 25, 10, 0, 10));
 
         assertFalse(store.importSessionMessage("delta", LocalDateTime.of(2026, 8, 25, 10, 0, 10)));
-        assertEquals(8, store.logEntries().size());
+        assertEquals(8, store.chatEntries().size());
     }
 
     @Test
@@ -664,7 +857,7 @@ class LogStoreTest {
         store.importDirectory(logsDirectory());
 
         assertTrue(store.chatLogs().stream().anyMatch(file -> file.source() instanceof LogSource.Session));
-        assertTrue(store.logEntries().stream().noneMatch(entry -> entry.chatLog().source() instanceof LogSource.Session));
+        assertTrue(store.chatEntries().stream().noneMatch(entry -> entry.chatLog().source() instanceof LogSource.Session));
     }
 
     @Test
@@ -677,7 +870,7 @@ class LogStoreTest {
         store.importDirectory(tempDir);
 
         assertEquals(1, store.query(ChatQuery.all().withSubstring("shared line")).size());
-        assertEquals(3, store.logEntries().size());
+        assertEquals(3, store.chatEntries().size());
     }
 
     @Test
@@ -690,7 +883,7 @@ class LogStoreTest {
         store.importDirectory(tempDir.resolve("a"));
         store.importDirectory(tempDir.resolve("b"));
 
-        assertEquals(1, store.logEntries().size());
+        assertEquals(1, store.chatEntries().size());
         // The file left without entries is dropped rather than lingering with a count of zero.
         assertEquals(1, store.chatLogs().size());
     }
@@ -702,7 +895,7 @@ class LogStoreTest {
         store.importSessionMessage("one", timestamp);
         store.importSessionMessage("two", timestamp);
 
-        assertEquals(2, store.logEntries().size());
+        assertEquals(2, store.chatEntries().size());
     }
 
     @Test
@@ -714,7 +907,7 @@ class LogStoreTest {
 
         store.importDirectory(tempDir);
 
-        assertEquals(3, store.logEntries().size());
+        assertEquals(3, store.chatEntries().size());
         assertEquals(2, store.chatLogs().size());
     }
 
@@ -793,6 +986,12 @@ class LogStoreTest {
         store.importDirectory(tempDir, ImportOptions.defaults().withTimezone(ZoneOffset.ofHours(14)));
         ChatLog plusFourteen = store.chatLogs().getFirst();
         assertEquals(LocalDate.of(2026, 8, 26), plusFourteen.date());
+    }
+
+    private static long onDiskSize(Path database) throws IOException {
+        long size = Files.size(database);
+        Path wal = database.resolveSibling(database.getFileName().toString() + ".wal");
+        return Files.isRegularFile(wal) ? size + Files.size(wal) : size;
     }
 
     private static String fileName(ChatLog log) {

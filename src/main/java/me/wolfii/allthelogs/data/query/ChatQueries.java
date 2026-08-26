@@ -5,6 +5,7 @@ import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.ChatQuery;
 import me.wolfii.allthelogs.data.LogDataException;
 import me.wolfii.allthelogs.data.LogSource;
+import me.wolfii.allthelogs.data.StoreMetadata;
 import me.wolfii.allthelogs.data.store.SourceKind;
 import org.duckdb.DuckDBChunkedResult;
 import org.duckdb.DuckDBConnection;
@@ -13,10 +14,12 @@ import org.duckdb.DuckDBPreparedStatement;
 import org.duckdb.DuckDBReadableVector;
 
 import java.nio.file.Path;
+import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -88,6 +91,64 @@ public final class ChatQueries {
             throw new LogDataException("could not read chat log metadata", e);
         }
         return logs;
+    }
+
+    /**
+     * Summarises the stored logs, using {@code databaseSizeBytes} supplied by the caller so file-backed stores can
+     * report on-disk size including the write-ahead log.
+     */
+    public StoreMetadata metadata(long databaseSizeBytes) {
+        try {
+            List<String> versions = new ArrayList<>();
+            try (Statement statement = connection.createStatement();
+                 ResultSet result = statement.executeQuery("""
+                     SELECT minecraft_version
+                     FROM log_file
+                     GROUP BY minecraft_version
+                     ORDER BY MIN(log_date), minecraft_version""")) {
+                while (result.next()) {
+                    versions.add(result.getString(1));
+                }
+            }
+            long chatLogCount;
+            LocalDate firstLogDate;
+            LocalDate lastLogDate;
+            try (Statement statement = connection.createStatement();
+                 ResultSet result = statement.executeQuery("SELECT COUNT(*), MIN(log_date), MAX(log_date) FROM log_file")) {
+                result.next();
+                chatLogCount = result.getLong(1);
+                Date first = result.getDate(2);
+                Date last = result.getDate(3);
+                firstLogDate = first == null ? null : first.toLocalDate();
+                lastLogDate = last == null ? null : last.toLocalDate();
+            }
+            long chatEntryCount;
+            try (Statement statement = connection.createStatement();
+                 ResultSet result = statement.executeQuery("SELECT COUNT(*) FROM chat_entry")) {
+                result.next();
+                chatEntryCount = result.getLong(1);
+            }
+            return new StoreMetadata(versions, firstLogDate, lastLogDate, chatLogCount, chatEntryCount,
+                databaseSizeBytes);
+        } catch (SQLException e) {
+            throw new LogDataException("could not read store metadata", e);
+        }
+    }
+
+    /**
+     * DuckDB's estimate of how much memory the in-memory database occupies.
+     */
+    public long reportedDatabaseSize() {
+        try (Statement statement = connection.createStatement();
+             ResultSet result = statement.executeQuery(
+                 "SELECT COALESCE(SUM(memory_usage_bytes), 0) FROM duckdb_memory()")) {
+            if (!result.next()) {
+                throw new LogDataException("could not read database size");
+            }
+            return result.getLong(1);
+        } catch (SQLException e) {
+            throw new LogDataException("could not read database size", e);
+        }
     }
 
     /**
