@@ -40,7 +40,6 @@ dependencies {
     implementation("net.fabricmc.fabric-api:fabric-api:$fabricApiVersion")
 
     implementation("io.wispforest:owo-lib:$owoVersion")
-    implementation("io.wispforest:owo-sentinel:$owoVersion")
 
     api(libs.duckdb.jdbc)
     include(libs.duckdb.jdbc)
