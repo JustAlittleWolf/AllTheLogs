@@ -40,7 +40,7 @@ public record SearchFilter(
     }
 
     public static SearchFilter defaults() {
-        return new SearchFilter("", false, false, DEFAULT_CONTEXT_LINES, DEFAULT_LIMIT, ChatQuery.Sort.ASCENDING,
+        return new SearchFilter("", false, false, DEFAULT_CONTEXT_LINES, DEFAULT_LIMIT, ChatQuery.Sort.DESCENDING,
             null, null, null);
     }
 

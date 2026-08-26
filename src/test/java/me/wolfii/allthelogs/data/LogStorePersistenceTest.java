@@ -225,6 +225,15 @@ class LogStorePersistenceTest {
     }
 
     @Test
+    void createsMissingParentDirectories() {
+        Path database = tempDir.resolve("nested/.allthelogs/logs.duckdb");
+        try (LogStore store = LogStore.open(database)) {
+            assertEquals(database.toAbsolutePath().normalize(), store.databasePath().orElseThrow());
+        }
+        assertTrue(Files.isDirectory(database.getParent()));
+    }
+
+    @Test
     void unicodeMessagesSurviveReopen() throws IOException {
         Path database = database();
         LogFixtures.writeGzipped(tempDir.resolve("logs"), "2026-08-24-1.log.gz",

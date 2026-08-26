@@ -3,6 +3,7 @@ package me.wolfii.allthelogs.client.ui;
 import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.*;
 import io.wispforest.owo.ui.container.FlowLayout;
+import io.wispforest.owo.ui.container.ScrollContainer;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.*;
 import me.wolfii.allthelogs.client.AllTheLogsClient;
@@ -12,11 +13,13 @@ import me.wolfii.allthelogs.client.view.DisplayRow;
 import me.wolfii.allthelogs.client.view.ResultWindow;
 import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.ChatQuery;
+import me.wolfii.allthelogs.data.LogStoreMetadata;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -27,11 +30,16 @@ import java.util.function.Consumer;
  * Transparent log browser. Search, filter, virtualised history, and a timeline of every hit.
  */
 public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
+    private static final int SEARCH_DEBOUNCE_MS = 100;
+
     private final AtomicInteger queryGeneration = new AtomicInteger();
     private SearchFilter filter;
     private TimelineLogList list;
     private LabelComponent status;
-    private FlowLayout filterPanel;
+    private LabelComponent stats;
+    private ParentUIComponent filterPanel;
+    private ButtonComponent oldestFirst;
+    private ButtonComponent newestFirst;
     private boolean filterOpen;
 
     public LogBrowserScreen() {
@@ -45,6 +53,40 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
 
     private static String formatBound(LocalDateTime time) {
         return time == null ? "" : time.toString().replace('T', ' ');
+    }
+
+    static String formatBytes(long bytes) {
+        if (bytes < 1024) return bytes + " B";
+        double value = bytes / 1024.0;
+        String unit = "KB";
+        if (value >= 1024) {
+            value /= 1024;
+            unit = "MB";
+        }
+        if (value >= 1024) {
+            value /= 1024;
+            unit = "GB";
+        }
+        return "%.1f %s".formatted(value, unit);
+    }
+
+    static List<Component> metadataTooltip(LogStoreMetadata metadata) {
+        if (metadata.chatLogCount() == 0) {
+            return List.of(Component.translatable("allthelogs.meta.empty"));
+        }
+        List<Component> lines = new ArrayList<>();
+        String versions = metadata.minecraftVersions().isEmpty()
+            ? "—"
+            : String.join(", ", metadata.minecraftVersions());
+        lines.add(Component.translatable("allthelogs.meta.versions", versions));
+        if (metadata.firstLogDate() != null && metadata.lastLogDate() != null) {
+            lines.add(Component.translatable("allthelogs.meta.range",
+                metadata.firstLogDate().toString(), metadata.lastLogDate().toString()));
+        }
+        lines.add(Component.translatable("allthelogs.meta.logs", Long.toString(metadata.chatLogCount())));
+        lines.add(Component.translatable("allthelogs.meta.entries", Long.toString(metadata.chatEntryCount())));
+        lines.add(Component.translatable("allthelogs.meta.size", formatBytes(metadata.databaseSizeBytes())));
+        return lines;
     }
 
     @Override
@@ -67,13 +109,8 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         list.onJump(this::jumpTo);
         root.child(list.verticalSizing(Sizing.expand()));
 
-        FlowLayout bottom = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
-        bottom.gap(8).verticalAlignment(VerticalAlignment.CENTER);
-        bottom.child(UIComponents.button(Component.translatable("allthelogs.import.button"),
-            button -> Minecraft.getInstance().gui.setScreen(new ImportScreen(this))));
         status = UIComponents.label(Component.empty());
-        bottom.child(status);
-        root.child(bottom);
+        root.child(status);
 
         reload(true);
     }
@@ -88,14 +125,21 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         search.onChanged().subscribe(this::onSearchChanged);
         bar.child(search);
 
-        bar.child(UIComponents.button(Component.translatable("allthelogs.filter"), button -> toggleFilter(root, button)));
+        bar.child(UIComponents.button(Component.translatable("allthelogs.filter"),
+            button -> toggleFilter(root, button)));
+        bar.child(UIComponents.button(Component.translatable("allthelogs.import.button"),
+            button -> Minecraft.getInstance().gui.setScreen(new ImportScreen(this))));
+
+        stats = UIComponents.label(Component.translatable("allthelogs.meta.marker"));
+        stats.tooltip(Component.translatable("allthelogs.meta.unavailable"));
+        bar.child(stats);
         return bar;
     }
 
     private void onSearchChanged(String text) {
         filter = filter.withText(text).withoutOffset();
         int generation = queryGeneration.incrementAndGet();
-        CompletableFuture.delayedExecutor(200, TimeUnit.MILLISECONDS).execute(() -> {
+        CompletableFuture.delayedExecutor(SEARCH_DEBOUNCE_MS, TimeUnit.MILLISECONDS).execute(() -> {
             if (generation == queryGeneration.get()) {
                 Minecraft.getInstance().execute(() -> reload(true));
             }
@@ -110,7 +154,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         filterOpen = true;
         filterPanel = buildFilterPanel();
         filterPanel.positioning(Positioning.absolute(
-            Math.max(8, this.width - 248),
+            Math.max(8, this.width - 258),
             button.y() + button.height() + 4));
         root.child(filterPanel);
     }
@@ -120,46 +164,49 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
             root.removeChild(filterPanel);
             filterPanel = null;
         }
+        oldestFirst = null;
+        newestFirst = null;
         filterOpen = false;
     }
 
-    private FlowLayout buildFilterPanel() {
-        FlowLayout panel = UIContainers.verticalFlow(Sizing.fixed(230), Sizing.content());
-        panel.padding(Insets.of(8));
-        panel.gap(4);
-        panel.surface(Surface.flat(0xE0101010).and(Surface.outline(0xFF3C3C3C)));
+    private ParentUIComponent buildFilterPanel() {
+        FlowLayout content = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
+        content.padding(Insets.of(8));
+        content.gap(4);
 
-        panel.child(checkbox("allthelogs.filter.regex", filter.regex(), value ->
+        content.child(checkbox("allthelogs.filter.regex", filter.regex(), value ->
             updateFilter(filter.withRegex(value))));
-        panel.child(checkbox("allthelogs.filter.case_sensitive", filter.caseSensitive(), value ->
+        content.child(checkbox("allthelogs.filter.case_sensitive", filter.caseSensitive(), value ->
             updateFilter(filter.withCaseSensitive(value))));
-        panel.child(labeledField("allthelogs.filter.context", String.valueOf(filter.contextLines()), text -> {
+        content.child(labeledField("allthelogs.filter.context", String.valueOf(filter.contextLines()), text -> {
             try {
                 updateFilter(filter.withContextLines(Integer.parseInt(text.trim())));
             } catch (RuntimeException ignored) {
             }
         }));
-        panel.child(labeledField("allthelogs.filter.limit", String.valueOf(filter.limit()), text -> {
-            try {
-                int limit = Integer.parseInt(text.trim());
-                if (limit > 0) updateFilter(filter.withLimit(limit));
-            } catch (RuntimeException ignored) {
-            }
-        }));
 
-        panel.child(UIComponents.label(Component.translatable("allthelogs.filter.sort")));
+        content.child(UIComponents.label(Component.translatable("allthelogs.filter.sort")));
         FlowLayout sortRow = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
         sortRow.gap(4);
-        sortRow.child(sortButton("allthelogs.filter.sort.ascending", ChatQuery.Sort.ASCENDING));
-        sortRow.child(sortButton("allthelogs.filter.sort.descending", ChatQuery.Sort.DESCENDING));
-        panel.child(sortRow);
+        oldestFirst = sortButton("allthelogs.filter.sort.ascending", ChatQuery.Sort.ASCENDING);
+        newestFirst = sortButton("allthelogs.filter.sort.descending", ChatQuery.Sort.DESCENDING);
+        sortRow.child(oldestFirst);
+        sortRow.child(newestFirst);
+        content.child(sortRow);
+        syncSortButtons();
 
-        panel.child(dateField("allthelogs.filter.from", filter.startingAt(), parsed ->
+        content.child(dateField("allthelogs.filter.from", filter.startingAt(), parsed ->
             updateFilter(filter.withStartingAt(parsed))));
-        panel.child(dateField("allthelogs.filter.until", filter.upUntil(), parsed ->
+        content.child(dateField("allthelogs.filter.until", filter.upUntil(), parsed ->
             updateFilter(filter.withUpUntil(parsed))));
-        panel.child(UIComponents.label(Component.translatable("allthelogs.filter.date_hint"))
+        content.child(UIComponents.label(Component.translatable("allthelogs.filter.date_hint"))
             .color(Color.ofRgb(0x888888)));
+
+        int panelHeight = Math.max(96, Math.min(this.height - 40, 280));
+        ScrollContainer<FlowLayout> panel = UIContainers.verticalScroll(
+            Sizing.fixed(240), Sizing.fixed(panelHeight), content);
+        panel.scrollbar(ScrollContainer.Scrollbar.vanillaFlat());
+        panel.surface(Surface.flat(0xE0101010).and(Surface.outline(0xFF3C3C3C)));
         return panel;
     }
 
@@ -171,7 +218,16 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
     }
 
     private ButtonComponent sortButton(String key, ChatQuery.Sort sort) {
-        return UIComponents.button(Component.translatable(key), button -> updateFilter(filter.withSort(sort)));
+        return UIComponents.button(Component.translatable(key), button -> {
+            if (filter.sort() == sort) return;
+            updateFilter(filter.withSort(sort));
+        });
+    }
+
+    private void syncSortButtons() {
+        if (oldestFirst == null || newestFirst == null) return;
+        oldestFirst.active(filter.sort() != ChatQuery.Sort.ASCENDING);
+        newestFirst.active(filter.sort() != ChatQuery.Sort.DESCENDING);
     }
 
     private FlowLayout dateField(String key, LocalDateTime value, Consumer<LocalDateTime> onParsed) {
@@ -200,6 +256,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
     private void persistAndReload() {
         AllTheLogsClient.settings().apply(filter);
         AllTheLogsClient.saveSettings();
+        syncSortButtons();
         reload(true);
     }
 
@@ -208,6 +265,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         int generation = queryGeneration.incrementAndGet();
         list.setLoading(true);
         status.text(Component.translatable("allthelogs.status.loading"));
+        refreshStats();
         SearchFilter page = filter.withoutOffset();
         AllTheLogsClient.worker().query(page.toQuery()).whenComplete((entries, error) -> {
             Minecraft.getInstance().execute(() -> {
@@ -231,6 +289,18 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
                 });
             });
         }
+    }
+
+    private void refreshStats() {
+        if (stats == null) return;
+        AllTheLogsClient.worker().metadata().whenComplete((metadata, error) -> Minecraft.getInstance().execute(() -> {
+            if (stats == null) return;
+            if (error != null || metadata == null) {
+                stats.tooltip(Component.translatable("allthelogs.meta.unavailable"));
+                return;
+            }
+            stats.tooltip(metadataTooltip(metadata));
+        }));
     }
 
     private void loadMore(TimelineLogList.Edge edge) {

@@ -60,8 +60,12 @@ public final class LogStore implements AutoCloseable {
         Objects.requireNonNull(databasePath, "databasePath");
         Path absolute = databasePath.toAbsolutePath().normalize();
         try {
+            Path parent = absolute.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
             return new LogStore(StoreConnections.openFile(absolute), absolute);
-        } catch (SQLException e) {
+        } catch (IOException | SQLException e) {
             throw new LogDataException("could not open log database at " + absolute, e);
         }
     }

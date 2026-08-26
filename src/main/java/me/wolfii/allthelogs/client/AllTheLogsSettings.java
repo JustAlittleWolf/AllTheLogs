@@ -16,13 +16,12 @@ import java.util.regex.Pattern;
  * Persisted browser defaults, stored as JSON in Fabric's config directory.
  */
 public final class AllTheLogsSettings {
-    private static final Pattern STRING = Pattern.compile("\"(contextLines|limit|caseSensitive|regex|sort)\"\\s*:\\s*(\"[^\"]*\"|true|false|-?\\d+)");
+    private static final Pattern STRING = Pattern.compile("\"(contextLines|caseSensitive|regex|sort)\"\\s*:\\s*(\"[^\"]*\"|true|false|-?\\d+)");
 
     private int contextLines = SearchFilter.DEFAULT_CONTEXT_LINES;
-    private int limit = SearchFilter.DEFAULT_LIMIT;
     private boolean caseSensitive;
     private boolean regex;
-    private ChatQuery.Sort sort = ChatQuery.Sort.ASCENDING;
+    private ChatQuery.Sort sort = ChatQuery.Sort.DESCENDING;
 
     public static AllTheLogsSettings load(Path file) throws IOException {
         AllTheLogsSettings settings = new AllTheLogsSettings();
@@ -36,7 +35,6 @@ public final class AllTheLogsSettings {
             String value = matcher.group(2);
             switch (key) {
                 case "contextLines" -> settings.setContextLines(Integer.parseInt(value));
-                case "limit" -> settings.setLimit(Integer.parseInt(value));
                 case "caseSensitive" -> settings.setCaseSensitive(Boolean.parseBoolean(value));
                 case "regex" -> settings.setRegex(Boolean.parseBoolean(value));
                 case "sort" -> settings.setSort(parseSort(unquote(value)));
@@ -58,7 +56,7 @@ public final class AllTheLogsSettings {
         try {
             return ChatQuery.Sort.valueOf(raw.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
-            return ChatQuery.Sort.ASCENDING;
+            return ChatQuery.Sort.DESCENDING;
         }
     }
 
@@ -68,14 +66,6 @@ public final class AllTheLogsSettings {
 
     public void setContextLines(int contextLines) {
         this.contextLines = Math.clamp(contextLines, 0, SearchFilter.MAX_CONTEXT_LINES);
-    }
-
-    public int limit() {
-        return limit;
-    }
-
-    public void setLimit(int limit) {
-        this.limit = Math.max(1, limit);
     }
 
     public boolean caseSensitive() {
@@ -105,7 +95,6 @@ public final class AllTheLogsSettings {
     public SearchFilter toFilter() {
         return SearchFilter.defaults()
             .withContextLines(contextLines)
-            .withLimit(limit)
             .withCaseSensitive(caseSensitive)
             .withRegex(regex)
             .withSort(sort);
@@ -113,7 +102,6 @@ public final class AllTheLogsSettings {
 
     public void apply(SearchFilter filter) {
         setContextLines(filter.contextLines());
-        setLimit((int) Math.min(Integer.MAX_VALUE, Math.max(1, filter.limit())));
         setCaseSensitive(filter.caseSensitive());
         setRegex(filter.regex());
         setSort(filter.sort());
@@ -124,12 +112,11 @@ public final class AllTheLogsSettings {
         String json = """
             {
               "contextLines": %d,
-              "limit": %d,
               "caseSensitive": %s,
               "regex": %s,
               "sort": "%s"
             }
-            """.formatted(contextLines, limit, caseSensitive, regex, sort.name());
+            """.formatted(contextLines, caseSensitive, regex, sort.name());
         Files.writeString(file, json, StandardCharsets.UTF_8);
     }
 }

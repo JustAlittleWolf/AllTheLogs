@@ -21,6 +21,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * Import a folder or archive into the log store. Launcher directory shortcuts from
@@ -55,40 +56,45 @@ public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
             .horizontalAlignment(HorizontalAlignment.LEFT)
             .verticalAlignment(VerticalAlignment.TOP);
 
-        root.child(UIComponents.label(Component.translatable("allthelogs.screen.import")));
+        FlowLayout form = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
+        form.gap(8);
+
+        form.child(UIComponents.label(Component.translatable("allthelogs.screen.import")));
+        LabelComponent description = UIComponents.label(Component.translatable("allthelogs.import.description"));
+        description.color(Color.ofRgb(0xA0A0A0));
+        description.maxWidth(Math.max(160, this.width - 48));
+        form.child(description);
 
         FlowLayout pathRow = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
         pathRow.gap(4).verticalAlignment(VerticalAlignment.CENTER);
         pathBox = UIComponents.textBox(Sizing.expand(), "");
         pathBox.setMaxLength(1024);
         pathRow.child(pathBox);
-        pathRow.child(UIComponents.button(Component.translatable("allthelogs.import.browse"), button -> {
-            DropdownComponent.openContextMenu(this, root, FlowLayout::child,
-                button.x(), button.y() + button.height(),
-                dropdown -> dropdown
-                    .button(Component.translatable("allthelogs.import.browse.folder"), d ->
-                        NativeFilePicker.pickFolder(currentPath(), this::setPath))
-                    .button(Component.translatable("allthelogs.import.browse.archive"), d ->
-                        NativeFilePicker.pickArchive(currentPath(), this::setPath)));
-        }));
-        root.child(pathRow);
+        pathRow.child(UIComponents.button(Component.translatable("allthelogs.import.browse"),
+            button -> NativeFilePicker.pickFolder(currentPath(), this::setPath)));
+        pathRow.child(UIComponents.button(Component.translatable("allthelogs.import.browse.archive"),
+            button -> NativeFilePicker.pickArchive(currentPath(), this::setPath)));
+        form.child(pathRow);
 
         List<CommonLogLocations.Location> common = CommonLogLocations.defaults();
         if (!common.isEmpty()) {
-            root.child(UIComponents.label(Component.translatable("allthelogs.import.common")));
+            form.child(UIComponents.label(Component.translatable("allthelogs.import.common")));
             FlowLayout locations = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
             locations.gap(2);
             for (CommonLogLocations.Location location : common) {
                 locations.child(UIComponents.button(Component.literal(location.displayName()),
                     button -> applyLocation(location)));
             }
-            root.child(UIContainers.verticalScroll(Sizing.fill(), Sizing.fixed(90), locations)
+            form.child(UIContainers.verticalScroll(Sizing.fill(), Sizing.fixed(90), locations)
                 .scrollbar(ScrollContainer.Scrollbar.vanillaFlat()));
         }
 
-        root.child(UIContainers.collapsible(Sizing.fill(), Sizing.content(),
+        form.child(UIContainers.collapsible(Sizing.fill(), Sizing.content(),
                 Component.translatable("allthelogs.import.advanced"), false)
             .child(buildAdvanced()));
+
+        root.child(UIContainers.verticalScroll(Sizing.fill(), Sizing.expand(), form)
+            .scrollbar(ScrollContainer.Scrollbar.vanillaFlat()));
 
         status = UIComponents.label(Component.empty());
         FlowLayout actions = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
@@ -128,13 +134,13 @@ public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
         return advanced;
     }
 
-    private FlowLayout field(String key, String value, java.util.function.Consumer<String> onChange) {
+    private FlowLayout field(String key, String value, Consumer<String> onChange) {
         FlowLayout row = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
         row.gap(2);
         row.child(UIComponents.label(Component.translatable(key)));
         TextBoxComponent box = UIComponents.textBox(Sizing.fill(), value);
         box.setMaxLength(128);
-        box.onChanged().subscribe(text -> onChange.accept(text));
+        box.onChanged().subscribe(onChange::accept);
         row.child(box);
         return row;
     }
@@ -180,7 +186,7 @@ public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
     private void startImport() {
         Path path = currentPath();
         status.text(Component.translatable("allthelogs.status.importing"));
-        java.util.function.Consumer<ImportProgress> progress = snapshot ->
+        Consumer<ImportProgress> progress = snapshot ->
             Minecraft.getInstance().execute(() -> status.text(Component.literal(
                 snapshot.completedFiles() + "/" + snapshot.discoveredFiles())));
         var future = Files.isRegularFile(path)
