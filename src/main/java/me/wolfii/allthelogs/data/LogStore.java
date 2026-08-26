@@ -6,6 +6,8 @@ import me.wolfii.allthelogs.data.store.SessionCapture;
 import me.wolfii.allthelogs.data.store.StoreConnections;
 import org.duckdb.DuckDBConnection;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
@@ -242,7 +244,7 @@ public final class LogStore implements AutoCloseable {
     /**
      * Returns every stored entry, oldest first. Convenience for {@code query(ChatQuery.all())}.
      */
-    public List<ChatEntry> logEntries() {
+    public List<ChatEntry> chatEntries() {
         return query(ChatQuery.all());
     }
 
@@ -251,6 +253,37 @@ public final class LogStore implements AutoCloseable {
      */
     public List<ChatLog> chatLogs() {
         return queries.chatLogs();
+    }
+
+    /**
+     * Summarises the stored logs: distinct Minecraft versions, the earliest and latest log dates, how many logs and
+     * chat entries are stored, and the database size in bytes.
+     */
+    public StoreMetadata metadata() {
+        return queries.metadata(databaseSizeBytes());
+    }
+
+    private long databaseSizeBytes() {
+        if (databasePath == null) {
+            return queries.reportedDatabaseSize();
+        }
+        return onDiskSize(databasePath);
+    }
+
+    private static long onDiskSize(Path database) {
+        return sizeIfPresent(database) + sizeIfPresent(walPath(database));
+    }
+
+    private static Path walPath(Path database) {
+        return database.resolveSibling(database.getFileName().toString() + ".wal");
+    }
+
+    private static long sizeIfPresent(Path path) {
+        try {
+            return Files.isRegularFile(path) ? Files.size(path) : 0L;
+        } catch (IOException e) {
+            throw new LogDataException("could not read size of " + path, e);
+        }
     }
 
     @Override

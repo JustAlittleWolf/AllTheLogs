@@ -18,6 +18,7 @@ class ChatQueryTest {
         assertNull(query.offset());
         assertNull(query.startingAt());
         assertNull(query.upUntil());
+        assertNull(query.version());
         assertEquals(-1, query.limit());
     }
 
@@ -73,5 +74,13 @@ class ChatQueryTest {
     void startingAtAndUpUntilRejectNull() {
         assertThrows(NullPointerException.class, () -> ChatQuery.all().startingAt(null));
         assertThrows(NullPointerException.class, () -> ChatQuery.all().upUntil(null));
+    }
+
+    @Test
+    void withVersionReplacesAndRejectsNull() {
+        assertThrows(NullPointerException.class, () -> ChatQuery.all().withVersion(null));
+        ChatQuery first = ChatQuery.all().withVersion("26.2");
+        assertEquals("26.2", first.version());
+        assertEquals("1.8.9", first.withVersion("1.8.9").version());
     }
 }

@@ -53,7 +53,7 @@ class LogStorePersistenceTest {
         assertTrue(Files.isRegularFile(database));
         try (LogStore store = LogStore.open(database)) {
             assertEquals(database, store.databasePath().orElseThrow());
-            assertEquals(8, store.logEntries().size());
+            assertEquals(8, store.chatEntries().size());
             assertEquals(3, store.chatLogs().size());
 
             assertEquals(2, store.query(ChatQuery.all().withSubstring("NEEDLE")).size());
@@ -113,7 +113,7 @@ class LogStorePersistenceTest {
         }
 
         try (LogStore store = LogStore.open(database)) {
-            assertEquals(3, store.logEntries().size());
+            assertEquals(3, store.chatEntries().size());
             assertEquals(2, store.chatLogs().size());
             assertEquals(List.of("first session"),
                     store.query(ChatQuery.all().withSubstring("first session"))
@@ -122,7 +122,7 @@ class LogStorePersistenceTest {
                     store.query(ChatQuery.all().withSubstring("second session"))
                             .stream().map(ChatEntry::message).toList());
             assertEquals(List.of("first session", "shared later", "second session"),
-                    store.logEntries().stream().map(ChatEntry::message).toList());
+                    store.chatEntries().stream().map(ChatEntry::message).toList());
         }
     }
 
@@ -162,7 +162,7 @@ class LogStorePersistenceTest {
 
         try (LogStore store = LogStore.open(database)) {
             assertEquals(2, store.chatLogs().size());
-            assertEquals(4, store.logEntries().size());
+            assertEquals(4, store.chatEntries().size());
             assertEquals(1, store.query(ChatQuery.all().withSubstring("next session")).size());
             assertEquals(1, store.query(ChatQuery.all().withSubstring("the needle")).size());
         }

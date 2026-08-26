@@ -21,6 +21,7 @@ import java.util.Locale;
  * {@link ChatQuery#startingAt} and {@link ChatQuery#upUntil} still clip both matches and context. When context is
  * requested, {@link ChatQuery#limit()} applies to the match set
  * before expansion, so a page of N matches still includes their surrounding lines.
+ * {@link ChatQuery#withVersion} keeps matches whose log has that Minecraft version; context stays in the same log.
  */
 public final class QueryBuilder {
     private static final String SELECT_COLUMNS = "SELECT e.file_id, e.entry_time, e.line_index, e.message";
@@ -46,6 +47,10 @@ public final class QueryBuilder {
             parameters.add(Timestamp.valueOf(query.upUntil()));
         }
         addOffsetCondition(query, conditions, parameters);
+        if (query.version() != null) {
+            conditions.add("file_id IN (SELECT id FROM log_file WHERE minecraft_version = ?)");
+            parameters.add(query.version());
+        }
         if (query.substring() != null) {
             if (query.caseSensitive()) {
                 conditions.add("contains(message, ?)");
