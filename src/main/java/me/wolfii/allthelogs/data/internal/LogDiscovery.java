@@ -120,7 +120,8 @@ public final class LogDiscovery {
                     failures.add(new ImportResult.Failure(entryPath, "could not read file: " + e.getMessage()));
                     continue;
                 }
-                consumer.accept(new LogCandidate(name, SourceKind.DIRECTORY, root.toString(), entryPath,
+                consumer.accept(new LogCandidate(name, SourceKind.FILE,
+                    child.toAbsolutePath().normalize().toString(), "",
                     lastModified(child), content));
             } else if (options.nestedArchives() && isArchive(name)) {
                 readArchive(child, root.toString(), child.toString(), entryPath + ARCHIVE_SEPARATOR, name);

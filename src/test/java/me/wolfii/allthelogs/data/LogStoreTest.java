@@ -69,10 +69,10 @@ class LogStoreTest {
         store.importDirectory(root);
 
         ChatEntry entry = store.query(ChatQuery.all().withSubstring("needle in here")).getFirst();
-        LogSource.Directory source = assertInstanceOf(LogSource.Directory.class, entry.chatLog().source());
-        assertEquals("2026-08-25-1.log.gz", source.fileName());
-        assertEquals(root.toAbsolutePath().normalize().toString(), source.path());
-        assertEquals("logs/2026-08-25-1.log.gz", source.entryPath());
+        LogSource.File source = assertInstanceOf(LogSource.File.class, entry.chatLog().source());
+        Path expected = root.resolve("logs/2026-08-25-1.log.gz").toAbsolutePath().normalize();
+        assertEquals(expected, source.path());
+        assertEquals("2026-08-25-1.log.gz", source.path().getFileName().toString());
         assertEquals("26.2", entry.chatLog().minecraftVersion());
         assertEquals(LocalDate.of(2026, 8, 25), entry.chatLog().date());
         assertEquals(LocalDateTime.of(2026, 8, 25, 10, 0, 11), entry.timestamp());
@@ -208,6 +208,19 @@ class LogStoreTest {
         assertEquals(0, second.importedFiles());
         assertEquals(3, second.skippedFiles());
         assertEquals(8, store.logEntries().size());
+    }
+
+    @Test
+    void alreadyImportedIsKeyedByTheLogFileNotTheImportRoot() throws IOException {
+        Path root = logsDirectory();
+        store.importDirectory(root);
+
+        ImportResult second = store.importDirectory(root.resolve("logs"),
+                ImportOptions.defaults().withSkipAlreadyImported(true));
+
+        assertEquals(0, second.importedFiles());
+        assertEquals(3, second.skippedFiles());
+        assertEquals(3, store.chatLogs().size());
     }
 
     @Test
@@ -741,7 +754,7 @@ class LogStoreTest {
 
     private static String fileName(ChatLog log) {
         return switch (log.source()) {
-            case LogSource.Directory directory -> directory.fileName();
+            case LogSource.File file -> file.path().getFileName().toString();
             case LogSource.Archive archive -> archive.fileName();
             case LogSource.Session session -> throw new AssertionError("session has no file name");
         };
@@ -749,7 +762,7 @@ class LogStoreTest {
 
     private static String entryPath(ChatLog log) {
         return switch (log.source()) {
-            case LogSource.Directory directory -> directory.entryPath();
+            case LogSource.File file -> throw new AssertionError("file has no archive entry path");
             case LogSource.Archive archive -> archive.entryPath();
             case LogSource.Session session -> throw new AssertionError("session has no entry path");
         };

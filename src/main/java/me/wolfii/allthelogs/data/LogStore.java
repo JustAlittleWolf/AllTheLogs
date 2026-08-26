@@ -79,7 +79,7 @@ public final class LogStore implements AutoCloseable {
     private static final String SESSION_SOURCE_PATH = "<session>";
     /// Sentinel that tells the writer loop that no more logs are coming.
     private static final PreparedLog END_OF_STREAM = new PreparedLog(
-        "", SourceKind.DIRECTORY, "", "", LocalDate.EPOCH, "", List.of(), List.of(),
+        "", SourceKind.FILE, "", "", LocalDate.EPOCH, "", List.of(), List.of(),
         false, null, null);
 
     private final DuckDBConnection connection;
@@ -234,10 +234,14 @@ public final class LogStore implements AutoCloseable {
             throw new SQLException("unknown source kind: " + kind, e);
         }
         return switch (sourceKind) {
-            case DIRECTORY -> new LogSource.Directory(fileName, path, entryPath);
+            case FILE -> new LogSource.File(Path.of(path));
             case ARCHIVE -> new LogSource.Archive(fileName, path, entryPath);
             case SESSION -> new LogSource.Session();
         };
+    }
+
+    private static String failurePath(LogCandidate candidate) {
+        return candidate.sourceKind() == SourceKind.FILE ? candidate.sourcePath() : candidate.entryPath();
     }
 
     /// The file this store is backed by, or empty for an in memory store.
@@ -252,8 +256,8 @@ public final class LogStore implements AutoCloseable {
 
     /// Imports every log file found below `directory`.
     ///
-    /// @param directory the directory to walk; also the root that [ImportOptions#pathMatcher()] and
-    ///                  [LogSource.Directory#entryPath()] are relative to
+    /// @param directory the directory to walk; [ImportOptions#pathMatcher()] is relative to this directory. Each
+    ///                  imported log is recorded as a [LogSource.File] pointing at the file itself
     /// @throws LogDataException if `directory` is not a directory, or the database rejects the writes
     public ImportResult importDirectory(Path directory, ImportOptions options) {
         Objects.requireNonNull(directory, "directory");
@@ -306,7 +310,7 @@ public final class LogStore implements AutoCloseable {
                         }
                         queue.put(prepared);
                     } catch (IOException e) {
-                        parseFailures.add(new ImportResult.Failure(candidate.entryPath(),
+                        parseFailures.add(new ImportResult.Failure(failurePath(candidate),
                             "could not parse: " + e.getMessage()));
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();

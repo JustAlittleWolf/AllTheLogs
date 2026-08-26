@@ -1,20 +1,17 @@
 package me.wolfii.allthelogs.data;
 
+import java.nio.file.Path;
 import java.util.Objects;
 
 /// Where a [ChatLog] was read from: a file on disk, an archive entry, or a running client session.
-public sealed interface LogSource permits LogSource.Directory, LogSource.Archive, LogSource.Session {
+public sealed interface LogSource permits LogSource.File, LogSource.Archive, LogSource.Session {
 
-    /// The log was read directly from the file system.
+    /// The log was read from a file on disk, such as `2026-08-25-2.log.gz`.
     ///
-    /// @param fileName  the bare file name, e.g. `2026-08-25-2.log.gz`
-    /// @param path      absolute path of the imported directory
-    /// @param entryPath path of the log relative to that directory, always `/` separated
-    record Directory(String fileName, String path, String entryPath) implements LogSource {
-        public Directory {
-            Objects.requireNonNull(fileName, "fileName");
+    /// @param path absolute path of the log file itself, not the directory that was imported
+    record File(Path path) implements LogSource {
+        public File {
             Objects.requireNonNull(path, "path");
-            Objects.requireNonNull(entryPath, "entryPath");
         }
     }
 

@@ -8,9 +8,10 @@ import java.time.Instant;
 /// them to the parsing stage. Log files are small enough that this is cheaper than coordinating access to the archive.
 ///
 /// @param fileName     bare file name
-/// @param sourceKind   whether it came from a directory or an archive
-/// @param sourcePath   absolute path of the import root
-/// @param entryPath    path within the import root, always `/` separated, nested archives separated by `!/`
+/// @param sourceKind   whether it came from a file on disk or an archive
+/// @param sourcePath   absolute path of the log file, or of the import root for an archive
+/// @param entryPath    path within the archive, always `/` separated, nested archives separated by `!/`; empty for a
+///                     file on disk
 /// @param lastModified last modification instant, or `null` if the source does not report one
 /// @param content      raw file bytes, still gzip compressed if the file name ends in `.gz`
 public record LogCandidate(
