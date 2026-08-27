@@ -1182,6 +1182,42 @@ class LogStoreTest {
     }
 
     @Test
+    void logTaggedWithAForeignSessionIdIsImportedEvenIfALiveSessionExists() throws IOException {
+        store.startSession("26.2", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
+        String otherId = SessionMarker.newId();
+        LogFixtures.writeGzipped(tempDir.resolve("logs"), "2026-08-26-1.log.gz",
+            taggedLog(otherId, "10:00:10", "from an older session"));
+
+        ImportResult result = store.importDirectory(tempDir, ImportOptions.currentLogsDirectory());
+
+        assertEquals(1, result.importedFiles(), () -> "skipped=" + result.skippedFiles()
+            + " failures=" + result.failures());
+        assertEquals(0, result.skippedFiles());
+        assertEquals(List.of("from an older session"),
+            store.chatEntries().stream()
+                .filter(entry -> entry.chatLog().source() instanceof LogSource.File)
+                .map(ChatEntry::message).toList());
+    }
+
+    @Test
+    void severalSessionTaggedLogsImportWhenNoneOfThoseSessionsAreStored() throws IOException {
+        Path logs = tempDir.resolve("logs");
+        LogFixtures.writeGzipped(logs, "2026-08-24-1.log.gz",
+            taggedLog(SessionMarker.newId(), "10:00:10", "day one"));
+        LogFixtures.writeGzipped(logs, "2026-08-25-1.log.gz",
+            taggedLog(SessionMarker.newId(), "10:00:10", "day two"));
+        LogFixtures.writeGzipped(logs, "2026-08-26-1.log.gz",
+            taggedLog(SessionMarker.newId(), "10:00:10", "day three"));
+
+        ImportResult result = store.importDirectory(logs, ImportOptions.currentLogsDirectory());
+
+        assertEquals(3, result.importedFiles(), () -> "skipped=" + result.skippedFiles()
+            + " failures=" + result.failures());
+        assertEquals(0, result.skippedFiles());
+        assertEquals(3, store.chatEntries().size());
+    }
+
+    @Test
     void untaggedLogsAreStillImportedWhenASessionExists() throws IOException {
         store.startSession("26.2", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
         store.importDirectory(logsDirectory());

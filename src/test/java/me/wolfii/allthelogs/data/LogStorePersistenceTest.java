@@ -197,6 +197,36 @@ class LogStorePersistenceTest {
     }
 
     @Test
+    void sessionTaggedLogsImportAgainAfterTheDatabaseFileIsDeleted() throws IOException {
+        Path database = database();
+        LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+        String sessionId;
+        try (LogStore store = LogStore.open(database)) {
+            ChatLog session = store.startSession("26.2", startedAt);
+            sessionId = ((LogSource.Session) session.source()).id();
+            assertTrue(store.importSessionMessage("live", startedAt));
+        }
+
+        Path logs = tempDir.resolve("logs");
+        LogFixtures.writeGzipped(logs, "2026-08-26-1.log.gz",
+            "[10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3\n"
+                + "[10:00:02] [allthelogs-store/INFO]: " + SessionMarker.message(sessionId) + "\n"
+                + "[10:00:10] [Render thread/INFO]: [CHAT] only in the file\n");
+
+        Files.delete(database);
+
+        try (LogStore store = LogStore.open(database)) {
+            ImportResult result = store.importDirectory(logs, ImportOptions.currentLogsDirectory());
+            assertEquals(1, result.importedFiles(), () -> "skipped=" + result.skippedFiles()
+                + " failures=" + result.failures() + " logs=" + store.chatLogs());
+            assertEquals(0, result.skippedFiles());
+            assertEquals(List.of("only in the file"),
+                store.chatEntries().stream().map(ChatEntry::message).toList());
+            assertInstanceOf(LogSource.File.class, store.chatEntries().getFirst().chatLog().source());
+        }
+    }
+
+    @Test
     void archiveImportsSurviveReopenAndRemainQueryable() throws IOException {
         Path database = database();
         Path archive = LogFixtures.writeZip(tempDir.resolve("backup.zip"), new LinkedHashMap<>(Map.of(
