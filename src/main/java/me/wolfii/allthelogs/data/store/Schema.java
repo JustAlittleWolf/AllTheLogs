@@ -47,8 +47,9 @@ public final class Schema {
     }
 
     /**
-     * Rewrites {@code chat_entry} in timestamp order so row-group zone maps can skip data on range scans and
+     * Rewrites {@code chat_entry} oldest-first so row-group zone maps can skip data on range scans and
      * {@code ORDER BY entry_time, file_id, line_index} can stream instead of sorting the whole result.
+     * Same-timestamp lines from one log stay in line-index order, matching {@code ChatQueries#query}.
      */
     public static void clusterEntries(Statement statement) throws SQLException {
         long count;

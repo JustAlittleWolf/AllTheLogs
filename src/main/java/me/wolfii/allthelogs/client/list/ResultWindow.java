@@ -39,8 +39,8 @@ public final class ResultWindow {
     }
 
     /**
-     * Newest-first queries return rows in reverse chronological order. After fetching the previous page with the
-     * opposite sort, reverse that page so it can be prepended.
+     * After fetching the previous page with the opposite sort, reverse that page so it can be prepended in list
+     * order.
      */
     public static List<DisplayRow> reversed(List<DisplayRow> rows) {
         return List.copyOf(rows).reversed();
@@ -109,14 +109,14 @@ public final class ResultWindow {
     }
 
     /**
-     * Whether {@code window} dropped rows from the start of {@code merged} (newer messages in newest-first order).
+     * Whether {@code window} dropped rows from the start of {@code merged}.
      */
     public static boolean trimmedHead(List<DisplayRow> merged, List<DisplayRow> window) {
         return droppedEdge(merged, window, true);
     }
 
     /**
-     * Whether {@code window} dropped rows from the end of {@code merged} (older messages in newest-first order).
+     * Whether {@code window} dropped rows from the end of {@code merged}.
      */
     public static boolean trimmedTail(List<DisplayRow> merged, List<DisplayRow> window) {
         return droppedEdge(merged, window, false);
@@ -130,7 +130,7 @@ public final class ResultWindow {
     }
 
     /**
-     * Merges {@code extra} into {@code existing} without duplicates, then orders by timestamp, file, and line
+     * Merges {@code extra} into {@code existing} without duplicates, then orders by timestamp, then line index,
      * in {@code sort} order.
      */
     public static List<DisplayRow> mergeSorted(List<DisplayRow> existing, List<DisplayRow> extra, ChatQuery.Sort sort) {

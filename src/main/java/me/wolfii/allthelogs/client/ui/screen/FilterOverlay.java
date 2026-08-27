@@ -66,10 +66,14 @@ final class FilterOverlay {
             return;
         }
         open = true;
+        int panelHeight = Math.max(96, Math.min(screenHeight.getAsInt() - 40, 280));
+        int below = button.y() + button.height() + 4;
+        int above = button.y() - panelHeight - 4;
+        int panelY = below + panelHeight > screenHeight.getAsInt() - 8 ? Math.max(8, above) : below;
         filterPanel = buildFilterPanel();
         filterPanel.positioning(Positioning.absolute(
             Math.max(8, screenWidth.getAsInt() - 258),
-            button.y() + button.height() + 4));
+            panelY));
         overlays.child(filterPanel);
     }
 

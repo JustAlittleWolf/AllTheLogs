@@ -53,6 +53,8 @@ public final class ChatQueries {
     /**
      * Returns every entry matching {@code query}, with chat-log metadata attached.
      * Only logs that appear in the result are loaded.
+     * Ordered by timestamp, then file id, then line index, in {@link ChatQuery#sort()} direction
+     * (ascending is oldest first, with a higher line index further down when timestamps match).
      *
      * @throws LogDataException if the query is rejected, e.g. because its regex is malformed
      */
