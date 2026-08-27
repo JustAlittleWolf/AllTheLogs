@@ -146,20 +146,6 @@ class LogStoreTest {
     }
 
     @Test
-    void overlappingChatKeepsEveryLogFileAfterAFreshImport() throws IOException {
-        Path logs = tempDir.resolve("logs");
-        String shared = LogFixtures.modernLog("26.2", "same line", "also same");
-        LogFixtures.writeGzipped(logs, "2026-08-26-1.log.gz", shared);
-        LogFixtures.writePlain(logs, "debug.log", shared);
-
-        ImportResult result = store.importDirectory(logs, ImportOptions.currentLogsDirectory());
-
-        assertEquals(2, result.importedFiles());
-        assertEquals(2, store.chatLogs().size());
-        assertEquals(2, store.chatEntries().size());
-    }
-
-    @Test
     void importsChatEntriesFromADirectory() throws IOException {
         ImportResult result = store.importDirectory(logsDirectory());
 

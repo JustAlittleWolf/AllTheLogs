@@ -67,7 +67,7 @@ public record ImportOptions(
     }
 
     /**
-     * Import of a Minecraft instance / game directory: walk {@code **/logs/**} and do not open zips found
+     * Import of a Minecraft instance / game directory: walk {@code **&#47;logs&#47;**} and do not open zips found
      * elsewhere in the tree.
      */
     public static ImportOptions currentGameDirectory() {

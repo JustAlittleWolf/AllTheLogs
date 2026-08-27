@@ -8,6 +8,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -25,6 +26,7 @@ public final class LogWriter implements AutoCloseable {
     private final DuckDBAppender entryAppender;
     private final Map<String, Long> existingLocations = new ConcurrentHashMap<>();
     private final Set<String> knownSessionIds = ConcurrentHashMap.newKeySet();
+    private final Set<Long> keepEvenIfEmpty = ConcurrentHashMap.newKeySet();
     /** First file id handed out by this writer; counters and dedup bookkeeping are scoped to this import. */
     private final long sessionStartId;
     private long nextFileId;
@@ -127,6 +129,7 @@ public final class LogWriter implements AutoCloseable {
             entryAppender.endRow();
         }
 
+        if (times.isEmpty() && log.resourceManagerReloaded()) keepEvenIfEmpty.add(fileId);
         existingLocations.put(locationKey(log.sourcePath(), log.entryPath()), fileId);
         writtenFiles++;
         writtenEntries += times.size();
@@ -166,20 +169,20 @@ public final class LogWriter implements AutoCloseable {
                 removed++;
                 if (deleted.getLong(1) >= sessionStartId) removedFromSession++;
             }
-            if (removed > 0) refreshFileAggregates(statement);
+            if (removed > 0) writtenFiles -= refreshFileAggregates(statement);
         }
         writtenEntries -= removedFromSession;
         return removed;
     }
 
     /**
-     * Recomputes per-file entry counts after duplicate chat rows were deleted.
-     * Files whose chat was entirely duplicated by another log are kept, with {@code entry_count = 0}, so a
-     * full re-import (for example after deleting the database) still records every log file. Session rows and
-     * resource-manager-only files were already stored empty on purpose.
+     * Recomputes per-file entry counts after rows were deleted, and drops files left without any entries.
      * {@code start_time} / {@code end_time} bound every logged line, not just chat entries, so they are left untouched.
+     *
+     * @return how many of this session's files were dropped because every one of their entries turned out to be a
+     *         duplicate
      */
-    private void refreshFileAggregates(Statement statement) throws SQLException {
+    private int refreshFileAggregates(Statement statement) throws SQLException {
         statement.execute("""
             UPDATE log_file SET entry_count = coalesce(stats.count, 0)
             FROM (
@@ -188,6 +191,26 @@ public final class LogWriter implements AutoCloseable {
                 GROUP BY f.id
             ) stats
             WHERE log_file.id = stats.file_id""");
+
+        List<Long> emptyIds = new ArrayList<>();
+        List<String> emptyLocations = new ArrayList<>();
+        int emptySessionFiles = 0;
+        try (ResultSet result = statement.executeQuery(
+            "SELECT id, source_path, entry_path FROM log_file WHERE entry_count = 0 AND source_kind <> '"
+                + SourceKind.SESSION.name() + "'")) {
+            while (result.next()) {
+                long id = result.getLong(1);
+                if (keepEvenIfEmpty.contains(id)) continue;
+                emptyIds.add(id);
+                emptyLocations.add(locationKey(result.getString(2), result.getString(3)));
+                if (id >= sessionStartId) emptySessionFiles++;
+            }
+        }
+        emptyLocations.forEach(existingLocations::remove);
+        for (long id : emptyIds) {
+            statement.execute("DELETE FROM log_file WHERE id = " + id);
+        }
+        return emptySessionFiles;
     }
 
     private void deleteFile(long fileId) throws SQLException {

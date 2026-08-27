@@ -78,7 +78,7 @@ public final class ImportPaths {
 
     /**
      * Import knobs for a folder chosen in the import form. A Minecraft instance directory (one that contains
-     * a {@code logs} folder) is walked for {@code **/logs/**} without opening resource-pack zips. Other
+     * a {@code logs} folder) is walked for {@code **&#47;logs&#47;**} without opening resource-pack zips. Other
      * folders keep the recursive nested-archive defaults.
      */
     public static ImportOptions optionsForFolder(Path folder) {
