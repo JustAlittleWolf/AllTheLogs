@@ -21,6 +21,8 @@ class ResultWindowTest {
         int rowHeight = 12;
         double newScroll = ResultWindow.keepAnchor(2, 0, 2 * rowHeight, 0, scrollY);
         assertEquals(2 * rowHeight - scrollY, 0 * rowHeight - newScroll, 0.001);
+        assertEquals(0, ResultWindow.keepAnchor(0, 4, 0, 80, 0, 80, 0), 0.001);
+        assertEquals(320, ResultWindow.keepAnchor(0, 4, 0, 400, 0, 80, 0), 0.001);
     }
 
     @Test

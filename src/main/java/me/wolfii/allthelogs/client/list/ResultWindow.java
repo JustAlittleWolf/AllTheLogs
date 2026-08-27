@@ -145,8 +145,17 @@ public final class ResultWindow {
      * Scroll offset that keeps an anchored row at the same screen position after the buffer is replaced.
      */
     public static double keepAnchor(int oldIndex, int newIndex, double oldY, double newY, double scrollY) {
+        return keepAnchor(oldIndex, newIndex, oldY, newY, scrollY, 0, 0);
+    }
+
+    /**
+     * Like {@link #keepAnchor(int, int, double, double, double)}, also preserving screen position when
+     * bottom-padding ({@code origin}) appears or disappears as the page grows.
+     */
+    public static double keepAnchor(int oldIndex, int newIndex, double oldY, double newY, double scrollY,
+                                    double oldOrigin, double newOrigin) {
         if (oldIndex < 0 || newIndex < 0) return scrollY;
-        return newY - (oldY - scrollY);
+        return newOrigin + newY - (oldOrigin + oldY - scrollY);
     }
 
     public List<DisplayRow> rows() {

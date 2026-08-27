@@ -122,6 +122,11 @@ class TimelineLayoutTest {
         assertEquals(16, manyDays);
         assertEquals(fewDays, TimelineLayout.thumbHeightForDays(200, 1));
         assertTrue(fewDays <= 40);
+        assertEquals(0, TimelineLayout.thumbHeightForDays(200, 8, 150, 200));
+        assertEquals(someDays, TimelineLayout.thumbHeightForDays(200, 8, 800, 200));
+        assertEquals(1, TimelineLayout.pinnedProgress(0.4, false, true), 0.0001);
+        assertEquals(0, TimelineLayout.pinnedProgress(0.4, true, false), 0.0001);
+        assertEquals(0.4, TimelineLayout.pinnedProgress(0.4, false, false), 0.0001);
     }
 
     @Test

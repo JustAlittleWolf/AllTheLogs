@@ -71,6 +71,21 @@ final class LogBrowserQueries {
         return summary.oldest() != null && summary.oldest().isBefore(last);
     }
 
+    /**
+     * A jump that lands on the newest (or oldest) matches can return too few rows to fill the list because
+     * {@link #exclusiveOffset} starts at that timestamp. Fetch older (or newer) rows first in that case.
+     */
+    static boolean pageNeedsMoreToFill(List<DisplayRow> rows, int contextLines, int viewHeight, boolean hasBefore) {
+        if (!hasBefore || rows == null || rows.isEmpty() || viewHeight <= 0) return false;
+        return MessageListLayout.of(rows, contextLines).contentHeight() < viewHeight;
+    }
+
+    static int extraFillLimit(int viewHeight, long pageLimit) {
+        int needed = Math.max(8, viewHeight / MessageListLayout.ROW_HEIGHT + 8);
+        if (pageLimit < 0) return needed;
+        return (int) Math.max(needed, Math.min(pageLimit, Integer.MAX_VALUE));
+    }
+
     static LocalDateTime firstMatchTime(List<DisplayRow> rows) {
         for (DisplayRow row : rows) {
             if (row.match()) return row.entry().timestamp();
@@ -330,23 +345,61 @@ final class LogBrowserQueries {
         onClient(AllTheLogsClient.worker().query(requested), (entries, error) -> {
             if (preview && list != null) list.scrubQueryFinished();
             if (gen != generation.get()) return;
-            list.setLoading(false);
             if (error != null) {
+                list.setLoading(false);
                 if (!preview) list.finishScrub();
                 return;
             }
             List<DisplayRow> rows = DisplayRow.from(entries, filter);
             if (rows.isEmpty()) {
+                list.setLoading(false);
                 if (!preview) list.finishScrub();
                 return;
             }
             boolean full = requested.limit() > 0 && ResultWindow.matchCount(rows) >= requested.limit();
             double progress = jump == null ? Double.NaN : jump.progress();
-            list.showAt(target, rows, pageHasBefore(filter.sort(), rows, matchSummary),
-                pageHasAfter(filter.sort(), full, rows, matchSummary), progress);
-            if (!preview) list.finishScrub();
-            snapshotCurrentList();
+            boolean hasBefore = pageHasBefore(filter.sort(), rows, matchSummary);
+            boolean hasAfter = pageHasAfter(filter.sort(), full, rows, matchSummary);
+            if (pageNeedsMoreToFill(rows, filter.contextLines(), list.viewHeight(), hasBefore)) {
+                fillJumpViewport(gen, target, preview, rows, hasAfter, requested.limit(), progress);
+                return;
+            }
+            applyJump(target, preview, rows, hasBefore, hasAfter, progress);
         });
+    }
+
+    private void fillJumpViewport(int gen, LocalDateTime target, boolean preview, List<DisplayRow> rows,
+                                  boolean hasAfter, long pageLimit, double progress) {
+        LocalDateTime cursor = firstMatchTime(rows);
+        if (cursor == null) {
+            applyJump(target, preview, rows, true, hasAfter, progress);
+            return;
+        }
+        SearchFilter extra = filter.withOffset(cursor).withSort(filter.sort().opposite())
+            .withLimit(extraFillLimit(list.viewHeight(), pageLimit));
+        Set<DisplayRow.RowKey> beforeKeys = keysOf(rows);
+        onClient(AllTheLogsClient.worker().query(extra.toQuery()), (entries, error) -> {
+            if (gen != generation.get()) return;
+            if (error != null) {
+                applyJump(target, preview, rows, true, hasAfter, progress);
+                return;
+            }
+            List<DisplayRow> incoming = ResultWindow.reversed(DisplayRow.from(entries, filter));
+            boolean more = pageIsFull(incoming, extra)
+                && incoming.stream().anyMatch(row -> !beforeKeys.contains(row.key()));
+            List<DisplayRow> merged = ResultWindow.mergeUnique(incoming, rows);
+            boolean hasBefore = more || pageHasBefore(filter.sort(), merged, matchSummary);
+            applyJump(target, preview, merged, hasBefore,
+                hasAfter || pageHasAfter(filter.sort(), false, merged, matchSummary), progress);
+        });
+    }
+
+    private void applyJump(LocalDateTime target, boolean preview, List<DisplayRow> rows,
+                           boolean hasBefore, boolean hasAfter, double progress) {
+        list.setLoading(false);
+        list.showAt(target, rows, hasBefore, hasAfter, progress);
+        if (!preview) list.finishScrub();
+        snapshotCurrentList();
     }
 
     private LocalDateTime clampToBounds(LocalDateTime time) {

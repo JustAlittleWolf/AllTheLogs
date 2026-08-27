@@ -274,9 +274,10 @@ public final class MessageTimeline extends BaseUIComponent {
         rebuildLayout();
         if (!Double.isNaN(progress)) {
             scrollToScrubProgress(progress);
-            return;
+        } else {
+            scrollToTime(time);
         }
-        scrollToTime(time);
+        if (!draggingTimeline) maybeRequestMore();
     }
 
     public void scrollToTime(LocalDateTime time) {
@@ -312,13 +313,19 @@ public final class MessageTimeline extends BaseUIComponent {
     public void applyPage(List<DisplayRow> rows, boolean hasBefore, boolean hasAfter, DisplayRow.RowKey anchor) {
         int oldIndex = ResultWindow.indexOf(window.rows(), anchor);
         double oldY = layout.rowY(oldIndex);
+        int oldOrigin = contentOrigin();
         List<DisplayRow> previous = window.rows();
         window.reset(rows, hasBefore, hasAfter);
         remapSelection(previous, window.rows());
         rebuildLayout();
         int newIndex = ResultWindow.indexOf(window.rows(), anchor);
-        setScrollY(ResultWindow.keepAnchor(oldIndex, newIndex, oldY, layout.rowY(newIndex), scrollY));
+        setScrollY(ResultWindow.keepAnchor(oldIndex, newIndex, oldY, layout.rowY(newIndex), scrollY,
+            oldOrigin, contentOrigin()));
         maybeRequestMore();
+    }
+
+    public int viewHeight() {
+        return height;
     }
 
     /**
@@ -408,11 +415,15 @@ public final class MessageTimeline extends BaseUIComponent {
         if (overTimelineLocal(click.x())) {
             stopAutoScroll();
             int thumb = thumbHeight();
-            if (thumb <= 0) return true;
             draggingTimeline = true;
-            scrubThumbHeight = Math.max(MIN_THUMB_HEIGHT, thumb);
-            int thumbTop = thumbTop(scrubThumbHeight) - y;
-            thumbGrabOffset = TimelineLayout.thumbGrabOffset(click.y(), thumbTop, scrubThumbHeight, height);
+            if (thumb <= 0) {
+                scrubThumbHeight = 0;
+                thumbGrabOffset = 0;
+            } else {
+                scrubThumbHeight = Math.max(MIN_THUMB_HEIGHT, thumb);
+                int thumbTop = thumbTop(scrubThumbHeight) - y;
+                thumbGrabOffset = TimelineLayout.thumbGrabOffset(click.y(), thumbTop, scrubThumbHeight, height);
+            }
             onScrubBegin.run();
             lastSentScrubJump = null;
             previewScrub(click.y());
@@ -758,7 +769,7 @@ public final class MessageTimeline extends BaseUIComponent {
         if (draggingTimeline && scrubThumbHeight > 0) return scrubThumbHeight;
         if (window.rows().isEmpty() || height <= 0) return 0;
         int days = uniqueMatchDates > 0 ? uniqueMatchDates : matchDays.size();
-        return TimelineLayout.thumbHeightForDays(height, days);
+        return TimelineLayout.thumbHeightForDays(height, days, layout.contentHeight(), height);
     }
 
     private int thumbTop(int thumbHeight) {
@@ -773,8 +784,18 @@ public final class MessageTimeline extends BaseUIComponent {
         LocalDateTime oldest = scrubOldest();
         LocalDateTime newest = scrubNewest();
         if (time == null || oldest == null || newest == null) return y;
-        double progress = thumbProgress(time);
+        double progress = TimelineLayout.pinnedProgress(thumbProgress(time), scrolledToStart(), scrolledToEnd());
         return y + TimelineLayout.thumbOffset(height, progress, thumbHeight);
+    }
+
+    private boolean scrolledToStart() {
+        return !window.hasBefore() && scrollY <= 0.5 && layout.contentHeight() > height;
+    }
+
+    private boolean scrolledToEnd() {
+        if (window.hasAfter()) return false;
+        double max = Math.max(0, layout.contentHeight() - height);
+        return scrollY >= max - 0.5;
     }
 
     private void updateCursor(int mouseX, int mouseY, int listWidth) {

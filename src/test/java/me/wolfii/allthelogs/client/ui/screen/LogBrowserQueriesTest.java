@@ -49,6 +49,21 @@ class LogBrowserQueriesTest {
         assertTrue(LogBrowserQueries.pageHasAfter(ChatQuery.Sort.DESCENDING, false, rows, summary));
     }
 
+    @Test
+    void jumpPagesThatDoNotFillTheViewNeedAnExtraFetchWhenOlderRowsExist() {
+        LocalDateTime time = LocalDateTime.of(2026, 8, 27, 10, 0, 0);
+        List<DisplayRow> few = List.of(row(time, 0), row(time.plusSeconds(1), 1));
+        assertTrue(LogBrowserQueries.pageNeedsMoreToFill(few, 0, 200, true));
+        assertFalse(LogBrowserQueries.pageNeedsMoreToFill(few, 0, 200, false));
+        List<DisplayRow> many = new java.util.ArrayList<>();
+        for (int i = 0; i < 40; i++) {
+            many.add(row(time.plusSeconds(i), i));
+        }
+        assertFalse(LogBrowserQueries.pageNeedsMoreToFill(many, 0, 200, true));
+        assertEquals(24, LogBrowserQueries.extraFillLimit(200, 8));
+        assertEquals(32, LogBrowserQueries.extraFillLimit(200, 32));
+    }
+
     private static DisplayRow row(LocalDateTime time, int line) {
         ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), time.toLocalDate(), "26.2", time, time);
         return new DisplayRow(new ChatEntry(log, time, line, "msg"), true, Duration.ZERO, List.of());
