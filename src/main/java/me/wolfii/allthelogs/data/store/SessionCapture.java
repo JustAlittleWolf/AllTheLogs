@@ -78,13 +78,13 @@ public final class SessionCapture {
         return importMessage(message, null, timestamp);
     }
 
-    public boolean importMessage(String message, int[] formatting, LocalDateTime timestamp) {
+    public boolean importMessage(String message, long[] formatting, LocalDateTime timestamp) {
         Objects.requireNonNull(message, "message");
         Objects.requireNonNull(timestamp, "timestamp");
         requireActiveSession();
         LocalDateTime stamp = timestamp.withNano(0);
         String text;
-        int[] packed;
+        long[] packed;
         if (formatting == null) {
             FormattingCodes.Parsed parsed = FormattingCodes.parse(message);
             text = parsed.text();
@@ -127,7 +127,7 @@ public final class SessionCapture {
         }
     }
 
-    private boolean writeEntry(String message, int[] formatting, LocalDateTime timestamp) throws SQLException {
+    private boolean writeEntry(String message, long[] formatting, LocalDateTime timestamp) throws SQLException {
         try (PreparedStatement duplicate = connection.prepareStatement(
             "SELECT 1 FROM chat_entry WHERE entry_time = ? AND message = ? LIMIT 1")) {
             duplicate.setTimestamp(1, Timestamp.valueOf(timestamp));
@@ -138,7 +138,7 @@ public final class SessionCapture {
         }
 
         try (PreparedStatement insert = connection.prepareStatement(
-            "INSERT INTO chat_entry (file_id, line_index, entry_time, message, formatting) VALUES (?, ?, ?, ?, ?)")) {
+            "INSERT INTO chat_entry (file_id, line_index, entry_time, message, formatting) VALUES (?, ?, ?, ?, CAST(? AS BIGINT[]))")) {
             insert.setLong(1, sessionFileId);
             insert.setInt(2, sessionLineIndex);
             insert.setTimestamp(3, Timestamp.valueOf(timestamp));

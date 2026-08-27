@@ -35,7 +35,7 @@ public final class LogPreparer {
 
         List<LocalDateTime> times = new ArrayList<>(parsed.entries().size());
         List<String> messages = new ArrayList<>(parsed.entries().size());
-        List<int[]> formattings = new ArrayList<>(parsed.entries().size());
+        List<long[]> formattings = new ArrayList<>(parsed.entries().size());
         for (ParsedLog.Entry entry : parsed.entries()) {
             times.add(LogDates.toSystemLocal(date, entry.time(), timezone));
             messages.add(entry.message());

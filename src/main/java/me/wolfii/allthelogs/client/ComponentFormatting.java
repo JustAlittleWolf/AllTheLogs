@@ -25,7 +25,7 @@ public final class ComponentFormatting {
         message.visit((style, string) -> {
             FormattingCodes.Parsed parsed = FormattingCodes.parse(string, pack(style));
             text.append(parsed.text());
-            int[] packed = parsed.formatting();
+            long[] packed = parsed.formatting();
             for (int i = 0; i < parsed.text().length(); i++) {
                 perChar.add(PackedFormatting.at(packed, i));
             }

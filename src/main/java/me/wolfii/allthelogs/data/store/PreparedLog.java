@@ -26,7 +26,7 @@ public record PreparedLog(
     String minecraftVersion,
     List<LocalDateTime> entryTimes,
     List<String> messages,
-    List<int[]> formattings,
+    List<long[]> formattings,
     boolean resourceManagerReloaded,
     LocalDateTime firstLineTime,
     LocalDateTime lastLineTime,

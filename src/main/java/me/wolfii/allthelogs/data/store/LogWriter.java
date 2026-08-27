@@ -1,6 +1,5 @@
 package me.wolfii.allthelogs.data.store;
 
-import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import org.duckdb.DuckDBAppender;
 import org.duckdb.DuckDBConnection;
 
@@ -95,7 +94,7 @@ public final class LogWriter implements AutoCloseable {
         long fileId = nextFileId++;
         List<LocalDateTime> times = log.entryTimes();
         List<String> messages = log.messages();
-        List<int[]> formattings = log.formattings();
+        List<long[]> formattings = log.formattings();
 
         fileAppender.beginRow();
         fileAppender.append(fileId);
@@ -121,11 +120,11 @@ public final class LogWriter implements AutoCloseable {
             entryAppender.append(i);
             entryAppender.append(times.get(i));
             entryAppender.append(messages.get(i));
-            int[] formatting = formattings.get(i);
+            long[] formatting = formattings.get(i);
             if (formatting == null || formatting.length == 0) {
                 entryAppender.appendNull();
             } else {
-                entryAppender.append(PackedFormatting.toSqlLiteral(formatting));
+                entryAppender.append(formatting);
             }
             entryAppender.endRow();
         }

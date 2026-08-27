@@ -69,7 +69,8 @@ class FormattingCodesTest {
         assertEquals("Hello World!", parsed.text());
         int redBold = PackedFormatting.color(0xFF5555) | PackedFormatting.BOLD;
         int blue = PackedFormatting.color(0x5555FF);
-        assertArrayEquals(new int[]{0, 6, redBold, 6, 5, blue}, parsed.formatting());
+        assertArrayEquals(new long[]{PackedFormatting.run(0, 6, redBold), PackedFormatting.run(6, 5, blue)},
+            parsed.formatting());
     }
 
     @Test
@@ -104,12 +105,16 @@ class FormattingCodesTest {
     }
 
     @Test
-    void packedSqlLiteralRoundTrips() {
-        int[] packed = {0, 3, PackedFormatting.color(0xFF5555)};
+    void packedRunFitsInOneLongAndRoundTripsThroughSql() {
+        int red = PackedFormatting.color(0xFF5555);
+        long run = PackedFormatting.run(12, 4, red);
+        assertEquals(12, PackedFormatting.offset(run));
+        assertEquals(4, PackedFormatting.count(run));
+        assertEquals(red, PackedFormatting.format(run));
+        long[] packed = {run};
         String literal = PackedFormatting.toSqlLiteral(packed);
-        assertEquals("0,3," + PackedFormatting.color(0xFF5555), literal);
+        assertEquals("[" + run + "]", literal);
         assertArrayEquals(packed, PackedFormatting.fromSqlLiteral(literal));
-        assertArrayEquals(packed, PackedFormatting.fromSqlLiteral("[0, 3, " + PackedFormatting.color(0xFF5555) + "]"));
         assertNull(PackedFormatting.fromSqlLiteral(null));
         assertNull(PackedFormatting.fromSqlLiteral("[]"));
     }

@@ -66,7 +66,7 @@ public final class LogStoreWorker implements AutoCloseable {
     public void importSessionMessage(Component message) {
         FormattingCodes.Parsed flat = ComponentFormatting.flatten(message);
         String text = flat.text();
-        int[] formatting = flat.formatting() == null ? null : flat.formatting().clone();
+        long[] formatting = flat.formatting() == null ? null : flat.formatting().clone();
         executor.execute(() -> {
             if (store == null) return;
             store.importSessionMessage(text, formatting);

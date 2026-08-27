@@ -44,8 +44,8 @@ class VisualMessageTest {
     @Test
     void remapsStoredFormattingOntoTrimmedVisualText() {
         int red = PackedFormatting.color(0xFF5555);
-        int[] stored = {2, 5, red};
-        int[] visual = VisualMessage.remapFormatting("  hello  ", stored, false);
+        long[] stored = {PackedFormatting.run(2, 5, red)};
+        long[] visual = VisualMessage.remapFormatting("  hello  ", stored, false);
         assertEquals("hello", VisualMessage.visual("  hello  ", false));
         assertEquals(red, PackedFormatting.at(visual, 0));
         assertEquals(red, PackedFormatting.at(visual, 4));

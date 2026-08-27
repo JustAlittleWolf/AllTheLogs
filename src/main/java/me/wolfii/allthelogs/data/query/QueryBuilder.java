@@ -24,7 +24,7 @@ import java.util.Locale;
  * {@link ChatQuery#withVersion} keeps matches whose log has that Minecraft version; context stays in the same log.
  */
 public final class QueryBuilder {
-    private static final String SELECT_COLUMNS = "SELECT e.file_id, e.entry_time, e.line_index, e.message, e.formatting";
+    private static final String SELECT_COLUMNS = "SELECT e.file_id, e.entry_time, e.line_index, e.message, to_json(e.formatting)";
 
     private final String sql;
     private final List<Object> parameters;

@@ -26,7 +26,7 @@ public final class VisualMessage {
     /**
      * Packed formatting remapped from stored-message offsets onto {@link #visual(String, boolean)}.
      */
-    public static int[] remapFormatting(String message, int[] formatting, boolean interpretEscapes) {
+    public static long[] remapFormatting(String message, long[] formatting, boolean interpretEscapes) {
         if (formatting == null || formatting.length == 0) return null;
         Layout layout = layout(message, interpretEscapes);
         if (layout.text.isEmpty()) return null;

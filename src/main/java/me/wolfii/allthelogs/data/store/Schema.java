@@ -7,7 +7,7 @@ import java.sql.Statement;
 /**
  * Database layout. {@code chat_entry} has no index: both access patterns are full scans, and an ART index would
  * prevent DuckDB from reusing table blocks when a log file is re-imported.
- * {@code chat_entry.formatting} is a VARCHAR of packed {@code offset,count,format} decimals, or NULL.
+ * {@code chat_entry.formatting} is a {@code BIGINT[]} of packed runs (one {@code long} per range), or NULL.
  */
 public final class Schema {
     private Schema() {
@@ -34,7 +34,7 @@ public final class Schema {
                 line_index INTEGER NOT NULL,
                 entry_time TIMESTAMP NOT NULL,
                 message VARCHAR NOT NULL,
-                formatting VARCHAR
+                formatting BIGINT[]
             )""");
         statement.execute("CREATE UNIQUE INDEX IF NOT EXISTS log_file_location ON log_file (source_path, entry_path)");
     }

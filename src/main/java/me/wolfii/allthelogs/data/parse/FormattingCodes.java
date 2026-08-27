@@ -27,7 +27,7 @@ public final class FormattingCodes {
      * Stripped text plus packed formatting. {@code formatting} is {@code null} when nothing is styled.
      * {@code text} is {@code message} itself when it contains no codes.
      */
-    public record Parsed(String text, int[] formatting) {
+    public record Parsed(String text, long[] formatting) {
         public static Parsed plain(String text) {
             return new Parsed(text, null);
         }
@@ -77,7 +77,7 @@ public final class FormattingCodes {
         if (text.length() == message.length() && PackedFormatting.isEmpty(initialFormat)) {
             return Parsed.plain(message);
         }
-        int[] packed = PackedFormatting.pack(Arrays.copyOf(perChar, text.length()));
+        long[] packed = PackedFormatting.pack(Arrays.copyOf(perChar, text.length()));
         return new Parsed(text, packed);
     }
 

@@ -3,12 +3,16 @@ package me.wolfii.allthelogs.data.parse;
 import java.util.Arrays;
 
 /**
- * Packed {@code (offset, charCount, format)} triples describing non-overlapping runs.
- * Offsets are into the stored (stripped) message. {@code null} means the line has no formatting.
- * Stored as a VARCHAR of decimal triples so typical small offsets and counts stay compact.
+ * Packed formatting runs. Each run is one {@code long}:
+ * <ul>
+ *   <li>bits 0–15: start offset in the stripped message (0–65535)</li>
+ *   <li>bits 16–31: character count (0–65535)</li>
+ *   <li>bits 32–63: format</li>
+ * </ul>
+ * Minecraft chat cannot exceed 65535 characters, so one {@code long} holds a whole run.
+ * {@code null} means the line has no formatting. Reset is not stored.
  * <p>
- * One format int per run, so each character has at most one colour and one set of style flags.
- * Reset is not stored: unformatted characters are simply omitted. Format bits:
+ * Format bits:
  * <ul>
  *   <li>0–23: RGB</li>
  *   <li>24: colour present</li>
@@ -27,6 +31,7 @@ public final class PackedFormatting {
     public static final int STRIKETHROUGH = 1 << 28;
     public static final int OBFUSCATED = 1 << 29;
     private static final int STYLE_MASK = BOLD | ITALIC | UNDERLINE | STRIKETHROUGH | OBFUSCATED;
+    private static final int RANGE_MASK = 0xFFFF;
 
     private PackedFormatting() {
     }
@@ -71,15 +76,32 @@ public final class PackedFormatting {
         return (format & OBFUSCATED) != 0;
     }
 
+    public static long run(int offset, int count, int format) {
+        return (offset & RANGE_MASK)
+            | ((long) (count & RANGE_MASK) << 16)
+            | ((format & 0xFFFFFFFFL) << 32);
+    }
+
+    public static int offset(long run) {
+        return (int) (run & RANGE_MASK);
+    }
+
+    public static int count(long run) {
+        return (int) ((run >>> 16) & RANGE_MASK);
+    }
+
+    public static int format(long run) {
+        return (int) (run >>> 32);
+    }
+
     /**
      * Format at {@code index}, or {@code 0} when unformatted / out of range / {@code packed} is null.
      */
-    public static int at(int[] packed, int index) {
+    public static int at(long[] packed, int index) {
         if (packed == null || index < 0) return 0;
-        for (int i = 0; i + 2 < packed.length; i += 3) {
-            int start = packed[i];
-            int end = start + packed[i + 1];
-            if (index >= start && index < end) return packed[i + 2];
+        for (long run : packed) {
+            int start = offset(run);
+            if (index >= start && index < start + count(run)) return format(run);
         }
         return 0;
     }
@@ -87,73 +109,70 @@ public final class PackedFormatting {
     /**
      * Merges adjacent equal non-zero formats. {@code null} or all zeros become {@code null}.
      */
-    public static int[] pack(int[] perChar) {
+    public static long[] pack(int[] perChar) {
         if (perChar == null || perChar.length == 0) return null;
-        int[] packed = new int[perChar.length * 3];
+        long[] packed = new long[perChar.length];
         int size = 0;
         int runStart = -1;
         int runFormat = 0;
         for (int i = 0; i <= perChar.length; i++) {
-            int format = i < perChar.length ? perChar[i] : 0;
-            if (runStart >= 0 && format != runFormat) {
-                packed[size] = runStart;
-                packed[size + 1] = i - runStart;
-                packed[size + 2] = runFormat;
-                size += 3;
+            int next = i < perChar.length ? perChar[i] : 0;
+            if (runStart >= 0 && next != runFormat) {
+                packed[size++] = run(runStart, i - runStart, runFormat);
                 runStart = -1;
             }
-            if (runStart < 0 && format != 0) {
+            if (runStart < 0 && next != 0) {
                 runStart = i;
-                runFormat = format;
+                runFormat = next;
             }
         }
         if (size == 0) return null;
         return Arrays.copyOf(packed, size);
     }
 
-    public static int[] perChar(int[] packed, int length) {
+    public static int[] perChar(long[] packed, int length) {
         int[] perChar = new int[Math.max(0, length)];
         if (packed == null) return perChar;
-        for (int i = 0; i + 2 < packed.length; i += 3) {
-            int start = Math.clamp(packed[i], 0, perChar.length);
-            int end = Math.clamp(packed[i] + packed[i + 1], start, perChar.length);
-            Arrays.fill(perChar, start, end, packed[i + 2]);
+        for (long run : packed) {
+            int start = Math.clamp(offset(run), 0, perChar.length);
+            int end = Math.clamp(start + count(run), start, perChar.length);
+            Arrays.fill(perChar, start, end, format(run));
         }
         return perChar;
     }
 
     /**
-     * Compact VARCHAR payload for DuckDB, or {@code null}. Offset and count are decimal so short runs stay small;
-     * triples are comma-separated {@code offset,count,format}.
+     * DuckDB {@code BIGINT[]} literal, or {@code null}.
      */
-    public static String toSqlLiteral(int[] packed) {
+    public static String toSqlLiteral(long[] packed) {
         if (packed == null || packed.length == 0) return null;
-        StringBuilder text = new StringBuilder(packed.length * 3);
+        StringBuilder text = new StringBuilder(2 + packed.length * 12);
+        text.append('[');
         for (int i = 0; i < packed.length; i++) {
             if (i > 0) text.append(',');
             text.append(packed[i]);
         }
-        return text.toString();
+        return text.append(']').toString();
     }
 
     /**
-     * Parses a stored VARCHAR payload. Empty or {@code null} yield {@code null}.
+     * Parses a {@code BIGINT[]} / JSON list literal. Empty or {@code null} yield {@code null}.
      */
-    public static int[] fromSqlLiteral(String literal) {
-        if (literal == null || literal.isBlank() || "null".equalsIgnoreCase(literal)) {
+    public static long[] fromSqlLiteral(String literal) {
+        if (literal == null || literal.isBlank() || "null".equalsIgnoreCase(literal) || "[]".equals(literal)) {
             return null;
         }
         String body = literal.charAt(0) == '[' && literal.endsWith("]")
             ? literal.substring(1, literal.length() - 1)
             : literal;
-        if (body.isBlank() || "[]".equals(body)) return null;
+        if (body.isBlank()) return null;
         String[] parts = body.split(",");
-        int[] values = new int[parts.length];
+        long[] values = new long[parts.length];
         int size = 0;
         for (String part : parts) {
             String token = part.trim();
             if (token.isEmpty()) continue;
-            values[size++] = Integer.parseInt(token);
+            values[size++] = Long.parseLong(token);
         }
         if (size == 0) return null;
         return size == values.length ? values : Arrays.copyOf(values, size);

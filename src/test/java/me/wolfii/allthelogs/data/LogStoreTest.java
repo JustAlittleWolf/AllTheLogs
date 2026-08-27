@@ -895,7 +895,7 @@ class LogStoreTest {
 
         ChatEntry entry = store.chatEntries().getFirst();
         assertEquals("hello world", entry.message());
-        int[] formatting = entry.formatting();
+        long[] formatting = entry.formatting();
         assertEquals(PackedFormatting.color(0xFF5555), PackedFormatting.at(formatting, 0));
         assertEquals(PackedFormatting.color(0xFF5555), PackedFormatting.at(formatting, 5));
         assertEquals(PackedFormatting.color(0x55FF55), PackedFormatting.at(formatting, 6));
@@ -923,7 +923,7 @@ class LogStoreTest {
         LocalDateTime at = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
         store.startSession("26.2", at);
         int red = PackedFormatting.color(0xFF5555);
-        int[] packed = {0, 3, red};
+        long[] packed = {PackedFormatting.run(0, 3, red)};
         assertTrue(store.importSessionMessage("abc", packed, at));
         ChatEntry entry = store.chatEntries().getFirst();
         assertEquals("abc", entry.message());

@@ -263,7 +263,7 @@ public final class LogStore implements AutoCloseable {
      *
      * @see #importSessionMessage(String)
      */
-    public boolean importSessionMessage(String message, int[] formatting) {
+    public boolean importSessionMessage(String message, long[] formatting) {
         return importSessionMessage(message, formatting, LocalDateTime.now());
     }
 
@@ -272,7 +272,7 @@ public final class LogStore implements AutoCloseable {
      *
      * @see #importSessionMessage(String)
      */
-    public boolean importSessionMessage(String message, int[] formatting, LocalDateTime timestamp) {
+    public boolean importSessionMessage(String message, long[] formatting, LocalDateTime timestamp) {
         return sessions.importMessage(message, formatting, timestamp);
     }
 

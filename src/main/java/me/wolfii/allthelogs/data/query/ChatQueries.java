@@ -164,7 +164,7 @@ public final class ChatQueries {
     }
 
     private static final String SELECT_AROUND = """
-        SELECT e.file_id, e.entry_time, e.line_index, e.message, e.formatting
+        SELECT e.file_id, e.entry_time, e.line_index, e.message, to_json(e.formatting)
         FROM chat_entry e
         JOIN log_file f ON f.id = e.file_id
         WHERE f.source_path = ? AND f.entry_path = ? AND e.line_index BETWEEN ? AND ?
@@ -295,7 +295,7 @@ public final class ChatQueries {
     private static final class ResultRows {
         private final ArrayList<LocalDateTime> timestamps;
         private final ArrayList<String> messages;
-        private final ArrayList<int[]> formattings;
+        private final ArrayList<long[]> formattings;
         private final Set<Long> neededFileIds = new HashSet<>();
         private long[] fileIds;
         private int[] lineIndices;

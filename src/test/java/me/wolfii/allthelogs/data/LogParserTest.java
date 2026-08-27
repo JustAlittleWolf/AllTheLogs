@@ -31,7 +31,7 @@ class LogParserTest {
         assertEquals(List.of("hello", "[Click Here] to watch an ad"),
                 parsed.entries().stream().map(ParsedLog.Entry::message).toList());
         assertNull(parsed.entries().getFirst().formatting());
-        int[] ad = parsed.entries().get(1).formatting();
+        long[] ad = parsed.entries().get(1).formatting();
         assertEquals(PackedFormatting.color(0x55FF55), PackedFormatting.at(ad, 0));
         assertEquals(PackedFormatting.color(0xAAAAAA), PackedFormatting.at(ad, 13));
         assertEquals(LocalTime.of(12, 16, 21), parsed.entries().getFirst().time());

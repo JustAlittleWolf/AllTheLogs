@@ -111,7 +111,7 @@ class MessageTextTest {
             MessageText.stackedColor(context, 5, true));
         int red = PackedFormatting.color(0xFF5555);
         DisplayRow coloured = new DisplayRow(
-            new ChatEntry(log, time, 2, "abc", new int[]{0, 3, red}), true, Duration.ZERO, List.of());
+            new ChatEntry(log, time, 2, "abc", new long[]{PackedFormatting.run(0, 3, red)}), true, Duration.ZERO, List.of());
         assertEquals(0xFFFF5555, MessageText.stackedColor(coloured, 1, false));
         Component drawn = MessageText.message(coloured);
         assertEquals(0xFF5555, drawn.getStyle().getColor().getValue());
