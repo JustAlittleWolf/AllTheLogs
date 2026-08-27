@@ -161,8 +161,9 @@ public final class TimelineLogList extends BaseUIComponent {
     }
 
     /**
-     * Shows {@code N matches found} over the list for a moment after a search. Stays while the
+     * Shows {@code N matches} over the list for a moment after a search. Stays while the
      * pointer is over the list, then fades out. Counts above 99 are shown as {@code >99}.
+     * While a query is running the chip shows loading instead of the count.
      */
     public void showMatchCount(int matches) {
         this.matchCount = matches;
@@ -195,9 +196,13 @@ public final class TimelineLogList extends BaseUIComponent {
         updateCursor(mouseX, mouseY, listWidth);
     }
 
+    /**
+     * Mouse events are component-local (0,0 is this list's top-left). Draw calls still use
+     * screen coordinates via {@code x}/{@code y}.
+     */
     @Override
     public boolean onMouseScroll(double mouseX, double mouseY, double amount) {
-        if (overTimeline(mouseX)) return false;
+        if (overTimelineLocal(mouseX)) return false;
         setScrollY(scrollY - amount * ROW_HEIGHT * 3);
         maybeRequestMore();
         return true;
@@ -205,18 +210,18 @@ public final class TimelineLogList extends BaseUIComponent {
 
     @Override
     public boolean onMouseDown(MouseButtonEvent click, boolean doubled) {
-        if (overTimeline(click.x())) {
+        if (overTimelineLocal(click.x())) {
             draggingTimeline = true;
             previewScrub(click.y());
             return true;
         }
-        int row = rowAtScreenY(click.y());
+        int row = rowAtLocalY(click.y());
         if (row < 0) return super.onMouseDown(click, doubled);
         if (doubled) {
             onExpand.accept(window.rows().get(row));
             return true;
         }
-        if (click.x() >= messageX()) {
+        if (click.x() >= messageLocalX()) {
             draggingSelection = true;
             selection.start(row, charAt(row, click.x(), click.y()));
             return true;
@@ -232,7 +237,7 @@ public final class TimelineLogList extends BaseUIComponent {
             return true;
         }
         if (draggingSelection) {
-            int row = rowAtScreenY(click.y());
+            int row = rowAtLocalY(click.y());
             if (row >= 0) selection.extend(row, charAt(row, click.x(), click.y()));
             return true;
         }
@@ -377,7 +382,7 @@ public final class TimelineLogList extends BaseUIComponent {
 
         boolean nearTrack = mouseX >= trackX - HOVER_SLOP && mouseX < x + width && mouseY >= y && mouseY < y + height;
         if (!nearTrack && !draggingTimeline) return;
-        LocalDateTime hoverTime = timeAtY(mouseY);
+        LocalDateTime hoverTime = timeAtLocalY(mouseY - y);
         if (hoverTime == null) return;
         String label = TimelineLayout.hoverLabel(hoverTime, uniqueMatchDates);
         int labelWidth = (int) (font().width(label) * 0.85f) + 10;
@@ -389,7 +394,7 @@ public final class TimelineLogList extends BaseUIComponent {
     }
 
     private int thumbCenter(LocalDateTime oldest, LocalDateTime newest) {
-        if (draggingTimeline && !Double.isNaN(scrubY)) return (int) Math.round(scrubY);
+        if (draggingTimeline && !Double.isNaN(scrubY)) return y + (int) Math.round(scrubY);
         LocalDateTime viewTime = visibleTime();
         if (viewTime == null) return Integer.MIN_VALUE;
         return TimelineLayout.yFromNewest(viewTime, oldest, newest, y, height);
@@ -421,11 +426,11 @@ public final class TimelineLogList extends BaseUIComponent {
         return rows.get(index).entry().timestamp();
     }
 
-    private LocalDateTime timeAtY(double mouseY) {
+    private LocalDateTime timeAtLocalY(double localY) {
         LocalDateTime oldest = scrubOldest();
         LocalDateTime newest = scrubNewest();
         if (oldest == null || newest == null) return null;
-        double progress = (mouseY - y) / Math.max(1, height - 1);
+        double progress = localY / Math.max(1, height - 1);
         return TimelineLayout.timeFromNewest(progress, oldest, newest);
     }
 
@@ -437,18 +442,18 @@ public final class TimelineLogList extends BaseUIComponent {
         return boundsNewest != null ? boundsNewest : window.lastMatchTime();
     }
 
-    private void previewScrub(double mouseY) {
-        scrubY = Math.clamp(mouseY, y, y + Math.max(0, height - 1));
-        applyScrub(mouseY, false);
+    private void previewScrub(double localY) {
+        scrubY = Math.clamp(localY, 0, Math.max(0, height - 1));
+        applyScrub(scrubY, false);
     }
 
-    private void commitScrub(double mouseY) {
-        applyScrub(mouseY, true);
+    private void commitScrub(double localY) {
+        applyScrub(Math.clamp(localY, 0, Math.max(0, height - 1)), true);
         scrubY = Double.NaN;
     }
 
-    private void applyScrub(double mouseY, boolean commit) {
-        LocalDateTime time = timeAtY(mouseY);
+    private void applyScrub(double localY, boolean commit) {
+        LocalDateTime time = timeAtLocalY(localY);
         if (time == null) return;
         if (window.coversTime(time)) {
             scrollToTime(time);
@@ -469,9 +474,9 @@ public final class TimelineLogList extends BaseUIComponent {
         }
     }
 
-    private int rowAtScreenY(double screenY) {
+    private int rowAtLocalY(double localY) {
         if (layout.size() == 0) return -1;
-        int contentY = (int) Math.round(screenY - y + scrollY);
+        int contentY = (int) Math.round(localY + scrollY);
         int index = layout.rowAtY(contentY);
         if (index < 0 || index >= window.rows().size()) return -1;
         int top = layout.rowY(index);
@@ -496,24 +501,28 @@ public final class TimelineLogList extends BaseUIComponent {
     }
 
     private int messageX() {
-        return x + LIST_PAD + timestampWidth();
+        return x + messageLocalX();
+    }
+
+    private int messageLocalX() {
+        return LIST_PAD + timestampWidth();
     }
 
     private int messageWidth() {
         return Math.max(16, listWidth() - LIST_PAD * 2 - timestampWidth());
     }
 
-    private boolean overTimeline(double mouseX) {
-        return mouseX >= x + width - TIMELINE_WIDTH;
+    private boolean overTimelineLocal(double localX) {
+        return localX >= width - TIMELINE_WIDTH;
     }
 
-    private int charAt(int row, double screenX, double screenY) {
+    private int charAt(int row, double localX, double localY) {
         List<DisplayRow> rows = window.rows();
         if (row < 0 || row >= rows.size()) return 0;
-        int localX = (int) Math.round(screenX - messageX());
-        int localY = (int) Math.round(screenY - y + scrollY - layout.rowY(row));
-        int line = localY < 0 ? 0 : localY / ROW_HEIGHT;
-        return MessageWrap.charIndex(rows.get(row).message(), messageWidth(), line, localX, font()::width);
+        int xInMessage = (int) Math.round(localX - messageLocalX());
+        int yInRow = (int) Math.round(localY + scrollY - layout.rowY(row));
+        int line = yInRow < 0 ? 0 : yInRow / ROW_HEIGHT;
+        return MessageWrap.charIndex(rows.get(row).message(), messageWidth(), line, xInMessage, font()::width);
     }
 
     private double clampScroll(double value) {
