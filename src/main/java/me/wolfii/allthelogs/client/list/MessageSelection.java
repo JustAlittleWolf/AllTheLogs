@@ -92,8 +92,8 @@ public final class MessageSelection {
         }
         DisplayRow.RowKey startKey = previous.get(startRow).key();
         DisplayRow.RowKey endKey = previous.get(endRow).key();
-        int newStart = ResultWindow.indexOf(next, startKey);
-        int newEnd = ResultWindow.indexOf(next, endKey);
+        int newStart = DisplayRows.indexOf(next, startKey);
+        int newEnd = DisplayRows.indexOf(next, endKey);
         if (newStart < 0 || newEnd < 0) {
             clear();
             return;

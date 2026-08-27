@@ -3,11 +3,13 @@ package me.wolfii.allthelogs.client.ui.screen;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import me.wolfii.allthelogs.client.AllTheLogsClient;
 import me.wolfii.allthelogs.client.list.DisplayRow;
+import me.wolfii.allthelogs.client.list.DisplayRows;
 import me.wolfii.allthelogs.client.list.MessageListLayout;
-import me.wolfii.allthelogs.client.list.ResultWindow;
+import me.wolfii.allthelogs.client.list.PageBounds;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.ui.text.StoreSummary;
 import me.wolfii.allthelogs.client.ui.widget.MessageTimeline;
+import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.ChatQuery;
 import me.wolfii.allthelogs.data.MatchSummary;
 import net.minecraft.client.Minecraft;
@@ -15,7 +17,6 @@ import net.minecraft.network.chat.Component;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -24,7 +25,16 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 
 /**
- * Runs log-store queries for the browser and applies the pages to {@link MessageTimeline}.
+ * Runs the browser's log-store queries and applies the pages to {@link MessageTimeline}.
+ * <p>
+ * Every query is answered on the store's worker thread and applied back on the client thread, so results can
+ * arrive after the search that asked for them is gone. A generation counter guards that: it is bumped whenever
+ * the user changes something, and a result whose generation is stale is dropped. The widget is rebuilt every
+ * time the screen is resized or reopened, so the last applied page is also kept here as a
+ * {@link ListSnapshot} and re-applied on {@link #attach}.
+ * <p>
+ * Which rows exist beyond a page is decided by {@link PageBounds}; stitching pages together is
+ * {@link DisplayRows}.
  */
 final class LogBrowserQueries {
     private final AtomicInteger generation = new AtomicInteger();
@@ -34,90 +44,10 @@ final class LogBrowserQueries {
     private List<String> versions = List.of();
     private MatchSummary matchSummary = MatchSummary.empty();
     private boolean reloadPending = true;
-    private List<DisplayRow> restoredRows = List.of();
-    private boolean restoredHasBefore;
-    private boolean restoredHasAfter;
-    private double restoredScrollY;
-    private long restoredMatchCount;
-    private boolean restoredExactMatchCount;
-    private long restoredElapsedMs;
+    private ListSnapshot snapshot = ListSnapshot.EMPTY;
 
-    /**
-     * Exclusive cursor that still includes {@code time} itself for the current sort.
-     */
-    static LocalDateTime exclusiveOffset(LocalDateTime time, ChatQuery.Sort sort) {
-        if (sort == ChatQuery.Sort.DESCENDING) {
-            return time.plusNanos(1);
-        }
-        return time.minusNanos(1);
-    }
-
-    static boolean pageHasBefore(ChatQuery.Sort sort, List<DisplayRow> rows, MatchSummary summary) {
-        LocalDateTime first = firstMatchTime(rows);
-        if (first == null || summary == null) return false;
-        if (sort == ChatQuery.Sort.ASCENDING) {
-            return summary.oldest() != null && summary.oldest().isBefore(first);
-        }
-        return summary.newest() != null && summary.newest().isAfter(first);
-    }
-
-    static boolean pageHasAfter(ChatQuery.Sort sort, boolean full, List<DisplayRow> rows, MatchSummary summary) {
-        if (full) return true;
-        LocalDateTime last = lastMatchTime(rows);
-        if (last == null || summary == null) return false;
-        if (sort == ChatQuery.Sort.ASCENDING) {
-            return summary.newest() != null && summary.newest().isAfter(last);
-        }
-        return summary.oldest() != null && summary.oldest().isBefore(last);
-    }
-
-    /**
-     * A jump that lands on the newest (or oldest) matches can return too few rows to fill the list because
-     * {@link #exclusiveOffset} starts at that timestamp. Fetch older (or newer) rows first in that case.
-     */
-    static boolean pageNeedsMoreToFill(List<DisplayRow> rows, int contextLines, int viewHeight, boolean hasBefore) {
-        if (!hasBefore || rows == null || rows.isEmpty() || viewHeight <= 0) return false;
-        return MessageListLayout.of(rows, contextLines).contentHeight() < viewHeight;
-    }
-
-    static int extraFillLimit(int viewHeight, long pageLimit) {
-        int needed = Math.max(8, viewHeight / MessageListLayout.ROW_HEIGHT + 8);
-        if (pageLimit < 0) return needed;
-        return (int) Math.max(needed, Math.min(pageLimit, Integer.MAX_VALUE));
-    }
-
-    static LocalDateTime firstMatchTime(List<DisplayRow> rows) {
-        for (DisplayRow row : rows) {
-            if (row.match()) return row.entry().timestamp();
-        }
-        return rows.isEmpty() ? null : rows.getFirst().entry().timestamp();
-    }
-
-    static LocalDateTime lastMatchTime(List<DisplayRow> rows) {
-        for (int i = rows.size() - 1; i >= 0; i--) {
-            if (rows.get(i).match()) return rows.get(i).entry().timestamp();
-        }
-        return rows.isEmpty() ? null : rows.getLast().entry().timestamp();
-    }
-
-    private static Set<DisplayRow.RowKey> keysOf(List<DisplayRow> rows) {
-        Set<DisplayRow.RowKey> keys = new HashSet<>(rows.size() * 2);
-        for (DisplayRow row : rows) {
-            keys.add(row.key());
-        }
-        return keys;
-    }
-
-    private static int countNewKeys(List<DisplayRow> rows, Set<DisplayRow.RowKey> existing) {
-        int count = 0;
-        for (DisplayRow row : rows) {
-            if (!existing.contains(row.key())) count++;
-        }
-        return count;
-    }
-
-    private static boolean pageIsFull(List<DisplayRow> rows, SearchFilter page) {
-        return ResultWindow.matchCount(rows) >= page.limit() && page.limit() > 0;
+    private static long elapsedMs(long startedAtNanos) {
+        return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos);
     }
 
     private static <T> void onClient(CompletableFuture<T> future, BiConsumer<T, Throwable> handler) {
@@ -142,8 +72,11 @@ final class LogBrowserQueries {
         reloadPending = true;
     }
 
+    /**
+     * Binds a freshly built widget, restoring the page that was on screen before it was rebuilt.
+     */
     void attach(MessageTimeline list, ButtonComponent info) {
-        snapshotCurrentList();
+        takeSnapshot();
         this.list = list;
         this.info = info;
         list.setContextLines(filter.contextLines());
@@ -151,13 +84,12 @@ final class LogBrowserQueries {
         list.onJump(this::jumpTo);
         list.onExpand(this::expandAround);
         list.onScrubBegin(this::beginScrub);
-        if (!reloadPending && !restoredRows.isEmpty()) {
-            list.restore(restoredRows, restoredHasBefore, restoredHasAfter, restoredScrollY);
-            list.setMatchSummary(matchSummary);
-            list.showMatchCount(restoredMatchCount, restoredElapsedMs);
-            if (restoredExactMatchCount) {
-                list.setTotalMatchCount(restoredMatchCount);
-            }
+        if (reloadPending || snapshot.isEmpty()) return;
+        list.restore(snapshot.rows(), snapshot.hasBefore(), snapshot.hasAfter(), snapshot.scrollY());
+        list.setMatchSummary(matchSummary);
+        list.showMatchCount(snapshot.matchCount(), snapshot.elapsedMs());
+        if (snapshot.exactMatchCount()) {
+            list.setTotalMatchCount(snapshot.matchCount());
         }
     }
 
@@ -179,17 +111,21 @@ final class LogBrowserQueries {
         return generation.get();
     }
 
+    /**
+     * Runs the current filter from scratch.
+     * <p>
+     * An oldest-first search still fetches its newest page first, then reverses it, because that is the page
+     * the user sees: the list starts scrolled to the bottom.
+     */
     void reload() {
         if (list == null) return;
         reloadPending = false;
         int gen = generation.incrementAndGet();
         list.setLoading(true);
         boolean chronological = filter.sort() == ChatQuery.Sort.ASCENDING;
-        SearchFilter page = filter.withoutOffset();
-        if (chronological) {
-            page = page.withSort(ChatQuery.Sort.DESCENDING);
-        }
-        SearchFilter query = page;
+        SearchFilter query = chronological
+            ? filter.withoutOffset().withSort(ChatQuery.Sort.DESCENDING)
+            : filter.withoutOffset();
         long startedAt = System.nanoTime();
         onClient(AllTheLogsClient.worker().findEntries(query.toQuery()), (entries, error) -> {
             if (gen != generation.get()) return;
@@ -198,37 +134,19 @@ final class LogBrowserQueries {
                 AllTheLogsClient.LOGGER.warn("AllTheLogs query failed", error);
                 list.reset(List.of(), false, false);
                 list.showOverlay(Component.translatable("allthelogs.status.error"));
-                snapshotCurrentList();
+                takeSnapshot();
                 return;
             }
-            List<DisplayRow> rows = DisplayRow.from(entries, filter);
-            if (chronological) rows = ResultWindow.reversed(rows);
-            boolean full = pageIsFull(rows, query);
+            List<DisplayRow> rows = displayRows(entries);
+            if (chronological) rows = DisplayRows.reversed(rows);
+            boolean full = PageBounds.isFull(rows, query.limit());
             list.reset(rows, chronological && full, !chronological && full);
             if (chronological) list.scrollToEnd();
-            list.showMatchCount(ResultWindow.matchCount(rows), elapsedMs(startedAt));
-            snapshotCurrentList();
+            list.showMatchCount(DisplayRows.matchCount(rows), elapsedMs(startedAt));
+            takeSnapshot();
             loadMatchSummary(gen, query, startedAt);
         });
         refreshStats();
-    }
-
-    /**
-     * Timeline totals after the page is on screen, so a slower summarize cannot overwrite
-     * the list before rows arrive, or land on a newer search.
-     */
-    private void loadMatchSummary(int gen, SearchFilter page, long startedAt) {
-        onClient(AllTheLogsClient.worker().summarizeMatches(page.toSummaryQuery()), (summary, error) -> {
-            if (gen != generation.get() || error != null || list == null) return;
-            matchSummary = summary == null ? MatchSummary.empty() : summary;
-            list.setMatchSummary(matchSummary);
-            list.setTotalMatchCount(matchSummary.matches(), elapsedMs(startedAt));
-            snapshotCurrentList();
-        });
-    }
-
-    private static long elapsedMs(long startedAtNanos) {
-        return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos);
     }
 
     void refreshStats() {
@@ -249,23 +167,37 @@ final class LogBrowserQueries {
         });
     }
 
+    /**
+     * Timeline totals after the page is on screen, so a slower summarize cannot overwrite
+     * the list before rows arrive, or land on a newer search.
+     */
+    private void loadMatchSummary(int gen, SearchFilter page, long startedAt) {
+        onClient(AllTheLogsClient.worker().summarizeMatches(page.toSummaryQuery()), (summary, error) -> {
+            if (gen != generation.get() || error != null || list == null) return;
+            matchSummary = summary == null ? MatchSummary.empty() : summary;
+            list.setMatchSummary(matchSummary);
+            list.setTotalMatchCount(matchSummary.matches(), elapsedMs(startedAt));
+            takeSnapshot();
+        });
+    }
+
+    /**
+     * Extends the buffer at whichever end the viewport has reached, then trims the far end back to the page
+     * limit so the buffer cannot grow without bound while scrolling.
+     */
     private void loadMore(MessageTimeline.Edge edge) {
         if (list.loading() || list.window().rows().isEmpty()) return;
-        list.setLoading(true);
-        LocalDateTime cursor = edge == MessageTimeline.Edge.AFTER
-            ? list.window().lastMatchTime()
-            : list.window().firstMatchTime();
-        if (cursor == null) {
-            list.setLoading(false);
-            return;
-        }
         boolean towardStart = edge == MessageTimeline.Edge.BEFORE;
-        SearchFilter page = filter.withOffset(cursor);
-        if (towardStart) page = page.withSort(filter.sort().opposite());
+        LocalDateTime cursor = towardStart ? list.window().firstMatchTime() : list.window().lastMatchTime();
+        if (cursor == null) return;
+        list.setLoading(true);
+        SearchFilter page = towardStart
+            ? filter.withOffset(cursor).withSort(filter.sort().opposite())
+            : filter.withOffset(cursor);
         DisplayRow.RowKey anchor = list.visibleAnchor();
         int firstVisible = list.firstVisibleIndex();
         int lastVisible = list.lastVisibleIndex();
-        Set<DisplayRow.RowKey> beforeKeys = keysOf(list.window().rows());
+        Set<DisplayRow.RowKey> bufferedKeys = DisplayRows.keysOf(list.window().rows());
         int gen = generation.get();
         onClient(AllTheLogsClient.worker().findEntries(page.toQuery()), (entries, error) -> {
             if (gen != generation.get()) return;
@@ -274,26 +206,30 @@ final class LogBrowserQueries {
                 AllTheLogsClient.LOGGER.warn("AllTheLogs page query failed", error);
                 return;
             }
-            List<DisplayRow> incoming = DisplayRow.from(entries, filter);
-            if (towardStart) incoming = ResultWindow.reversed(incoming);
-            boolean more = pageIsFull(incoming, filter);
-            boolean added = incoming.stream().anyMatch(row -> !beforeKeys.contains(row.key()));
-            if (!added) more = false;
-            List<DisplayRow> head = towardStart ? incoming : list.window().rows();
-            List<DisplayRow> tail = towardStart ? list.window().rows() : incoming;
-            List<DisplayRow> merged = ResultWindow.mergeUnique(head, tail);
-            int prepended = towardStart ? countNewKeys(incoming, beforeKeys) : 0;
-            List<DisplayRow> trimmed = ResultWindow.trimToMatchLimit(
-                merged, (int) Math.max(1, filter.limit()), firstVisible + prepended, lastVisible + prepended);
+            List<DisplayRow> incoming = displayRows(entries);
+            if (towardStart) incoming = DisplayRows.reversed(incoming);
+            int added = DisplayRows.countNewKeys(incoming, bufferedKeys);
+            boolean more = added > 0 && PageBounds.isFull(incoming, filter.limit());
+
+            List<DisplayRow> buffered = list.window().rows();
+            List<DisplayRow> merged = towardStart
+                ? DisplayRows.mergeUnique(incoming, buffered)
+                : DisplayRows.mergeUnique(buffered, incoming);
+            int shift = towardStart ? added : 0;
+            List<DisplayRow> trimmed = DisplayRows.trimToMatchLimit(
+                merged, (int) Math.max(1, filter.limit()), firstVisible + shift, lastVisible + shift);
             boolean hasBefore = (towardStart ? more : list.window().hasBefore())
-                || ResultWindow.trimmedHead(merged, trimmed);
+                || DisplayRows.trimmedHead(merged, trimmed);
             boolean hasAfter = (towardStart ? list.window().hasAfter() : more)
-                || ResultWindow.trimmedTail(merged, trimmed);
+                || DisplayRows.trimmedTail(merged, trimmed);
             list.applyPage(trimmed, hasBefore, hasAfter, anchor);
-            snapshotCurrentList();
+            takeSnapshot();
         });
     }
 
+    /**
+     * Loads more context around a double-clicked row, on the side that was clicked.
+     */
     private void expandAround(DisplayRow row, MessageTimeline.Edge side) {
         int extra = MessageListLayout.extraContextLines(filter.contextLines());
         if (extra <= 0 || list == null) return;
@@ -302,65 +238,60 @@ final class LogBrowserQueries {
         int before = older ? extra : 0;
         int after = older ? 0 : extra;
         DisplayRow.RowKey anchor = row.key();
-        onClient(AllTheLogsClient.worker().entriesAround(row.chatLog(), row.lineIndex(), before, after), (entries, error) -> {
-            if (error != null || list == null) {
-                if (error != null) AllTheLogsClient.LOGGER.warn("AllTheLogs expand query failed", error);
-                return;
-            }
-            List<DisplayRow> extraRows = DisplayRow.from(entries, filter);
-            List<DisplayRow> merged = ResultWindow.mergeSorted(list.window().rows(), extraRows, filter.sort());
-            list.applyPage(merged, list.window().hasBefore(), list.window().hasAfter(), anchor);
-            list.setScrollY(list.scrollY());
-            snapshotCurrentList();
-        });
+        onClient(AllTheLogsClient.worker().entriesAround(row.chatLog(), row.lineIndex(), before, after),
+            (entries, error) -> {
+                if (error != null || list == null) {
+                    if (error != null) AllTheLogsClient.LOGGER.warn("AllTheLogs expand query failed", error);
+                    return;
+                }
+                List<DisplayRow> merged = DisplayRows.mergeSorted(
+                    list.window().rows(), displayRows(entries), filter.sort());
+                list.applyPage(merged, list.window().hasBefore(), list.window().hasAfter(), anchor);
+                list.setScrollY(list.scrollY());
+                takeSnapshot();
+            });
     }
 
+    /**
+     * A drag on the timeline invalidates whatever page is still in flight, and stops the loading chip from
+     * flickering for the duration of the drag.
+     */
     private void beginScrub() {
         generation.incrementAndGet();
         list.setLoading(false);
     }
 
+    /**
+     * Loads the page a timeline drag points at. Previews, sent while the thumb is still held, fetch a smaller
+     * page and leave the thumb where it is.
+     */
     private void jumpTo(MessageTimeline.ScrubJump jump, boolean preview) {
-        LocalDateTime target = clampToBounds(jump == null ? null : jump.time());
+        LocalDateTime target = clampToMatchedRange(jump == null ? null : jump.time());
         if (target == null && (jump == null || jump.skip() < 0)) {
-            if (preview && list != null) list.scrubQueryFinished();
-            if (!preview) list.finishScrub();
+            if (preview) {
+                if (list != null) list.scrubQueryFinished();
+            } else {
+                list.finishScrub();
+            }
             return;
         }
-        SearchFilter page = filter.withoutOffset();
-        ChatQuery query;
-        if (jump != null && jump.skip() >= 0) {
-            query = page.toQuery().withSkip(jump.skip());
-        } else {
-            query = page.withOffset(exclusiveOffset(target, filter.sort())).toQuery();
-        }
-        if (preview) {
-            long cap = filter.limit() < 0 ? MessageTimeline.SCRUB_PAGE_SIZE
-                : Math.min(MessageTimeline.SCRUB_PAGE_SIZE, filter.limit());
-            query = query.withLimit(Math.max(8, cap));
-        }
-        ChatQuery requested = query;
+        ChatQuery requested = jumpQuery(jump, target, preview);
         int gen = generation.incrementAndGet();
         if (!preview) list.setLoading(true);
         onClient(AllTheLogsClient.worker().findEntries(requested), (entries, error) -> {
             if (preview && list != null) list.scrubQueryFinished();
             if (gen != generation.get()) return;
-            if (error != null) {
+            List<DisplayRow> rows = error == null ? displayRows(entries) : List.of();
+            if (error != null || rows.isEmpty()) {
                 list.setLoading(false);
                 if (!preview) list.finishScrub();
                 return;
             }
-            List<DisplayRow> rows = DisplayRow.from(entries, filter);
-            if (rows.isEmpty()) {
-                list.setLoading(false);
-                if (!preview) list.finishScrub();
-                return;
-            }
-            boolean full = requested.limit() > 0 && ResultWindow.matchCount(rows) >= requested.limit();
+            boolean full = PageBounds.isFull(rows, requested.limit());
             double progress = jump == null ? Double.NaN : jump.progress();
-            boolean hasBefore = pageHasBefore(filter.sort(), rows, matchSummary);
-            boolean hasAfter = pageHasAfter(filter.sort(), full, rows, matchSummary);
-            if (pageNeedsMoreToFill(rows, filter.contextLines(), list.viewHeight(), hasBefore)) {
+            boolean hasBefore = PageBounds.hasBefore(filter.sort(), rows, matchSummary);
+            boolean hasAfter = PageBounds.hasAfter(filter.sort(), full, rows, matchSummary);
+            if (PageBounds.needsMoreToFill(rows, filter.contextLines(), list.viewHeight(), hasBefore)) {
                 fillJumpViewport(gen, target, preview, rows, hasAfter, requested.limit(), progress);
                 return;
             }
@@ -368,29 +299,44 @@ final class LogBrowserQueries {
         });
     }
 
+    private ChatQuery jumpQuery(MessageTimeline.ScrubJump jump, LocalDateTime target, boolean preview) {
+        SearchFilter page = filter.withoutOffset();
+        ChatQuery query = jump != null && jump.skip() >= 0
+            ? page.toQuery().withSkip(jump.skip())
+            : page.withOffset(PageBounds.exclusiveOffset(target, filter.sort())).toQuery();
+        if (!preview) return query;
+        long cap = filter.limit() < 0
+            ? MessageTimeline.SCRUB_PAGE_SIZE
+            : Math.min(MessageTimeline.SCRUB_PAGE_SIZE, filter.limit());
+        return query.withLimit(Math.max(8, cap));
+    }
+
+    /**
+     * Prepends older matches to a jump that landed too close to the end of the result set to fill the list.
+     */
     private void fillJumpViewport(int gen, LocalDateTime target, boolean preview, List<DisplayRow> rows,
                                   boolean hasAfter, long pageLimit, double progress) {
-        LocalDateTime cursor = firstMatchTime(rows);
+        LocalDateTime cursor = DisplayRows.firstMatchTime(rows);
         if (cursor == null) {
             applyJump(target, preview, rows, true, hasAfter, progress);
             return;
         }
         SearchFilter extra = filter.withOffset(cursor).withSort(filter.sort().opposite())
-            .withLimit(extraFillLimit(list.viewHeight(), pageLimit));
-        Set<DisplayRow.RowKey> beforeKeys = keysOf(rows);
+            .withLimit(PageBounds.extraFillLimit(list.viewHeight(), pageLimit));
+        Set<DisplayRow.RowKey> alreadyLoaded = DisplayRows.keysOf(rows);
         onClient(AllTheLogsClient.worker().findEntries(extra.toQuery()), (entries, error) -> {
             if (gen != generation.get()) return;
             if (error != null) {
                 applyJump(target, preview, rows, true, hasAfter, progress);
                 return;
             }
-            List<DisplayRow> incoming = ResultWindow.reversed(DisplayRow.from(entries, filter));
-            boolean more = pageIsFull(incoming, extra)
-                && incoming.stream().anyMatch(row -> !beforeKeys.contains(row.key()));
-            List<DisplayRow> merged = ResultWindow.mergeUnique(incoming, rows);
-            boolean hasBefore = more || pageHasBefore(filter.sort(), merged, matchSummary);
-            applyJump(target, preview, merged, hasBefore,
-                hasAfter || pageHasAfter(filter.sort(), false, merged, matchSummary), progress);
+            List<DisplayRow> incoming = DisplayRows.reversed(displayRows(entries));
+            boolean more = PageBounds.isFull(incoming, extra.limit())
+                && DisplayRows.countNewKeys(incoming, alreadyLoaded) > 0;
+            List<DisplayRow> merged = DisplayRows.mergeUnique(incoming, rows);
+            applyJump(target, preview, merged,
+                more || PageBounds.hasBefore(filter.sort(), merged, matchSummary),
+                hasAfter || PageBounds.hasAfter(filter.sort(), false, merged, matchSummary), progress);
         });
     }
 
@@ -399,10 +345,18 @@ final class LogBrowserQueries {
         list.setLoading(false);
         list.showAt(target, rows, hasBefore, hasAfter, progress);
         if (!preview) list.finishScrub();
-        snapshotCurrentList();
+        takeSnapshot();
     }
 
-    private LocalDateTime clampToBounds(LocalDateTime time) {
+    private List<DisplayRow> displayRows(List<ChatEntry> entries) {
+        return DisplayRow.from(entries, filter);
+    }
+
+    /**
+     * Keeps a drag target inside the matched range, so a drag past either end of the track still lands on a
+     * real match.
+     */
+    private LocalDateTime clampToMatchedRange(LocalDateTime time) {
         if (time == null) return null;
         LocalDateTime oldest = matchSummary.oldest();
         LocalDateTime newest = matchSummary.newest();
@@ -412,14 +366,25 @@ final class LogBrowserQueries {
         return time;
     }
 
-    private void snapshotCurrentList() {
+    private void takeSnapshot() {
         if (list == null) return;
-        restoredRows = list.window().rows();
-        restoredHasBefore = list.window().hasBefore();
-        restoredHasAfter = list.window().hasAfter();
-        restoredScrollY = list.scrollY();
-        restoredMatchCount = list.matchCount();
-        restoredExactMatchCount = list.exactMatchCount();
-        restoredElapsedMs = list.matchElapsedMs();
+        snapshot = ListSnapshot.of(list);
+    }
+
+    /**
+     * The last page applied to the widget, so it survives the widget being rebuilt on resize or reopen.
+     */
+    private record ListSnapshot(List<DisplayRow> rows, boolean hasBefore, boolean hasAfter, double scrollY,
+                                long matchCount, boolean exactMatchCount, long elapsedMs) {
+        private static final ListSnapshot EMPTY = new ListSnapshot(List.of(), false, false, 0, 0, false, 0);
+
+        private static ListSnapshot of(MessageTimeline list) {
+            return new ListSnapshot(list.window().rows(), list.window().hasBefore(), list.window().hasAfter(),
+                list.scrollY(), list.matchCount(), list.exactMatchCount(), list.matchElapsedMs());
+        }
+
+        private boolean isEmpty() {
+            return rows.isEmpty();
+        }
     }
 }

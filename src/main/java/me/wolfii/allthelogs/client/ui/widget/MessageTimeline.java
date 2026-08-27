@@ -6,6 +6,7 @@ import io.wispforest.owo.ui.core.OwoUIGraphics;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.UIComponent;
 import me.wolfii.allthelogs.client.list.DisplayRow;
+import me.wolfii.allthelogs.client.list.DisplayRows;
 import me.wolfii.allthelogs.client.list.MessageListLayout;
 import me.wolfii.allthelogs.client.list.MessageSelection;
 import me.wolfii.allthelogs.client.list.MessageWrap;
@@ -218,11 +219,11 @@ public final class MessageTimeline extends BaseUIComponent {
      * edge of the buffer.
      */
     public void applyPage(List<DisplayRow> rows, boolean hasBefore, boolean hasAfter, DisplayRow.RowKey anchor) {
-        int oldIndex = ResultWindow.indexOf(window.rows(), anchor);
+        int oldIndex = DisplayRows.indexOf(window.rows(), anchor);
         double oldY = layout.rowY(oldIndex);
         int oldOrigin = contentOrigin();
         replacePage(rows, hasBefore, hasAfter);
-        int newIndex = ResultWindow.indexOf(window.rows(), anchor);
+        int newIndex = DisplayRows.indexOf(window.rows(), anchor);
         setScrollY(ResultWindow.keepAnchor(oldIndex, newIndex, oldY, layout.rowY(newIndex), scrollY,
             oldOrigin, contentOrigin()));
         maybeRequestMore();
@@ -437,7 +438,7 @@ public final class MessageTimeline extends BaseUIComponent {
     private void remapSelection(List<DisplayRow> previous, List<DisplayRow> next) {
         selection.retainIn(previous, next);
         if (clickKey == null) return;
-        int index = ResultWindow.indexOf(next, clickKey);
+        int index = DisplayRows.indexOf(next, clickKey);
         if (index < 0) {
             clearClick();
             return;
