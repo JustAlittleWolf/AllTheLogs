@@ -615,7 +615,7 @@ public final class MessageTimeline extends BaseUIComponent {
         int boxX = x + Math.max(8, listWidth - 8 - boxWidth);
         int boxY = y;
         HoverChip.fill(graphics, boxX, boxY, boxWidth, boxHeight, BANNER_BG);
-        int textY = boxY + Math.max(0, (boxHeight - font.lineHeight) / 2);
+        int textY = boxY + Math.max(0, (boxHeight - font.lineHeight) / 2) + 2;
         graphics.drawText(text, boxX + 8, textY, 1, TEXT);
     }
 
