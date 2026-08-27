@@ -344,7 +344,8 @@ public final class TimelineLogList extends BaseUIComponent {
 
     private void drawDateBand(OwoUIGraphics graphics, LocalDate date, int headerY, int listWidth) {
         graphics.fill(x, headerY, x + listWidth, headerY + MessageListLayout.DATE_HEIGHT, DATE_BG);
-        graphics.drawText(MessageComponents.dateHeader(date), x + LIST_PAD, headerY + LIST_PAD, DATE_SCALE, TEXT);
+        graphics.drawText(MessageComponents.dateHeader(date), x + LIST_PAD, headerY + MessageListLayout.DATE_HEIGHT,
+            DATE_SCALE, TEXT, OwoUIGraphics.TextAnchor.BOTTOM_LEFT);
     }
 
     private void drawBanner(OwoUIGraphics graphics, int listWidth, int mouseX, int mouseY) {
