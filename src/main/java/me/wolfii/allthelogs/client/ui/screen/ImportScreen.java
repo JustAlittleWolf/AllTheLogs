@@ -7,9 +7,11 @@ import io.wispforest.owo.ui.component.TextBoxComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.ScrollContainer;
+import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.*;
 import me.wolfii.allthelogs.client.AllTheLogsPaths;
+import me.wolfii.allthelogs.client.files.CommonLogLocations;
 import me.wolfii.allthelogs.client.files.ImportPaths;
 import me.wolfii.allthelogs.client.files.NativeFilePicker;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
@@ -26,10 +28,12 @@ import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * Import a folder or archive into the log store.
+ * Import a folder or archive into the log store. Launcher directory shortcuts from
+ * {@link CommonLogLocations#defaults()} fill both the path and advanced options when chosen.
  */
-public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
+public final class ImportScreen extends BaseOwoScreen<StackLayout> {
     private final Screen parent;
+    private CommonLocationMenu commonLocations;
     private TextBoxComponent pathBox;
     private LabelComponent status;
     private boolean recursive = true;
@@ -49,14 +53,16 @@ public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
     }
 
     @Override
-    protected @NotNull OwoUIAdapter<FlowLayout> createAdapter() {
-        return OwoUIAdapter.create(this, UIContainers::verticalFlow);
+    protected @NotNull OwoUIAdapter<StackLayout> createAdapter() {
+        return OwoUIAdapter.create(this, UIContainers::stack);
     }
 
     @Override
-    protected void build(FlowLayout root) {
-        root.gap(8);
-        root.surface(Surface.VANILLA_TRANSLUCENT)
+    protected void build(StackLayout root) {
+        FlowLayout content = UIContainers.verticalFlow(Sizing.fill(), Sizing.fill());
+        content.gap(8);
+        content.allowOverflow(true);
+        content.surface(Surface.VANILLA_TRANSLUCENT)
             .padding(Insets.of(16))
             .horizontalAlignment(HorizontalAlignment.LEFT)
             .verticalAlignment(VerticalAlignment.TOP);
@@ -84,6 +90,9 @@ public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
             button -> NativeFilePicker.pickArchive(currentPath(), this::setPath)));
         form.child(pathRow);
 
+        commonLocations = new CommonLocationMenu(root, () -> this.width, () -> this.height, this::applyLocation);
+        form.child(commonLocations.row());
+
         LabelComponent dropHint = UIComponents.label(Component.translatable("allthelogs.import.drop_hint"));
         dropHint.color(Color.ofRgb(0xA0A0A0));
         form.child(dropHint);
@@ -96,7 +105,7 @@ public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
             Sizing.fill(), Sizing.expand(), form);
         scroll.scrollbar(OverflowScrollbar.vanillaFlat());
         scroll.padding(Insets.right(6));
-        root.child(scroll);
+        content.child(scroll);
 
         status = UIComponents.label(Component.empty());
         FlowLayout actions = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
@@ -105,7 +114,8 @@ public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
         actions.child(UIComponents.button(Component.translatable("allthelogs.done"),
             button -> Minecraft.getInstance().gui.setScreen(parent)));
         actions.child(status);
-        root.child(actions);
+        content.child(actions);
+        root.child(content);
     }
 
     private FlowLayout buildAdvanced() {
@@ -148,6 +158,14 @@ public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
         if (bind != null) bind.accept(box);
         row.child(box);
         return row;
+    }
+
+    private void applyLocation(CommonLogLocations.Location location) {
+        if (location == null) {
+            return;
+        }
+        setPath(location.preferredPath());
+        applyOptions(location.suggestedOptions());
     }
 
     @Override
@@ -214,6 +232,7 @@ public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
 
     @Override
     public void onClose() {
+        if (commonLocations != null) commonLocations.close();
         Minecraft.getInstance().gui.setScreen(parent);
     }
 }
