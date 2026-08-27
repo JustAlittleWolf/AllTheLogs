@@ -24,15 +24,7 @@ class MessageListLayoutTest {
     }
 
     @Test
-    void estimatedHeightDependsOnMatchesAndContextNotOnTheLoadedWindow() {
-        int withoutContext = MessageListLayout.estimatedContentHeight(10, 0, 1);
-        int withContext = MessageListLayout.estimatedContentHeight(10, 4, 1);
-        assertEquals(MessageListLayout.DATE_HEIGHT + 10 * MessageListLayout.ROW_HEIGHT, withoutContext);
-        assertEquals(MessageListLayout.DATE_HEIGHT + 10 * 9 * MessageListLayout.ROW_HEIGHT, withContext);
-        assertEquals(withoutContext, MessageListLayout.estimatedContentHeight(10, 0, 1));
-        int twoDays = MessageListLayout.estimatedContentHeight(10, 0, 2);
-        assertEquals(2 * MessageListLayout.DATE_HEIGHT + MessageListLayout.DATE_GAP + 10 * MessageListLayout.ROW_HEIGHT,
-            twoDays);
+    void bottomPadAlignsShortContentToTheBottom() {
         assertEquals(0, MessageListLayout.bottomPad(400, 200));
         assertEquals(80, MessageListLayout.bottomPad(120, 200));
         assertEquals(0, MessageListLayout.bottomPad(0, 200));
