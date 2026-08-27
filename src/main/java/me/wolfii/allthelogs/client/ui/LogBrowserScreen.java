@@ -44,7 +44,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
     private ButtonComponent oldestFirst;
     private ButtonComponent newestFirst;
     private ButtonComponent versionButton;
-    private ParentUIComponent versionMenu;
+    private DropdownComponent versionMenu;
     private List<String> versions = List.of();
     private boolean filterOpen;
     private FlowLayout root;
@@ -75,6 +75,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
     protected void build(FlowLayout root) {
         this.root = root;
         root.gap(6);
+        root.allowOverflow(true);
         root.surface(BrowserPanels.overlay())
             .padding(Insets.of(8))
             .horizontalAlignment(HorizontalAlignment.LEFT)
@@ -232,15 +233,19 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
     }
 
     private void toggleVersionMenu(ButtonComponent button) {
-        if (versionMenu != null) {
+        if (versionMenuOpen()) {
             closeVersionMenu();
             return;
         }
         openVersionMenu(button);
     }
 
+    private boolean versionMenuOpen() {
+        return root != null && versionMenu != null && root.children().contains(versionMenu);
+    }
+
     private void closeVersionMenu() {
-        if (root != null && versionMenu != null) {
+        if (versionMenuOpen()) {
             root.removeChild(versionMenu);
         }
         versionMenu = null;
@@ -248,31 +253,23 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
 
     private void openVersionMenu(ButtonComponent button) {
         if (root == null) return;
-        closeVersionMenu();
-        FlowLayout items = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
-        items.gap(1).padding(Insets.of(2));
-        items.child(versionChoice(Component.translatable("allthelogs.filter.version.all"), null));
-        for (String version : versions) {
-            items.child(versionChoice(Component.literal(version), version));
-        }
-        int width = Math.max(180, button.width());
-        int height = Math.min(180, Math.max(24, (versions.size() + 1) * 20 + 8));
-        ScrollContainer<FlowLayout> menu = UIContainers.verticalScroll(
-            Sizing.fixed(width), Sizing.fixed(height), items);
-        menu.scrollbar(OverflowScrollbar.vanillaFlat());
-        menu.surface(BrowserPanels.menu());
-        menu.positioning(Positioning.absolute(button.x(), button.y() + button.height()));
-        versionMenu = menu;
-        root.child(menu);
-    }
-
-    private ButtonComponent versionChoice(Component label, String version) {
-        ButtonComponent choice = UIComponents.button(label, ignored -> {
+        DropdownComponent.openContextMenu(this, root, (parent, dropdown) -> {
             closeVersionMenu();
-            updateFilter(filter.withVersion(version));
+            parent.child(dropdown);
+            versionMenu = dropdown;
+        }, button.x(), button.y() + button.height(), dropdown -> {
+            dropdown.surface(BrowserPanels.menu());
+            dropdown.button(Component.translatable("allthelogs.filter.version.all"), ignored -> {
+                closeVersionMenu();
+                updateFilter(filter.withVersion(null));
+            });
+            for (String version : versions) {
+                dropdown.button(Component.literal(version), ignored -> {
+                    closeVersionMenu();
+                    updateFilter(filter.withVersion(version));
+                });
+            }
         });
-        choice.horizontalSizing(Sizing.fill());
-        return choice;
     }
 
     private ButtonComponent sortButton(String key, ChatQuery.Sort sort) {
