@@ -8,6 +8,7 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
@@ -26,8 +27,10 @@ import java.util.concurrent.CompletableFuture;
 public final class AllTheLogsClient implements ClientModInitializer {
     public static final String MOD_ID = "allthelogs";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+    private static final long SESSION_END_TOUCH_INTERVAL_MS = 60_000L;
 
     private static LogStoreWorker worker;
+    private static long lastSessionEndTouchMs;
 
     public static LogStoreWorker worker() {
         return worker;
@@ -90,6 +93,13 @@ public final class AllTheLogsClient implements ClientModInitializer {
                 Minecraft.getInstance().execute(() -> Minecraft.getInstance().gui.setScreen(new LogBrowserScreen()));
                 return 1;
             })));
+
+        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            long now = System.currentTimeMillis();
+            if (now - lastSessionEndTouchMs < SESSION_END_TOUCH_INTERVAL_MS) return;
+            lastSessionEndTouchMs = now;
+            worker.touchSessionEndTime();
+        });
 
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> worker.close());
     }

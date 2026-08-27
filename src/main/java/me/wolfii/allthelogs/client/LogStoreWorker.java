@@ -5,8 +5,10 @@ import me.wolfii.allthelogs.data.parse.FormattingCodes;
 import net.minecraft.network.chat.Component;
 
 import java.nio.file.Path;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -18,7 +20,7 @@ import java.util.function.Consumer;
 public final class LogStoreWorker implements AutoCloseable {
     private final ExecutorService executor;
     private final AtomicBoolean cancelImport = new AtomicBoolean();
-    private LogStore store;
+    private volatile LogStore store;
 
     public LogStoreWorker() {
         this.executor = Executors.newSingleThreadExecutor(daemonFactory());
@@ -73,6 +75,18 @@ public final class LogStoreWorker implements AutoCloseable {
         });
     }
 
+    /**
+     * Advances the live session's end time to now on the worker thread. No-op when the store is not open
+     * or no session is active.
+     */
+    public void touchSessionEndTime() {
+        executor.execute(this::touchSessionEndTimeNow);
+    }
+
+    public boolean isOpen() {
+        return store != null;
+    }
+
     public CompletableFuture<List<ChatEntry>> findEntries(ChatQuery query) {
         ChatQuery copy = Objects.requireNonNull(query, "query");
         return submit(() -> requireStore().findEntries(copy));
@@ -83,6 +97,11 @@ public final class LogStoreWorker implements AutoCloseable {
         return submit(() -> requireStore().summarizeMatches(copy));
     }
 
+    public CompletableFuture<Long> countMatches(ChatQuery query) {
+        ChatQuery copy = Objects.requireNonNull(query, "query");
+        return submit(() -> requireStore().countMatches(copy));
+    }
+
     public CompletableFuture<List<ChatEntry>> entriesAround(ChatLog log, int lineIndex, int before, int after) {
         ChatLog copy = Objects.requireNonNull(log, "log");
         int beforeLines = Math.max(0, before);
@@ -90,15 +109,29 @@ public final class LogStoreWorker implements AutoCloseable {
         return submit(() -> requireStore().entriesAround(copy, lineIndex, beforeLines, afterLines));
     }
 
+    public CompletableFuture<List<ChatEntry>> allEntries() {
+        return submit(() -> requireStore().allEntries());
+    }
+
+    public CompletableFuture<List<ChatLog>> chatLogs() {
+        return submit(() -> requireStore().chatLogs());
+    }
+
     public CompletableFuture<LogStoreMetadata> metadata() {
         return submit(() -> requireStore().metadata());
+    }
+
+    public CompletableFuture<Optional<Path>> databasePath() {
+        return submit(() -> requireStore().databasePath());
     }
 
     @Override
     public void close() {
         try {
+            submit(this::touchSessionEndTimeNow).join();
             submit(this::closeStore).join();
         } catch (CompletionException ignored) {
+            touchSessionEndTimeNow();
             closeStore();
         } finally {
             executor.shutdownNow();
@@ -116,6 +149,14 @@ public final class LogStoreWorker implements AutoCloseable {
         if (store != null) {
             store.close();
             store = null;
+        }
+    }
+
+    private void touchSessionEndTimeNow() {
+        if (store == null) return;
+        try {
+            store.updateSessionEndTime(LocalDateTime.now());
+        } catch (LogDataException ignored) {
         }
     }
 
