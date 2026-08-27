@@ -12,7 +12,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
 /**
- * Builds chat-line {@link Component}s with hex colours: white for hits, light green on the match, grey for context.
+ * Builds chat-line {@link Component}s with hex colours: white for hits, light green on the match, one grey for context.
  */
 public final class MessageComponents {
     /**
@@ -31,16 +31,13 @@ public final class MessageComponents {
     }
 
     /**
-     * Text for the list's status chip: a persistent overlay, loading, match count, or both.
+     * Text for the list's status chip: a persistent overlay, then loading, then the match count.
      */
     public static Component listStatus(Component overlay, boolean loading, boolean showMatches, int matchCount) {
         if (overlay != null && !overlay.getString().isEmpty()) return overlay;
-        String count = matchCountText(matchCount);
-        if (loading && showMatches) {
-            return Component.translatable("allthelogs.status.matches_loading", count);
-        }
         if (loading) return Component.translatable("allthelogs.status.loading");
-        return Component.translatable("allthelogs.status.matches", count);
+        if (!showMatches) return Component.empty();
+        return Component.translatable("allthelogs.status.matches", matchCountText(matchCount));
     }
 
     public static Component timestamp(DisplayRow row) {
@@ -61,7 +58,7 @@ public final class MessageComponents {
         int end = Math.clamp(to, start, full.length());
         String text = full.substring(start, end);
         if (!row.match()) {
-            return colored(text, ContextColors.contextText(row.distanceFromMatch()));
+            return colored(text, ContextColors.CONTEXT_TEXT);
         }
         if (row.highlights().isEmpty()) {
             return colored(text, ContextColors.MATCH_TEXT);

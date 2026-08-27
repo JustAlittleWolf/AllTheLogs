@@ -14,7 +14,7 @@ import java.util.function.Predicate;
 
 /**
  * One row in the log browser: a stored chat line plus whether it is a search hit and how far it is from the
- * nearest hit in the same log (used to grey out context).
+ * nearest hit in the same log.
  */
 public record DisplayRow(
     ChatEntry entry,
@@ -63,7 +63,7 @@ public record DisplayRow(
 
     private static Duration distanceToNearestHit(ChatEntry entry, List<ChatEntry> hits) {
         if (hits == null || hits.isEmpty()) {
-            return Duration.ofMillis(ContextColors.MAX_DISTANCE_MILLIS);
+            return Duration.ofMinutes(15);
         }
         Duration nearest = null;
         for (ChatEntry hit : hits) {
