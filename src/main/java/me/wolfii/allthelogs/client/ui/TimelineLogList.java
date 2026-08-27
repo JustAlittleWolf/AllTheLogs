@@ -11,7 +11,6 @@ import me.wolfii.allthelogs.client.view.MessageSelection;
 import me.wolfii.allthelogs.client.view.MessageWrap;
 import me.wolfii.allthelogs.client.view.ResultWindow;
 import me.wolfii.allthelogs.client.view.TimelineLayout;
-import me.wolfii.allthelogs.client.view.ContextColors;
 import me.wolfii.allthelogs.data.MatchBounds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -21,9 +20,12 @@ import net.minecraft.network.chat.Component;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+
+import org.lwjgl.glfw.GLFW;
 
 /**
  * Virtualised log list plus a timeline scrubber on the right. Newest is at the top. The scrubber maps the
@@ -35,11 +37,13 @@ public final class TimelineLogList extends BaseUIComponent {
     public static final int SCRUB_PAGE_SIZE = 24;
     private static final int TRACK_WIDTH = 8;
     private static final int THUMB_HEIGHT = 16;
-    private static final int BANNER_MS = 2200;
+    private static final int BANNER_MS = 5000;
     private static final int HOVER_SLOP = 12;
     private static final int LIST_PAD = 4;
     private static final int SCRUB_THROTTLE_MS = 50;
     private static final int TICK_GAP_PX = 16;
+    private static final int INFO_MAX_WIDTH = 240;
+    private static final int AUTO_SCROLL_DEADZONE = 8;
 
     private static final int LIST_BG = 0x80000000;
     private static final float DATE_SCALE = 1.25f;
@@ -63,14 +67,19 @@ public final class TimelineLogList extends BaseUIComponent {
     private LocalDateTime boundsOldest;
     private LocalDateTime boundsNewest;
     private int uniqueMatchDates;
+    private List<YearMonth> matchMonths = List.of();
     private double scrollY;
     private boolean loading;
     private boolean draggingTimeline;
     private boolean draggingSelection;
+    private boolean autoScrolling;
+    private double autoScrollOriginY;
+    private double autoScrollMouseY;
     private double scrubY = Double.NaN;
     private long lastScrubQueryMs;
     private int laidOutWidth = -1;
     private int matchCount;
+    private long matchElapsedMs;
     private boolean showMatchBanner;
     private long bannerUntilMs;
     private Component overlayMessage = Component.empty();
@@ -121,6 +130,7 @@ public final class TimelineLogList extends BaseUIComponent {
         this.boundsOldest = bounds == null ? null : bounds.oldest();
         this.boundsNewest = bounds == null ? null : bounds.newest();
         this.uniqueMatchDates = bounds == null ? 0 : bounds.uniqueDates();
+        this.matchMonths = bounds == null || bounds.months() == null ? List.of() : bounds.months();
     }
 
     public void setLoading(boolean loading) {
@@ -191,15 +201,20 @@ public final class TimelineLogList extends BaseUIComponent {
     }
 
     /**
-     * Shows {@code N matches} over the list for a moment after a search. Stays while the
+     * Shows {@code N matches (Xms)} over the list for a moment after a search. Stays while the
      * pointer is over the list, then fades out. Counts above 99 are shown as {@code >99}.
      * While a query is running the chip shows loading instead of the count.
      */
-    public void showMatchCount(int matches) {
+    public void showMatchCount(int matches, long elapsedMs) {
         this.matchCount = matches;
+        this.matchElapsedMs = Math.max(0, elapsedMs);
         this.showMatchBanner = true;
         this.bannerUntilMs = System.currentTimeMillis() + BANNER_MS;
         this.overlayMessage = Component.empty();
+    }
+
+    public void showMatchCount(int matches) {
+        showMatchCount(matches, 0);
     }
 
     public void showOverlay(Component message) {
@@ -220,6 +235,7 @@ public final class TimelineLogList extends BaseUIComponent {
             rebuildLayout();
         }
         graphics.fill(x, y, x + listWidth, y + height, LIST_BG);
+        applyAutoScroll(mouseY, delta);
         drawRows(graphics, listWidth);
         drawMessageInfo(graphics, mouseX, mouseY, listWidth);
         drawBanner(graphics, listWidth, mouseX, mouseY);
@@ -234,6 +250,10 @@ public final class TimelineLogList extends BaseUIComponent {
     @Override
     public boolean onMouseScroll(double mouseX, double mouseY, double amount) {
         if (overTimelineLocal(mouseX)) return false;
+        if (autoScrolling) {
+            stopAutoScroll();
+            return true;
+        }
         setScrollY(scrollY - amount * ROW_HEIGHT * 3);
         maybeRequestMore();
         return true;
@@ -245,9 +265,21 @@ public final class TimelineLogList extends BaseUIComponent {
             focusHandler().focus(this, UIComponent.FocusSource.MOUSE_CLICK);
         }
         if (overTimelineLocal(click.x())) {
+            stopAutoScroll();
             draggingTimeline = true;
             onScrubBegin.run();
             previewScrub(click.y());
+            return true;
+        }
+        if (autoScrolling) {
+            stopAutoScroll();
+            return true;
+        }
+        if (click.button() == GLFW.GLFW_MOUSE_BUTTON_MIDDLE) {
+            autoScrolling = true;
+            autoScrollOriginY = click.y();
+            autoScrollMouseY = click.y();
+            draggingSelection = false;
             return true;
         }
         int row = rowAtLocalY(click.y());
@@ -271,6 +303,10 @@ public final class TimelineLogList extends BaseUIComponent {
             previewScrub(click.y());
             return true;
         }
+        if (autoScrolling) {
+            autoScrollMouseY = click.y();
+            return true;
+        }
         if (draggingSelection) {
             int row = rowAtLocalY(click.y());
             if (row >= 0) selection.extend(row, charAt(row, click.x(), click.y()));
@@ -286,6 +322,9 @@ public final class TimelineLogList extends BaseUIComponent {
             commitScrub(click.y());
         }
         draggingSelection = false;
+        if (click.button() == GLFW.GLFW_MOUSE_BUTTON_MIDDLE) {
+            return true;
+        }
         return super.onMouseUp(click);
     }
 
@@ -369,19 +408,21 @@ public final class TimelineLogList extends BaseUIComponent {
     }
 
     private void drawMessageInfo(OwoUIGraphics graphics, int mouseX, int mouseY, int listWidth) {
-        if (draggingSelection || draggingTimeline) return;
+        if (draggingSelection || draggingTimeline || autoScrolling) return;
         if (mouseX < x + LIST_PAD || mouseX >= messageX() || mouseY < y || mouseY >= y + height) return;
         int row = rowAtLocalY(mouseY - y);
         if (row < 0) return;
-        List<Component> lines = MessageComponents.messageInfo(window.rows().get(row));
         Font font = font();
+        int maxTextWidth = Math.min(INFO_MAX_WIDTH, Math.max(48, listWidth - 16));
+        List<Component> lines = MessageComponents.messageInfo(window.rows().get(row), maxTextWidth,
+            text -> (int) Math.ceil(font.width(text) * 0.85f));
         int lineHeight = 10;
         int pad = 5;
         int textWidth = 0;
         for (Component line : lines) {
-            textWidth = Math.max(textWidth, (int) (font.width(line) * 0.85f));
+            textWidth = Math.max(textWidth, (int) Math.ceil(font.width(line) * 0.85f));
         }
-        int boxWidth = textWidth + pad * 2;
+        int boxWidth = Math.min(listWidth - 8, textWidth + pad * 2);
         int boxHeight = pad * 2 + lines.size() * lineHeight - 2;
         int rowScreenY = screenY(layout.rowY(row));
         int boxX = Math.clamp(x + LIST_PAD, x, Math.max(x, x + listWidth - boxWidth));
@@ -390,10 +431,10 @@ public final class TimelineLogList extends BaseUIComponent {
             boxY = Math.max(y, rowScreenY - boxHeight - 2);
         }
         fillChip(graphics, boxX, boxY, boxWidth, boxHeight, HOVER_BG);
-        int[] colors = {ContextColors.INFO_DATE, ContextColors.INFO_VERSION, ContextColors.INFO_FILE};
         int textY = boxY + pad;
-        for (int i = 0; i < lines.size(); i++) {
-            graphics.drawText(lines.get(i), boxX + pad, textY, 0.85f, colors[Math.min(i, colors.length - 1)]);
+        for (Component line : lines) {
+            int color = line.getStyle().getColor() == null ? TEXT : (0xFF000000 | line.getStyle().getColor().getValue());
+            graphics.drawText(line, boxX + pad, textY, 0.85f, color);
             textY += lineHeight;
         }
     }
@@ -432,7 +473,8 @@ public final class TimelineLogList extends BaseUIComponent {
             showMatchBanner = false;
             return;
         }
-        Component text = MessageComponents.listStatus(overlayMessage, loading, timed || showMatchBanner, matchCount);
+        Component text = MessageComponents.listStatus(overlayMessage, loading, timed || showMatchBanner, matchCount,
+            matchElapsedMs);
         Font font = font();
         int boxWidth = Math.min(listWidth - 16, font.width(text) + 16);
         int boxHeight = 16;
@@ -473,8 +515,8 @@ public final class TimelineLogList extends BaseUIComponent {
     }
 
     private void drawDateTicks(OwoUIGraphics graphics, int trackX, LocalDateTime oldest, LocalDateTime newest) {
-        for (TimelineLayout.DateTick tick : TimelineLayout.spacedTicks(oldest, newest, height, TICK_GAP_PX)) {
-            int tickY = TimelineLayout.yFromNewest(tick.at(), oldest, newest, y, height);
+        for (TimelineLayout.DateTick tick : TimelineLayout.spacedTicks(oldest, newest, matchMonths, height, TICK_GAP_PX)) {
+            int tickY = TimelineLayout.yFromNewest(tick.at(), oldest, newest, matchMonths, y, height);
             graphics.fill(trackX + 2, tickY, trackX + TRACK_WIDTH - 2, tickY + 1, TICK_DOT);
             graphics.drawText(Component.literal(tick.label()), trackX - 3, tickY,
                 0.7f, TICK_LABEL, OwoUIGraphics.TextAnchor.BOTTOM_RIGHT);
@@ -485,7 +527,7 @@ public final class TimelineLogList extends BaseUIComponent {
         if (!Double.isNaN(scrubY)) return y + (int) Math.round(scrubY);
         LocalDateTime viewTime = visibleTime();
         if (viewTime == null) return Integer.MIN_VALUE;
-        return TimelineLayout.yFromNewest(viewTime, oldest, newest, y, height);
+        return TimelineLayout.yFromNewest(viewTime, oldest, newest, matchMonths, y, height);
     }
 
     private void fillChip(OwoUIGraphics graphics, int boxX, int boxY, int boxWidth, int boxHeight, int fill) {
@@ -498,13 +540,28 @@ public final class TimelineLogList extends BaseUIComponent {
         boolean nearTrack = mouseX >= x + listWidth - HOVER_SLOP && mouseX < x + width
             && mouseY >= y && mouseY < y + height;
         boolean overMessage = mouseX >= messageX() && mouseX < x + listWidth && mouseY >= y && mouseY < y + height;
-        if (nearTrack || draggingTimeline) {
+        if (nearTrack || draggingTimeline || autoScrolling) {
             this.cursorStyle(CursorStyle.MOVE);
         } else if (overMessage) {
             this.cursorStyle(CursorStyle.TEXT);
         } else {
             this.cursorStyle(CursorStyle.POINTER);
         }
+    }
+
+    private void applyAutoScroll(int mouseY, float delta) {
+        if (!autoScrolling) return;
+        autoScrollMouseY = mouseY - y;
+        double offset = autoScrollMouseY - autoScrollOriginY;
+        if (Math.abs(offset) <= AUTO_SCROLL_DEADZONE) return;
+        double signed = offset - Math.copySign(AUTO_SCROLL_DEADZONE, offset);
+        double speed = signed / 28.0;
+        setScrollY(scrollY + speed * ROW_HEIGHT * Math.max(0.05, delta) * 8);
+        maybeRequestMore();
+    }
+
+    private void stopAutoScroll() {
+        autoScrolling = false;
     }
 
     private LocalDateTime visibleTime() {
@@ -526,7 +583,7 @@ public final class TimelineLogList extends BaseUIComponent {
         LocalDateTime newest = scrubNewest();
         if (oldest == null || newest == null) return null;
         double progress = localY / Math.max(1, height - 1);
-        return TimelineLayout.timeFromNewest(progress, oldest, newest);
+        return TimelineLayout.timeFromNewest(progress, oldest, newest, matchMonths);
     }
 
     private LocalDateTime scrubOldest() {

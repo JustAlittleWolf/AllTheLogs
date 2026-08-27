@@ -15,6 +15,10 @@ public final class ContextColors {
     public static final int INFO_DATE = 0xFFD8D8D8;
     public static final int INFO_VERSION = 0xFF7EB8D4;
     public static final int INFO_FILE = 0xFFB8A9E0;
+    /**
+     * Literal {@code \n} tokens that were turned into visual linebreaks.
+     */
+    public static final int ESCAPE_TEXT = 0xFF6E6E6E;
     public static final int META_LABEL = 0xFF9A9A9A;
     public static final int META_VALUE = 0xFFD8D8D8;
     public static final int META_NUMBER = 0xFF7EB8D4;

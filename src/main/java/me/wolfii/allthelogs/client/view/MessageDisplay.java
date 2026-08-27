@@ -1,0 +1,68 @@
+package me.wolfii.allthelogs.client.view;
+
+import me.wolfii.allthelogs.data.ChatLog;
+import me.wolfii.allthelogs.data.LogSource;
+
+/**
+ * Display-only chat text: trim each line, and turn a literal {@code \n} into a visual linebreak
+ * (still drawing those two characters) unless the line was captured from a live session.
+ */
+public final class MessageDisplay {
+    private MessageDisplay() {
+    }
+
+    public static boolean interpretEscapes(ChatLog log) {
+        return log != null && !(log.source() instanceof LogSource.Session);
+    }
+
+    public static String visual(String message, boolean interpretEscapes) {
+        if (message == null || message.isEmpty()) return "";
+        String[] paragraphs = message.split("\n", -1);
+        StringBuilder out = new StringBuilder(message.length());
+        for (int i = 0; i < paragraphs.length; i++) {
+            if (i > 0) out.append('\n');
+            appendParagraph(out, paragraphs[i], interpretEscapes);
+        }
+        return out.toString();
+    }
+
+    /**
+     * Whether {@code index} in {@code visual} is the {@code \} or {@code n} of an interpreted linebreak token.
+     */
+    public static boolean escapeChar(String visual, int index, boolean interpretEscapes) {
+        if (!interpretEscapes || visual == null || index < 0 || index >= visual.length()) return false;
+        if (visual.charAt(index) == '\\') {
+            return escapeStartsAt(visual, index);
+        }
+        if (visual.charAt(index) == 'n') {
+            return escapeStartsAt(visual, index - 1);
+        }
+        return false;
+    }
+
+    private static boolean escapeStartsAt(String visual, int index) {
+        if (index < 0 || index + 1 >= visual.length()) return false;
+        if (visual.charAt(index) != '\\' || visual.charAt(index + 1) != 'n') return false;
+        return index + 2 >= visual.length() || visual.charAt(index + 2) == '\n';
+    }
+
+    private static void appendParagraph(StringBuilder out, String paragraph, boolean interpretEscapes) {
+        if (!interpretEscapes) {
+            out.append(paragraph.trim());
+            return;
+        }
+        int from = 0;
+        boolean first = true;
+        while (from <= paragraph.length()) {
+            int escape = paragraph.indexOf("\\n", from);
+            String chunk = escape < 0 ? paragraph.substring(from) : paragraph.substring(from, escape);
+            if (!first) {
+                out.append("\\n\n");
+            }
+            out.append(chunk.trim());
+            first = false;
+            if (escape < 0) break;
+            from = escape + 2;
+        }
+    }
+}

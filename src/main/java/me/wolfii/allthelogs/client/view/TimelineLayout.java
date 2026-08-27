@@ -3,6 +3,7 @@ package me.wolfii.allthelogs.client.view;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -58,17 +59,92 @@ public final class TimelineLayout {
      * Pixel Y with newest at the top and oldest at the bottom, like Immich's timeline scrubber.
      */
     public static int yFromNewest(LocalDateTime time, LocalDateTime oldest, LocalDateTime newest, int top, int height) {
-        double fromNewest = 1 - progress(time, oldest, newest);
+        return yFromNewest(time, oldest, newest, List.of(), top, height);
+    }
+
+    /**
+     * Pixel Y with newest at the top. When {@code months} lists the months that actually contain matches,
+     * empty months between them are omitted and each listed month gets an equal share of the track.
+     */
+    public static int yFromNewest(LocalDateTime time, LocalDateTime oldest, LocalDateTime newest,
+                                  List<YearMonth> months, int top, int height) {
+        double fromNewest = 1 - progress(time, oldest, newest, months);
         return top + (int) Math.round(fromNewest * Math.max(0, height - 1));
     }
 
     public static LocalDateTime timeFromNewest(double progressFromTop, LocalDateTime oldest, LocalDateTime newest) {
+        return timeFromNewest(progressFromTop, oldest, newest, List.of());
+    }
+
+    public static LocalDateTime timeFromNewest(double progressFromTop, LocalDateTime oldest, LocalDateTime newest,
+                                               List<YearMonth> months) {
+        if (months != null && months.size() >= 2) {
+            return timeFromCompressedMonths(progressFromTop, months);
+        }
         LocalDateTime first = earlier(oldest, newest);
         LocalDateTime last = later(oldest, newest);
         if (first == null || last == null) return first;
         double clamped = Math.clamp(progressFromTop, 0, 1);
         long millis = Math.round(Duration.between(first, last).toMillis() * (1 - clamped));
         return first.plus(Duration.ofMillis(millis));
+    }
+
+    public static double progress(LocalDateTime time, LocalDateTime oldest, LocalDateTime newest,
+                                  List<YearMonth> months) {
+        if (months != null && months.size() >= 2) {
+            return compressedProgress(time, months);
+        }
+        return progress(time, oldest, newest);
+    }
+
+    /**
+     * 0 at the start of the oldest listed month, 1 at the end of the newest. Each month occupies the same
+     * fraction of the track, so a year with no matches between two hits does not take space.
+     */
+    public static double compressedProgress(LocalDateTime time, List<YearMonth> months) {
+        if (time == null || months == null || months.isEmpty()) return 0;
+        YearMonth target = YearMonth.from(time);
+        int index = 0;
+        for (int i = 0; i < months.size(); i++) {
+            YearMonth month = months.get(i);
+            if (month.equals(target)) {
+                index = i;
+                break;
+            }
+            if (month.isBefore(target)) {
+                index = i;
+            } else {
+                break;
+            }
+        }
+        YearMonth month = months.get(index);
+        double fraction = 0;
+        if (month.equals(target)) {
+            LocalDateTime start = month.atDay(1).atStartOfDay();
+            LocalDateTime end = month.plusMonths(1).atDay(1).atStartOfDay();
+            double total = Duration.between(start, end).toMillis();
+            fraction = total <= 0 ? 0 : Duration.between(start, time).toMillis() / total;
+            fraction = Math.clamp(fraction, 0, 1);
+        } else if (target.isAfter(month)) {
+            fraction = 1;
+        }
+        return (index + fraction) / months.size();
+    }
+
+    static LocalDateTime timeFromCompressedMonths(double progressFromTop, List<YearMonth> months) {
+        double fromOldest = 1 - Math.clamp(progressFromTop, 0, 1);
+        double scaled = fromOldest * months.size();
+        int index = Math.min(months.size() - 1, (int) Math.floor(scaled));
+        if (index < 0) index = 0;
+        double fraction = Math.clamp(scaled - index, 0, 1);
+        if (index == months.size() - 1 && fromOldest >= 1) {
+            fraction = 1;
+        }
+        YearMonth month = months.get(index);
+        LocalDateTime start = month.atDay(1).atStartOfDay();
+        LocalDateTime end = month.plusMonths(1).atDay(1).atStartOfDay();
+        long millis = Math.round(Duration.between(start, end).toMillis() * fraction);
+        return start.plus(Duration.ofMillis(millis));
     }
 
     public static LocalDateTime oldest(List<LocalDateTime> times) {
@@ -97,6 +173,31 @@ public final class TimelineLayout {
         if (a == null) return b;
         if (b == null) return a;
         return a.isAfter(b) ? a : b;
+    }
+
+    /**
+     * One label per occupied month when there are a handful of them, otherwise years. Newest-at-top
+     * placement is done by {@link #spacedTicks}.
+     */
+    public static List<DateTick> ticks(List<YearMonth> months) {
+        if (months == null || months.isEmpty()) return List.of();
+        boolean multiYear = months.getFirst().getYear() != months.getLast().getYear();
+        if (months.size() > 36) {
+            List<DateTick> ticks = new ArrayList<>();
+            Integer previousYear = null;
+            for (YearMonth month : months) {
+                if (previousYear != null && previousYear == month.getYear()) continue;
+                ticks.add(new DateTick(month.atDay(1).atStartOfDay(), month.format(YEAR)));
+                previousYear = month.getYear();
+            }
+            return List.copyOf(ticks);
+        }
+        DateTimeFormatter format = multiYear || months.size() > 4 ? MONTH : DateTimeFormatter.ofPattern("MMM", Locale.US);
+        List<DateTick> ticks = new ArrayList<>(months.size());
+        for (YearMonth month : months) {
+            ticks.add(new DateTick(month.atDay(1).atStartOfDay(), month.format(format)));
+        }
+        return List.copyOf(ticks);
     }
 
     public static List<DateTick> ticks(LocalDateTime first, LocalDateTime last) {
@@ -138,23 +239,28 @@ public final class TimelineLayout {
      * Date labels placed along a newest-at-top track, spaced at least {@code minGapPx} apart so they stay readable.
      */
     public static List<DateTick> spacedTicks(LocalDateTime oldest, LocalDateTime newest, int height, int minGapPx) {
-        List<DateTick> raw = ticks(oldest, newest);
+        return spacedTicks(oldest, newest, List.of(), height, minGapPx);
+    }
+
+    public static List<DateTick> spacedTicks(LocalDateTime oldest, LocalDateTime newest, List<YearMonth> months,
+                                             int height, int minGapPx) {
+        List<DateTick> raw = months != null && months.size() >= 2 ? ticks(months) : ticks(oldest, newest);
         if (raw.isEmpty() || height <= 0 || minGapPx <= 0) return raw;
         List<DateTick> ordered = new ArrayList<>(raw);
         ordered.sort((a, b) -> Integer.compare(
-            yFromNewest(a.at(), oldest, newest, 0, height),
-            yFromNewest(b.at(), oldest, newest, 0, height)));
+            yFromNewest(a.at(), oldest, newest, months, 0, height),
+            yFromNewest(b.at(), oldest, newest, months, 0, height)));
         List<DateTick> kept = new ArrayList<>();
         int lastY = Integer.MIN_VALUE / 2;
         for (DateTick tick : ordered) {
-            int y = yFromNewest(tick.at(), oldest, newest, 0, height);
+            int y = yFromNewest(tick.at(), oldest, newest, months, 0, height);
             if (kept.isEmpty() || Math.abs(y - lastY) >= minGapPx) {
                 kept.add(tick);
                 lastY = y;
             }
         }
         DateTick last = ordered.getLast();
-        int lastTickY = yFromNewest(last.at(), oldest, newest, 0, height);
+        int lastTickY = yFromNewest(last.at(), oldest, newest, months, 0, height);
         if (!kept.getLast().equals(last) && Math.abs(lastTickY - lastY) >= minGapPx) {
             kept.add(last);
         }

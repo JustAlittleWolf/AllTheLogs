@@ -12,7 +12,7 @@ import java.util.function.ToIntFunction;
  */
 public final class MessageListLayout {
     public static final int ROW_HEIGHT = 12;
-    public static final int DATE_HEIGHT = 20;
+    public static final int DATE_HEIGHT = 16;
     public static final int DATE_GAP = 6;
     public static final int CLUSTER_GAP = 8;
 

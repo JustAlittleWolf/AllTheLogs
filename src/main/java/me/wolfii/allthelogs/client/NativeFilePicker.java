@@ -40,14 +40,66 @@ public final class NativeFilePicker {
     }
 
     private static void pick(Supplier<String> dialog, Consumer<Path> onPicked) {
-        Thread thread = new Thread(() -> {
-            String result = dialog.get();
-            if (result == null || result.isBlank()) return;
-            Path path = Path.of(result.strip());
-            Minecraft.getInstance().execute(() -> onPicked.accept(path));
-        }, "allthelogs-file-picker");
-        thread.setDaemon(true);
-        thread.start();
+        Minecraft client = Minecraft.getInstance();
+        client.execute(() -> {
+            boolean restoreFullscreen = leaveFullscreen(client);
+            client.mouseHandler.releaseMouse();
+            Thread thread = new Thread(() -> {
+                waitForWindowed(client, restoreFullscreen);
+                String result;
+                try {
+                    result = dialog.get();
+                } catch (RuntimeException failed) {
+                    result = null;
+                }
+                String chosen = result;
+                client.execute(() -> {
+                    if (chosen != null && !chosen.isBlank()) {
+                        onPicked.accept(Path.of(chosen.strip()));
+                    }
+                    restoreFullscreen(client, restoreFullscreen);
+                });
+            }, "allthelogs-file-picker");
+            thread.setDaemon(true);
+            thread.start();
+        });
+    }
+
+    static boolean leaveFullscreen(Minecraft client) {
+        if (client == null || client.getWindow() == null || !client.getWindow().isFullscreen()) {
+            return false;
+        }
+        client.getWindow().toggleFullScreen();
+        client.getWindow().updateFullscreenIfChanged();
+        return true;
+    }
+
+    static void restoreFullscreen(Minecraft client, boolean restore) {
+        if (!restore || client == null || client.getWindow() == null) return;
+        if (!client.getWindow().isFullscreen()) {
+            client.getWindow().toggleFullScreen();
+            client.getWindow().updateFullscreenIfChanged();
+        }
+    }
+
+    static void waitForWindowed(Minecraft client, boolean leftFullscreen) {
+        if (!leftFullscreen) {
+            sleep(50);
+            return;
+        }
+        for (int i = 0; i < 40; i++) {
+            if (client.getWindow() != null && !client.getWindow().isFullscreen()) break;
+            sleep(25);
+        }
+        sleep(75);
+    }
+
+    private static void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private static String selectFolder(Path start) {
