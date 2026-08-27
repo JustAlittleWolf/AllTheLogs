@@ -7,6 +7,7 @@ import me.wolfii.allthelogs.client.list.VisualMessage;
 import me.wolfii.allthelogs.client.list.MessageWrap;
 import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.LogSource;
+import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
@@ -139,14 +140,18 @@ public final class MessageText {
         String text = full.substring(start, end);
         if (text.isEmpty()) return Component.empty();
         boolean interpret = VisualMessage.interpretEscapes(row.chatLog());
+        int[] formatting = VisualMessage.remapFormatting(row.entry().message(), row.entry().formatting(), interpret);
         MutableComponent result = Component.empty();
         int runStart = 0;
-        int runColor = stackedColor(row, start, interpret);
+        int runFormat = PackedFormatting.at(formatting, start);
+        int runColor = stackedColor(row, start, interpret, runFormat);
         for (int i = 1; i <= text.length(); i++) {
-            int color = i < text.length() ? stackedColor(row, start + i, interpret) : runColor ^ 1;
-            if (color != runColor) {
-                result.append(colored(text.substring(runStart, i), runColor));
+            int format = i < text.length() ? PackedFormatting.at(formatting, start + i) : runFormat ^ 1;
+            int color = i < text.length() ? stackedColor(row, start + i, interpret, format) : runColor ^ 1;
+            if (color != runColor || format != runFormat) {
+                result.append(styled(text.substring(runStart, i), runColor, runFormat));
                 runStart = i;
+                runFormat = format;
                 runColor = color;
             }
         }
@@ -157,7 +162,15 @@ public final class MessageText {
      * Chat colour with match highlight, context dimming, and {@code \n} darkening multiplied in that order.
      */
     public static int stackedColor(DisplayRow row, int index, boolean interpretEscapes) {
-        int color = Colors.MATCH_TEXT;
+        int[] formatting = VisualMessage.remapFormatting(row.entry().message(), row.entry().formatting(),
+            interpretEscapes);
+        return stackedColor(row, index, interpretEscapes, PackedFormatting.at(formatting, index));
+    }
+
+    private static int stackedColor(DisplayRow row, int index, boolean interpretEscapes, int format) {
+        int color = PackedFormatting.hasColor(format)
+            ? 0xFF000000 | PackedFormatting.rgb(format)
+            : Colors.MATCH_TEXT;
         if (highlighted(row, index)) {
             color = Colors.multiply(color, Colors.MATCH_HIGHLIGHT);
         }
@@ -201,6 +214,16 @@ public final class MessageText {
 
     private static Component muted(Component component) {
         return component.copy().withStyle(Style.EMPTY.withColor(Colors.META_LABEL & 0xFFFFFF));
+    }
+
+    private static Component styled(String text, int argb, int format) {
+        Style style = Style.EMPTY.withColor(argb & 0xFFFFFF);
+        if (PackedFormatting.bold(format)) style = style.withBold(true);
+        if (PackedFormatting.italic(format)) style = style.withItalic(true);
+        if (PackedFormatting.underline(format)) style = style.withUnderlined(true);
+        if (PackedFormatting.strikethrough(format)) style = style.withStrikethrough(true);
+        if (PackedFormatting.obfuscated(format)) style = style.withObfuscated(true);
+        return Component.literal(text).withStyle(style);
     }
 
     private static Component colored(String text, int argb) {

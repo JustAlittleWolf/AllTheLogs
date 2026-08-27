@@ -35,15 +35,17 @@ public final class LogPreparer {
 
         List<LocalDateTime> times = new ArrayList<>(parsed.entries().size());
         List<String> messages = new ArrayList<>(parsed.entries().size());
+        List<int[]> formattings = new ArrayList<>(parsed.entries().size());
         for (ParsedLog.Entry entry : parsed.entries()) {
             times.add(LogDates.toSystemLocal(date, entry.time(), timezone));
             messages.add(entry.message());
+            formattings.add(entry.formatting());
         }
         LocalDateTime firstLineTime = LogDates.toSystemLocal(date, parsed.firstLineTime(), timezone);
         LocalDateTime lastLineTime = LogDates.toSystemLocal(date, parsed.lastLineTime(), timezone);
         return new PreparedLog(candidate.fileName(), candidate.sourceKind(), candidate.sourcePath(),
             candidate.entryPath(), date, parsed.minecraftVersion(),
-            times, messages, parsed.resourceManagerReloaded(),
+            times, messages, formattings, parsed.resourceManagerReloaded(),
             firstLineTime, lastLineTime, parsed.sessionId(), parsed.minecraftUser());
     }
 

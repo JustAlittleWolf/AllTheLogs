@@ -2,6 +2,9 @@ package me.wolfii.allthelogs.client.list;
 
 import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.LogSource;
+import me.wolfii.allthelogs.data.parse.PackedFormatting;
+
+import java.util.Arrays;
 
 /**
  * Turns a stored chat line into the string drawn in the list: trim each line, and turn a literal
@@ -17,14 +20,25 @@ public final class VisualMessage {
     }
 
     public static String visual(String message, boolean interpretEscapes) {
-        if (message == null || message.isEmpty()) return "";
-        String[] paragraphs = message.split("\n", -1);
-        StringBuilder out = new StringBuilder(message.length());
-        for (int i = 0; i < paragraphs.length; i++) {
-            if (i > 0) out.append('\n');
-            appendParagraph(out, paragraphs[i], interpretEscapes);
+        return layout(message, interpretEscapes).text();
+    }
+
+    /**
+     * Packed formatting remapped from stored-message offsets onto {@link #visual(String, boolean)}.
+     */
+    public static int[] remapFormatting(String message, int[] formatting, boolean interpretEscapes) {
+        if (formatting == null || formatting.length == 0) return null;
+        Layout layout = layout(message, interpretEscapes);
+        if (layout.text.isEmpty()) return null;
+        int[] stored = PackedFormatting.perChar(formatting, message == null ? 0 : message.length());
+        int[] visual = new int[layout.text.length()];
+        for (int i = 0; i < visual.length; i++) {
+            int storedIndex = layout.storedIndex[i];
+            if (storedIndex >= 0 && storedIndex < stored.length) {
+                visual[i] = stored[storedIndex];
+            }
         }
-        return trimNewlines(out.toString());
+        return PackedFormatting.pack(visual);
     }
 
     /**
@@ -47,26 +61,6 @@ public final class VisualMessage {
         return index + 2 >= visual.length() || visual.charAt(index + 2) == '\n';
     }
 
-    private static void appendParagraph(StringBuilder out, String paragraph, boolean interpretEscapes) {
-        if (!interpretEscapes) {
-            out.append(paragraph.trim());
-            return;
-        }
-        int from = 0;
-        boolean first = true;
-        while (from <= paragraph.length()) {
-            int escape = paragraph.indexOf("\\n", from);
-            String chunk = escape < 0 ? paragraph.substring(from) : paragraph.substring(from, escape);
-            if (!first) {
-                out.append("\\n\n");
-            }
-            out.append(chunk.trim());
-            first = false;
-            if (escape < 0) break;
-            from = escape + 2;
-        }
-    }
-
     /**
      * Strips leading and trailing newline characters from a display string. Literal {@code \n} tokens are kept.
      */
@@ -77,5 +71,79 @@ public final class VisualMessage {
         while (start < end && visual.charAt(start) == '\n') start++;
         while (end > start && visual.charAt(end - 1) == '\n') end--;
         return start == 0 && end == visual.length() ? visual : visual.substring(start, end);
+    }
+
+    private record Layout(String text, int[] storedIndex) {
+    }
+
+    private static final class Buffer {
+        private final StringBuilder text = new StringBuilder();
+        private int[] storedIndex = new int[32];
+
+        void append(char c, int stored) {
+            int size = text.length();
+            if (size == storedIndex.length) {
+                storedIndex = Arrays.copyOf(storedIndex, storedIndex.length + (storedIndex.length >> 1) + 8);
+            }
+            text.append(c);
+            storedIndex[size] = stored;
+        }
+
+        void appendTrimmed(String chunk, int chunkStart) {
+            int begin = 0;
+            int stop = chunk.length();
+            while (begin < stop && chunk.charAt(begin) <= ' ') begin++;
+            while (stop > begin && chunk.charAt(stop - 1) <= ' ') stop--;
+            for (int i = begin; i < stop; i++) {
+                append(chunk.charAt(i), chunkStart + i);
+            }
+        }
+
+        Layout trimmedNewlines() {
+            int start = 0;
+            int end = text.length();
+            while (start < end && text.charAt(start) == '\n') start++;
+            while (end > start && text.charAt(end - 1) == '\n') end--;
+            return new Layout(text.substring(start, end), Arrays.copyOfRange(storedIndex, start, end));
+        }
+    }
+
+    private static Layout layout(String message, boolean interpretEscapes) {
+        if (message == null || message.isEmpty()) return new Layout("", new int[0]);
+        Buffer buffer = new Buffer();
+        String[] paragraphs = message.split("\n", -1);
+        int paragraphStart = 0;
+        for (int i = 0; i < paragraphs.length; i++) {
+            if (i > 0) {
+                buffer.append('\n', paragraphStart - 1);
+            }
+            appendParagraph(buffer, paragraphs[i], paragraphStart, interpretEscapes);
+            paragraphStart += paragraphs[i].length() + 1;
+        }
+        return buffer.trimmedNewlines();
+    }
+
+    private static void appendParagraph(Buffer buffer, String paragraph, int paragraphStart,
+                                        boolean interpretEscapes) {
+        if (!interpretEscapes) {
+            buffer.appendTrimmed(paragraph, paragraphStart);
+            return;
+        }
+        int from = 0;
+        boolean first = true;
+        while (from <= paragraph.length()) {
+            int escape = paragraph.indexOf("\\n", from);
+            String chunk = escape < 0 ? paragraph.substring(from) : paragraph.substring(from, escape);
+            if (!first) {
+                int tokenAt = paragraphStart + from - 2;
+                buffer.append('\\', tokenAt);
+                buffer.append('n', tokenAt + 1);
+                buffer.append('\n', -1);
+            }
+            buffer.appendTrimmed(chunk, paragraphStart + from);
+            first = false;
+            if (escape < 0) break;
+            from = escape + 2;
+        }
     }
 }

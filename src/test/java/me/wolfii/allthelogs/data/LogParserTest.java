@@ -1,6 +1,7 @@
 package me.wolfii.allthelogs.data;
 
 import me.wolfii.allthelogs.data.parse.LogParser;
+import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import me.wolfii.allthelogs.data.parse.ParsedLog;
 import org.junit.jupiter.api.Test;
 
@@ -11,6 +12,7 @@ import java.time.LocalTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LogParserTest {
@@ -28,6 +30,10 @@ class LogParserTest {
                 """);
         assertEquals(List.of("hello", "[Click Here] to watch an ad"),
                 parsed.entries().stream().map(ParsedLog.Entry::message).toList());
+        assertNull(parsed.entries().getFirst().formatting());
+        int[] ad = parsed.entries().get(1).formatting();
+        assertEquals(PackedFormatting.color(0x55FF55), PackedFormatting.at(ad, 0));
+        assertEquals(PackedFormatting.color(0xAAAAAA), PackedFormatting.at(ad, 13));
         assertEquals(LocalTime.of(12, 16, 21), parsed.entries().getFirst().time());
         assertEquals(LocalTime.of(12, 16, 21), parsed.firstLineTime());
         assertEquals(LocalTime.of(12, 16, 23), parsed.lastLineTime());

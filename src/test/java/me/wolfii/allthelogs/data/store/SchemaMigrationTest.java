@@ -75,7 +75,7 @@ class SchemaMigrationTest {
                     TIMESTAMP '2026-08-24 10:00:00', TIMESTAMP '2026-08-24 10:00:10', 1, NULL)""");
             statement.execute("""
                 INSERT INTO chat_entry VALUES (
-                    1, 0, TIMESTAMP '2026-08-24 10:00:10', 'hello from legacy')""");
+                    1, 0, TIMESTAMP '2026-08-24 10:00:10', 'hello from legacy', NULL)""");
             statement.execute("DROP TABLE IF EXISTS " + SchemaMigration.META_TABLE);
         }
 
@@ -138,6 +138,13 @@ class SchemaMigrationTest {
             try (ResultSet result = statement.executeQuery("""
                 SELECT count(*) FROM information_schema.columns
                 WHERE table_name = 'log_file' AND column_name = 'minecraft_user'
+                """)) {
+                result.next();
+                assertEquals(1, result.getLong(1));
+            }
+            try (ResultSet result = statement.executeQuery("""
+                SELECT count(*) FROM information_schema.columns
+                WHERE table_name = 'chat_entry' AND column_name = 'formatting'
                 """)) {
                 result.next();
                 assertEquals(1, result.getLong(1));

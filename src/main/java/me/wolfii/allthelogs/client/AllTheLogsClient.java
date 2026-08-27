@@ -34,7 +34,7 @@ public final class AllTheLogsClient implements ClientModInitializer {
     }
 
     private static void capture(Component message) {
-        worker.importSessionMessage(message.getString());
+        worker.importSessionMessage(message);
     }
 
     private static CompletableFuture<Void> importCurrentLogs() {

@@ -1,6 +1,8 @@
 package me.wolfii.allthelogs.client;
 
 import me.wolfii.allthelogs.data.*;
+import me.wolfii.allthelogs.data.parse.FormattingCodes;
+import net.minecraft.network.chat.Component;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -61,6 +63,16 @@ public final class LogStoreWorker implements AutoCloseable {
     /**
      * Queues a live chat line. Returns immediately; the insert runs on the worker.
      */
+    public void importSessionMessage(Component message) {
+        FormattingCodes.Parsed flat = ComponentFormatting.flatten(message);
+        String text = flat.text();
+        int[] formatting = flat.formatting() == null ? null : flat.formatting().clone();
+        executor.execute(() -> {
+            if (store == null) return;
+            store.importSessionMessage(text, formatting);
+        });
+    }
+
     public void importSessionMessage(String message) {
         String copy = Objects.requireNonNull(message, "message");
         executor.execute(() -> {

@@ -1,6 +1,7 @@
 package me.wolfii.allthelogs.data.query;
 
 import me.wolfii.allthelogs.data.*;
+import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import me.wolfii.allthelogs.data.store.SessionMarker;
 import me.wolfii.allthelogs.data.store.SourceKind;
 import org.duckdb.*;
@@ -163,7 +164,7 @@ public final class ChatQueries {
     }
 
     private static final String SELECT_AROUND = """
-        SELECT e.file_id, e.entry_time, e.line_index, e.message
+        SELECT e.file_id, e.entry_time, e.line_index, e.message, to_json(e.formatting)
         FROM chat_entry e
         JOIN log_file f ON f.id = e.file_id
         WHERE f.source_path = ? AND f.entry_path = ? AND e.line_index BETWEEN ? AND ?
@@ -294,6 +295,7 @@ public final class ChatQueries {
     private static final class ResultRows {
         private final ArrayList<LocalDateTime> timestamps;
         private final ArrayList<String> messages;
+        private final ArrayList<int[]> formattings;
         private final Set<Long> neededFileIds = new HashSet<>();
         private long[] fileIds;
         private int[] lineIndices;
@@ -305,6 +307,7 @@ public final class ChatQueries {
             this.lineIndices = new int[cap];
             this.timestamps = new ArrayList<>(cap);
             this.messages = new ArrayList<>(cap);
+            this.formattings = new ArrayList<>(cap);
         }
 
         Set<Long> neededFileIds() {
@@ -316,6 +319,7 @@ public final class ChatQueries {
             DuckDBReadableVector times = chunk.vector(1);
             DuckDBReadableVector lines = chunk.vector(2);
             DuckDBReadableVector texts = chunk.vector(3);
+            DuckDBReadableVector formats = chunk.vector(4);
             int rows = Math.toIntExact(chunk.rowCount());
             ensureRoom(rows);
             long previousFileId = size == 0 ? Long.MIN_VALUE : fileIds[size - 1];
@@ -325,6 +329,7 @@ public final class ChatQueries {
                 lineIndices[size] = lines.getInt(row);
                 timestamps.add(times.getLocalDateTime(row));
                 messages.add(texts.getString(row));
+                formattings.add(formats.isNull(row) ? null : PackedFormatting.fromSqlLiteral(formats.getString(row)));
                 if (fileId != previousFileId) {
                     neededFileIds.add(fileId);
                     previousFileId = fileId;
@@ -345,7 +350,7 @@ public final class ChatQueries {
                     }
                     previousFileId = fileId;
                 }
-                entries.add(new ChatEntry(log, timestamps.get(i), lineIndices[i], messages.get(i)));
+                entries.add(new ChatEntry(log, timestamps.get(i), lineIndices[i], messages.get(i), formattings.get(i)));
             }
         }
 

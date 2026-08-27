@@ -11,7 +11,7 @@ import java.sql.Statement;
  * <ul>
  *   <li>1 — initial {@link Schema} layout ({@code log_file}, {@code chat_entry}, location index).
  *       {@code log_file.minecraft_user} is added with {@code ALTER TABLE ... IF NOT EXISTS} and does not bump this
- *       version.</li>
+ *       version. {@code chat_entry.formatting} is added the same way.</li>
  * </ul>
  * <p>
  * To bump the schema:

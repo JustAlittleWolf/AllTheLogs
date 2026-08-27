@@ -32,7 +32,8 @@ public final class Schema {
                 file_id BIGINT NOT NULL,
                 line_index INTEGER NOT NULL,
                 entry_time TIMESTAMP NOT NULL,
-                message VARCHAR NOT NULL
+                message VARCHAR NOT NULL,
+                formatting INTEGER[]
             )""");
         statement.execute("CREATE UNIQUE INDEX IF NOT EXISTS log_file_location ON log_file (source_path, entry_path)");
         ensureOptionalColumns(statement);
@@ -44,6 +45,7 @@ public final class Schema {
      */
     public static void ensureOptionalColumns(Statement statement) throws SQLException {
         statement.execute("ALTER TABLE log_file ADD COLUMN IF NOT EXISTS minecraft_user VARCHAR");
+        statement.execute("ALTER TABLE chat_entry ADD COLUMN IF NOT EXISTS formatting INTEGER[]");
     }
 
     /**
@@ -61,7 +63,7 @@ public final class Schema {
         statement.execute("DROP TABLE IF EXISTS chat_entry_sorted");
         statement.execute("""
             CREATE TABLE chat_entry_sorted AS
-            SELECT file_id, line_index, entry_time, message
+            SELECT file_id, line_index, entry_time, message, formatting
             FROM chat_entry
             ORDER BY entry_time, file_id, line_index""");
         statement.execute("DROP TABLE chat_entry");

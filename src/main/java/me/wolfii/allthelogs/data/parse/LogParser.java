@@ -117,7 +117,10 @@ public final class LogParser {
         }
         if (pending != null) entries.add(new ParsedLog.Entry(pendingTime, pending.toString()));
 
-        entries.replaceAll(entry -> new ParsedLog.Entry(entry.time(), FormattingCodes.strip(entry.message())));
+        entries.replaceAll(entry -> {
+            FormattingCodes.Parsed parsed = FormattingCodes.parse(entry.message());
+            return new ParsedLog.Entry(entry.time(), parsed.text(), parsed.formatting());
+        });
         return new ParsedLog(version == null ? ChatLog.UNKNOWN_VERSION : version, minecraftUser, entries,
             resourceManagerReloaded, firstLineTime, lastLineTime, sessionId);
     }
