@@ -557,7 +557,7 @@ public final class MessageTimeline extends BaseUIComponent {
         int labelY = Math.clamp(mouseY - labelHeight / 2, y, y + height - labelHeight);
         int labelX = trackX - 6 - labelWidth;
         HoverChip.fill(graphics, labelX, labelY, labelWidth, labelHeight, HOVER_BG);
-        graphics.drawText(Component.literal(label), labelX + 5, labelY + 3, 0.85f, TEXT);
+        graphics.drawText(Component.literal(label), labelX + 5, labelY + 3, 1.0f, TEXT);
     }
 
     private void drawDateTicks(OwoUIGraphics graphics, int trackX, LocalDateTime oldest, LocalDateTime newest) {
@@ -565,7 +565,7 @@ public final class MessageTimeline extends BaseUIComponent {
             int tickY = TimelineLayout.yFromNewest(tick.at(), oldest, newest, matchMonths, y, height);
             graphics.fill(trackX + 2, tickY, trackX + TRACK_WIDTH - 2, tickY + 1, TICK_DOT);
             graphics.drawText(Component.literal(tick.label()), trackX - 3, tickY + TICK_LABEL_OFFSET,
-                0.7f, TICK_LABEL, OwoUIGraphics.TextAnchor.BOTTOM_RIGHT);
+                0.75f, TICK_LABEL, OwoUIGraphics.TextAnchor.BOTTOM_RIGHT);
         }
     }
 
