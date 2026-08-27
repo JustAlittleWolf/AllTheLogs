@@ -11,7 +11,9 @@ import me.wolfii.allthelogs.client.list.MessageListLayout;
 import me.wolfii.allthelogs.client.list.MessageSelection;
 import me.wolfii.allthelogs.client.list.MessageWrap;
 import me.wolfii.allthelogs.client.list.ResultWindow;
+import me.wolfii.allthelogs.client.timeline.ScrubJump;
 import me.wolfii.allthelogs.client.timeline.ScrubberGeometry;
+import me.wolfii.allthelogs.client.timeline.TimelineEdge;
 import me.wolfii.allthelogs.client.timeline.TimelineScale;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
 import me.wolfii.allthelogs.data.MatchDay;
@@ -72,11 +74,11 @@ public final class MessageTimeline extends BaseUIComponent {
     private double clickX;
     private double clickY;
 
-    private Consumer<Edge> onApproachEdge = edge -> {
+    private Consumer<TimelineEdge> onApproachEdge = edge -> {
     };
     private BiConsumer<ScrubJump, Boolean> onJump = (jump, preview) -> {
     };
-    private BiConsumer<DisplayRow, Edge> onExpand = (row, side) -> {
+    private BiConsumer<DisplayRow, TimelineEdge> onExpand = (row, side) -> {
     };
     private Runnable onScrubBegin = () -> {
     };
@@ -87,7 +89,7 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     /**
-     * Top half of a row expands toward the top of the list ({@link Edge#BEFORE}).
+     * Top half of a row expands toward the top of the list ({@link TimelineEdge#BEFORE}).
      */
     static boolean clickInTopHalf(double contentY, int rowTop, int rowHeight) {
         return contentY < rowTop + rowHeight / 2.0;
@@ -97,7 +99,7 @@ public final class MessageTimeline extends BaseUIComponent {
         return window;
     }
 
-    public void onApproachEdge(Consumer<Edge> onApproachEdge) {
+    public void onApproachEdge(Consumer<TimelineEdge> onApproachEdge) {
         this.onApproachEdge = onApproachEdge;
     }
 
@@ -105,7 +107,7 @@ public final class MessageTimeline extends BaseUIComponent {
         this.onJump = onJump;
     }
 
-    public void onExpand(BiConsumer<DisplayRow, Edge> onExpand) {
+    public void onExpand(BiConsumer<DisplayRow, TimelineEdge> onExpand) {
         this.onExpand = onExpand;
     }
 
@@ -690,15 +692,15 @@ public final class MessageTimeline extends BaseUIComponent {
     private void maybeRequestMore() {
         if (status.loading() || scrub.dragging() || window.rows().isEmpty()) return;
         if (window.hasBefore() && firstVisibleIndex() <= EDGE_ROWS - 1) {
-            onApproachEdge.accept(Edge.BEFORE);
+            onApproachEdge.accept(TimelineEdge.BEFORE);
         } else if (window.hasAfter() && lastVisibleIndex() >= window.rows().size() - EDGE_ROWS) {
-            onApproachEdge.accept(Edge.AFTER);
+            onApproachEdge.accept(TimelineEdge.AFTER);
         }
     }
 
-    private Edge expandSide(int row, double localY) {
+    private TimelineEdge expandSide(int row, double localY) {
         int contentY = view().contentY(localY);
-        return clickInTopHalf(contentY, layout.rowY(row), layout.rowHeight(row)) ? Edge.BEFORE : Edge.AFTER;
+        return clickInTopHalf(contentY, layout.rowY(row), layout.rowHeight(row)) ? TimelineEdge.BEFORE : TimelineEdge.AFTER;
     }
 
     private int charAt(int row, double localX, double localY) {
@@ -730,22 +732,5 @@ public final class MessageTimeline extends BaseUIComponent {
 
     private static Font font() {
         return Minecraft.getInstance().font;
-    }
-
-    /**
-     * Which end of the buffer a request is for.
-     */
-    public enum Edge {
-        BEFORE, AFTER
-    }
-
-    /**
-     * Where a scrubber drag wants the list to land.
-     *
-     * @param time     target timestamp, or {@code null} when only {@code skip} can address it
-     * @param skip     match rank to skip to for a day collapsed onto one timestamp, or {@code -1} to jump by time
-     * @param progress 0–1 position along the track, used to restore the scroll offset once the page arrives
-     */
-    public record ScrubJump(LocalDateTime time, long skip, double progress) {
     }
 }

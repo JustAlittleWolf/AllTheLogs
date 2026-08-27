@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.client.ui.widget;
 
+import me.wolfii.allthelogs.client.timeline.ScrubJump;
 import me.wolfii.allthelogs.client.timeline.ScrubberGeometry;
 
 import java.util.Objects;
@@ -24,7 +25,7 @@ final class ScrubDrag {
     private int capturedThumbHeight;
     private long lastPreviewAtMs;
     private boolean previewInFlight;
-    private MessageTimeline.ScrubJump lastSentJump;
+    private ScrubJump lastSentJump;
 
     /**
      * Preview jumps while the thumb is held: at most one in-flight store query, at least
@@ -32,13 +33,13 @@ final class ScrubDrag {
      * parked thumb can catch up.
      */
     static boolean shouldSendPreviewQuery(boolean inFlight, long nowMs, long lastQueryMs,
-                                          int throttleMs, MessageTimeline.ScrubJump requested,
-                                          MessageTimeline.ScrubJump lastSent) {
+                                          int throttleMs, ScrubJump requested,
+                                          ScrubJump lastSent) {
         if (inFlight || nowMs - lastQueryMs < throttleMs) return false;
         return !sameTarget(requested, lastSent);
     }
 
-    static boolean sameTarget(MessageTimeline.ScrubJump left, MessageTimeline.ScrubJump right) {
+    static boolean sameTarget(ScrubJump left, ScrubJump right) {
         if (left == right) return true;
         if (left == null || right == null) return false;
         return left.skip() == right.skip()
@@ -140,7 +141,7 @@ final class ScrubDrag {
     /**
      * Whether a preview query for {@code jump} should be sent now. Records it as in flight when it should.
      */
-    boolean claimPreview(MessageTimeline.ScrubJump jump) {
+    boolean claimPreview(ScrubJump jump) {
         long now = System.currentTimeMillis();
         if (!shouldSendPreviewQuery(previewInFlight, now, lastPreviewAtMs, PREVIEW_THROTTLE_MS, jump, lastSentJump)) {
             return false;
@@ -151,7 +152,7 @@ final class ScrubDrag {
         return true;
     }
 
-    void markCommitted(MessageTimeline.ScrubJump jump) {
+    void markCommitted(ScrubJump jump) {
         lastSentJump = jump;
     }
 }

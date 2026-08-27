@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.client.ui.widget;
 
+import me.wolfii.allthelogs.client.timeline.ScrubJump;
 import me.wolfii.allthelogs.client.list.MessageListLayout;
 import org.junit.jupiter.api.Test;
 
@@ -34,8 +35,8 @@ class MessageTimelineTest {
 
     @Test
     void previewScrubWaitsForThePreviousQueryAndTheThrottle() {
-        MessageTimeline.ScrubJump first = new MessageTimeline.ScrubJump(LocalDateTime.of(2026, 1, 1, 0, 0), 0, 0.2);
-        MessageTimeline.ScrubJump later = new MessageTimeline.ScrubJump(LocalDateTime.of(2026, 1, 2, 0, 0), 10, 0.8);
+        ScrubJump first = new ScrubJump(LocalDateTime.of(2026, 1, 1, 0, 0), 0, 0.2);
+        ScrubJump later = new ScrubJump(LocalDateTime.of(2026, 1, 2, 0, 0), 10, 0.8);
         assertTrue(ScrubDrag.shouldSendPreviewQuery(false, 100, 0, 100, first, null));
         assertFalse(ScrubDrag.shouldSendPreviewQuery(true, 200, 100, 100, later, first));
         assertFalse(ScrubDrag.shouldSendPreviewQuery(false, 199, 100, 100, later, first));
@@ -44,11 +45,11 @@ class MessageTimelineTest {
 
     @Test
     void parkedThumbStillRequestsAfterTheThrottleWhenTheTargetMoved() {
-        MessageTimeline.ScrubJump sent = new MessageTimeline.ScrubJump(LocalDateTime.of(2026, 1, 1, 0, 0), 0, 0.2);
-        MessageTimeline.ScrubJump parked = new MessageTimeline.ScrubJump(LocalDateTime.of(2026, 1, 1, 12, 0), 5, 0.5);
+        ScrubJump sent = new ScrubJump(LocalDateTime.of(2026, 1, 1, 0, 0), 0, 0.2);
+        ScrubJump parked = new ScrubJump(LocalDateTime.of(2026, 1, 1, 12, 0), 5, 0.5);
         assertFalse(ScrubDrag.shouldSendPreviewQuery(false, 200, 100, 100, sent, sent));
         assertTrue(ScrubDrag.shouldSendPreviewQuery(false, 200, 100, 100, parked, sent));
-        assertTrue(ScrubDrag.sameTarget(sent, new MessageTimeline.ScrubJump(sent.time(), sent.skip(), sent.progress())));
+        assertTrue(ScrubDrag.sameTarget(sent, new ScrubJump(sent.time(), sent.skip(), sent.progress())));
         assertFalse(ScrubDrag.sameTarget(sent, parked));
     }
 }

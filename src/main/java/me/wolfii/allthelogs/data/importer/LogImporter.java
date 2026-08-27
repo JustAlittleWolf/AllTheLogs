@@ -9,6 +9,7 @@ import me.wolfii.allthelogs.data.store.LogWriter;
 import me.wolfii.allthelogs.data.store.PreparedLog;
 import me.wolfii.allthelogs.data.store.Schema;
 import me.wolfii.allthelogs.data.store.SourceKind;
+import me.wolfii.allthelogs.data.store.StoredSources;
 import org.duckdb.DuckDBConnection;
 
 import java.io.IOException;
@@ -44,11 +45,7 @@ public final class LogImporter {
     }
 
     private static LogSource sourceOf(PreparedLog log) {
-        return switch (log.sourceKind()) {
-            case FILE -> new LogSource.File(Path.of(log.sourcePath()));
-            case ARCHIVE -> new LogSource.Archive(Path.of(log.sourcePath()), log.entryPath());
-            case SESSION -> new LogSource.Session(log.sessionId());
-        };
+        return StoredSources.fromPrepared(log);
     }
 
     private static String failurePath(LogCandidate candidate) {
