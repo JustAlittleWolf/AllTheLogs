@@ -287,7 +287,8 @@ class ImportProgressTest {
 
         LogFixtures.writeGzipped(root.resolve("logs"), "2026-08-26-1.log.gz",
             LogFixtures.modernLog("26.2", "second pass"));
-        ImportResult second = store.importDirectory(root, ImportOptions.defaults().withOptimize(false));
+        ImportResult second = store.importDirectory(root,
+            ImportOptions.defaults().withOptimize(false).withSkipAlreadyImported(true));
 
         assertEquals(1, second.importedFiles());
         List<String> messages = store.allEntries().stream().map(ChatEntry::message).toList();
