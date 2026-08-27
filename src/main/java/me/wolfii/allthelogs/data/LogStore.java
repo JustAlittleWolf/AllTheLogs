@@ -30,7 +30,7 @@ import java.util.function.Consumer;
  *             ImportOptions.defaults().withPathMatcher("**" + "/logs/**"),
  *             progress -> System.out.println(progress.completedFiles() + "/" + progress.discoveredFiles()
  *                     + " " + progress.current()));
- *     List<ChatEntry> hits = store.query(ChatQuery.all().withSubstring("welcome").withContextLines(2));
+ *     List<ChatEntry> hits = store.findEntries(ChatQuery.all().withSubstring("welcome").withContextLines(2));
  * }
  *}
  * <p>
@@ -295,49 +295,49 @@ public final class LogStore implements AutoCloseable {
      *
      * @throws LogDataException if the query is rejected, e.g. because its regex is malformed
      */
-    public List<ChatEntry> query(ChatQuery query) {
+    public List<ChatEntry> findEntries(ChatQuery query) {
         Objects.requireNonNull(query, "query");
-        return queries.query(query);
+        return queries.findEntries(query);
     }
 
     /**
      * Unpaged match count, first/last timestamps, and per-day counts for {@code query}. Ignores paging
      * and context. One date aggregation, not a load of every matching row.
      */
-    public MatchSummary summarize(ChatQuery query) {
+    public MatchSummary summarizeMatches(ChatQuery query) {
         Objects.requireNonNull(query, "query");
-        return queries.summarize(query);
+        return queries.summarizeMatches(query);
     }
 
     /**
      * Number of matching entries for {@code query}. Honours offset and limit; ignores context lines.
      * Callers that want every match for a filter should drop the page offset and pass a negative limit.
      */
-    public long matches(ChatQuery query) {
+    public long countMatches(ChatQuery query) {
         Objects.requireNonNull(query, "query");
-        return queries.matches(query);
+        return queries.countMatches(query);
     }
 
     /**
      * Chat lines from {@code log} within {@code radius} of {@code lineIndex}, inclusive of the centre line.
      */
-    public List<ChatEntry> around(ChatLog log, int lineIndex, int radius) {
-        return around(log, lineIndex, radius, radius);
+    public List<ChatEntry> entriesAround(ChatLog log, int lineIndex, int radius) {
+        return entriesAround(log, lineIndex, radius, radius);
     }
 
     /**
      * Chat lines from {@code log} between {@code lineIndex - before} and {@code lineIndex + after}.
      */
-    public List<ChatEntry> around(ChatLog log, int lineIndex, int before, int after) {
+    public List<ChatEntry> entriesAround(ChatLog log, int lineIndex, int before, int after) {
         Objects.requireNonNull(log, "log");
-        return queries.around(log, lineIndex, before, after);
+        return queries.entriesAround(log, lineIndex, before, after);
     }
 
     /**
-     * Returns every stored entry, oldest first. Convenience for {@code query(ChatQuery.all())}.
+     * Returns every stored entry, oldest first. Convenience for {@code findEntries(ChatQuery.all())}.
      */
-    public List<ChatEntry> chatEntries() {
-        return query(ChatQuery.all());
+    public List<ChatEntry> allEntries() {
+        return findEntries(ChatQuery.all());
     }
 
     /**

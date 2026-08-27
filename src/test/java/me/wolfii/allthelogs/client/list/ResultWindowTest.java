@@ -6,7 +6,6 @@ import me.wolfii.allthelogs.data.LogSource;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -19,7 +18,7 @@ class ResultWindowTest {
     void replacingThePageKeepsTheAnchorRowAtTheSameScreenPosition() {
         double scrollY = 10;
         int rowHeight = 12;
-        double newScroll = ResultWindow.keepAnchor(2, 0, 2 * rowHeight, 0, scrollY);
+        double newScroll = ResultWindow.keepAnchor(2, 0, 2 * rowHeight, 0, scrollY, 0, 0);
         assertEquals(2 * rowHeight - scrollY, 0 * rowHeight - newScroll, 0.001);
         assertEquals(0, ResultWindow.keepAnchor(0, 4, 0, 80, 0, 80, 0), 0.001);
         assertEquals(320, ResultWindow.keepAnchor(0, 4, 0, 400, 0, 80, 0), 0.001);
@@ -32,20 +31,20 @@ class ResultWindowTest {
             rows.add(row("a.log", i));
         }
         // Visible rows 6-8, limit 4 matches → keep a window covering 6-8.
-        List<DisplayRow> trimmed = ResultWindow.trimToMatchLimit(rows, 4, 6, 8);
+        List<DisplayRow> trimmed = DisplayRows.trimToMatchLimit(rows, 4, 6, 8);
         assertEquals(List.of(5, 6, 7, 8), trimmed.stream().map(DisplayRow::lineIndex).toList());
         List<DisplayRow> merged = new java.util.ArrayList<>();
         for (int i = 0; i < 10; i++) {
             merged.add(row("a.log", i));
         }
-        assertTrue(ResultWindow.trimmedHead(merged, trimmed));
-        assertTrue(ResultWindow.trimmedTail(merged, trimmed));
+        assertTrue(DisplayRows.trimmedHead(merged, trimmed));
+        assertTrue(DisplayRows.trimmedTail(merged, trimmed));
     }
 
     @Test
     void matchCountCountsOnlyHits() {
         List<DisplayRow> rows = List.of(row("a.log", 0), row("a.log", 1));
-        assertEquals(2, ResultWindow.matchCount(rows));
+        assertEquals(2, DisplayRows.matchCount(rows));
         ResultWindow window = new ResultWindow();
         window.reset(rows, false, false);
         assertEquals(2, window.matchCount());
@@ -79,7 +78,7 @@ class ResultWindowTest {
     @Test
     void reverseRestoresChronologicalOrderAfterABackwardFetch() {
         List<DisplayRow> newestFirst = List.of(row("a.log", 5), row("a.log", 4), row("a.log", 3));
-        List<DisplayRow> chronological = ResultWindow.reversed(newestFirst);
+        List<DisplayRow> chronological = DisplayRows.reversed(newestFirst);
         assertEquals(List.of(3, 4, 5), chronological.stream().map(DisplayRow::lineIndex).toList());
     }
 
@@ -88,7 +87,7 @@ class ResultWindowTest {
         LocalDateTime time = LocalDateTime.of(2026, 8, 26, 10, 0);
         DisplayRow first = rowAt(time, 1);
         DisplayRow second = rowAt(time, 4);
-        List<DisplayRow> merged = ResultWindow.mergeSorted(List.of(second), List.of(first),
+        List<DisplayRow> merged = DisplayRows.mergeSorted(List.of(second), List.of(first),
             me.wolfii.allthelogs.data.ChatQuery.Sort.ASCENDING);
         assertEquals(List.of(1, 4), merged.stream().map(DisplayRow::lineIndex).toList());
     }
@@ -104,6 +103,6 @@ class ResultWindowTest {
     private static DisplayRow rowAt(LocalDateTime time, int line, String file) {
         ChatLog log = new ChatLog(new LogSource.File(Path.of(file)), time.toLocalDate(), "26.2", time, time);
         ChatEntry entry = new ChatEntry(log, time, line, "msg-" + line);
-        return new DisplayRow(entry, true, Duration.ZERO, List.of());
+        return new DisplayRow(entry, true, List.of());
     }
 }

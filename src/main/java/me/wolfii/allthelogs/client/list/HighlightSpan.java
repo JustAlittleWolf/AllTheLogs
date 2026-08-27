@@ -9,8 +9,4 @@ public record HighlightSpan(int start, int end) {
             throw new IllegalArgumentException("invalid span [" + start + ", " + end + ")");
         }
     }
-
-    public int length() {
-        return end - start;
-    }
 }

@@ -22,9 +22,7 @@
 	"allthelogs.import.drop_hint": "Or drop a folder or zip onto this window",
 	"allthelogs.import.dialog.folder": "Choose a log folder",
 	"allthelogs.import.dialog.archive": "Choose a log archive",
-	"allthelogs.import.path": "Path",
 	"allthelogs.import.advanced": "Advanced",
-	"allthelogs.import.common": "Common log directories",
 	"allthelogs.import.recursive": "Recursive",
 	"allthelogs.import.nested_archives": "Nested archives",
 	"allthelogs.import.skip_imported": "Skip already imported",
@@ -62,9 +60,7 @@
 	"allthelogs.import.progress.counts": "%s / %s files (%s%%)",
 	"allthelogs.import.progress.current": "Current: %s",
 	"allthelogs.import.progress.done": "Import finished",
-	"allthelogs.import.progress.back": "Back",
 	"allthelogs.import.progress.cancel": "Cancel",
 	"allthelogs.import.progress.cancelling": "Cancelling...",
-	"allthelogs.import.progress.cancelled": "Cancelled after %s files, %s entries",
-	"allthelogs.command.opened": "Opened AllTheLogs"
+	"allthelogs.import.progress.cancelled": "Cancelled after %s files, %s entries"
 }

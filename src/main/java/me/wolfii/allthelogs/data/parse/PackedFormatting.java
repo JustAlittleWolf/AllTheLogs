@@ -30,7 +30,6 @@ public final class PackedFormatting {
     public static final int UNDERLINE = 1 << 27;
     public static final int STRIKETHROUGH = 1 << 28;
     public static final int OBFUSCATED = 1 << 29;
-    private static final int STYLE_MASK = BOLD | ITALIC | UNDERLINE | STRIKETHROUGH | OBFUSCATED;
     private static final int RANGE_MASK = 0xFFFF;
 
     private PackedFormatting() {
@@ -38,10 +37,6 @@ public final class PackedFormatting {
 
     public static int color(int rgb) {
         return (rgb & 0xFFFFFF) | HAS_COLOR;
-    }
-
-    public static int withStyle(int format, int flags) {
-        return format | (flags & STYLE_MASK);
     }
 
     public static boolean isEmpty(int format) {

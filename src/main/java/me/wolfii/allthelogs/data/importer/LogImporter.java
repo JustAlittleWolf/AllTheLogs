@@ -74,10 +74,6 @@ public final class LogImporter {
     /**
      * Imports every matching log file under {@code directory}.
      */
-    public ImportResult importDirectory(Path directory, ImportOptions options, Consumer<ImportProgress> progress) {
-        return importDirectory(directory, options, progress, () -> false);
-    }
-
     public ImportResult importDirectory(Path directory, ImportOptions options, Consumer<ImportProgress> progress,
                                         BooleanSupplier cancelled) {
         int estimate = FileCountEstimator.estimateDirectory(directory, options);
@@ -87,10 +83,6 @@ public final class LogImporter {
     /**
      * Imports every matching log file inside {@code archive}.
      */
-    public ImportResult importArchive(Path archive, ImportOptions options, Consumer<ImportProgress> progress) {
-        return importArchive(archive, options, progress, () -> false);
-    }
-
     public ImportResult importArchive(Path archive, ImportOptions options, Consumer<ImportProgress> progress,
                                       BooleanSupplier cancelled) {
         int estimate = FileCountEstimator.estimateArchive(archive, options);

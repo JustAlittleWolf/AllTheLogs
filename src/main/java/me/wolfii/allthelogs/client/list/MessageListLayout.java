@@ -3,7 +3,6 @@ package me.wolfii.allthelogs.client.list;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.ToIntFunction;
 
 /**
  * Vertical layout for the virtualised message list: a sticky date header for each calendar day, a larger gap
@@ -28,14 +27,11 @@ public final class MessageListLayout {
         this.contentHeight = contentHeight;
     }
 
+    /**
+     * Lays out rows without measuring text, for callers that only need the unwrapped content height.
+     */
     public static MessageListLayout of(List<DisplayRow> rows, int contextLines) {
         return of(rows, contextLines, Integer.MAX_VALUE, (row, from, to) -> to - from);
-    }
-
-    public static MessageListLayout of(List<DisplayRow> rows, int contextLines, int messageWidth,
-                                       ToIntFunction<String> widthOf) {
-        return of(rows, contextLines, messageWidth,
-            (row, from, to) -> widthOf.applyAsInt(row.message().substring(from, to)));
     }
 
     /**
@@ -59,7 +55,7 @@ public final class MessageListLayout {
                 if (previousDate != null) {
                     y += DATE_GAP;
                 }
-                dates.add(new DateBand(date, y, i));
+                dates.add(new DateBand(date, y));
                 y += DATE_HEIGHT;
                 previousDate = date;
             } else if (i > 0 && needsClusterGap(rows.get(i - 1), row, contextLines)) {
@@ -188,6 +184,9 @@ public final class MessageListLayout {
         int width(DisplayRow row, int from, int to);
     }
 
-    public record DateBand(LocalDate date, int y, int firstRow) {
+    /**
+     * A calendar day's sticky header at content-y {@code y}.
+     */
+    public record DateBand(LocalDate date, int y) {
     }
 }

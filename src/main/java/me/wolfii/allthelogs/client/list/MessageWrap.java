@@ -8,21 +8,36 @@ import java.util.function.ToIntFunction;
 /**
  * Wraps a chat line to a pixel width and maps pointer coordinates onto character indexes using prefix widths,
  * so selection matches what is drawn. Hard newlines in the stored message become their own visual rows.
+ * <p>
+ * Every entry point measures through one {@link RangeWidth}. Build one with {@link #prefixWidths} when
+ * per-character advances are already known, or with {@link #substringWidths} when only a whole-string
+ * measurement is available.
  */
 public final class MessageWrap {
     private MessageWrap() {
     }
 
-    public static List<String> lines(String text, int maxWidth, ToIntFunction<String> widthOf) {
-        return wrap(text, maxWidth, widthOf).stream().map(Line::text).toList();
+    /**
+     * Range widths from one pass over per-character advances, so wrapping does not remeasure prefixes.
+     */
+    public static RangeWidth prefixWidths(int length, IntUnaryOperator charWidth) {
+        int size = Math.max(0, length);
+        int[] prefix = new int[size + 1];
+        for (int i = 0; i < size; i++) {
+            prefix[i + 1] = prefix[i] + charWidth.applyAsInt(i);
+        }
+        return (from, to) -> {
+            int start = Math.clamp(from, 0, size);
+            int end = Math.clamp(to, 0, size);
+            return end > start ? prefix[end] - prefix[start] : 0;
+        };
     }
 
-    public static List<String> lines(String text, int maxWidth, RangeWidth widthOf) {
-        return wrap(text, maxWidth, widthOf).stream().map(Line::text).toList();
-    }
-
-    public static List<Line> wrap(String text, int maxWidth, ToIntFunction<String> widthOf) {
-        return wrap(text, maxWidth, substringWidth(text, widthOf));
+    /**
+     * Range widths that measure each requested substring of {@code text} on demand.
+     */
+    public static RangeWidth substringWidths(String text, ToIntFunction<String> widthOf) {
+        return (from, to) -> widthOf.applyAsInt(text.substring(from, to));
     }
 
     public static List<Line> wrap(String text, int maxWidth, RangeWidth widthOf) {
@@ -43,10 +58,6 @@ public final class MessageWrap {
         return List.copyOf(lines);
     }
 
-    public static int lineCount(String text, int maxWidth, ToIntFunction<String> widthOf) {
-        return wrap(text, maxWidth, widthOf).size();
-    }
-
     public static int lineCount(String text, int maxWidth, RangeWidth widthOf) {
         return wrap(text, maxWidth, widthOf).size();
     }
@@ -54,10 +65,6 @@ public final class MessageWrap {
     /**
      * Character index whose left edge is at or just after {@code x} pixels into {@code text}.
      */
-    public static int indexAtX(String text, int x, ToIntFunction<String> widthOf) {
-        return indexAtX(text, x, substringWidth(text, widthOf));
-    }
-
     public static int indexAtX(String text, int x, RangeWidth widthOf) {
         if (text == null || text.isEmpty() || x <= 0) return 0;
         int previousWidth = 0;
@@ -75,26 +82,6 @@ public final class MessageWrap {
     /**
      * Character index in {@code text} for a pointer on wrapped visual line {@code line} at pixel {@code x}.
      */
-    public static int charIndex(String text, int maxWidth, int line, int x, ToIntFunction<String> widthOf) {
-        return charIndex(text, maxWidth, line, x, substringWidth(text, widthOf));
-    }
-
-    /**
-     * Range widths from one pass over per-character advances, so wrapping does not remeasure prefixes.
-     */
-    public static RangeWidth prefixWidths(int length, IntUnaryOperator charWidth) {
-        int size = Math.max(0, length);
-        int[] prefix = new int[size + 1];
-        for (int i = 0; i < size; i++) {
-            prefix[i + 1] = prefix[i] + charWidth.applyAsInt(i);
-        }
-        return (from, to) -> {
-            int start = Math.clamp(from, 0, size);
-            int end = Math.clamp(to, 0, size);
-            return end > start ? prefix[end] - prefix[start] : 0;
-        };
-    }
-
     public static int charIndex(String text, int maxWidth, int line, int x, RangeWidth widthOf) {
         List<Line> wrapped = wrap(text, maxWidth, widthOf);
         if (wrapped.isEmpty()) return 0;
@@ -102,10 +89,6 @@ public final class MessageWrap {
         Line visual = wrapped.get(clampedLine);
         return visual.start() + indexAtX(visual.text(), x,
             (from, to) -> widthOf.width(visual.start() + from, visual.start() + to));
-    }
-
-    private static RangeWidth substringWidth(String text, ToIntFunction<String> widthOf) {
-        return (from, to) -> widthOf.applyAsInt(text.substring(from, to));
     }
 
     private static void wrapParagraph(String text, int start, int end, int maxWidth,

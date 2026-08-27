@@ -8,7 +8,6 @@ import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -30,7 +29,7 @@ class DisplayRowTest {
     }
 
     @Test
-    void contextRowsAreGreyedByTimeFromTheNearestHit() {
+    void onlyMatchingRowsAreHitsAndCarryHighlights() {
         ChatLog log = log("a.log");
         LocalDateTime base = LocalDateTime.of(2026, 8, 26, 10, 0, 0);
         ChatEntry before = new ChatEntry(log, base, 0, "hello");
@@ -43,9 +42,8 @@ class DisplayRowTest {
         assertFalse(rows.get(0).match());
         assertTrue(rows.get(1).match());
         assertFalse(rows.get(2).match());
-        assertEquals(Duration.ofMinutes(1), rows.get(0).distanceFromMatch());
-        assertEquals(Duration.ZERO, rows.get(1).distanceFromMatch());
-        assertEquals(Duration.ofMinutes(19), rows.get(2).distanceFromMatch());
+        assertTrue(rows.get(0).highlights().isEmpty());
+        assertTrue(rows.get(2).highlights().isEmpty());
         assertEquals(1, rows.get(1).highlights().size());
     }
 
@@ -55,7 +53,7 @@ class DisplayRowTest {
         int red = PackedFormatting.color(0xFF5555);
         ChatEntry entry = new ChatEntry(log, log.startTime(), 0, "  hello  ",
             new long[]{PackedFormatting.run(2, 5, red)});
-        DisplayRow row = new DisplayRow(entry, true, Duration.ZERO, List.of());
+        DisplayRow row = new DisplayRow(entry, true, List.of());
         assertEquals("hello", row.message());
         assertSame(row.message(), row.message());
         assertEquals(red, PackedFormatting.at(row.visualFormatting(), 0));

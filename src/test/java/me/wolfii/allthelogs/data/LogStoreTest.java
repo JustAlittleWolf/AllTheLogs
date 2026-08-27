@@ -69,7 +69,7 @@ class LogStoreTest {
         ImportResult result = store.importDirectory(tempDir);
 
         assertEquals(2, result.importedFiles());
-        List<String> messages = store.chatEntries().stream().map(ChatEntry::message).toList();
+        List<String> messages = store.allEntries().stream().map(ChatEntry::message).toList();
         assertTrue(messages.contains("kept"));
         assertTrue(messages.contains("gzipped"));
         assertFalse(messages.contains("live"));
@@ -87,7 +87,7 @@ class LogStoreTest {
         ImportResult result = store.importArchive(archive);
 
         assertEquals(1, result.importedFiles());
-        assertEquals(List.of("kept in zip"), store.chatEntries().stream().map(ChatEntry::message).toList());
+        assertEquals(List.of("kept in zip"), store.allEntries().stream().map(ChatEntry::message).toList());
     }
 
     @Test
@@ -104,7 +104,7 @@ class LogStoreTest {
             .withPathMatcher("{*.log.gz,*.log}"));
 
         assertEquals(2, result.importedFiles());
-        List<String> messages = store.chatEntries().stream().map(ChatEntry::message).toList();
+        List<String> messages = store.allEntries().stream().map(ChatEntry::message).toList();
         assertTrue(messages.contains("debug"));
         assertTrue(messages.contains("rotated"));
         assertFalse(messages.contains("live"));
@@ -117,7 +117,7 @@ class LogStoreTest {
         assertTrue(result.failures().isEmpty(), () -> "unexpected failures: " + result.failures());
         assertEquals(3, result.importedFiles());
         assertEquals(8, result.importedEntries());
-        assertEquals(8, store.chatEntries().size());
+        assertEquals(8, store.allEntries().size());
     }
 
     @Test
@@ -125,7 +125,7 @@ class LogStoreTest {
         Path root = logsDirectory();
         store.importDirectory(root);
 
-        ChatEntry entry = store.query(ChatQuery.all().withSubstring("needle in here")).getFirst();
+        ChatEntry entry = store.findEntries(ChatQuery.all().withSubstring("needle in here")).getFirst();
         LogSource.File source = assertInstanceOf(LogSource.File.class, entry.chatLog().source());
         Path expected = root.resolve("logs/2026-08-25-1.log.gz").toAbsolutePath().normalize();
         assertEquals(expected, source.path());
@@ -142,7 +142,7 @@ class LogStoreTest {
             [11:21:54] [Render thread/INFO]: [CHAT] hi from wolf
             """);
         store.importDirectory(tempDir);
-        ChatEntry entry = store.query(ChatQuery.all().withSubstring("hi from wolf")).getFirst();
+        ChatEntry entry = store.findEntries(ChatQuery.all().withSubstring("hi from wolf")).getFirst();
         assertEquals("JustAlittleWolf", entry.chatLog().minecraftUser());
     }
 
@@ -150,13 +150,13 @@ class LogStoreTest {
     void reusesTheSameChatLogInstanceForEntriesFromTheSameFile() throws IOException {
         store.importDirectory(logsDirectory());
 
-        List<ChatEntry> hits = store.query(ChatQuery.all().withSubstring("needle in here").withContextLines(1));
+        List<ChatEntry> hits = store.findEntries(ChatQuery.all().withSubstring("needle in here").withContextLines(1));
 
         assertEquals(List.of("delta", "needle in here", "epsilon"), hits.stream().map(ChatEntry::message).toList());
         assertSame(hits.get(0).chatLog(), hits.get(1).chatLog());
         assertSame(hits.get(1).chatLog(), hits.get(2).chatLog());
 
-        List<ChatEntry> twoFiles = store.query(ChatQuery.all().withSubstring("needle"));
+        List<ChatEntry> twoFiles = store.findEntries(ChatQuery.all().withSubstring("needle"));
         assertEquals(2, twoFiles.size());
         assertNotSame(twoFiles.get(0).chatLog(), twoFiles.get(1).chatLog());
     }
@@ -194,7 +194,7 @@ class LogStoreTest {
                 ImportOptions.defaults().withRecursive(false));
 
         assertEquals(0, result.importedFiles());
-        assertTrue(store.chatEntries().isEmpty());
+        assertTrue(store.allEntries().isEmpty());
     }
 
     @Test
@@ -205,8 +205,8 @@ class LogStoreTest {
 
         store.importDirectory(root, ImportOptions.defaults().withPathMatcher("**/logs/**"));
 
-        assertTrue(store.query(ChatQuery.all().withSubstring("should not be imported")).isEmpty());
-        assertEquals(8, store.chatEntries().size());
+        assertTrue(store.findEntries(ChatQuery.all().withSubstring("should not be imported")).isEmpty());
+        assertEquals(8, store.allEntries().size());
     }
 
     @Test
@@ -217,7 +217,7 @@ class LogStoreTest {
         ImportResult result = store.importArchive(archive);
 
         assertEquals(1, result.importedFiles());
-        ChatEntry entry = store.query(ChatQuery.all().withSubstring("in archive")).getFirst();
+        ChatEntry entry = store.findEntries(ChatQuery.all().withSubstring("in archive")).getFirst();
         LogSource.Archive source = assertInstanceOf(LogSource.Archive.class, entry.chatLog().source());
         assertEquals(archive.toAbsolutePath().normalize(), source.path());
         assertEquals("logs/2026-01-02-1.log.gz", source.entryPath());
@@ -232,7 +232,7 @@ class LogStoreTest {
 
         store.importArchive(archive, ImportOptions.defaults().withTimezone(offset));
 
-        ChatEntry entry = store.query(ChatQuery.all().withSubstring("in archive")).getFirst();
+        ChatEntry entry = store.findEntries(ChatQuery.all().withSubstring("in archive")).getFirst();
         assertEquals(LogDates.toSystemLocal(LocalDateTime.of(2026, 1, 2, 10, 0, 10), offset), entry.timestamp());
     }
 
@@ -250,7 +250,7 @@ class LogStoreTest {
         ImportResult result = store.importArchive(outer);
 
         assertEquals(1, result.importedFiles());
-        ChatEntry entry = store.query(ChatQuery.all().withSubstring("deeply nested")).getFirst();
+        ChatEntry entry = store.findEntries(ChatQuery.all().withSubstring("deeply nested")).getFirst();
         LogSource.Archive source = assertInstanceOf(LogSource.Archive.class, entry.chatLog().source());
         assertEquals(outer.toAbsolutePath().normalize(), source.path());
         assertEquals("instances/inner.zip!/logs/2026-02-03-1.log", source.entryPath());
@@ -278,7 +278,7 @@ class LogStoreTest {
 
         store.importDirectory(tempDir);
 
-        ChatEntry entry = store.query(ChatQuery.all().withSubstring("from nested zip")).getFirst();
+        ChatEntry entry = store.findEntries(ChatQuery.all().withSubstring("from nested zip")).getFirst();
         LogSource.Archive source = assertInstanceOf(LogSource.Archive.class, entry.chatLog().source());
         assertEquals(archive.toAbsolutePath().normalize(), source.path());
         assertEquals("logs/2026-01-02-1.log.gz", source.entryPath());
@@ -291,7 +291,7 @@ class LogStoreTest {
         store.importDirectory(root);
 
         assertEquals(3, store.chatLogs().size());
-        assertEquals(8, store.chatEntries().size());
+        assertEquals(8, store.allEntries().size());
     }
 
     @Test
@@ -303,7 +303,7 @@ class LogStoreTest {
 
         assertEquals(0, second.importedFiles());
         assertEquals(3, second.skippedFiles());
-        assertEquals(8, store.chatEntries().size());
+        assertEquals(8, store.allEntries().size());
     }
 
     @Test
@@ -323,15 +323,15 @@ class LogStoreTest {
     void searchesBySubstringCaseInsensitivelyByDefault() throws IOException {
         store.importDirectory(logsDirectory());
 
-        assertEquals(2, store.query(ChatQuery.all().withSubstring("NEEDLE")).size());
-        assertEquals(0, store.query(ChatQuery.all().withSubstringCaseSensitive("NEEDLE")).size());
+        assertEquals(2, store.findEntries(ChatQuery.all().withSubstring("NEEDLE")).size());
+        assertEquals(0, store.findEntries(ChatQuery.all().withSubstringCaseSensitive("NEEDLE")).size());
     }
 
     @Test
     void searchesByRegex() throws IOException {
         store.importDirectory(logsDirectory());
 
-        List<ChatEntry> hits = store.query(ChatQuery.all().withRegex("^(alpha|gamma)$"));
+        List<ChatEntry> hits = store.findEntries(ChatQuery.all().withRegex("^(alpha|gamma)$"));
         assertEquals(List.of("alpha", "gamma"), hits.stream().map(ChatEntry::message).toList());
     }
 
@@ -339,7 +339,7 @@ class LogStoreTest {
     void filtersByDateRangeExcludingTheUpperBound() throws IOException {
         store.importDirectory(logsDirectory());
 
-        List<ChatEntry> hits = store.query(ChatQuery.all()
+        List<ChatEntry> hits = store.findEntries(ChatQuery.all()
                 .startingAt(LocalDateTime.of(2026, 8, 25, 0, 0))
                 .upUntil(LocalDateTime.of(2026, 8, 26, 0, 0)));
         assertEquals(List.of("delta", "needle in here", "epsilon"), hits.stream().map(ChatEntry::message).toList());
@@ -349,7 +349,7 @@ class LogStoreTest {
     void combinesTextAndDateFilters() throws IOException {
         store.importDirectory(logsDirectory());
 
-        List<ChatEntry> hits = store.query(ChatQuery.all()
+        List<ChatEntry> hits = store.findEntries(ChatQuery.all()
                 .withSubstring("needle")
                 .startingAt(LocalDateTime.of(2026, 8, 25, 0, 0))
                 .upUntil(LocalDateTime.of(2026, 8, 26, 0, 0)));
@@ -361,10 +361,10 @@ class LogStoreTest {
         store.importDirectory(logsDirectory());
 
         assertEquals(List.of("alpha", "beta", "gamma", "delta", "needle in here", "epsilon"),
-            store.query(ChatQuery.all().withVersion("26.2")).stream().map(ChatEntry::message).toList());
+            store.findEntries(ChatQuery.all().withVersion("26.2")).stream().map(ChatEntry::message).toList());
         assertEquals(List.of("zeta", "another needle"),
-            store.query(ChatQuery.all().withVersion("1.8.9")).stream().map(ChatEntry::message).toList());
-        assertTrue(store.query(ChatQuery.all().withVersion("1.20.1")).isEmpty());
+            store.findEntries(ChatQuery.all().withVersion("1.8.9")).stream().map(ChatEntry::message).toList());
+        assertTrue(store.findEntries(ChatQuery.all().withVersion("1.20.1")).isEmpty());
     }
 
     @Test
@@ -372,10 +372,10 @@ class LogStoreTest {
         store.importDirectory(logsDirectory());
 
         assertEquals(List.of("needle in here"),
-            store.query(ChatQuery.all().withSubstring("needle").withVersion("26.2"))
+            store.findEntries(ChatQuery.all().withSubstring("needle").withVersion("26.2"))
                 .stream().map(ChatEntry::message).toList());
         assertEquals(List.of("zeta", "another needle"),
-            store.query(ChatQuery.all().withSubstring("needle").withVersion("1.8.9").withContextLines(1))
+            store.findEntries(ChatQuery.all().withSubstring("needle").withVersion("1.8.9").withContextLines(1))
                 .stream().map(ChatEntry::message).toList());
     }
 
@@ -383,30 +383,30 @@ class LogStoreTest {
     void returnsSurroundingLinesForMatches() throws IOException {
         store.importDirectory(logsDirectory());
 
-        List<ChatEntry> hits = store.query(ChatQuery.all().withSubstring("needle in here").withContextLines(1));
+        List<ChatEntry> hits = store.findEntries(ChatQuery.all().withSubstring("needle in here").withContextLines(1));
         assertEquals(List.of("delta", "needle in here", "epsilon"), hits.stream().map(ChatEntry::message).toList());
     }
 
     @Test
     void aroundReturnsNeighboursFromTheSameLog() throws IOException {
         store.importDirectory(logsDirectory());
-        ChatEntry hit = store.query(ChatQuery.all().withSubstring("needle in here")).getFirst();
+        ChatEntry hit = store.findEntries(ChatQuery.all().withSubstring("needle in here")).getFirst();
         assertEquals(List.of("delta", "needle in here", "epsilon"),
-            store.around(hit.chatLog(), hit.lineIndex(), 1).stream().map(ChatEntry::message).toList());
+            store.entriesAround(hit.chatLog(), hit.lineIndex(), 1).stream().map(ChatEntry::message).toList());
         assertEquals(List.of("delta", "needle in here"),
-            store.around(hit.chatLog(), hit.lineIndex(), 1, 0).stream().map(ChatEntry::message).toList());
+            store.entriesAround(hit.chatLog(), hit.lineIndex(), 1, 0).stream().map(ChatEntry::message).toList());
         assertEquals(List.of("needle in here", "epsilon"),
-            store.around(hit.chatLog(), hit.lineIndex(), 0, 1).stream().map(ChatEntry::message).toList());
+            store.entriesAround(hit.chatLog(), hit.lineIndex(), 0, 1).stream().map(ChatEntry::message).toList());
     }
 
     @Test
     void summarizeCoversMatchingDatesAndSumsDayCounts() throws IOException {
         store.importDirectory(logsDirectory());
-        MatchSummary needles = store.summarize(ChatQuery.all().withSubstring("needle in here"));
+        MatchSummary needles = store.summarizeMatches(ChatQuery.all().withSubstring("needle in here"));
         assertEquals(1, needles.uniqueDates());
         assertEquals(needles.oldest(), needles.newest());
         assertEquals(1, needles.matches());
-        MatchSummary all = store.summarize(ChatQuery.all());
+        MatchSummary all = store.summarizeMatches(ChatQuery.all());
         assertTrue(all.uniqueDates() >= 2);
         assertFalse(all.dates().isEmpty());
         assertEquals(all.uniqueDates(), all.dates().size());
@@ -417,27 +417,27 @@ class LogStoreTest {
             summed += day.matches();
         }
         assertEquals(summed, all.matches());
-        assertEquals(store.matches(ChatQuery.all()), all.matches());
-        assertEquals(store.query(ChatQuery.all()).size(), all.matches());
+        assertEquals(store.countMatches(ChatQuery.all()), all.matches());
+        assertEquals(store.findEntries(ChatQuery.all()).size(), all.matches());
     }
 
     @Test
     void matchesHonoursLimitAndIgnoresContext() throws IOException {
         store.importDirectory(logsDirectory());
-        assertEquals(store.query(ChatQuery.all()).size(), store.matches(ChatQuery.all()));
-        assertEquals(1, store.matches(ChatQuery.all().withSubstring("needle in here")));
+        assertEquals(store.findEntries(ChatQuery.all()).size(), store.countMatches(ChatQuery.all()));
+        assertEquals(1, store.countMatches(ChatQuery.all().withSubstring("needle in here")));
         ChatQuery withContext = ChatQuery.all().withSubstring("needle in here").withContextLines(1);
-        assertEquals(1, store.matches(withContext));
-        assertEquals(3, store.query(withContext).size());
-        assertEquals(2, store.matches(ChatQuery.all().withLimit(2)));
+        assertEquals(1, store.countMatches(withContext));
+        assertEquals(3, store.findEntries(withContext).size());
+        assertEquals(2, store.countMatches(ChatQuery.all().withLimit(2)));
     }
 
     @Test
     void matchesHonoursTimestampOffset() throws IOException {
         importOffsetLog();
-        assertEquals(3, store.matches(ChatQuery.all()
+        assertEquals(3, store.countMatches(ChatQuery.all()
             .withOffset(LocalDateTime.of(2026, 6, 1, 10, 0, 11))));
-        assertEquals(2, store.matches(ChatQuery.all()
+        assertEquals(2, store.countMatches(ChatQuery.all()
             .withOffset(LocalDateTime.of(2026, 6, 1, 10, 0, 11))
             .withLimit(2)));
     }
@@ -449,12 +449,10 @@ class LogStoreTest {
         LogFixtures.writeGzipped(tempDir.resolve("logs"), "2026-08-01-1.log.gz",
             LogFixtures.modernLog("26.2", "new hit"));
         store.importDirectory(tempDir);
-        MatchSummary summary = store.summarize(ChatQuery.all().withSubstring("hit"));
+        MatchSummary summary = store.summarizeMatches(ChatQuery.all().withSubstring("hit"));
         assertEquals(2, summary.dates().size());
         assertEquals(java.time.LocalDate.of(2025, 1, 15), summary.dates().getFirst());
         assertEquals(java.time.LocalDate.of(2026, 8, 1), summary.dates().getLast());
-        assertEquals(java.time.YearMonth.of(2025, 1), summary.months().getFirst());
-        assertEquals(java.time.YearMonth.of(2026, 8), summary.months().getLast());
         assertEquals(2, summary.matches());
     }
 
@@ -465,7 +463,7 @@ class LogStoreTest {
         LogFixtures.writeGzipped(tempDir.resolve("logs"), "2026-01-31-1.log.gz",
             LogFixtures.modernLog("26.2", "last of month"));
         store.importDirectory(tempDir);
-        MatchSummary summary = store.summarize(ChatQuery.all().withSubstring("of month"));
+        MatchSummary summary = store.summarizeMatches(ChatQuery.all().withSubstring("of month"));
         assertEquals(List.of(java.time.LocalDate.of(2026, 1, 1), java.time.LocalDate.of(2026, 1, 31)), summary.dates());
         assertEquals(2, summary.matches());
     }
@@ -480,7 +478,7 @@ class LogStoreTest {
     void contextDoesNotLeakAcrossChatLogs() throws IOException {
         store.importDirectory(logsDirectory());
 
-        List<ChatEntry> hits = store.query(ChatQuery.all().withSubstring("delta").withContextLines(5));
+        List<ChatEntry> hits = store.findEntries(ChatQuery.all().withSubstring("delta").withContextLines(5));
         assertEquals(List.of("delta", "needle in here", "epsilon"), hits.stream().map(ChatEntry::message).toList());
     }
 
@@ -490,7 +488,7 @@ class LogStoreTest {
                 LogFixtures.modernLog("26.2", "a", "hit one", "b", "hit two", "c"));
 
         store.importDirectory(tempDir);
-        List<ChatEntry> hits = store.query(ChatQuery.all().withSubstring("hit").withContextLines(2));
+        List<ChatEntry> hits = store.findEntries(ChatQuery.all().withSubstring("hit").withContextLines(2));
 
         assertEquals(List.of("a", "hit one", "b", "hit two", "c"), hits.stream().map(ChatEntry::message).toList());
     }
@@ -499,7 +497,7 @@ class LogStoreTest {
     void contextLinesStayInsideTheRequestedDateRange() throws IOException {
         store.importDirectory(logsDirectory());
 
-        List<ChatEntry> hits = store.query(ChatQuery.all()
+        List<ChatEntry> hits = store.findEntries(ChatQuery.all()
                 .withSubstring("delta")
                 .withContextLines(5)
                 .startingAt(LocalDateTime.of(2026, 8, 25, 10, 0, 10))
@@ -511,8 +509,8 @@ class LogStoreTest {
     void ordersAscendingByDefaultAndDescendingOnRequest() throws IOException {
         store.importDirectory(logsDirectory());
 
-        List<ChatEntry> ascending = store.chatEntries();
-        List<ChatEntry> descending = store.query(ChatQuery.all().withSort(ChatQuery.Sort.DESCENDING));
+        List<ChatEntry> ascending = store.allEntries();
+        List<ChatEntry> descending = store.findEntries(ChatQuery.all().withSort(ChatQuery.Sort.DESCENDING));
 
         assertEquals(ascending.getFirst().message(), descending.getLast().message());
         assertEquals(ascending.getLast().message(), descending.getFirst().message());
@@ -523,14 +521,14 @@ class LogStoreTest {
     void honoursTheLimit() throws IOException {
         store.importDirectory(logsDirectory());
 
-        assertEquals(2, store.query(ChatQuery.all().withLimit(2)).size());
+        assertEquals(2, store.findEntries(ChatQuery.all().withLimit(2)).size());
     }
 
     @Test
     void sortsDescendingWithTheSortOption() throws IOException {
         store.importDirectory(logsDirectory());
 
-        List<ChatEntry> bySort = store.query(ChatQuery.all().withSort(ChatQuery.Sort.DESCENDING));
+        List<ChatEntry> bySort = store.findEntries(ChatQuery.all().withSort(ChatQuery.Sort.DESCENDING));
 
         assertTrue(bySort.getFirst().timestamp().isAfter(bySort.getLast().timestamp()));
     }
@@ -539,12 +537,12 @@ class LogStoreTest {
     void timestampOffsetPagesForwardAndBackward() throws IOException {
         importOffsetLog();
 
-        List<String> forward = store.query(ChatQuery.all()
+        List<String> forward = store.findEntries(ChatQuery.all()
                 .withOffset(LocalDateTime.of(2026, 6, 1, 10, 0, 11)))
             .stream().map(ChatEntry::message).toList();
         assertEquals(List.of("hit", "four", "five"), forward);
 
-        List<String> backward = store.query(ChatQuery.all()
+        List<String> backward = store.findEntries(ChatQuery.all()
                 .withSort(ChatQuery.Sort.DESCENDING)
                 .withOffset(LocalDateTime.of(2026, 6, 1, 10, 0, 13)))
             .stream().map(ChatEntry::message).toList();
@@ -555,15 +553,15 @@ class LogStoreTest {
     void timestampOffsetComplementsTheLimit() throws IOException {
         importOffsetLog();
 
-        List<ChatEntry> page1 = store.query(ChatQuery.all().withLimit(2));
+        List<ChatEntry> page1 = store.findEntries(ChatQuery.all().withLimit(2));
         assertEquals(List.of("one", "two"), page1.stream().map(ChatEntry::message).toList());
 
-        List<ChatEntry> page2 = store.query(ChatQuery.all()
+        List<ChatEntry> page2 = store.findEntries(ChatQuery.all()
             .withOffset(page1.getLast().timestamp())
             .withLimit(2));
         assertEquals(List.of("hit", "four"), page2.stream().map(ChatEntry::message).toList());
 
-        List<ChatEntry> page3 = store.query(ChatQuery.all()
+        List<ChatEntry> page3 = store.findEntries(ChatQuery.all()
             .withOffset(page2.getLast().timestamp())
             .withLimit(2));
         assertEquals(List.of("five"), page3.stream().map(ChatEntry::message).toList());
@@ -573,12 +571,12 @@ class LogStoreTest {
     void timestampOffsetPagesNewestFirst() throws IOException {
         importOffsetLog();
 
-        List<ChatEntry> page1 = store.query(ChatQuery.all()
+        List<ChatEntry> page1 = store.findEntries(ChatQuery.all()
             .withSort(ChatQuery.Sort.DESCENDING)
             .withLimit(2));
         assertEquals(List.of("five", "four"), page1.stream().map(ChatEntry::message).toList());
 
-        List<ChatEntry> page2 = store.query(ChatQuery.all()
+        List<ChatEntry> page2 = store.findEntries(ChatQuery.all()
             .withSort(ChatQuery.Sort.DESCENDING)
             .withOffset(page1.getLast().timestamp())
             .withLimit(2));
@@ -589,14 +587,14 @@ class LogStoreTest {
     void contextLinesMayExtendBeyondTheTimestampOffset() throws IOException {
         importOffsetLog();
 
-        List<String> after = store.query(ChatQuery.all()
+        List<String> after = store.findEntries(ChatQuery.all()
                 .withSubstring("hit")
                 .withContextLines(2)
                 .withOffset(LocalDateTime.of(2026, 6, 1, 10, 0, 11)))
             .stream().map(ChatEntry::message).toList();
         assertEquals(List.of("one", "two", "hit", "four", "five"), after);
 
-        List<String> before = store.query(ChatQuery.all()
+        List<String> before = store.findEntries(ChatQuery.all()
                 .withSubstring("hit")
                 .withContextLines(2)
                 .withSort(ChatQuery.Sort.DESCENDING)
@@ -609,7 +607,7 @@ class LogStoreTest {
     void limitAppliesToMatchesBeforeContextIsExpanded() throws IOException {
         importOffsetLog();
 
-        List<String> hits = store.query(ChatQuery.all()
+        List<String> hits = store.findEntries(ChatQuery.all()
                 .withSubstring("t")
                 .withContextLines(1)
                 .withLimit(1))
@@ -622,7 +620,7 @@ class LogStoreTest {
     void timeWindowStillClipsContextWhenAnOffsetIsSet() throws IOException {
         importOffsetLog();
 
-        List<String> hits = store.query(ChatQuery.all()
+        List<String> hits = store.findEntries(ChatQuery.all()
                 .withSubstring("hit")
                 .withContextLines(2)
                 .withOffset(LocalDateTime.of(2026, 6, 1, 10, 0, 11))
@@ -636,7 +634,7 @@ class LogStoreTest {
     void startingAtAloneKeepsEntriesFromThatInstant() throws IOException {
         importOffsetLog();
 
-        List<String> hits = store.query(ChatQuery.all()
+        List<String> hits = store.findEntries(ChatQuery.all()
                 .startingAt(LocalDateTime.of(2026, 6, 1, 10, 0, 12)))
             .stream().map(ChatEntry::message).toList();
         assertEquals(List.of("hit", "four", "five"), hits);
@@ -646,7 +644,7 @@ class LogStoreTest {
     void upUntilAloneKeepsEntriesBeforeThatInstant() throws IOException {
         importOffsetLog();
 
-        List<String> hits = store.query(ChatQuery.all()
+        List<String> hits = store.findEntries(ChatQuery.all()
                 .upUntil(LocalDateTime.of(2026, 6, 1, 10, 0, 12)))
             .stream().map(ChatEntry::message).toList();
         assertEquals(List.of("one", "two"), hits);
@@ -674,13 +672,13 @@ class LogStoreTest {
 
         store.importDirectory(tempDir);
 
-        List<ChatEntry> entries = store.chatEntries();
+        List<ChatEntry> entries = store.allEntries();
         assertEquals(lines, entries.size());
         assertEquals("line 0", entries.getFirst().message());
         assertEquals("line 2047", entries.get(2047).message());
         assertEquals("line 2048", entries.get(2048).message());
         assertEquals("line " + (lines - 1), entries.getLast().message());
-        List<ChatEntry> aroundChunkBoundary = store.query(ChatQuery.all()
+        List<ChatEntry> aroundChunkBoundary = store.findEntries(ChatQuery.all()
             .withRegex("^line 2048$")
             .withContextLines(1));
         assertEquals(List.of("line 2047", "line 2048", "line 2049"),
@@ -697,7 +695,7 @@ class LogStoreTest {
 
         assertTrue(Files.isRegularFile(database));
         try (LogStore reopened = LogStore.open(database)) {
-            assertEquals(8, reopened.chatEntries().size());
+            assertEquals(8, reopened.allEntries().size());
             assertEquals(database, reopened.databasePath().orElseThrow());
             LogStoreMetadata metadata = reopened.metadata();
             assertEquals(3, metadata.chatLogCount());
@@ -757,7 +755,7 @@ class LogStoreTest {
     @Test
     void reportsMalformedRegexAsALogDataException() throws IOException {
         store.importDirectory(logsDirectory());
-        assertThrows(LogDataException.class, () -> store.query(ChatQuery.all().withRegex("(unclosed")));
+        assertThrows(LogDataException.class, () -> store.findEntries(ChatQuery.all().withRegex("(unclosed")));
     }
 
     @Test
@@ -803,7 +801,7 @@ class LogStoreTest {
         assertEquals(LocalDate.of(2026, 4, 2), file.date());
         assertEquals(LocalDateTime.of(2026, 4, 2, 10, 0, 0), file.startTime());
         assertEquals(LocalDateTime.of(2026, 4, 2, 10, 0, 10), file.endTime());
-        assertTrue(store.chatEntries().isEmpty());
+        assertTrue(store.allEntries().isEmpty());
     }
 
     @Test
@@ -834,7 +832,7 @@ class LogStoreTest {
         assertEquals(startedAt, file.startTime());
         assertEquals(startedAt, file.endTime());
         assertEquals(1, store.chatLogs().size());
-        assertTrue(store.chatEntries().isEmpty());
+        assertTrue(store.allEntries().isEmpty());
     }
 
     @Test
@@ -857,7 +855,7 @@ class LogStoreTest {
         ChatLog file = store.chatLogs().getFirst();
         assertEquals(startedAt, file.startTime());
         assertEquals(startedAt.plusHours(2), file.endTime());
-        assertTrue(store.chatEntries().isEmpty());
+        assertTrue(store.allEntries().isEmpty());
     }
 
     @Test
@@ -870,7 +868,7 @@ class LogStoreTest {
 
         ChatLog file = store.chatLogs().getFirst();
         assertEquals(startedAt.plusMinutes(5), file.endTime());
-        assertEquals(1, store.chatEntries().size());
+        assertEquals(1, store.allEntries().size());
     }
 
     @Test
@@ -884,7 +882,7 @@ class LogStoreTest {
         ChatLog file = store.chatLogs().getFirst();
         assertEquals(startedAt, file.startTime());
         assertEquals(startedAt.plusHours(1), file.endTime());
-        assertEquals(1, store.chatEntries().size());
+        assertEquals(1, store.allEntries().size());
     }
 
     @Test
@@ -897,7 +895,7 @@ class LogStoreTest {
 
         ChatLog file = store.chatLogs().getFirst();
         assertEquals(startedAt.plusHours(1), file.endTime());
-        assertEquals(1, store.chatEntries().size());
+        assertEquals(1, store.allEntries().size());
     }
 
     @Test
@@ -907,12 +905,12 @@ class LogStoreTest {
 
         assertTrue(store.importSessionMessage("client message", LocalDateTime.of(2026, 8, 26, 12, 0, 0)));
 
-        ChatEntry entry = store.query(ChatQuery.all().withSubstring("client message")).getFirst();
+        ChatEntry entry = store.findEntries(ChatQuery.all().withSubstring("client message")).getFirst();
         assertInstanceOf(LogSource.Session.class, entry.chatLog().source());
         assertEquals("26.2", entry.chatLog().minecraftVersion());
         assertEquals(LocalDate.of(2026, 8, 26), entry.chatLog().date());
         assertEquals(LocalDateTime.of(2026, 8, 26, 12, 0, 0), entry.timestamp());
-        assertEquals(9, store.chatEntries().size());
+        assertEquals(9, store.allEntries().size());
     }
 
     @Test
@@ -925,7 +923,7 @@ class LogStoreTest {
         ChatLog file = store.chatLogs().getFirst();
         assertEquals(startedAt, file.startTime());
         assertEquals(startedAt.plusMinutes(5), file.endTime());
-        assertEquals(1, store.chatEntries().size());
+        assertEquals(1, store.allEntries().size());
     }
 
     @Test
@@ -934,7 +932,7 @@ class LogStoreTest {
         LocalDateTime before = LocalDateTime.now().withNano(0);
         assertTrue(store.importSessionMessage("now"));
 
-        ChatEntry entry = store.query(ChatQuery.all().withSubstring("now")).getFirst();
+        ChatEntry entry = store.findEntries(ChatQuery.all().withSubstring("now")).getFirst();
         assertFalse(entry.timestamp().isBefore(before));
         assertFalse(entry.timestamp().isAfter(LocalDateTime.now()));
     }
@@ -944,7 +942,7 @@ class LogStoreTest {
         store.startSession("26.2", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
         store.importSessionMessage("\u00a7chello \u00a7aworld", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
 
-        ChatEntry entry = store.chatEntries().getFirst();
+        ChatEntry entry = store.allEntries().getFirst();
         assertEquals("hello world", entry.message());
         long[] formatting = entry.formatting();
         assertEquals(PackedFormatting.color(0xFF5555), PackedFormatting.at(formatting, 0));
@@ -960,8 +958,8 @@ class LogStoreTest {
             [10:00:11] [Render thread/INFO]: [CHAT] \u00a7cRed \u00a7lBold
             """);
         store.importDirectory(tempDir);
-        ChatEntry plain = store.query(ChatQuery.all().withSubstring("plain")).getFirst();
-        ChatEntry styled = store.query(ChatQuery.all().withSubstring("Red")).getFirst();
+        ChatEntry plain = store.findEntries(ChatQuery.all().withSubstring("plain")).getFirst();
+        ChatEntry styled = store.findEntries(ChatQuery.all().withSubstring("Red")).getFirst();
         assertNull(plain.formatting());
         assertEquals("Red Bold", styled.message());
         assertEquals(PackedFormatting.color(0xFF5555), PackedFormatting.at(styled.formatting(), 0));
@@ -976,7 +974,7 @@ class LogStoreTest {
         int red = PackedFormatting.color(0xFF5555);
         long[] packed = {PackedFormatting.run(0, 3, red)};
         assertTrue(store.importSessionMessage("abc", packed, at));
-        ChatEntry entry = store.chatEntries().getFirst();
+        ChatEntry entry = store.allEntries().getFirst();
         assertEquals("abc", entry.message());
         assertEquals(red, PackedFormatting.at(entry.formatting(), 1));
     }
@@ -989,7 +987,7 @@ class LogStoreTest {
         store.importSessionMessage("second", base.plusSeconds(1));
         store.importSessionMessage("third", base.plusSeconds(2));
 
-        assertEquals(List.of(0, 1, 2), store.chatEntries().stream().map(ChatEntry::lineIndex).toList());
+        assertEquals(List.of(0, 1, 2), store.allEntries().stream().map(ChatEntry::lineIndex).toList());
         ChatLog file = store.chatLogs().getFirst();
         assertEquals(base, file.startTime());
         assertEquals(base.plusSeconds(2), file.endTime());
@@ -1003,10 +1001,10 @@ class LogStoreTest {
         store.importSessionMessage("second", at);
         store.importSessionMessage("third", at);
 
-        List<ChatEntry> entries = store.query(ChatQuery.all());
+        List<ChatEntry> entries = store.findEntries(ChatQuery.all());
         assertEquals(List.of("first", "second", "third"), entries.stream().map(ChatEntry::message).toList());
         assertEquals(List.of(0, 1, 2), entries.stream().map(ChatEntry::lineIndex).toList());
-        List<ChatEntry> newestFirst = store.query(ChatQuery.all().withSort(ChatQuery.Sort.DESCENDING));
+        List<ChatEntry> newestFirst = store.findEntries(ChatQuery.all().withSort(ChatQuery.Sort.DESCENDING));
         assertEquals(List.of("third", "second", "first"), newestFirst.stream().map(ChatEntry::message).toList());
     }
 
@@ -1018,7 +1016,7 @@ class LogStoreTest {
         store.importSessionMessage("the needle", base.plusSeconds(1));
         store.importSessionMessage("after", base.plusSeconds(2));
 
-        List<ChatEntry> hits = store.query(ChatQuery.all().withSubstring("needle").withContextLines(1));
+        List<ChatEntry> hits = store.findEntries(ChatQuery.all().withSubstring("needle").withContextLines(1));
         assertEquals(List.of("before", "the needle", "after"), hits.stream().map(ChatEntry::message).toList());
     }
 
@@ -1032,7 +1030,7 @@ class LogStoreTest {
         store.importSessionMessage("c", LocalDateTime.of(2026, 8, 27, 13, 0, 0));
 
         assertEquals(3, store.chatLogs().size());
-        assertEquals(3, store.chatEntries().size());
+        assertEquals(3, store.allEntries().size());
         assertTrue(store.chatLogs().stream().allMatch(file -> file.source() instanceof LogSource.Session));
     }
 
@@ -1043,7 +1041,7 @@ class LogStoreTest {
         assertTrue(store.importSessionMessage("duplicated", timestamp));
         assertFalse(store.importSessionMessage("duplicated", timestamp));
 
-        assertEquals(1, store.chatEntries().size());
+        assertEquals(1, store.allEntries().size());
     }
 
     @Test
@@ -1052,7 +1050,7 @@ class LogStoreTest {
         store.startSession("26.2", LocalDateTime.of(2026, 8, 25, 10, 0, 10));
 
         assertFalse(store.importSessionMessage("delta", LocalDateTime.of(2026, 8, 25, 10, 0, 10)));
-        assertEquals(8, store.chatEntries().size());
+        assertEquals(8, store.allEntries().size());
     }
 
     @Test
@@ -1061,7 +1059,7 @@ class LogStoreTest {
         store.importDirectory(logsDirectory());
 
         assertTrue(store.chatLogs().stream().anyMatch(file -> file.source() instanceof LogSource.Session));
-        assertTrue(store.chatEntries().stream().noneMatch(entry -> entry.chatLog().source() instanceof LogSource.Session));
+        assertTrue(store.allEntries().stream().noneMatch(entry -> entry.chatLog().source() instanceof LogSource.Session));
     }
 
     @Test
@@ -1073,8 +1071,8 @@ class LogStoreTest {
 
         store.importDirectory(tempDir);
 
-        assertEquals(1, store.query(ChatQuery.all().withSubstring("shared line")).size());
-        assertEquals(3, store.chatEntries().size());
+        assertEquals(1, store.findEntries(ChatQuery.all().withSubstring("shared line")).size());
+        assertEquals(3, store.allEntries().size());
     }
 
     @Test
@@ -1087,7 +1085,7 @@ class LogStoreTest {
         store.importDirectory(tempDir.resolve("a"));
         store.importDirectory(tempDir.resolve("b"));
 
-        assertEquals(1, store.chatEntries().size());
+        assertEquals(1, store.allEntries().size());
         // The file left without entries is dropped rather than lingering with a count of zero.
         assertEquals(1, store.chatLogs().size());
     }
@@ -1099,7 +1097,7 @@ class LogStoreTest {
         store.importSessionMessage("one", timestamp);
         store.importSessionMessage("two", timestamp);
 
-        assertEquals(2, store.chatEntries().size());
+        assertEquals(2, store.allEntries().size());
     }
 
     @Test
@@ -1128,8 +1126,8 @@ class LogStoreTest {
 
         assertEquals(0, result.importedFiles());
         assertEquals(1, result.skippedFiles());
-        assertEquals(List.of("live capture"), store.chatEntries().stream().map(ChatEntry::message).toList());
-        assertInstanceOf(LogSource.Session.class, store.chatEntries().getFirst().chatLog().source());
+        assertEquals(List.of("live capture"), store.allEntries().stream().map(ChatEntry::message).toList());
+        assertInstanceOf(LogSource.Session.class, store.allEntries().getFirst().chatLog().source());
     }
 
     @Test
@@ -1142,8 +1140,8 @@ class LogStoreTest {
 
         assertEquals(1, result.importedFiles());
         assertEquals(0, result.skippedFiles());
-        assertEquals(List.of("from the file"), store.chatEntries().stream().map(ChatEntry::message).toList());
-        assertInstanceOf(LogSource.File.class, store.chatEntries().getFirst().chatLog().source());
+        assertEquals(List.of("from the file"), store.allEntries().stream().map(ChatEntry::message).toList());
+        assertInstanceOf(LogSource.File.class, store.allEntries().getFirst().chatLog().source());
     }
 
     @Test
@@ -1151,7 +1149,7 @@ class LogStoreTest {
         store.startSession("26.2", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
         store.importDirectory(logsDirectory());
 
-        assertEquals(8, store.chatEntries().size());
+        assertEquals(8, store.allEntries().size());
         assertTrue(store.chatLogs().stream().anyMatch(log -> log.source() instanceof LogSource.Session));
         assertTrue(store.chatLogs().stream().anyMatch(log -> log.source() instanceof LogSource.File));
     }
@@ -1163,7 +1161,7 @@ class LogStoreTest {
         assertTrue(store.importSessionMessage("gg", first));
         assertTrue(store.importSessionMessage("gg", first.plusSeconds(30)));
 
-        assertEquals(2, store.chatEntries().size());
+        assertEquals(2, store.allEntries().size());
     }
 
     @Test
@@ -1175,7 +1173,7 @@ class LogStoreTest {
 
         store.importDirectory(tempDir);
 
-        assertEquals(2, store.chatEntries().size());
+        assertEquals(2, store.allEntries().size());
     }
 
     @Test
@@ -1187,7 +1185,7 @@ class LogStoreTest {
 
         store.importDirectory(tempDir);
 
-        assertEquals(3, store.chatEntries().size());
+        assertEquals(3, store.allEntries().size());
         assertEquals(2, store.chatLogs().size());
     }
 
@@ -1203,14 +1201,14 @@ class LogStoreTest {
 
         assertEquals(28, result.importedFiles());
         assertEquals(56, result.importedEntries());
-        assertEquals(1, store.query(ChatQuery.all().withSubstring("day 17 message")).size());
+        assertEquals(1, store.findEntries(ChatQuery.all().withSubstring("day 17 message")).size());
     }
 
     @Test
     void defaultImportLeavesTimestampsInLocalTime() throws IOException {
         store.importDirectory(logsDirectory());
 
-        ChatEntry entry = store.query(ChatQuery.all().withSubstring("needle in here")).getFirst();
+        ChatEntry entry = store.findEntries(ChatQuery.all().withSubstring("needle in here")).getFirst();
         assertEquals(LocalDateTime.of(2026, 8, 25, 10, 0, 11), entry.timestamp());
         assertEquals(LocalDateTime.of(2026, 8, 25, 10, 0, 0),
                 entry.chatLog().startTime());
@@ -1223,12 +1221,12 @@ class LogStoreTest {
         ZoneOffset minusThree = ZoneOffset.ofHours(-3);
 
         ImportResult first = store.importDirectory(root, ImportOptions.defaults().withTimezone(plusThree));
-        ChatEntry plus = store.query(ChatQuery.all().withSubstring("needle in here")).getFirst();
+        ChatEntry plus = store.findEntries(ChatQuery.all().withSubstring("needle in here")).getFirst();
 
         store.close();
         store = LogStore.openInMemory();
         ImportResult second = store.importDirectory(root, ImportOptions.defaults().withTimezone(minusThree));
-        ChatEntry minus = store.query(ChatQuery.all().withSubstring("needle in here")).getFirst();
+        ChatEntry minus = store.findEntries(ChatQuery.all().withSubstring("needle in here")).getFirst();
 
         assertTrue(first.failures().isEmpty(), () -> "unexpected failures: " + first.failures());
         assertTrue(second.failures().isEmpty(), () -> "unexpected failures: " + second.failures());
@@ -1246,7 +1244,7 @@ class LogStoreTest {
     void importTimezoneDoesNotChangeTheNamedLogDate() throws IOException {
         store.importDirectory(logsDirectory(), ImportOptions.defaults().withTimezone(ZoneOffset.ofHours(-10)));
 
-        ChatEntry entry = store.query(ChatQuery.all().withSubstring("needle in here")).getFirst();
+        ChatEntry entry = store.findEntries(ChatQuery.all().withSubstring("needle in here")).getFirst();
         assertEquals(LocalDate.of(2026, 8, 25), entry.chatLog().date());
     }
 

@@ -56,10 +56,6 @@ final class FilterOverlay {
         return time == null ? "" : time.toString().replace('T', ' ');
     }
 
-    boolean isOpen() {
-        return open;
-    }
-
     void toggle(ButtonComponent button) {
         if (open) {
             close();
