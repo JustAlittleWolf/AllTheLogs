@@ -20,16 +20,28 @@ public record DisplayRow(
     ChatEntry entry,
     boolean match,
     Duration distanceFromMatch,
-    List<HighlightSpan> highlights
+    List<HighlightSpan> highlights,
+    String message,
+    long[] visualFormatting
 ) {
     public DisplayRow {
         Objects.requireNonNull(entry, "entry");
         Objects.requireNonNull(distanceFromMatch, "distanceFromMatch");
         Objects.requireNonNull(highlights, "highlights");
+        Objects.requireNonNull(message, "message");
         highlights = List.copyOf(highlights);
         if (distanceFromMatch.isNegative()) {
             throw new IllegalArgumentException("distanceFromMatch must not be negative");
         }
+    }
+
+    public DisplayRow(ChatEntry entry, boolean match, Duration distanceFromMatch, List<HighlightSpan> highlights) {
+        this(entry, match, distanceFromMatch, highlights, VisualMessage.prepare(entry));
+    }
+
+    private DisplayRow(ChatEntry entry, boolean match, Duration distanceFromMatch, List<HighlightSpan> highlights,
+                       VisualMessage.Prepared prepared) {
+        this(entry, match, distanceFromMatch, highlights, prepared.text(), prepared.formatting());
     }
 
     /**
@@ -56,9 +68,9 @@ public record DisplayRow(
             List<ChatEntry> hits = hitsByLog.get(entry.chatLog());
             boolean match = hits != null && hits.contains(entry);
             Duration distance = match ? Duration.ZERO : distanceToNearestHit(entry, hits);
-            String display = VisualMessage.visual(entry.message(), VisualMessage.interpretEscapes(entry.chatLog()));
-            List<HighlightSpan> highlights = match ? MatchSpans.spans(display, filter) : List.of();
-            return new DisplayRow(entry, match, distance, highlights);
+            VisualMessage.Prepared prepared = VisualMessage.prepare(entry);
+            List<HighlightSpan> highlights = match ? MatchSpans.spans(prepared.text(), filter) : List.of();
+            return new DisplayRow(entry, match, distance, highlights, prepared);
         }).toList();
     }
 
@@ -82,10 +94,6 @@ public record DisplayRow(
 
     public int lineIndex() {
         return entry.lineIndex();
-    }
-
-    public String message() {
-        return VisualMessage.visual(entry.message(), VisualMessage.interpretEscapes(entry.chatLog()));
     }
 
     public RowKey key() {

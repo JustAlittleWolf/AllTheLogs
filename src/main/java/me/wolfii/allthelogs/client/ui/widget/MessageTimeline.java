@@ -13,6 +13,7 @@ import me.wolfii.allthelogs.client.list.ResultWindow;
 import me.wolfii.allthelogs.client.timeline.TimelineLayout;
 import me.wolfii.allthelogs.client.ui.text.MessageText;
 import me.wolfii.allthelogs.data.MatchBounds;
+import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.input.KeyEvent;
@@ -95,6 +96,9 @@ public final class MessageTimeline extends BaseUIComponent {
     private int scrubThumbHeight;
     private long lastScrubQueryMs;
     private int laidOutWidth = -1;
+    private DisplayRow cachedWidthRow;
+    private Font cachedWidthFont;
+    private MessageWrap.RangeWidth cachedRangeWidth;
     private long matchCount;
     private boolean exactMatchCount;
     private long matchElapsedMs;
@@ -491,8 +495,7 @@ public final class MessageTimeline extends BaseUIComponent {
                 DisplayRow row = rows.get(i);
                 int rowY = screenY(layout.rowY(i));
                 int msgX = x + LIST_PAD + timestampWidth;
-                List<MessageWrap.Line> lines = MessageWrap.wrap(row.message(), messageWidth,
-                    (from, to) -> messageRangeWidth(row, from, to));
+                List<MessageWrap.Line> lines = MessageWrap.wrap(row.message(), messageWidth, rangeWidth(row));
                 drawSelection(graphics, row, i, lines, msgX, rowY);
                 graphics.drawText(MessageText.timestamp(row), x + LIST_PAD, rowY + 1, 1, MUTED);
                 int lineY = rowY;
@@ -892,13 +895,30 @@ public final class MessageTimeline extends BaseUIComponent {
         int yInRow = (int) Math.round(localY + scrollY - contentOrigin() - layout.rowY(row));
         int line = yInRow < 0 ? 0 : yInRow / ROW_HEIGHT;
         DisplayRow displayRow = rows.get(row);
-        return MessageWrap.charIndex(displayRow.message(), messageWidth(), line, xInMessage,
-            (from, to) -> messageRangeWidth(displayRow, from, to));
+        return MessageWrap.charIndex(displayRow.message(), messageWidth(), line, xInMessage, rangeWidth(displayRow));
     }
 
     private int messageRangeWidth(DisplayRow row, int from, int to) {
         if (from >= to) return 0;
-        return font().width(MessageText.messageRange(row, from, to));
+        return rangeWidth(row).width(from, to);
+    }
+
+    /**
+     * Per-character prefix widths for one row, measured without obfuscation. Reused across wrap,
+     * selection, and hit-testing so obfuscated lines are not rebuilt on every prefix query.
+     */
+    private MessageWrap.RangeWidth rangeWidth(DisplayRow row) {
+        Font font = font();
+        if (row == cachedWidthRow && font == cachedWidthFont && cachedRangeWidth != null) {
+            return cachedRangeWidth;
+        }
+        String text = row.message();
+        int[] formats = PackedFormatting.perChar(row.visualFormatting(), text.length());
+        cachedRangeWidth = MessageWrap.prefixWidths(text.length(), i ->
+            font.width(MessageText.measureChar(text.charAt(i), formats[i])));
+        cachedWidthRow = row;
+        cachedWidthFont = font;
+        return cachedRangeWidth;
     }
 
     private double clampScroll(double value) {

@@ -160,7 +160,7 @@ public final class MessageText {
         String text = full.substring(start, end);
         if (text.isEmpty()) return Component.empty();
         boolean interpret = VisualMessage.interpretEscapes(row.chatLog());
-        long[] formatting = VisualMessage.remapFormatting(row.entry().message(), row.entry().formatting(), interpret);
+        long[] formatting = row.visualFormatting();
         MutableComponent result = Component.empty();
         int runStart = 0;
         int runFormat = PackedFormatting.at(formatting, start);
@@ -182,9 +182,15 @@ public final class MessageText {
      * Chat colour with match highlight, context dimming, and {@code \n} darkening multiplied in that order.
      */
     public static int stackedColor(DisplayRow row, int index, boolean interpretEscapes) {
-        long[] formatting = VisualMessage.remapFormatting(row.entry().message(), row.entry().formatting(),
-            interpretEscapes);
-        return stackedColor(row, index, interpretEscapes, PackedFormatting.at(formatting, index));
+        return stackedColor(row, index, interpretEscapes, PackedFormatting.at(row.visualFormatting(), index));
+    }
+
+    /**
+     * Glyph used when measuring wrap width. Obfuscation is omitted so width stays stable and cheap;
+     * Minecraft picks same-advance replacements when drawing {@code §k}.
+     */
+    public static Component measureChar(char c, int format) {
+        return styled(String.valueOf(c), 0xFFFFFFFF, format & ~PackedFormatting.OBFUSCATED);
     }
 
     private static int stackedColor(DisplayRow row, int index, boolean interpretEscapes, int format) {

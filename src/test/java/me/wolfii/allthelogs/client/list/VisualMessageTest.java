@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.client.list;
 
+import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.LogSource;
 import me.wolfii.allthelogs.data.parse.PackedFormatting;
@@ -49,6 +50,17 @@ class VisualMessageTest {
         assertEquals("hello", VisualMessage.visual("  hello  ", false));
         assertEquals(red, PackedFormatting.at(visual, 0));
         assertEquals(red, PackedFormatting.at(visual, 4));
+    }
+
+    @Test
+    void prepareLaysOutTextAndFormattingTogether() {
+        LocalDateTime time = LocalDateTime.of(2026, 8, 27, 12, 0);
+        ChatLog file = new ChatLog(new LogSource.File(Path.of("a.log")), LocalDate.of(2026, 8, 27), "26.2", time, time);
+        int red = PackedFormatting.color(0xFF5555);
+        var prepared = VisualMessage.prepare(new ChatEntry(
+            file, time, 0, "  hello  ", new long[]{PackedFormatting.run(2, 5, red)}));
+        assertEquals("hello", prepared.text());
+        assertEquals(red, PackedFormatting.at(prepared.formatting(), 0));
     }
 
     @Test

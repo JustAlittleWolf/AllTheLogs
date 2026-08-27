@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.client.list;
 
+import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.LogSource;
 import me.wolfii.allthelogs.data.parse.PackedFormatting;
@@ -24,21 +25,24 @@ public final class VisualMessage {
     }
 
     /**
+     * Display text and remapped formatting for a stored entry, laid out once.
+     */
+    public static Prepared prepare(ChatEntry entry) {
+        if (entry == null) return Prepared.EMPTY;
+        boolean interpret = interpretEscapes(entry.chatLog());
+        Layout layout = layout(entry.message(), interpret);
+        return new Prepared(layout.text(), remap(layout, entry.message(), entry.formatting()));
+    }
+
+    /**
      * Packed formatting remapped from stored-message offsets onto {@link #visual(String, boolean)}.
      */
     public static long[] remapFormatting(String message, long[] formatting, boolean interpretEscapes) {
-        if (formatting == null || formatting.length == 0) return null;
-        Layout layout = layout(message, interpretEscapes);
-        if (layout.text.isEmpty()) return null;
-        int[] stored = PackedFormatting.perChar(formatting, message == null ? 0 : message.length());
-        int[] visual = new int[layout.text.length()];
-        for (int i = 0; i < visual.length; i++) {
-            int storedIndex = layout.storedIndex[i];
-            if (storedIndex >= 0 && storedIndex < stored.length) {
-                visual[i] = stored[storedIndex];
-            }
-        }
-        return PackedFormatting.pack(visual);
+        return remap(layout(message, interpretEscapes), message, formatting);
+    }
+
+    public record Prepared(String text, long[] formatting) {
+        static final Prepared EMPTY = new Prepared("", null);
     }
 
     /**
@@ -106,6 +110,20 @@ public final class VisualMessage {
             while (end > start && text.charAt(end - 1) == '\n') end--;
             return new Layout(text.substring(start, end), Arrays.copyOfRange(storedIndex, start, end));
         }
+    }
+
+    private static long[] remap(Layout layout, String storedMessage, long[] formatting) {
+        if (formatting == null || formatting.length == 0) return null;
+        if (layout.text.isEmpty()) return null;
+        int[] stored = PackedFormatting.perChar(formatting, storedMessage == null ? 0 : storedMessage.length());
+        int[] visual = new int[layout.text.length()];
+        for (int i = 0; i < visual.length; i++) {
+            int storedIndex = layout.storedIndex[i];
+            if (storedIndex >= 0 && storedIndex < stored.length) {
+                visual[i] = stored[storedIndex];
+            }
+        }
+        return PackedFormatting.pack(visual);
     }
 
     private static Layout layout(String message, boolean interpretEscapes) {

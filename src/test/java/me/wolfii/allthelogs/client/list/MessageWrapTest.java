@@ -53,4 +53,19 @@ class MessageWrapTest {
         assertEquals(4, MessageWrap.charIndex("boldplain", 8, 0, 7, boldFirst));
         assertEquals(6, MessageWrap.charIndex("boldplain", 8, 1, 2, boldFirst));
     }
+
+    @Test
+    void prefixWidthsMeasureEachCharacterOnce() {
+        int[] calls = {0};
+        MessageWrap.RangeWidth widths = MessageWrap.prefixWidths(5, i -> {
+            calls[0]++;
+            return i < 2 ? 2 : 1;
+        });
+        assertEquals(5, calls[0]);
+        assertEquals(4, widths.width(0, 2));
+        assertEquals(3, widths.width(2, 5));
+        assertEquals(0, widths.width(3, 3));
+        assertEquals(List.of("ab", "cde"), MessageWrap.lines("abcde", 4, widths));
+        assertEquals(5, calls[0]);
+    }
 }
