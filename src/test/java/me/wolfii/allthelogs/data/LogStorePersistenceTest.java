@@ -265,7 +265,7 @@ class LogStorePersistenceTest {
             assertEquals(3, result.importedFiles());
             assertTrue(store.importSessionMessage("live after compact", startedAt.plusSeconds(5)));
 
-            assertEquals(9, store.allEntries().size());
+            assertEquals(10, store.allEntries().size());
             assertEquals(List.of("live before import"),
                 store.findEntries(ChatQuery.all().withSubstring("live before import"))
                     .stream().map(ChatEntry::message).toList());
@@ -275,7 +275,7 @@ class LogStorePersistenceTest {
         }
 
         try (LogStore store = LogStore.open(database)) {
-            assertEquals(9, store.allEntries().size());
+            assertEquals(10, store.allEntries().size());
             assertTrue(store.allEntries().stream().map(ChatEntry::message).toList()
                 .containsAll(List.of("alpha", "live before import", "live after compact")));
         }

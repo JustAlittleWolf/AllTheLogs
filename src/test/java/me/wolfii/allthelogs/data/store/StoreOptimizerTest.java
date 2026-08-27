@@ -18,20 +18,26 @@ class StoreOptimizerTest {
     Path tempDir;
 
     @Test
-    void compactCopyReclaimsSpaceLeftByDroppedTables() throws SQLException, IOException {
+    void compactCopyReclaimsSpaceLeftByAClusterRewrite() throws SQLException, IOException {
         Path database = tempDir.resolve("logs.duckdb");
-        long bloated;
+        long afterRewrite;
         try (var connection = StoreConnections.openFile(database);
              Statement statement = connection.createStatement()) {
-            statement.execute("CREATE TABLE waste (message VARCHAR)");
-            statement.execute("INSERT INTO waste SELECT 'xxxxxxxxxxxxxxxx' || i FROM range(50_000) t(i)");
+            statement.execute("CREATE TABLE chat_payload (message VARCHAR)");
+            statement.execute("INSERT INTO chat_payload SELECT 'xxxxxxxxxxxxxxxx' || i FROM range(80_000) t(i)");
             statement.execute("CHECKPOINT");
-            bloated = Files.size(database);
-            statement.execute("DROP TABLE waste");
+            long packed = Files.size(database);
+            statement.execute("""
+                CREATE TABLE chat_payload_sorted AS
+                SELECT * FROM chat_payload ORDER BY message""");
+            statement.execute("DROP TABLE chat_payload");
+            statement.execute("ALTER TABLE chat_payload_sorted RENAME TO chat_payload");
             statement.execute("CHECKPOINT");
+            afterRewrite = Files.size(database);
+            assertTrue(afterRewrite >= packed,
+                "cluster rewrite should not shrink below the live table; packed="
+                    + packed + " rewritten=" + afterRewrite);
         }
-        assertTrue(Files.size(database) >= bloated * 0.8,
-            "dropping a table should not shrink the file much before compact");
 
         try (var connection = StoreConnections.openFile(database)) {
             var compacted = StoreOptimizer.replaceWithCompactCopy(connection, database);
@@ -39,8 +45,8 @@ class StoreOptimizerTest {
         }
 
         long compactedSize = Files.size(database);
-        assertTrue(compactedSize < bloated / 2,
-            "compacted " + compactedSize + " should be well under bloated " + bloated);
+        assertTrue(compactedSize < afterRewrite,
+            "compacted " + compactedSize + " should be under rewritten " + afterRewrite);
         assertTrue(Files.notExists(StoreOptimizer.walPath(database))
             || Files.size(StoreOptimizer.walPath(database)) == 0);
     }
@@ -48,8 +54,8 @@ class StoreOptimizerTest {
     @Test
     void compactCopyKeepsTablesAndIndexes() throws SQLException, IOException {
         Path database = tempDir.resolve("keep.duckdb");
-        try (var connection = StoreConnections.openFile(database);
-             Statement statement = connection.createStatement()) {
+        var connection = StoreConnections.openFile(database);
+        try (Statement statement = connection.createStatement()) {
             statement.execute("""
                 INSERT INTO log_file VALUES (
                     1, 'chat.log', 'FILE', '/tmp/chat.log', '/tmp/chat.log',
@@ -58,20 +64,23 @@ class StoreOptimizerTest {
             statement.execute("""
                 INSERT INTO chat_entry VALUES (
                     1, 0, TIMESTAMP '2026-08-24 10:00:10', 'hello', NULL)""");
-            var compacted = StoreOptimizer.replaceWithCompactCopy(connection, database);
-            try (Statement check = compacted.createStatement();
-                 ResultSet entries = check.executeQuery("SELECT message FROM chat_entry");
-                 ResultSet files = check.executeQuery("SELECT file_name FROM log_file");
-                 ResultSet indexes = check.executeQuery("""
-                     SELECT index_name FROM duckdb_indexes()
-                     WHERE table_name = 'log_file' AND index_name = 'log_file_location'""")) {
+        }
+        var compacted = StoreOptimizer.replaceWithCompactCopy(connection, database);
+        try (Statement check = compacted.createStatement()) {
+            try (ResultSet entries = check.executeQuery("SELECT message FROM chat_entry")) {
                 assertTrue(entries.next());
                 assertEquals("hello", entries.getString(1));
+            }
+            try (ResultSet files = check.executeQuery("SELECT file_name FROM log_file")) {
                 assertTrue(files.next());
                 assertEquals("chat.log", files.getString(1));
+            }
+            try (ResultSet indexes = check.executeQuery("""
+                SELECT index_name FROM duckdb_indexes()
+                WHERE table_name = 'log_file' AND index_name = 'log_file_location'""")) {
                 assertTrue(indexes.next());
             }
-            compacted.close();
         }
+        compacted.close();
     }
 }
