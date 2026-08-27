@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MessageWrapTest {
     @Test
@@ -67,5 +68,26 @@ class MessageWrapTest {
         assertEquals(0, widths.width(3, 3));
         assertEquals(List.of("ab", "cde"), MessageWrap.lines("abcde", 4, widths));
         assertEquals(5, calls[0]);
+    }
+
+    @Test
+    void prefixWidthsAvoidRescanningEveryPrefixDuringWrap() {
+        String text = "obfuscated-magic-text ".repeat(20);
+        int[] visits = {0};
+        MessageWrap.RangeWidth naive = (from, to) -> {
+            for (int i = from; i < to; i++) visits[0]++;
+            return to - from;
+        };
+        MessageWrap.wrap(text, 30, naive);
+        int naiveVisits = visits[0];
+        visits[0] = 0;
+        MessageWrap.RangeWidth cached = MessageWrap.prefixWidths(text.length(), i -> {
+            visits[0]++;
+            return 1;
+        });
+        MessageWrap.wrap(text, 30, cached);
+        assertEquals(text.length(), visits[0]);
+        assertTrue(naiveVisits > visits[0] * 5,
+            "naive glyph visits " + naiveVisits + " should dwarf cached " + visits[0]);
     }
 }
