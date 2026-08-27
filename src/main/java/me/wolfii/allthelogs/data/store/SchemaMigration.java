@@ -21,22 +21,10 @@ import java.sql.Statement;
  * Each step is applied in order, and the stored version is advanced only after that step succeeds.
  */
 public final class SchemaMigration {
-    static final String META_TABLE = "allthelogs_meta";
-    static final String VERSION_KEY = "schema_version";
-
     /** Schema version written by this release. */
     public static final int CURRENT_VERSION = 1;
-
-    @FunctionalInterface
-    interface UpgradeStep {
-        void apply(Statement statement) throws SQLException;
-    }
-
-    @FunctionalInterface
-    interface UpgradePlan {
-        UpgradeStep stepFrom(int fromVersion);
-    }
-
+    static final String META_TABLE = "allthelogs_meta";
+    static final String VERSION_KEY = "schema_version";
     /**
      * Migrations from version {@code N} to {@code N + 1}. Add a case when bumping
      * {@link #CURRENT_VERSION}.
@@ -120,5 +108,15 @@ public final class SchemaMigration {
             step.apply(statement);
             setVersion(statement, version + 1);
         }
+    }
+
+    @FunctionalInterface
+    interface UpgradeStep {
+        void apply(Statement statement) throws SQLException;
+    }
+
+    @FunctionalInterface
+    interface UpgradePlan {
+        UpgradeStep stepFrom(int fromVersion);
     }
 }

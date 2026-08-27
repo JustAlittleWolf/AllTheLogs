@@ -24,16 +24,6 @@ public final class FormattingCodes {
     }
 
     /**
-     * Stripped text plus packed formatting. {@code formatting} is {@code null} when nothing is styled.
-     * {@code text} is {@code message} itself when it contains no codes.
-     */
-    public record Parsed(String text, long[] formatting) {
-        public static Parsed plain(String text) {
-            return new Parsed(text, null);
-        }
-    }
-
-    /**
      * @return {@code message} without formatting codes, or {@code message} itself when it contains none
      */
     public static String strip(String message) {
@@ -101,5 +91,15 @@ public final class FormattingCodes {
             case 'r' -> 0;
             default -> -1;
         };
+    }
+
+    /**
+     * Stripped text plus packed formatting. {@code formatting} is {@code null} when nothing is styled.
+     * {@code text} is {@code message} itself when it contains no codes.
+     */
+    public record Parsed(String text, long[] formatting) {
+        public static Parsed plain(String text) {
+            return new Parsed(text, null);
+        }
     }
 }

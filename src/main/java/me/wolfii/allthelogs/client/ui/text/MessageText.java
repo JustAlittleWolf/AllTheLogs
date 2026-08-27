@@ -1,10 +1,10 @@
 package me.wolfii.allthelogs.client.ui.text;
 
-import me.wolfii.allthelogs.client.ui.theme.Colors;
 import me.wolfii.allthelogs.client.list.DisplayRow;
 import me.wolfii.allthelogs.client.list.HighlightSpan;
-import me.wolfii.allthelogs.client.list.VisualMessage;
 import me.wolfii.allthelogs.client.list.MessageWrap;
+import me.wolfii.allthelogs.client.list.VisualMessage;
+import me.wolfii.allthelogs.client.ui.theme.Colors;
 import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.LogSource;
 import me.wolfii.allthelogs.data.parse.PackedFormatting;

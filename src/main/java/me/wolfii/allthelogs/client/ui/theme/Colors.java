@@ -26,6 +26,9 @@ public final class Colors {
     public static final int META_NUMBER = 0xFF7EB8D4;
     public static final int META_SIZE = 0xFFA8C48A;
 
+    private Colors() {
+    }
+
     /**
      * Channel-wise multiply of two ARGB colours, the same stacking Minecraft uses for dyes. White is a no-op.
      */
@@ -47,8 +50,5 @@ public final class Colors {
             color = multiply(color, overlay);
         }
         return color;
-    }
-
-    private Colors() {
     }
 }

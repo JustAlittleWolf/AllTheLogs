@@ -56,10 +56,6 @@ public final class LogDiscovery {
         this.cancelled = cancelled == null ? () -> false : cancelled;
     }
 
-    private boolean cancelled() {
-        return cancelled.getAsBoolean();
-    }
-
     private static byte[] readFully(InputStream stream, long expectedSize) throws IOException {
         if (expectedSize > Integer.MAX_VALUE) {
             throw new IOException("archive entry is too large to read: " + expectedSize + " bytes");
@@ -91,6 +87,10 @@ public final class LogDiscovery {
     static boolean isArchive(String name) {
         String lower = name.toLowerCase(Locale.ROOT);
         return ARCHIVE_SUFFIXES.stream().anyMatch(lower::endsWith);
+    }
+
+    private boolean cancelled() {
+        return cancelled.getAsBoolean();
     }
 
     public List<ImportResult.Failure> failures() {

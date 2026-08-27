@@ -17,6 +17,12 @@ import java.util.*;
  * Runs {@link ChatQuery} against an open store and maps rows to {@link ChatEntry} / {@link ChatLog}.
  */
 public final class ChatQueries {
+    private static final String SELECT_AROUND = """
+        SELECT e.file_id, e.entry_time, e.line_index, e.message, to_json(e.formatting)
+        FROM chat_entry e
+        JOIN log_file f ON f.id = e.file_id
+        WHERE f.source_path = ? AND f.entry_path = ? AND e.line_index BETWEEN ? AND ?
+        ORDER BY e.line_index""";
     private final DuckDBConnection connection;
 
     public ChatQueries(DuckDBConnection connection) {
@@ -47,6 +53,22 @@ public final class ChatQueries {
             case FILE -> new LogSource.File(Path.of(path));
             case ARCHIVE -> new LogSource.Archive(Path.of(path), entryPath);
             case SESSION -> new LogSource.Session(SessionMarker.idFromEntryPath(entryPath));
+        };
+    }
+
+    static String storedSourcePath(LogSource source) {
+        return switch (source) {
+            case LogSource.File file -> file.path().toString();
+            case LogSource.Archive archive -> archive.path().toString();
+            case LogSource.Session ignored -> "<session>";
+        };
+    }
+
+    static String storedEntryPath(LogSource source) {
+        return switch (source) {
+            case LogSource.File ignored -> "";
+            case LogSource.Archive archive -> archive.entryPath();
+            case LogSource.Session session -> SessionMarker.entryPath(session.id());
         };
     }
 
@@ -176,29 +198,6 @@ public final class ChatQueries {
             throw new LogDataException("could not read lines around " + lineIndex + " in " + log.source(), e);
         }
         return entries;
-    }
-
-    private static final String SELECT_AROUND = """
-        SELECT e.file_id, e.entry_time, e.line_index, e.message, to_json(e.formatting)
-        FROM chat_entry e
-        JOIN log_file f ON f.id = e.file_id
-        WHERE f.source_path = ? AND f.entry_path = ? AND e.line_index BETWEEN ? AND ?
-        ORDER BY e.line_index""";
-
-    static String storedSourcePath(LogSource source) {
-        return switch (source) {
-            case LogSource.File file -> file.path().toString();
-            case LogSource.Archive archive -> archive.path().toString();
-            case LogSource.Session ignored -> "<session>";
-        };
-    }
-
-    static String storedEntryPath(LogSource source) {
-        return switch (source) {
-            case LogSource.File ignored -> "";
-            case LogSource.Archive archive -> archive.entryPath();
-            case LogSource.Session session -> SessionMarker.entryPath(session.id());
-        };
     }
 
     /**

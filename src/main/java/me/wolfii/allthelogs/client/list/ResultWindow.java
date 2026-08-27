@@ -4,12 +4,7 @@ import me.wolfii.allthelogs.data.ChatQuery;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Sliding window of displayed log rows. Replacing the buffered page adjusts the scroll offset so the same

@@ -43,6 +43,73 @@ final class LogBrowserQueries {
     private boolean restoredExactMatchCount;
     private long restoredElapsedMs;
 
+    /**
+     * Exclusive cursor that still includes {@code time} itself for the current sort.
+     */
+    static LocalDateTime exclusiveOffset(LocalDateTime time, ChatQuery.Sort sort) {
+        if (sort == ChatQuery.Sort.DESCENDING) {
+            return time.plusNanos(1);
+        }
+        return time.minusNanos(1);
+    }
+
+    static boolean pageHasBefore(ChatQuery.Sort sort, List<DisplayRow> rows, MatchBounds bounds) {
+        LocalDateTime first = firstMatchTime(rows);
+        if (first == null || bounds == null) return false;
+        if (sort == ChatQuery.Sort.ASCENDING) {
+            return bounds.oldest() != null && bounds.oldest().isBefore(first);
+        }
+        return bounds.newest() != null && bounds.newest().isAfter(first);
+    }
+
+    static boolean pageHasAfter(ChatQuery.Sort sort, boolean full, List<DisplayRow> rows, MatchBounds bounds) {
+        if (full) return true;
+        LocalDateTime last = lastMatchTime(rows);
+        if (last == null || bounds == null) return false;
+        if (sort == ChatQuery.Sort.ASCENDING) {
+            return bounds.newest() != null && bounds.newest().isAfter(last);
+        }
+        return bounds.oldest() != null && bounds.oldest().isBefore(last);
+    }
+
+    static LocalDateTime firstMatchTime(List<DisplayRow> rows) {
+        for (DisplayRow row : rows) {
+            if (row.match()) return row.entry().timestamp();
+        }
+        return rows.isEmpty() ? null : rows.getFirst().entry().timestamp();
+    }
+
+    static LocalDateTime lastMatchTime(List<DisplayRow> rows) {
+        for (int i = rows.size() - 1; i >= 0; i--) {
+            if (rows.get(i).match()) return rows.get(i).entry().timestamp();
+        }
+        return rows.isEmpty() ? null : rows.getLast().entry().timestamp();
+    }
+
+    private static Set<DisplayRow.RowKey> keysOf(List<DisplayRow> rows) {
+        Set<DisplayRow.RowKey> keys = new HashSet<>(rows.size() * 2);
+        for (DisplayRow row : rows) {
+            keys.add(row.key());
+        }
+        return keys;
+    }
+
+    private static int countNewKeys(List<DisplayRow> rows, Set<DisplayRow.RowKey> existing) {
+        int count = 0;
+        for (DisplayRow row : rows) {
+            if (!existing.contains(row.key())) count++;
+        }
+        return count;
+    }
+
+    private static boolean pageIsFull(List<DisplayRow> rows, SearchFilter page) {
+        return ResultWindow.matchCount(rows) >= page.limit() && page.limit() > 0;
+    }
+
+    private static <T> void onClient(CompletableFuture<T> future, BiConsumer<T, Throwable> handler) {
+        future.whenComplete((value, error) -> Minecraft.getInstance().execute(() -> handler.accept(value, error)));
+    }
+
     SearchFilter filter() {
         return filter;
     }
@@ -281,49 +348,6 @@ final class LogBrowserQueries {
         return time;
     }
 
-    /**
-     * Exclusive cursor that still includes {@code time} itself for the current sort.
-     */
-    static LocalDateTime exclusiveOffset(LocalDateTime time, ChatQuery.Sort sort) {
-        if (sort == ChatQuery.Sort.DESCENDING) {
-            return time.plusNanos(1);
-        }
-        return time.minusNanos(1);
-    }
-
-    static boolean pageHasBefore(ChatQuery.Sort sort, List<DisplayRow> rows, MatchBounds bounds) {
-        LocalDateTime first = firstMatchTime(rows);
-        if (first == null || bounds == null) return false;
-        if (sort == ChatQuery.Sort.ASCENDING) {
-            return bounds.oldest() != null && bounds.oldest().isBefore(first);
-        }
-        return bounds.newest() != null && bounds.newest().isAfter(first);
-    }
-
-    static boolean pageHasAfter(ChatQuery.Sort sort, boolean full, List<DisplayRow> rows, MatchBounds bounds) {
-        if (full) return true;
-        LocalDateTime last = lastMatchTime(rows);
-        if (last == null || bounds == null) return false;
-        if (sort == ChatQuery.Sort.ASCENDING) {
-            return bounds.newest() != null && bounds.newest().isAfter(last);
-        }
-        return bounds.oldest() != null && bounds.oldest().isBefore(last);
-    }
-
-    static LocalDateTime firstMatchTime(List<DisplayRow> rows) {
-        for (DisplayRow row : rows) {
-            if (row.match()) return row.entry().timestamp();
-        }
-        return rows.isEmpty() ? null : rows.getFirst().entry().timestamp();
-    }
-
-    static LocalDateTime lastMatchTime(List<DisplayRow> rows) {
-        for (int i = rows.size() - 1; i >= 0; i--) {
-            if (rows.get(i).match()) return rows.get(i).entry().timestamp();
-        }
-        return rows.isEmpty() ? null : rows.getLast().entry().timestamp();
-    }
-
     private void snapshotCurrentList() {
         if (list == null) return;
         restoredRows = list.window().rows();
@@ -333,29 +357,5 @@ final class LogBrowserQueries {
         restoredMatchCount = list.matchCount();
         restoredExactMatchCount = list.exactMatchCount();
         restoredElapsedMs = list.matchElapsedMs();
-    }
-
-    private static Set<DisplayRow.RowKey> keysOf(List<DisplayRow> rows) {
-        Set<DisplayRow.RowKey> keys = new HashSet<>(rows.size() * 2);
-        for (DisplayRow row : rows) {
-            keys.add(row.key());
-        }
-        return keys;
-    }
-
-    private static int countNewKeys(List<DisplayRow> rows, Set<DisplayRow.RowKey> existing) {
-        int count = 0;
-        for (DisplayRow row : rows) {
-            if (!existing.contains(row.key())) count++;
-        }
-        return count;
-    }
-
-    private static boolean pageIsFull(List<DisplayRow> rows, SearchFilter page) {
-        return ResultWindow.matchCount(rows) >= page.limit() && page.limit() > 0;
-    }
-
-    private static <T> void onClient(CompletableFuture<T> future, BiConsumer<T, Throwable> handler) {
-        future.whenComplete((value, error) -> Minecraft.getInstance().execute(() -> handler.accept(value, error)));
     }
 }

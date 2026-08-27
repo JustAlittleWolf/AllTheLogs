@@ -74,11 +74,6 @@ public final class MessageListLayout {
         return new MessageListLayout(rowY, rowHeight, List.copyOf(dates), y);
     }
 
-    @FunctionalInterface
-    public interface RowRangeWidth {
-        int width(DisplayRow row, int from, int to);
-    }
-
     /**
      * Extra lines fetched around a double-clicked row, on top of whatever is already on screen.
      */
@@ -161,6 +156,11 @@ public final class MessageListLayout {
         int index = dates.indexOf(band);
         if (index < 0 || index + 1 >= dates.size()) return null;
         return dates.get(index + 1);
+    }
+
+    @FunctionalInterface
+    public interface RowRangeWidth {
+        int width(DisplayRow row, int from, int to);
     }
 
     public record DateBand(LocalDate date, int y, int firstRow) {

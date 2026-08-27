@@ -41,10 +41,6 @@ public final class VisualMessage {
         return remap(layout(message, interpretEscapes), message, formatting);
     }
 
-    public record Prepared(String text, long[] formatting) {
-        static final Prepared EMPTY = new Prepared("", null);
-    }
-
     /**
      * Whether {@code index} in {@code visual} is the {@code \} or {@code n} of an interpreted linebreak token.
      */
@@ -75,41 +71,6 @@ public final class VisualMessage {
         while (start < end && visual.charAt(start) == '\n') start++;
         while (end > start && visual.charAt(end - 1) == '\n') end--;
         return start == 0 && end == visual.length() ? visual : visual.substring(start, end);
-    }
-
-    private record Layout(String text, int[] storedIndex) {
-    }
-
-    private static final class Buffer {
-        private final StringBuilder text = new StringBuilder();
-        private int[] storedIndex = new int[32];
-
-        void append(char c, int stored) {
-            int size = text.length();
-            if (size == storedIndex.length) {
-                storedIndex = Arrays.copyOf(storedIndex, storedIndex.length + (storedIndex.length >> 1) + 8);
-            }
-            text.append(c);
-            storedIndex[size] = stored;
-        }
-
-        void appendTrimmed(String chunk, int chunkStart) {
-            int begin = 0;
-            int stop = chunk.length();
-            while (begin < stop && chunk.charAt(begin) <= ' ') begin++;
-            while (stop > begin && chunk.charAt(stop - 1) <= ' ') stop--;
-            for (int i = begin; i < stop; i++) {
-                append(chunk.charAt(i), chunkStart + i);
-            }
-        }
-
-        Layout trimmedNewlines() {
-            int start = 0;
-            int end = text.length();
-            while (start < end && text.charAt(start) == '\n') start++;
-            while (end > start && text.charAt(end - 1) == '\n') end--;
-            return new Layout(text.substring(start, end), Arrays.copyOfRange(storedIndex, start, end));
-        }
     }
 
     private static long[] remap(Layout layout, String storedMessage, long[] formatting) {
@@ -162,6 +123,45 @@ public final class VisualMessage {
             first = false;
             if (escape < 0) break;
             from = escape + 2;
+        }
+    }
+
+    public record Prepared(String text, long[] formatting) {
+        static final Prepared EMPTY = new Prepared("", null);
+    }
+
+    private record Layout(String text, int[] storedIndex) {
+    }
+
+    private static final class Buffer {
+        private final StringBuilder text = new StringBuilder();
+        private int[] storedIndex = new int[32];
+
+        void append(char c, int stored) {
+            int size = text.length();
+            if (size == storedIndex.length) {
+                storedIndex = Arrays.copyOf(storedIndex, storedIndex.length + (storedIndex.length >> 1) + 8);
+            }
+            text.append(c);
+            storedIndex[size] = stored;
+        }
+
+        void appendTrimmed(String chunk, int chunkStart) {
+            int begin = 0;
+            int stop = chunk.length();
+            while (begin < stop && chunk.charAt(begin) <= ' ') begin++;
+            while (stop > begin && chunk.charAt(stop - 1) <= ' ') stop--;
+            for (int i = begin; i < stop; i++) {
+                append(chunk.charAt(i), chunkStart + i);
+            }
+        }
+
+        Layout trimmedNewlines() {
+            int start = 0;
+            int end = text.length();
+            while (start < end && text.charAt(start) == '\n') start++;
+            while (end > start && text.charAt(end - 1) == '\n') end--;
+            return new Layout(text.substring(start, end), Arrays.copyOfRange(storedIndex, start, end));
         }
     }
 }

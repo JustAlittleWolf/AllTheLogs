@@ -13,23 +13,6 @@ public final class MessageWrap {
     private MessageWrap() {
     }
 
-    /**
-     * Pixel width of {@code text[from, to)}. Indexes are into the original message.
-     */
-    @FunctionalInterface
-    public interface RangeWidth {
-        int width(int from, int to);
-    }
-
-    /**
-     * One visual row of a wrapped message.
-     *
-     * @param text  the characters drawn on this row, never including a {@code \n}
-     * @param start index of {@code text} in the original message
-     */
-    public record Line(String text, int start) {
-    }
-
     public static List<String> lines(String text, int maxWidth, ToIntFunction<String> widthOf) {
         return wrap(text, maxWidth, widthOf).stream().map(Line::text).toList();
     }
@@ -162,5 +145,22 @@ public final class MessageWrap {
 
     private static boolean canBreakAfter(char c) {
         return c == ' ' || c == '\t' || c == '-';
+    }
+
+    /**
+     * Pixel width of {@code text[from, to)}. Indexes are into the original message.
+     */
+    @FunctionalInterface
+    public interface RangeWidth {
+        int width(int from, int to);
+    }
+
+    /**
+     * One visual row of a wrapped message.
+     *
+     * @param text  the characters drawn on this row, never including a {@code \n}
+     * @param start index of {@code text} in the original message
+     */
+    public record Line(String text, int start) {
     }
 }

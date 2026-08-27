@@ -9,6 +9,35 @@ import java.util.Objects;
 public sealed interface LogSource permits LogSource.File, LogSource.Archive, LogSource.Session {
 
     /**
+     * Full path for hover details: the log file, {@code archive!/entry}, or {@code null} for a live session.
+     */
+    default String fullPath() {
+        return switch (this) {
+            case File file -> file.path().toAbsolutePath().normalize().toString();
+            case Archive archive -> archive.path().toAbsolutePath().normalize() + "!/" + archive.entryPath();
+            case Session ignored -> null;
+        };
+    }
+
+    /**
+     * Short label for tooltips: the log file name, archive entry name, or {@code session}.
+     */
+    default String label() {
+        return switch (this) {
+            case File file -> {
+                Path name = file.path().getFileName();
+                yield name == null ? file.path().toString() : name.toString();
+            }
+            case Archive archive -> {
+                String entry = archive.entryPath();
+                int slash = entry.lastIndexOf('/');
+                yield slash < 0 ? entry : entry.substring(slash + 1);
+            }
+            case Session ignored -> "session";
+        };
+    }
+
+    /**
      * The log was read from a file on disk, such as {@code 2026-08-25-2.log.gz}.
      *
      * @param path absolute path of the log file itself, not the directory that was imported
@@ -42,34 +71,5 @@ public sealed interface LogSource permits LogSource.File, LogSource.Archive, Log
      *           {@link LogStore#startSession(String)} always assigns one
      */
     record Session(String id) implements LogSource {
-    }
-
-    /**
-     * Full path for hover details: the log file, {@code archive!/entry}, or {@code null} for a live session.
-     */
-    default String fullPath() {
-        return switch (this) {
-            case File file -> file.path().toAbsolutePath().normalize().toString();
-            case Archive archive -> archive.path().toAbsolutePath().normalize() + "!/" + archive.entryPath();
-            case Session ignored -> null;
-        };
-    }
-
-    /**
-     * Short label for tooltips: the log file name, archive entry name, or {@code session}.
-     */
-    default String label() {
-        return switch (this) {
-            case File file -> {
-                Path name = file.path().getFileName();
-                yield name == null ? file.path().toString() : name.toString();
-            }
-            case Archive archive -> {
-                String entry = archive.entryPath();
-                int slash = entry.lastIndexOf('/');
-                yield slash < 0 ? entry : entry.substring(slash + 1);
-            }
-            case Session ignored -> "session";
-        };
     }
 }

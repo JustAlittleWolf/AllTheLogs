@@ -48,6 +48,24 @@ public record SearchFilter(
             null, null, null, null);
     }
 
+    public static Optional<Pattern> compiledRegex(String regex, boolean caseSensitive) {
+        try {
+            int flags = caseSensitive ? 0 : Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE;
+            return Optional.of(Pattern.compile(regex, flags));
+        } catch (PatternSyntaxException e) {
+            return Optional.empty();
+        }
+    }
+
+    static String regexPattern(String regex, boolean caseSensitive) {
+        if (caseSensitive || hasInlineCaseFlag(regex)) return regex;
+        return "(?i)" + regex;
+    }
+
+    private static boolean hasInlineCaseFlag(String regex) {
+        return regex.startsWith("(?i)") || regex.startsWith("(?-i)") || regex.startsWith("(?iu)");
+    }
+
     public SearchFilter withText(String text) {
         return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset,
             version);
@@ -153,23 +171,5 @@ public record SearchFilter(
         }
         String needle = text.toLowerCase(Locale.ROOT);
         return message -> message.toLowerCase(Locale.ROOT).contains(needle);
-    }
-
-    public static Optional<Pattern> compiledRegex(String regex, boolean caseSensitive) {
-        try {
-            int flags = caseSensitive ? 0 : Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE;
-            return Optional.of(Pattern.compile(regex, flags));
-        } catch (PatternSyntaxException e) {
-            return Optional.empty();
-        }
-    }
-
-    static String regexPattern(String regex, boolean caseSensitive) {
-        if (caseSensitive || hasInlineCaseFlag(regex)) return regex;
-        return "(?i)" + regex;
-    }
-
-    private static boolean hasInlineCaseFlag(String regex) {
-        return regex.startsWith("(?i)") || regex.startsWith("(?-i)") || regex.startsWith("(?iu)");
     }
 }

@@ -5,11 +5,7 @@ import io.wispforest.owo.ui.core.CursorStyle;
 import io.wispforest.owo.ui.core.OwoUIGraphics;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.UIComponent;
-import me.wolfii.allthelogs.client.list.DisplayRow;
-import me.wolfii.allthelogs.client.list.MessageListLayout;
-import me.wolfii.allthelogs.client.list.MessageSelection;
-import me.wolfii.allthelogs.client.list.MessageWrap;
-import me.wolfii.allthelogs.client.list.ResultWindow;
+import me.wolfii.allthelogs.client.list.*;
 import me.wolfii.allthelogs.client.timeline.TimelineLayout;
 import me.wolfii.allthelogs.client.ui.text.MessageText;
 import me.wolfii.allthelogs.data.MatchBounds;
@@ -19,14 +15,13 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
+import org.lwjgl.glfw.GLFW;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-
-import org.lwjgl.glfw.GLFW;
 
 /**
  * Virtualised log list plus a timeline scrubber on the right. Newest is at the bottom. The scrubber maps the
@@ -117,6 +112,13 @@ public final class MessageTimeline extends BaseUIComponent {
     public MessageTimeline() {
         this.sizing(Sizing.fill(), Sizing.fill());
         this.cursorStyle(CursorStyle.POINTER);
+    }
+
+    /**
+     * Once the middle button has been held for {@link #MIDDLE_HOLD_MS}, releasing it should stop auto-scroll.
+     */
+    static boolean latchMiddleHold(boolean alreadyLatched, boolean buttonDown, long heldMs) {
+        return alreadyLatched || (buttonDown && heldMs >= MIDDLE_HOLD_MS);
     }
 
     public ResultWindow window() {
@@ -724,13 +726,6 @@ public final class MessageTimeline extends BaseUIComponent {
         autoScrolling = false;
         middleButtonDown = false;
         middleHoldMode = false;
-    }
-
-    /**
-     * Once the middle button has been held for {@link #MIDDLE_HOLD_MS}, releasing it should stop auto-scroll.
-     */
-    static boolean latchMiddleHold(boolean alreadyLatched, boolean buttonDown, long heldMs) {
-        return alreadyLatched || (buttonDown && heldMs >= MIDDLE_HOLD_MS);
     }
 
     private boolean middleMousePressed() {

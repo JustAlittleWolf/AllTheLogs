@@ -8,11 +8,7 @@ import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.ScrollContainer;
 import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
-import io.wispforest.owo.ui.core.Color;
-import io.wispforest.owo.ui.core.Insets;
-import io.wispforest.owo.ui.core.ParentUIComponent;
-import io.wispforest.owo.ui.core.Positioning;
-import io.wispforest.owo.ui.core.Sizing;
+import io.wispforest.owo.ui.core.*;
 import me.wolfii.allthelogs.client.search.DateParser;
 import me.wolfii.allthelogs.client.search.MinecraftVersions;
 import me.wolfii.allthelogs.client.search.SearchFilter;
@@ -54,6 +50,10 @@ final class FilterOverlay {
         this.filter = filter;
         this.versions = versions;
         this.onChange = onChange;
+    }
+
+    private static String formatBound(LocalDateTime time) {
+        return time == null ? "" : time.toString().replace('T', ' ');
     }
 
     boolean isOpen() {
@@ -241,9 +241,5 @@ final class FilterOverlay {
         box.onChanged().subscribe(onFieldChange::accept);
         row.child(box);
         return row;
-    }
-
-    private static String formatBound(LocalDateTime time) {
-        return time == null ? "" : time.toString().replace('T', ' ');
     }
 }
