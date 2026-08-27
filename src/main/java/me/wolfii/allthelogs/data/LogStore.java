@@ -259,6 +259,24 @@ public final class LogStore implements AutoCloseable {
     }
 
     /**
+     * Imports an already-stripped live chat line with flattened packed formatting.
+     *
+     * @see #importSessionMessage(String)
+     */
+    public boolean importSessionMessage(String message, long[] formatting) {
+        return importSessionMessage(message, formatting, LocalDateTime.now());
+    }
+
+    /**
+     * Imports an already-stripped live chat line with flattened packed formatting at an explicit time.
+     *
+     * @see #importSessionMessage(String)
+     */
+    public boolean importSessionMessage(String message, long[] formatting, LocalDateTime timestamp) {
+        return sessions.importMessage(message, formatting, timestamp);
+    }
+
+    /**
      * Updates {@link ChatLog#endTime()} of the current session, without storing a chat line.
      * <p>
      * Whole seconds only, matching {@link #importSessionMessage(String, LocalDateTime)}. If {@code timestamp} is

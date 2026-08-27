@@ -2,6 +2,7 @@ package me.wolfii.allthelogs.client.list;
 
 import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.LogSource;
+import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
@@ -38,6 +39,16 @@ class VisualMessageTest {
         assertFalse(VisualMessage.escapeChar(visual, 7, true));
         assertFalse(VisualMessage.escapeChar(visual, 0, true));
         assertFalse(VisualMessage.escapeChar(visual, 5, false));
+    }
+
+    @Test
+    void remapsStoredFormattingOntoTrimmedVisualText() {
+        int red = PackedFormatting.color(0xFF5555);
+        long[] stored = {PackedFormatting.run(2, 5, red)};
+        long[] visual = VisualMessage.remapFormatting("  hello  ", stored, false);
+        assertEquals("hello", VisualMessage.visual("  hello  ", false));
+        assertEquals(red, PackedFormatting.at(visual, 0));
+        assertEquals(red, PackedFormatting.at(visual, 4));
     }
 
     @Test

@@ -34,7 +34,7 @@ import java.util.function.Consumer;
 public final class LogImporter {
     private static final int WRITE_QUEUE_CAPACITY = 64;
     private static final PreparedLog END_OF_STREAM = new PreparedLog(
-        "", SourceKind.FILE, "", "", LocalDate.EPOCH, "", List.of(), List.of(),
+        "", SourceKind.FILE, "", "", LocalDate.EPOCH, "", List.of(), List.of(), List.of(),
         false, null, null, null, null);
 
     private final DuckDBConnection connection;

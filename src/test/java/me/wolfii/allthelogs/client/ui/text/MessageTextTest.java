@@ -6,6 +6,7 @@ import me.wolfii.allthelogs.client.list.HighlightSpan;
 import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.LogSource;
+import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import org.junit.jupiter.api.Test;
@@ -108,6 +109,13 @@ class MessageTextTest {
         assertEquals(Colors.CONTEXT_TEXT, MessageText.stackedColor(context, 0, true));
         assertEquals(Colors.multiply(Colors.CONTEXT_TEXT, Colors.ESCAPE_TEXT),
             MessageText.stackedColor(context, 5, true));
+        int red = PackedFormatting.color(0xFF5555);
+        DisplayRow coloured = new DisplayRow(
+            new ChatEntry(log, time, 2, "abc", new long[]{PackedFormatting.run(0, 3, red)}), true, Duration.ZERO, List.of());
+        assertEquals(0xFFFF5555, MessageText.stackedColor(coloured, 1, false));
+        Component drawn = MessageText.message(coloured);
+        assertEquals(0xFF5555, drawn.getStyle().getColor().getValue());
+        assertEquals("abc", drawn.getString());
     }
 
     private static String key(Component component) {

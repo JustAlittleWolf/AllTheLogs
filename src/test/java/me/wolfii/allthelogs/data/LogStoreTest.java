@@ -1,6 +1,7 @@
 package me.wolfii.allthelogs.data;
 
 import me.wolfii.allthelogs.data.parse.LogDates;
+import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import me.wolfii.allthelogs.data.store.SessionMarker;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -892,7 +893,41 @@ class LogStoreTest {
         store.startSession("26.2", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
         store.importSessionMessage("\u00a7chello \u00a7aworld", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
 
-        assertEquals("hello world", store.chatEntries().getFirst().message());
+        ChatEntry entry = store.chatEntries().getFirst();
+        assertEquals("hello world", entry.message());
+        long[] formatting = entry.formatting();
+        assertEquals(PackedFormatting.color(0xFF5555), PackedFormatting.at(formatting, 0));
+        assertEquals(PackedFormatting.color(0xFF5555), PackedFormatting.at(formatting, 5));
+        assertEquals(PackedFormatting.color(0x55FF55), PackedFormatting.at(formatting, 6));
+    }
+
+    @Test
+    void fileImportStoresFormattingAndLeavesPlainLinesNull() throws IOException {
+        LogFixtures.writePlain(tempDir.resolve("logs"), "debug.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:10] [Render thread/INFO]: [CHAT] plain
+            [10:00:11] [Render thread/INFO]: [CHAT] \u00a7cRed \u00a7lBold
+            """);
+        store.importDirectory(tempDir);
+        ChatEntry plain = store.query(ChatQuery.all().withSubstring("plain")).getFirst();
+        ChatEntry styled = store.query(ChatQuery.all().withSubstring("Red")).getFirst();
+        assertNull(plain.formatting());
+        assertEquals("Red Bold", styled.message());
+        assertEquals(PackedFormatting.color(0xFF5555), PackedFormatting.at(styled.formatting(), 0));
+        assertEquals(PackedFormatting.color(0xFF5555) | PackedFormatting.BOLD,
+            PackedFormatting.at(styled.formatting(), 4));
+    }
+
+    @Test
+    void liveFlattenedFormattingIsStoredAsPackedRuns() {
+        LocalDateTime at = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+        store.startSession("26.2", at);
+        int red = PackedFormatting.color(0xFF5555);
+        long[] packed = {PackedFormatting.run(0, 3, red)};
+        assertTrue(store.importSessionMessage("abc", packed, at));
+        ChatEntry entry = store.chatEntries().getFirst();
+        assertEquals("abc", entry.message());
+        assertEquals(red, PackedFormatting.at(entry.formatting(), 1));
     }
 
     @Test

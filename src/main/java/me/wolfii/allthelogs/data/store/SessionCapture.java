@@ -4,6 +4,7 @@ import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.LogDataException;
 import me.wolfii.allthelogs.data.LogSource;
 import me.wolfii.allthelogs.data.parse.FormattingCodes;
+import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import org.duckdb.DuckDBConnection;
 
 import java.sql.*;
@@ -66,20 +67,34 @@ public final class SessionCapture {
 
     /**
      * Stores a chat line in the current session. Timestamps are truncated to whole seconds so a
-     * later file import of the same line can be recognised as a duplicate. Formatting codes are
-     * stripped like on file import.
+     * later file import of the same line can be recognised as a duplicate. Legacy {@code §} codes are
+     * stripped like on file import; {@code formatting} is stored as packed runs, or parsed from the
+     * message when {@code null}.
      *
      * @return {@code true} if stored, {@code false} if dropped as a duplicate
      * @throws LogDataException if no session is active, or the entry cannot be written
      */
     public boolean importMessage(String message, LocalDateTime timestamp) {
+        return importMessage(message, null, timestamp);
+    }
+
+    public boolean importMessage(String message, long[] formatting, LocalDateTime timestamp) {
         Objects.requireNonNull(message, "message");
         Objects.requireNonNull(timestamp, "timestamp");
         requireActiveSession();
         LocalDateTime stamp = timestamp.withNano(0);
-        String stripped = FormattingCodes.strip(message);
+        String text;
+        long[] packed;
+        if (formatting == null) {
+            FormattingCodes.Parsed parsed = FormattingCodes.parse(message);
+            text = parsed.text();
+            packed = parsed.formatting();
+        } else {
+            text = message;
+            packed = formatting.length == 0 ? null : formatting;
+        }
         try {
-            return writeEntry(stripped, stamp);
+            return writeEntry(text, packed, stamp);
         } catch (SQLException e) {
             throw new LogDataException("could not store client chat entry", e);
         }
@@ -112,7 +127,7 @@ public final class SessionCapture {
         }
     }
 
-    private boolean writeEntry(String message, LocalDateTime timestamp) throws SQLException {
+    private boolean writeEntry(String message, long[] formatting, LocalDateTime timestamp) throws SQLException {
         try (PreparedStatement duplicate = connection.prepareStatement(
             "SELECT 1 FROM chat_entry WHERE entry_time = ? AND message = ? LIMIT 1")) {
             duplicate.setTimestamp(1, Timestamp.valueOf(timestamp));
@@ -123,11 +138,12 @@ public final class SessionCapture {
         }
 
         try (PreparedStatement insert = connection.prepareStatement(
-            "INSERT INTO chat_entry (file_id, line_index, entry_time, message) VALUES (?, ?, ?, ?)")) {
+            "INSERT INTO chat_entry (file_id, line_index, entry_time, message, formatting) VALUES (?, ?, ?, ?, CAST(? AS BIGINT[]))")) {
             insert.setLong(1, sessionFileId);
             insert.setInt(2, sessionLineIndex);
             insert.setTimestamp(3, Timestamp.valueOf(timestamp));
             insert.setString(4, message);
+            insert.setString(5, PackedFormatting.toSqlLiteral(formatting));
             insert.execute();
         }
         sessionLineIndex++;

@@ -7,6 +7,7 @@ import java.sql.Statement;
 /**
  * Database layout. {@code chat_entry} has no index: both access patterns are full scans, and an ART index would
  * prevent DuckDB from reusing table blocks when a log file is re-imported.
+ * {@code chat_entry.formatting} is a {@code BIGINT[]} of packed runs (one {@code long} per range), or NULL.
  */
 public final class Schema {
     private Schema() {
@@ -32,18 +33,10 @@ public final class Schema {
                 file_id BIGINT NOT NULL,
                 line_index INTEGER NOT NULL,
                 entry_time TIMESTAMP NOT NULL,
-                message VARCHAR NOT NULL
+                message VARCHAR NOT NULL,
+                formatting BIGINT[]
             )""");
         statement.execute("CREATE UNIQUE INDEX IF NOT EXISTS log_file_location ON log_file (source_path, entry_path)");
-        ensureOptionalColumns(statement);
-    }
-
-    /**
-     * Adds columns introduced after the original layout without bumping {@link SchemaMigration#CURRENT_VERSION}.
-     * Safe on current databases: {@code IF NOT EXISTS} is a no-op when {@link #create} already defined the column.
-     */
-    public static void ensureOptionalColumns(Statement statement) throws SQLException {
-        statement.execute("ALTER TABLE log_file ADD COLUMN IF NOT EXISTS minecraft_user VARCHAR");
     }
 
     /**
@@ -61,7 +54,7 @@ public final class Schema {
         statement.execute("DROP TABLE IF EXISTS chat_entry_sorted");
         statement.execute("""
             CREATE TABLE chat_entry_sorted AS
-            SELECT file_id, line_index, entry_time, message
+            SELECT file_id, line_index, entry_time, message, formatting
             FROM chat_entry
             ORDER BY entry_time, file_id, line_index""");
         statement.execute("DROP TABLE chat_entry");
