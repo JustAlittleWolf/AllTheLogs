@@ -7,7 +7,6 @@ import me.wolfii.allthelogs.data.importer.discover.LogCandidate;
 import me.wolfii.allthelogs.data.importer.discover.LogDiscovery;
 import me.wolfii.allthelogs.data.store.LogWriter;
 import me.wolfii.allthelogs.data.store.PreparedLog;
-import me.wolfii.allthelogs.data.store.Schema;
 import me.wolfii.allthelogs.data.store.SourceKind;
 import me.wolfii.allthelogs.data.store.StoredSources;
 import org.duckdb.DuckDBConnection;
@@ -15,7 +14,6 @@ import org.duckdb.DuckDBConnection;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -74,7 +72,8 @@ public final class LogImporter {
     public ImportResult importDirectory(Path directory, ImportOptions options, Consumer<ImportProgress> progress,
                                         BooleanSupplier cancelled) {
         int estimate = FileCountEstimator.estimateDirectory(directory, options);
-        return runImport(options, discovery -> discovery.discoverDirectory(directory), progress, cancelled, estimate);
+        return importIntoStore(options, discovery -> discovery.discoverDirectory(directory), progress, cancelled,
+            estimate);
     }
 
     /**
@@ -83,20 +82,7 @@ public final class LogImporter {
     public ImportResult importArchive(Path archive, ImportOptions options, Consumer<ImportProgress> progress,
                                       BooleanSupplier cancelled) {
         int estimate = FileCountEstimator.estimateArchive(archive, options);
-        return runImport(options, discovery -> discovery.discoverArchive(archive), progress, cancelled, estimate);
-    }
-
-    private ImportResult runImport(ImportOptions options, Consumer<LogDiscovery> walk, Consumer<ImportProgress> progress,
-                                   BooleanSupplier cancelled, int estimatedFiles) {
-        ImportResult result = importIntoStore(options, walk, progress, cancelled, estimatedFiles);
-        if (result.importedFiles() > 0) {
-            try (Statement statement = connection.createStatement()) {
-                Schema.clusterEntries(statement);
-            } catch (SQLException e) {
-                throw new LogDataException("could not cluster imported chat entries", e);
-            }
-        }
-        return result;
+        return importIntoStore(options, discovery -> discovery.discoverArchive(archive), progress, cancelled, estimate);
     }
 
     private ImportResult importIntoStore(ImportOptions options, Consumer<LogDiscovery> walk,
