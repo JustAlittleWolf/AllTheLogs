@@ -866,8 +866,23 @@ class LogStoreTest {
         assertEquals(LocalDate.of(2026, 8, 26), file.date());
         assertEquals(startedAt, file.startTime());
         assertEquals(startedAt, file.endTime());
+        assertNull(file.minecraftUser());
         assertEquals(1, store.chatLogs().size());
         assertTrue(store.allEntries().isEmpty());
+    }
+
+    @Test
+    void startSessionStoresMinecraftUserOnTheChatLogAndQueries() {
+        LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+
+        ChatLog file = store.startSession("26.2", startedAt, "JustAlittleWolf");
+
+        assertEquals("JustAlittleWolf", file.minecraftUser());
+        assertEquals("JustAlittleWolf", store.chatLogs().getFirst().minecraftUser());
+
+        assertTrue(store.importSessionMessage("hello from live", startedAt.plusSeconds(1)));
+        ChatEntry queried = store.findEntries(ChatQuery.all().withSubstring("hello from live")).getFirst();
+        assertEquals("JustAlittleWolf", queried.chatLog().minecraftUser());
     }
 
     @Test

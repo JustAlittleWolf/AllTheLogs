@@ -35,11 +35,11 @@ public final class SessionCapture {
 
     /**
      * Starts a capture session at {@code startedAt} (whole seconds) and returns the created log, which carries a
-     * unique {@link LogSource.Session#id()}.
+     * unique {@link LogSource.Session#id()}. {@code minecraftUser} is stored when known, or {@code null}.
      *
      * @throws LogDataException if the session cannot be written
      */
-    public ChatLog start(String minecraftVersion, LocalDateTime startedAt) {
+    public ChatLog start(String minecraftVersion, LocalDateTime startedAt, String minecraftUser) {
         Objects.requireNonNull(minecraftVersion, "minecraftVersion");
         Objects.requireNonNull(startedAt, "startedAt");
         LocalDateTime start = startedAt.withNano(0);
@@ -51,8 +51,8 @@ public final class SessionCapture {
             Timestamp timestamp = Timestamp.valueOf(start);
             try (PreparedStatement insert = connection.prepareStatement("""
                 INSERT INTO log_file (id, file_name, source_kind, source_path, entry_path, log_date,
-                                      minecraft_version, start_time, end_time, entry_count)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""")) {
+                                      minecraft_version, start_time, end_time, entry_count, minecraft_user)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)""")) {
                 insert.setLong(1, fileId);
                 insert.setString(2, "");
                 insert.setString(3, SourceKind.SESSION.name());
@@ -62,11 +62,16 @@ public final class SessionCapture {
                 insert.setString(7, minecraftVersion);
                 insert.setTimestamp(8, timestamp);
                 insert.setTimestamp(9, timestamp);
+                if (minecraftUser == null) {
+                    insert.setNull(10, Types.VARCHAR);
+                } else {
+                    insert.setString(10, minecraftUser);
+                }
                 insert.execute();
             }
             sessionFileId = fileId;
             sessionLineIndex = 0;
-            return new ChatLog(new LogSource.Session(sessionId), date, minecraftVersion, start, start);
+            return new ChatLog(new LogSource.Session(sessionId), date, minecraftVersion, start, start, minecraftUser);
         } catch (SQLException e) {
             throw new LogDataException("could not start a client session", e);
         }
