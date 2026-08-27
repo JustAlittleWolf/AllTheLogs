@@ -2,7 +2,6 @@ package me.wolfii.allthelogs.data;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -58,22 +57,5 @@ public record MatchSummary(LocalDateTime oldest, LocalDateTime newest, long matc
             dates.add(day.date());
         }
         return List.copyOf(dates);
-    }
-
-    /**
-     * Distinct year-months that contain at least one matched day, oldest first.
-     */
-    public List<YearMonth> months() {
-        if (days.isEmpty()) return List.of();
-        List<YearMonth> months = new ArrayList<>();
-        YearMonth previous = null;
-        for (MatchDay day : days) {
-            YearMonth month = YearMonth.from(day.date());
-            if (!month.equals(previous)) {
-                months.add(month);
-                previous = month;
-            }
-        }
-        return List.copyOf(months);
     }
 }

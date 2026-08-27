@@ -18,6 +18,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.util.*;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
@@ -36,19 +37,11 @@ public final class LogDiscovery {
     private final Pattern pathMatcher;
     private final Consumer<LogCandidate> consumer;
     private final ImportObserver observer;
-    private final java.util.function.BooleanSupplier cancelled;
+    private final BooleanSupplier cancelled;
     private final List<ImportResult.Failure> failures = new ArrayList<>();
 
-    public LogDiscovery(ImportOptions options, Consumer<LogCandidate> consumer) {
-        this(options, consumer, new ImportObserver(null), () -> false);
-    }
-
-    public LogDiscovery(ImportOptions options, Consumer<LogCandidate> consumer, ImportObserver observer) {
-        this(options, consumer, observer, () -> false);
-    }
-
     public LogDiscovery(ImportOptions options, Consumer<LogCandidate> consumer, ImportObserver observer,
-                        java.util.function.BooleanSupplier cancelled) {
+                        BooleanSupplier cancelled) {
         this.options = options;
         this.pathMatcher = options.pathMatcher() == null ? null : Globs.compile(options.pathMatcher());
         this.consumer = consumer;

@@ -36,14 +36,10 @@ public final class MessageText {
     private MessageText() {
     }
 
-    public static String matchCountText(long matches) {
-        return matchCountText(matches, true);
-    }
-
     /**
-     * Visible match count. Unknown totals above 99 are shown as {@code >99} until {@code matches} finishes.
+     * Visible match count. Unknown totals above 99 are shown as {@code >99} until the exact total arrives.
      */
-    public static String matchCountText(long matches, boolean exact) {
+    static String matchCountText(long matches, boolean exact) {
         if (!exact && matches > 99) return ">99";
         return Long.toString(Math.max(0, matches));
     }
@@ -55,7 +51,7 @@ public final class MessageText {
     /**
      * Search duration for the status chip: seconds with one decimal, or empty when under 0.1s after rounding.
      */
-    public static String searchDurationText(long elapsedMs) {
+    static String searchDurationText(long elapsedMs) {
         double seconds = Math.round(Math.max(0, elapsedMs) / 100.0) / 10.0;
         if (seconds < 0.1) return "";
         return "%.1f".formatted(seconds);
@@ -64,11 +60,6 @@ public final class MessageText {
     /**
      * Text for the list's status chip: a persistent overlay, then loading, then the match count and search time.
      */
-    public static Component listStatus(Component overlay, boolean loading, boolean showMatches, long matchCount,
-                                       long elapsedMs) {
-        return listStatus(overlay, loading, showMatches, matchCount, true, elapsedMs);
-    }
-
     public static Component listStatus(Component overlay, boolean loading, boolean showMatches, long matchCount,
                                        boolean exactCount, long elapsedMs) {
         if (overlay != null && !overlay.getString().isEmpty()) return overlay;
@@ -92,10 +83,6 @@ public final class MessageText {
     /**
      * Compact hover card for a message timestamp: full date, labelled version/user, path and archive entry.
      */
-    public static List<Component> messageInfo(DisplayRow row) {
-        return messageInfo(row, Integer.MAX_VALUE, text -> text.length());
-    }
-
     public static List<Component> messageInfo(DisplayRow row, int maxWidth, ToIntFunction<String> widthOf) {
         List<Component> lines = new ArrayList<>();
         String date = row.entry().timestamp().withNano(0).format(FULL_DATE);
@@ -123,22 +110,6 @@ public final class MessageText {
         return lines;
     }
 
-    static String playedLine(ChatLog log) {
-        boolean version = displayVersion(log) != null;
-        String user = log.minecraftUser();
-        boolean named = user != null && !user.isBlank();
-        if (version && named) {
-            return "Version " + log.minecraftVersion() + " as " + user;
-        }
-        if (version) {
-            return "Version " + log.minecraftVersion();
-        }
-        if (named) {
-            return "Played as " + user;
-        }
-        return null;
-    }
-
     private static String displayVersion(ChatLog log) {
         if (log.minecraftVersion() == null || log.minecraftVersion().isBlank()) return null;
         if (ChatLog.UNKNOWN_VERSION.equals(log.minecraftVersion())) return null;
@@ -147,10 +118,6 @@ public final class MessageText {
 
     public static Component dateHeader(LocalDate date) {
         return Component.literal(date.format(DATE));
-    }
-
-    public static Component message(DisplayRow row) {
-        return messageRange(row, 0, row.message().length());
     }
 
     public static Component messageRange(DisplayRow row, int from, int to) {
@@ -182,7 +149,7 @@ public final class MessageText {
      * Chat colour with context dimming and {@code \n} darkening multiplied in that order.
      * Search hits are marked with a background fill, not a text tint.
      */
-    public static int stackedColor(DisplayRow row, int index, boolean interpretEscapes) {
+    static int stackedColor(DisplayRow row, int index, boolean interpretEscapes) {
         return stackedColor(row, index, interpretEscapes, PackedFormatting.at(row.visualFormatting(), index));
     }
 
@@ -213,7 +180,8 @@ public final class MessageText {
         String prefix = Component.translatable(key, "").getString();
         int prefixWidth = widthOf.applyAsInt(prefix);
         int valueWidth = Math.max(8, maxWidth - prefixWidth);
-        List<MessageWrap.Line> wrapped = MessageWrap.wrap(value, valueWidth, widthOf);
+        List<MessageWrap.Line> wrapped = MessageWrap.wrap(value, valueWidth,
+            MessageWrap.substringWidths(value, widthOf));
         if (wrapped.isEmpty()) {
             lines.add(labeled(key, colored(value, valueColor)));
             return;
