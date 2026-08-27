@@ -86,6 +86,28 @@ public final class MessageListLayout {
         return Math.min(100, 2 * Math.max(0, contextLines));
     }
 
+    /**
+     * Estimated pixel height of a search result: each match plus {@code contextLines} before and after,
+     * and one date header per occupied day. Independent of wrap and of the currently loaded page, so the
+     * timeline thumb can stay a fixed size for a query.
+     */
+    public static int estimatedContentHeight(long matchCount, int contextLines, int uniqueDates) {
+        long matches = Math.max(0, matchCount);
+        long lines = matches * (1L + 2L * Math.max(0, contextLines));
+        int dates = Math.max(0, uniqueDates);
+        long headers = dates == 0 ? 0 : (long) dates * DATE_HEIGHT + (long) Math.max(0, dates - 1) * DATE_GAP;
+        long total = headers + lines * (long) ROW_HEIGHT;
+        return total > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) total;
+    }
+
+    /**
+     * Top padding that bottom-aligns content when it is shorter than the viewport.
+     */
+    public static int bottomPad(int contentHeight, int viewHeight) {
+        if (viewHeight <= 0 || contentHeight <= 0 || contentHeight >= viewHeight) return 0;
+        return viewHeight - contentHeight;
+    }
+
     static boolean needsClusterGap(DisplayRow previous, DisplayRow current, int contextLines) {
         if (!previous.chatLog().equals(current.chatLog())) return true;
         int gap = Math.abs(current.lineIndex() - previous.lineIndex());

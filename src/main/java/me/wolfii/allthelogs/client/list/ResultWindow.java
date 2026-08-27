@@ -207,6 +207,17 @@ public final class ResultWindow {
     }
 
     /**
+     * Whether the buffered page already has a row on {@code time}'s calendar day. Used to scroll locally
+     * instead of treating empty gaps between the first and last timestamps as loaded content.
+     */
+    public boolean showsDate(LocalDateTime time) {
+        if (!coversTime(time) || time == null) return false;
+        int index = nearestIndex(time);
+        if (index < 0) return false;
+        return rows.get(index).entry().timestamp().toLocalDate().equals(time.toLocalDate());
+    }
+
+    /**
      * Index of the row whose timestamp is closest to {@code time}, or {@code -1} when the window is empty.
      */
     public int nearestIndex(LocalDateTime time) {

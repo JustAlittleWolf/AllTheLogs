@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.client.timeline;
 
+import me.wolfii.allthelogs.client.list.MessageListLayout;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
@@ -87,10 +88,17 @@ class TimelineLayoutTest {
         assertEquals(150, TimelineLayout.thumbOffset(200, 1, 50));
         assertEquals(0.5, TimelineLayout.progressFromThumb(75, 200, 50), 0.0001);
         assertEquals(75, TimelineLayout.thumbOffset(200, TimelineLayout.progressFromThumb(75, 200, 50), 50));
-        assertEquals(16, TimelineLayout.thumbHeightFromProgress(200, 0.4, 0.41, 16));
-        assertEquals(100, TimelineLayout.thumbHeightFromProgress(200, 0, 0.5, 16));
+        assertEquals(0, TimelineLayout.scrollToRow(0, 800, 200), 0.0001);
+        assertEquals(200, TimelineLayout.scrollToRow(200, 800, 200), 0.0001);
+        assertEquals(600, TimelineLayout.scrollToRow(10_000, 800, 200), 0.0001);
         assertEquals(8, TimelineLayout.thumbGrabOffset(18, 10, 20, 200), 0.0001);
         assertEquals(10, TimelineLayout.thumbGrabOffset(4, 10, 20, 200), 0.0001);
+        int few = MessageListLayout.estimatedContentHeight(20, 0, 1);
+        int many = MessageListLayout.estimatedContentHeight(20, 4, 1);
+        int fewThumb = TimelineLayout.thumbHeight(200, few, 200, 16);
+        int manyThumb = TimelineLayout.thumbHeight(200, many, 200, 16);
+        assertTrue(manyThumb < fewThumb);
+        assertEquals(fewThumb, TimelineLayout.thumbHeight(200, few, 200, 16));
     }
 
     @Test

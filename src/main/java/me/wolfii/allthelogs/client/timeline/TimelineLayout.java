@@ -171,15 +171,14 @@ public final class TimelineLayout {
     }
 
     /**
-     * Thumb height for the visible slice of a timeline, from the progress of the first and last visible times.
+     * Scroll offset that puts {@code rowTop} at the top of the view, clamped so the last content can sit
+     * on the bottom edge instead of leaving a gap.
      */
-    public static int thumbHeightFromProgress(int trackHeight, double startProgress, double endProgress, int minThumb) {
-        if (trackHeight <= 0) return 0;
-        double span = Math.abs(endProgress - startProgress);
-        int sized = (int) Math.round(span * trackHeight);
-        int min = Math.min(trackHeight, Math.max(1, minThumb));
-        if (sized <= 0) return min;
-        return Math.clamp(sized, min, trackHeight);
+    public static double scrollToRow(int rowTop, int contentHeight, int viewHeight) {
+        double max = Math.max(0, contentHeight - viewHeight);
+        if (rowTop < 0) return 0;
+        if (rowTop > max) return max;
+        return rowTop;
     }
 
     /**
