@@ -193,7 +193,7 @@ final class LogBrowserQueries {
             if (chronological) list.scrollToEnd();
             list.showMatchCount(ResultWindow.matchCount(rows), elapsedMs(startedAt));
             snapshotCurrentList();
-            loadMatchSummary(gen, page, startedAt);
+            loadMatchSummary(gen, query, startedAt);
         });
         refreshStats();
     }
