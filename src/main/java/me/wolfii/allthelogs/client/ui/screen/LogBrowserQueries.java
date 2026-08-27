@@ -122,6 +122,11 @@ final class LogBrowserQueries {
     void reload() {
         if (list == null) return;
         reloadPending = false;
+        if (!filter.canQuery()) {
+            generation.incrementAndGet();
+            list.setLoading(false);
+            return;
+        }
         int gen = generation.incrementAndGet();
         list.setLoading(true);
         boolean chronological = filter.sort() == ChatQuery.Sort.ASCENDING;
@@ -184,7 +189,7 @@ final class LogBrowserQueries {
      * limit so the buffer cannot grow without bound while scrolling.
      */
     private void loadMore(TimelineEdge edge) {
-        if (list.loading() || list.window().rows().isEmpty()) return;
+        if (!filter.canQuery() || list.loading() || list.window().rows().isEmpty()) return;
         boolean towardStart = edge == TimelineEdge.BEFORE;
         LocalDateTime cursor = towardStart ? list.window().firstMatchTime() : list.window().lastMatchTime();
         if (cursor == null) return;
@@ -226,11 +231,11 @@ final class LogBrowserQueries {
     }
 
     /**
-     * Loads more context around a double-clicked row, on the side that was clicked.
+     * Loads more context from a separator caret, on the side that was clicked.
      */
     private void expandAround(DisplayRow row, TimelineEdge side) {
-        int extra = MessageListLayout.extraContextLines(filter.contextLines());
-        if (extra <= 0 || list == null) return;
+        if (list == null) return;
+        int extra = MessageListLayout.extraContextLines();
         boolean older = MessageListLayout.expandOlderMessages(
             side == TimelineEdge.BEFORE, filter.sort() == ChatQuery.Sort.ASCENDING);
         int before = older ? extra : 0;
@@ -264,6 +269,14 @@ final class LogBrowserQueries {
      * page and leave the thumb where it is.
      */
     private void jumpTo(ScrubJump jump, boolean preview) {
+        if (!filter.canQuery()) {
+            if (preview) {
+                if (list != null) list.scrubQueryFinished();
+            } else if (list != null) {
+                list.finishScrub();
+            }
+            return;
+        }
         LocalDateTime target = clampToMatchedRange(jump == null ? null : jump.time());
         if (target == null && (jump == null || jump.skip() < 0)) {
             if (preview) {

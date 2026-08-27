@@ -1,6 +1,7 @@
 package me.wolfii.allthelogs.client.ui.text;
 
 import me.wolfii.allthelogs.client.list.DisplayRow;
+import me.wolfii.allthelogs.client.list.MessageListLayout;
 import me.wolfii.allthelogs.client.list.MessageWrap;
 import me.wolfii.allthelogs.client.list.VisualMessage;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
@@ -67,6 +68,14 @@ public final class MessageText {
             Component.translatable("allthelogs.help.copy"),
             Component.translatable("allthelogs.help.expand"),
             Component.translatable("allthelogs.help.scroll"));
+    }
+
+    public static Component expandUpHint() {
+        return Component.translatable("allthelogs.expand.up", MessageListLayout.EXPAND_LINES);
+    }
+
+    public static Component expandDownHint() {
+        return Component.translatable("allthelogs.expand.down", MessageListLayout.EXPAND_LINES);
     }
 
     /**

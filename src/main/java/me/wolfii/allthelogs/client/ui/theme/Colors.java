@@ -30,6 +30,16 @@ public final class Colors {
     public static final int SELECTION = 0x663A6EA5;
     public static final int STATUS_CHIP = 0xE0181818;
     public static final int HOVER_CHIP = 0xF01C1C1C;
+    /**
+     * Rule drawn between sessions and where context runs out.
+     */
+    public static final int SEPARATOR = 0xFF3A3A3A;
+    public static final int SEPARATOR_CARET = 0xFFB0B0B0;
+    /**
+     * Default vanilla edit-box text, and a slight red tint for a malformed regex.
+     */
+    public static final int SEARCH_TEXT = 0xFFE0E0E0;
+    public static final int SEARCH_INVALID = 0xFFE8A8A8;
 
     public static final int TRACK = 0xFF2B2B2B;
     public static final int TRACK_BORDER = 0xFF3A3A3A;

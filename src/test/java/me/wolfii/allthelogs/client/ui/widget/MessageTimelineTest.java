@@ -20,14 +20,6 @@ class MessageTimelineTest {
     }
 
     @Test
-    void clickInTopHalfUsesTheClickedRowHalf() {
-        assertTrue(MessageTimeline.clickInTopHalf(0, 0, 12));
-        assertTrue(MessageTimeline.clickInTopHalf(5, 0, 12));
-        assertFalse(MessageTimeline.clickInTopHalf(6, 0, 12));
-        assertFalse(MessageTimeline.clickInTopHalf(11, 0, 12));
-    }
-
-    @Test
     void highlightMarkerExtendsOnePixelLeftAndStopsTwoPixelsEarly() {
         assertEquals(7, MessageListPainter.highlightLeft(8));
         assertEquals(MessageListLayout.ROW_HEIGHT - 2, MessageListPainter.highlightHeight());

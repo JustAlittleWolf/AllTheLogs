@@ -22,6 +22,8 @@ class ColorsTest {
     void contextTimestampsAreSlightlyDarker() {
         assertEquals(0xFFA0A0A0, Colors.TIMESTAMP);
         assertEquals(0xFF7E7E7E, Colors.CONTEXT_TIMESTAMP);
+        assertEquals(0xFF3A3A3A, Colors.SEPARATOR);
+        assertEquals(0xFFE8A8A8, Colors.SEARCH_INVALID);
     }
 
     @Test

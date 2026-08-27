@@ -10,6 +10,7 @@ import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.*;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.ui.text.MessageText;
+import me.wolfii.allthelogs.client.ui.theme.Colors;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
 import me.wolfii.allthelogs.client.ui.widget.MessageTimeline;
 import net.minecraft.client.Minecraft;
@@ -109,6 +110,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         search.setHint(Component.translatable("allthelogs.search.placeholder"));
         search.setMaxLength(256);
         search.onChanged().subscribe(this::onSearchChanged);
+        refreshSearchColor();
         bar.child(search);
 
         bar.child(UIComponents.button(Component.translatable("allthelogs.filter"),
@@ -131,6 +133,11 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     private void onSearchChanged(String text) {
         if (text.equals(queries.filter().text())) return;
         queries.updateFilter(queries.filter().withText(text));
+        refreshSearchColor();
+        if (!queries.filter().canQuery()) {
+            queries.bumpGeneration();
+            return;
+        }
         int generation = queries.bumpGeneration();
         CompletableFuture.delayedExecutor(SEARCH_DEBOUNCE_MS, TimeUnit.MILLISECONDS).execute(() -> {
             if (generation == queries.currentGeneration()) {
@@ -141,6 +148,12 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
 
     private void applyFilter(SearchFilter next) {
         queries.setFilter(next);
+        refreshSearchColor();
         if (filters != null) filters.syncSortButtons();
+    }
+
+    private void refreshSearchColor() {
+        if (search == null) return;
+        search.setTextColor(queries.filter().invalidRegex() ? Colors.SEARCH_INVALID : Colors.SEARCH_TEXT);
     }
 }
