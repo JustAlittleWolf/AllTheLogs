@@ -165,7 +165,15 @@ public final class TimelineLayout {
      * are. Independent of scroll position and of the loaded page.
      */
     public static int thumbHeightForDays(int trackHeight, int uniqueDates) {
-        if (trackHeight <= 0) return 0;
+        return thumbHeightForDays(trackHeight, uniqueDates, Integer.MAX_VALUE, 0);
+    }
+
+    /**
+     * Like {@link #thumbHeightForDays(int, int)}, but {@code 0} when the loaded content already fits so the
+     * draggable thumb can be hidden.
+     */
+    public static int thumbHeightForDays(int trackHeight, int uniqueDates, int contentHeight, int viewHeight) {
+        if (trackHeight <= 0 || (viewHeight > 0 && contentHeight <= viewHeight)) return 0;
         int min = Math.min(trackHeight, 16);
         int max = Math.min(trackHeight, Math.max(min, trackHeight / 5));
         int few = Math.min(max, Math.max(min, (int) Math.round(trackHeight * 0.16)));
@@ -175,6 +183,16 @@ public final class TimelineLayout {
         if (dates >= 30) return many;
         double t = (dates - 1) / 29.0;
         return (int) Math.round(few + (many - few) * t);
+    }
+
+    /**
+     * Timeline progress with the thumb pinned to the track ends when the viewport is at the start or end of
+     * the loaded content.
+     */
+    public static double pinnedProgress(double progress, boolean atStart, boolean atEnd) {
+        if (atEnd) return 1;
+        if (atStart) return 0;
+        return Math.clamp(progress, 0, 1);
     }
 
     /**
