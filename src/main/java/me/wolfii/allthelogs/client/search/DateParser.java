@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Parses the date fields on the filter panel. Empty input means an open bound.
+ * Parses the from/until fields on the filter overlay. Empty input means an open bound.
  */
 public final class DateParser {
     private static final List<DateTimeFormatter> DATE_TIMES = List.of(
