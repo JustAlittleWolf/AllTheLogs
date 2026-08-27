@@ -12,7 +12,6 @@ import net.minecraft.network.chat.contents.TranslatableContents;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -24,8 +23,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class MessageTextTest {
     @Test
     void matchCountTextCapsUntilTheExactTotalIsKnown() {
-        assertEquals("0", MessageText.matchCountText(0));
-        assertEquals("12", MessageText.matchCountText(12));
+        assertEquals("0", MessageText.matchCountText(0, true));
+        assertEquals("12", MessageText.matchCountText(12, true));
         assertEquals(">99", MessageText.matchCountText(100, false));
         assertEquals("150", MessageText.matchCountText(150, true));
     }
@@ -43,8 +42,8 @@ class MessageTextTest {
         LocalDateTime time = LocalDateTime.of(2026, 8, 27, 19, 22, 14);
         ChatLog log = new ChatLog(new LogSource.File(Path.of("/home/wolf/logs/2026-08-27-1.log.gz")),
             LocalDate.of(2026, 8, 27), "1.12.2", time, time, "Steve");
-        DisplayRow row = new DisplayRow(new ChatEntry(log, time, 0, "hi"), true, Duration.ZERO, List.of());
-        List<Component> info = MessageText.messageInfo(row);
+        DisplayRow row = new DisplayRow(new ChatEntry(log, time, 0, "hi"), true, List.of());
+        List<Component> info = MessageText.messageInfo(row, Integer.MAX_VALUE, String::length);
         assertEquals("2026-08-27 19:22:14", info.get(0).getString());
         assertEquals("allthelogs.info.version", key(info.get(1)));
         assertEquals("allthelogs.info.playing", key(info.get(2)));
@@ -53,13 +52,11 @@ class MessageTextTest {
         assertEquals("1.12.2", ((Component) args(info.get(1))[0]).getString());
         assertEquals("Steve", ((Component) args(info.get(2))[0]).getString());
         assertTrue(((Component) args(info.get(3))[0]).getString().contains("2026-08-27-1.log.gz"));
-        ChatLog unnamed = new ChatLog(new LogSource.File(Path.of("/tmp/a.log")),
-            LocalDate.of(2026, 8, 27), ChatLog.UNKNOWN_VERSION, time, time, "Alex");
-        assertEquals("Played as Alex", MessageText.playedLine(unnamed));
         ChatLog archive = new ChatLog(new LogSource.Archive(Path.of("/tmp/logs.zip"), "instance/logs/latest.log"),
             LocalDate.of(2026, 8, 27), "26.2", time, time);
         List<Component> archiveInfo = MessageText.messageInfo(
-            new DisplayRow(new ChatEntry(archive, time, 0, "hi"), true, Duration.ZERO, List.of()));
+            new DisplayRow(new ChatEntry(archive, time, 0, "hi"), true, List.of()),
+            Integer.MAX_VALUE, String::length);
         assertEquals("allthelogs.info.path", key(archiveInfo.get(2)));
         assertEquals("allthelogs.info.entry", key(archiveInfo.get(3)));
         assertEquals("instance/logs/latest.log", ((Component) args(archiveInfo.get(3))[0]).getString());
@@ -70,17 +67,17 @@ class MessageTextTest {
         LocalDateTime time = LocalDateTime.of(2026, 8, 27, 19, 22, 14);
         ChatLog log = new ChatLog(new LogSource.File(Path.of("/very/long/path/to/the/log/file.log")),
             LocalDate.of(2026, 8, 27), "26.2", time, time);
-        DisplayRow row = new DisplayRow(new ChatEntry(log, time, 0, "hi"), true, Duration.ZERO, List.of());
+        DisplayRow row = new DisplayRow(new ChatEntry(log, time, 0, "hi"), true, List.of());
         List<Component> info = MessageText.messageInfo(row, 12, String::length);
         assertTrue(info.size() > 2);
     }
 
     @Test
     void listStatusOmitsDurationUnderATenthOfASecond() {
-        Component status = MessageText.listStatus(Component.empty(), false, true, 4, 12);
+        Component status = MessageText.listStatus(Component.empty(), false, true, 4, true, 12);
         assertEquals("allthelogs.status.matches", key(status));
         assertEquals("4", args(status)[0]);
-        Component timed = MessageText.listStatus(Component.empty(), false, true, 4, 120);
+        Component timed = MessageText.listStatus(Component.empty(), false, true, 4, true, 120);
         assertEquals("allthelogs.status.matches.timed", key(timed));
         assertEquals("4", args(timed)[0]);
         assertEquals("0.1", args(timed)[1]);
@@ -102,9 +99,9 @@ class MessageTextTest {
     void literalEscapesAreGreyedWhenDrawn() {
         LocalDateTime time = LocalDateTime.of(2026, 8, 27, 12, 0);
         ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), LocalDate.of(2026, 8, 27), "26.2", time, time);
-        DisplayRow row = new DisplayRow(new ChatEntry(log, time, 0, "hello\\nworld"), true, Duration.ZERO, List.of());
+        DisplayRow row = new DisplayRow(new ChatEntry(log, time, 0, "hello\\nworld"), true, List.of());
         assertEquals("hello\\n\nworld", row.message());
-        Component drawn = MessageText.message(row);
+        Component drawn = drawn(row);
         assertTrue(drawn.getString().contains("\\n"));
         int escape = MessageText.stackedColor(row, 5, true);
         assertEquals(Colors.ESCAPE_TEXT & 0xFFFFFF, escape & 0xFFFFFF);
@@ -114,20 +111,20 @@ class MessageTextTest {
     void highlightAndContextAndEscapesStack() {
         LocalDateTime time = LocalDateTime.of(2026, 8, 27, 12, 0);
         ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), LocalDate.of(2026, 8, 27), "26.2", time, time);
-        DisplayRow match = new DisplayRow(new ChatEntry(log, time, 0, "needle"), true, Duration.ZERO,
+        DisplayRow match = new DisplayRow(new ChatEntry(log, time, 0, "needle"), true,
             List.of(new HighlightSpan(0, 3)));
         assertEquals(Colors.MATCH_TEXT, MessageText.stackedColor(match, 0, false));
         assertEquals(Colors.MATCH_TEXT, MessageText.stackedColor(match, 3, false));
-        DisplayRow context = new DisplayRow(new ChatEntry(log, time, 1, "hello\\nworld"), false, Duration.ofSeconds(1),
+        DisplayRow context = new DisplayRow(new ChatEntry(log, time, 1, "hello\\nworld"), false,
             List.of());
         assertEquals(Colors.CONTEXT_TEXT, MessageText.stackedColor(context, 0, true));
         assertEquals(Colors.multiply(Colors.CONTEXT_TEXT, Colors.ESCAPE_TEXT),
             MessageText.stackedColor(context, 5, true));
         int red = PackedFormatting.color(0xFF5555);
         DisplayRow coloured = new DisplayRow(
-            new ChatEntry(log, time, 2, "abc", new long[]{PackedFormatting.run(0, 3, red)}), true, Duration.ZERO, List.of());
+            new ChatEntry(log, time, 2, "abc", new long[]{PackedFormatting.run(0, 3, red)}), true, List.of());
         assertEquals(0xFFFF5555, MessageText.stackedColor(coloured, 1, false));
-        Component drawn = MessageText.message(coloured);
+        Component drawn = drawn(coloured);
         assertEquals(0xFF5555, drawn.getStyle().getColor().getValue());
         assertEquals("abc", drawn.getString());
     }
@@ -142,8 +139,8 @@ class MessageTextTest {
         ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), LocalDate.of(2026, 8, 27), "26.2", time, time);
         DisplayRow row = new DisplayRow(
             new ChatEntry(log, time, 0, "abc", new long[]{PackedFormatting.run(0, 3, PackedFormatting.OBFUSCATED)}),
-            true, Duration.ZERO, List.of());
-        Component drawn = MessageText.message(row);
+            true, List.of());
+        Component drawn = drawn(row);
         assertTrue(drawn.getStyle().isObfuscated());
         assertEquals("abc", drawn.getString());
     }
@@ -152,13 +149,17 @@ class MessageTextTest {
     void contextTimestampsAreDarkerThanMatchTimestamps() {
         LocalDateTime time = LocalDateTime.of(2026, 8, 27, 12, 0, 4);
         ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), LocalDate.of(2026, 8, 27), "26.2", time, time);
-        DisplayRow match = new DisplayRow(new ChatEntry(log, time, 0, "needle"), true, Duration.ZERO, List.of());
-        DisplayRow context = new DisplayRow(new ChatEntry(log, time, 1, "around"), false, Duration.ofSeconds(1),
+        DisplayRow match = new DisplayRow(new ChatEntry(log, time, 0, "needle"), true, List.of());
+        DisplayRow context = new DisplayRow(new ChatEntry(log, time, 1, "around"), false,
             List.of());
         assertEquals("12:00:04", MessageText.timestamp(match).getString());
         assertEquals(Colors.TIMESTAMP & 0xFFFFFF, MessageText.timestamp(match).getStyle().getColor().getValue());
         assertEquals(Colors.CONTEXT_TIMESTAMP & 0xFFFFFF,
             MessageText.timestamp(context).getStyle().getColor().getValue());
+    }
+
+    private static Component drawn(DisplayRow row) {
+        return MessageText.messageRange(row, 0, row.message().length());
     }
 
     private static String key(Component component) {

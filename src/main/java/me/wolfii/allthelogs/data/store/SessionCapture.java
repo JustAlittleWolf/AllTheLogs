@@ -16,13 +16,20 @@ import java.util.Objects;
  * Captures chat lines from a running Minecraft client into a {@link LogSource.Session} log.
  */
 public final class SessionCapture {
-    private static final String SESSION_SOURCE_PATH = "<session>";
 
-    private final DuckDBConnection connection;
+    private DuckDBConnection connection;
     private long sessionFileId = -1;
     private int sessionLineIndex;
 
     public SessionCapture(DuckDBConnection connection) {
+        this.connection = connection;
+    }
+
+    /**
+     * Points this capture at a replacement connection after the store compacted the database file.
+     * Session identity ({@code sessionFileId} / line index) is unchanged because those rows were copied.
+     */
+    public void attach(DuckDBConnection connection) {
         this.connection = connection;
     }
 
@@ -49,7 +56,7 @@ public final class SessionCapture {
                 insert.setLong(1, fileId);
                 insert.setString(2, "");
                 insert.setString(3, SourceKind.SESSION.name());
-                insert.setString(4, SESSION_SOURCE_PATH);
+                insert.setString(4, StoredSources.SESSION_PATH);
                 insert.setString(5, entryPath);
                 insert.setDate(6, Date.valueOf(date));
                 insert.setString(7, minecraftVersion);

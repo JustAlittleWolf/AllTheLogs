@@ -20,25 +20,20 @@ public final class VisualMessage {
         return log != null && !(log.source() instanceof LogSource.Session);
     }
 
-    public static String visual(String message, boolean interpretEscapes) {
-        return layout(message, interpretEscapes).text();
-    }
-
     /**
      * Display text and remapped formatting for a stored entry, laid out once.
      */
     public static Prepared prepare(ChatEntry entry) {
         if (entry == null) return Prepared.EMPTY;
-        boolean interpret = interpretEscapes(entry.chatLog());
-        Layout layout = layout(entry.message(), interpret);
-        return new Prepared(layout.text(), remap(layout, entry.message(), entry.formatting()));
+        return prepare(entry.message(), entry.formatting(), interpretEscapes(entry.chatLog()));
     }
 
     /**
-     * Packed formatting remapped from stored-message offsets onto {@link #visual(String, boolean)}.
+     * Display text and remapped formatting for a stored message and its packed formatting.
      */
-    public static long[] remapFormatting(String message, long[] formatting, boolean interpretEscapes) {
-        return remap(layout(message, interpretEscapes), message, formatting);
+    static Prepared prepare(String message, long[] formatting, boolean interpretEscapes) {
+        Layout layout = layout(message, interpretEscapes);
+        return new Prepared(layout.text(), remap(layout, message, formatting));
     }
 
     /**
@@ -59,18 +54,6 @@ public final class VisualMessage {
         if (index < 0 || index + 1 >= visual.length()) return false;
         if (visual.charAt(index) != '\\' || visual.charAt(index + 1) != 'n') return false;
         return index + 2 >= visual.length() || visual.charAt(index + 2) == '\n';
-    }
-
-    /**
-     * Strips leading and trailing newline characters from a display string. Literal {@code \n} tokens are kept.
-     */
-    public static String trimNewlines(String visual) {
-        if (visual == null || visual.isEmpty()) return visual == null ? "" : visual;
-        int start = 0;
-        int end = visual.length();
-        while (start < end && visual.charAt(start) == '\n') start++;
-        while (end > start && visual.charAt(end - 1) == '\n') end--;
-        return start == 0 && end == visual.length() ? visual : visual.substring(start, end);
     }
 
     private static long[] remap(Layout layout, String storedMessage, long[] formatting) {

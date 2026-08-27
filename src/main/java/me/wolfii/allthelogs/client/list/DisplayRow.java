@@ -4,84 +4,61 @@ import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.ChatLog;
 
-import java.time.Duration;
-import java.util.*;
+import java.util.List;
+import java.util.Objects;
 import java.util.function.Predicate;
 
 /**
- * One row in the log browser: a stored chat line plus whether it is a search hit and how far it is from the
- * nearest hit in the same log.
+ * One row in the log browser: a stored chat line, whether it is a search hit, and where the query matched
+ * inside its display text.
+ *
+ * @param match            whether this row is a search hit rather than a context line around one
+ * @param highlights       ranges of {@code message} the query matched; empty on context lines
+ * @param message          the text as drawn, which trims each line and turns literal {@code \n} into a break
+ * @param visualFormatting packed formatting remapped onto {@code message}, or {@code null} when unstyled
  */
 public record DisplayRow(
     ChatEntry entry,
     boolean match,
-    Duration distanceFromMatch,
     List<HighlightSpan> highlights,
     String message,
     long[] visualFormatting
 ) {
     public DisplayRow {
         Objects.requireNonNull(entry, "entry");
-        Objects.requireNonNull(distanceFromMatch, "distanceFromMatch");
         Objects.requireNonNull(highlights, "highlights");
         Objects.requireNonNull(message, "message");
         highlights = List.copyOf(highlights);
-        if (distanceFromMatch.isNegative()) {
-            throw new IllegalArgumentException("distanceFromMatch must not be negative");
-        }
     }
 
-    public DisplayRow(ChatEntry entry, boolean match, Duration distanceFromMatch, List<HighlightSpan> highlights) {
-        this(entry, match, distanceFromMatch, highlights, VisualMessage.prepare(entry));
+    public DisplayRow(ChatEntry entry, boolean match, List<HighlightSpan> highlights) {
+        this(entry, match, highlights, VisualMessage.prepare(entry));
     }
 
-    private DisplayRow(ChatEntry entry, boolean match, Duration distanceFromMatch, List<HighlightSpan> highlights,
+    private DisplayRow(ChatEntry entry, boolean match, List<HighlightSpan> highlights,
                        VisualMessage.Prepared prepared) {
-        this(entry, match, distanceFromMatch, highlights, prepared.text(), prepared.formatting());
+        this(entry, match, highlights, prepared.text(), prepared.formatting());
     }
 
     /**
-     * Marks query results as search hits or context, and measures how far each context line is from the nearest
-     * hit in the same log.
+     * Marks query results as search hits or context lines, and highlights where the query matched.
+     * <p>
+     * The store already applied the filter, but a page also carries the context lines around each hit, so the
+     * two have to be told apart again here.
      */
     public static List<DisplayRow> from(List<ChatEntry> entries, SearchFilter filter) {
         if (entries.isEmpty()) return List.of();
         if (!filter.hasText()) {
-            return entries.stream()
-                .map(entry -> new DisplayRow(entry, true, Duration.ZERO, List.of()))
-                .toList();
+            return entries.stream().map(entry -> new DisplayRow(entry, true, List.of())).toList();
         }
-
         Predicate<String> matches = filter.messagePredicate();
-        Map<ChatLog, List<ChatEntry>> hitsByLog = new HashMap<>();
-        for (ChatEntry entry : entries) {
-            if (matches.test(entry.message())) {
-                hitsByLog.computeIfAbsent(entry.chatLog(), key -> new ArrayList<>()).add(entry);
-            }
-        }
-
         return entries.stream().map(entry -> {
-            List<ChatEntry> hits = hitsByLog.get(entry.chatLog());
-            boolean match = hits != null && hits.contains(entry);
-            Duration distance = match ? Duration.ZERO : distanceToNearestHit(entry, hits);
             VisualMessage.Prepared prepared = VisualMessage.prepare(entry);
-            List<HighlightSpan> highlights = match ? MatchSpans.spans(prepared.text(), filter) : List.of();
-            return new DisplayRow(entry, match, distance, highlights, prepared);
-        }).toList();
-    }
-
-    private static Duration distanceToNearestHit(ChatEntry entry, List<ChatEntry> hits) {
-        if (hits == null || hits.isEmpty()) {
-            return Duration.ofMinutes(15);
-        }
-        Duration nearest = null;
-        for (ChatEntry hit : hits) {
-            Duration distance = Duration.between(entry.timestamp(), hit.timestamp()).abs();
-            if (nearest == null || distance.compareTo(nearest) < 0) {
-                nearest = distance;
+            if (!matches.test(entry.message())) {
+                return new DisplayRow(entry, false, List.of(), prepared);
             }
-        }
-        return nearest;
+            return new DisplayRow(entry, true, MatchSpans.spans(prepared.text(), filter), prepared);
+        }).toList();
     }
 
     public ChatLog chatLog() {
@@ -96,6 +73,9 @@ public record DisplayRow(
         return new RowKey(chatLog(), lineIndex());
     }
 
+    /**
+     * Identifies a row across page reloads, so scroll anchors and selections survive them.
+     */
     public record RowKey(ChatLog chatLog, int lineIndex) {
         public RowKey {
             Objects.requireNonNull(chatLog, "chatLog");

@@ -17,9 +17,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class VisualMessageTest {
     @Test
     void trimsEachLineAndTurnsLiteralEscapesIntoBreaks() {
-        assertEquals("hello\\n\nworld", VisualMessage.visual("  hello \\n world  ", true));
-        assertEquals("hello \\n world", VisualMessage.visual("  hello \\n world  ", false));
-        assertEquals("a\nb\\n\nc", VisualMessage.visual(" a \nb\\n c ", true));
+        assertEquals("hello\\n\nworld", visual("  hello \\n world  ", true));
+        assertEquals("hello \\n world", visual("  hello \\n world  ", false));
+        assertEquals("a\nb\\n\nc", visual(" a \nb\\n c ", true));
     }
 
     @Test
@@ -33,7 +33,7 @@ class VisualMessageTest {
 
     @Test
     void escapeCharsCoverTheVisibleTokenBeforeTheBreak() {
-        String visual = VisualMessage.visual("hello\\nworld", true);
+        String visual = visual("hello\\nworld", true);
         assertEquals("hello\\n\nworld", visual);
         assertTrue(VisualMessage.escapeChar(visual, 5, true));
         assertTrue(VisualMessage.escapeChar(visual, 6, true));
@@ -46,10 +46,10 @@ class VisualMessageTest {
     void remapsStoredFormattingOntoTrimmedVisualText() {
         int red = PackedFormatting.color(0xFF5555);
         long[] stored = {PackedFormatting.run(2, 5, red)};
-        long[] visual = VisualMessage.remapFormatting("  hello  ", stored, false);
-        assertEquals("hello", VisualMessage.visual("  hello  ", false));
-        assertEquals(red, PackedFormatting.at(visual, 0));
-        assertEquals(red, PackedFormatting.at(visual, 4));
+        VisualMessage.Prepared prepared = VisualMessage.prepare("  hello  ", stored, false);
+        assertEquals("hello", prepared.text());
+        assertEquals(red, PackedFormatting.at(prepared.formatting(), 0));
+        assertEquals(red, PackedFormatting.at(prepared.formatting(), 4));
     }
 
     @Test
@@ -65,8 +65,11 @@ class VisualMessageTest {
 
     @Test
     void trimsLeadingAndTrailingNewlinesForDisplay() {
-        assertEquals("hello", VisualMessage.visual("\nhello\n", false));
-        assertEquals("hello\\n\nworld", VisualMessage.visual("\nhello\\nworld\n", true));
-        assertEquals("hello", VisualMessage.trimNewlines("\n\nhello\n"));
+        assertEquals("hello", visual("\nhello\n", false));
+        assertEquals("hello\\n\nworld", visual("\nhello\\nworld\n", true));
+    }
+
+    private static String visual(String message, boolean interpretEscapes) {
+        return VisualMessage.prepare(message, null, interpretEscapes).text();
     }
 }

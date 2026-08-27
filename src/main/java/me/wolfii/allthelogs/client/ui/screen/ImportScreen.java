@@ -10,7 +10,6 @@ import io.wispforest.owo.ui.container.ScrollContainer;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.*;
 import me.wolfii.allthelogs.client.AllTheLogsPaths;
-import me.wolfii.allthelogs.client.files.CommonLogLocations;
 import me.wolfii.allthelogs.client.files.ImportPaths;
 import me.wolfii.allthelogs.client.files.NativeFilePicker;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
@@ -27,8 +26,7 @@ import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * Import a folder or archive into the log store. Launcher directory shortcuts from
- * {@link CommonLogLocations#defaults()} fill both the path and advanced options when any are defined.
+ * Import a folder or archive into the log store.
  */
 public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
     private final Screen parent;
@@ -90,22 +88,6 @@ public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
         dropHint.color(Color.ofRgb(0xA0A0A0));
         form.child(dropHint);
 
-        List<CommonLogLocations.Location> common = CommonLogLocations.defaults();
-        if (!common.isEmpty()) {
-            form.child(UIComponents.label(Component.translatable("allthelogs.import.common")));
-            FlowLayout locations = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
-            locations.gap(2);
-            for (CommonLogLocations.Location location : common) {
-                locations.child(UIComponents.button(Component.literal(location.displayName()),
-                    button -> applyLocation(location)));
-            }
-            int locationHeight = Math.min(90, Math.max(24, common.size() * 22));
-            ScrollContainer<FlowLayout> locationScroll = UIContainers.verticalScroll(
-                Sizing.fill(), Sizing.fixed(locationHeight), locations);
-            locationScroll.scrollbar(OverflowScrollbar.vanillaFlat());
-            form.child(locationScroll);
-        }
-
         form.child(UIContainers.collapsible(Sizing.fill(), Sizing.content(),
                 Component.translatable("allthelogs.import.advanced"), false)
             .child(buildAdvanced()));
@@ -166,15 +148,6 @@ public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
         if (bind != null) bind.accept(box);
         row.child(box);
         return row;
-    }
-
-    private void applyLocation(CommonLogLocations.Location location) {
-        location.firstExisting().ifPresentOrElse(this::setPath, () -> {
-            if (!location.resolveAll().isEmpty()) {
-                setPath(location.resolveAll().getFirst());
-            }
-        });
-        applyOptions(location.suggestedOptions());
     }
 
     @Override

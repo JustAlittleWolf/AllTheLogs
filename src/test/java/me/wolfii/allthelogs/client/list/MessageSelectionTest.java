@@ -6,7 +6,6 @@ import me.wolfii.allthelogs.data.LogSource;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -81,6 +80,6 @@ class MessageSelectionTest {
 
     private static DisplayRow rowOn(LocalDateTime time, int line, String message) {
         ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), time.toLocalDate(), "26.2", time, time);
-        return new DisplayRow(new ChatEntry(log, time, line, message), true, Duration.ZERO, List.of());
+        return new DisplayRow(new ChatEntry(log, time, line, message), true, List.of());
     }
 }

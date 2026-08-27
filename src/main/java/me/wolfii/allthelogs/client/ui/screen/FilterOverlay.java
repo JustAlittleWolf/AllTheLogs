@@ -10,7 +10,6 @@ import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.*;
 import me.wolfii.allthelogs.client.search.DateParser;
-import me.wolfii.allthelogs.client.search.MinecraftVersions;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
@@ -31,14 +30,12 @@ final class FilterOverlay {
     private final IntSupplier screenWidth;
     private final IntSupplier screenHeight;
     private final Supplier<SearchFilter> filter;
-    private final Supplier<List<String>> versions;
     private final Consumer<SearchFilter> onChange;
 
     private ParentUIComponent filterPanel;
     private ButtonComponent oldestFirst;
     private ButtonComponent newestFirst;
-    private ButtonComponent versionButton;
-    private ParentUIComponent versionMenu;
+    private final VersionMenu versionsMenu;
     private boolean open;
 
     FilterOverlay(StackLayout overlays, IntSupplier screenWidth, IntSupplier screenHeight,
@@ -48,16 +45,12 @@ final class FilterOverlay {
         this.screenWidth = screenWidth;
         this.screenHeight = screenHeight;
         this.filter = filter;
-        this.versions = versions;
         this.onChange = onChange;
+        this.versionsMenu = new VersionMenu(overlays, screenWidth, screenHeight, filter, versions, onChange);
     }
 
     private static String formatBound(LocalDateTime time) {
         return time == null ? "" : time.toString().replace('T', ' ');
-    }
-
-    boolean isOpen() {
-        return open;
     }
 
     void toggle(ButtonComponent button) {
@@ -84,8 +77,7 @@ final class FilterOverlay {
         }
         oldestFirst = null;
         newestFirst = null;
-        versionButton = null;
-        closeVersionMenu();
+        versionsMenu.close();
         open = false;
     }
 
@@ -122,7 +114,7 @@ final class FilterOverlay {
             onChange.accept(filter.get().withUpUntil(parsed))));
         content.child(UIComponents.label(Component.translatable("allthelogs.filter.date_hint"))
             .color(Color.ofRgb(0x888888)));
-        content.child(versionRow());
+        content.child(versionsMenu.row());
 
         int panelHeight = Math.max(96, Math.min(screenHeight.getAsInt() - 40, 280));
         ScrollContainer<FlowLayout> panel = UIContainers.verticalScroll(
@@ -139,77 +131,6 @@ final class FilterOverlay {
         return box;
     }
 
-    private FlowLayout versionRow() {
-        FlowLayout row = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
-        row.gap(2);
-        row.child(UIComponents.label(Component.translatable("allthelogs.filter.version")));
-        versionButton = UIComponents.button(versionLabel(), this::toggleVersionMenu);
-        versionButton.horizontalSizing(Sizing.fill());
-        row.child(versionButton);
-        return row;
-    }
-
-    private Component versionLabel() {
-        SearchFilter current = filter.get();
-        if (!current.hasVersion()) {
-            return Component.translatable("allthelogs.filter.version.all");
-        }
-        return Component.literal(current.version());
-    }
-
-    private void toggleVersionMenu(ButtonComponent button) {
-        if (versionMenuOpen()) {
-            closeVersionMenu();
-            return;
-        }
-        openVersionMenu(button);
-    }
-
-    private boolean versionMenuOpen() {
-        return overlays != null && versionMenu != null && overlays.children().contains(versionMenu);
-    }
-
-    private void closeVersionMenu() {
-        if (versionMenuOpen()) {
-            overlays.removeChild(versionMenu);
-        }
-        versionMenu = null;
-    }
-
-    private void openVersionMenu(ButtonComponent button) {
-        if (overlays == null) return;
-        closeVersionMenu();
-        FlowLayout items = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
-        items.gap(1);
-        items.child(versionChoice(Component.translatable("allthelogs.filter.version.all"), null));
-        for (String version : MinecraftVersions.newestFirst(versions.get())) {
-            items.child(versionChoice(Component.literal(version), version));
-        }
-        int width = Math.max(120, button.width());
-        int maxHeight = Math.max(48, Math.min(180, screenHeight.getAsInt() - button.y() - button.height() - 12));
-        ScrollContainer<FlowLayout> menu = UIContainers.verticalScroll(
-            Sizing.fixed(width), Sizing.fixed(maxHeight), items);
-        menu.scrollbar(OverflowScrollbar.vanillaFlat());
-        menu.surface(PanelSurfaces.menu());
-        int menuX = Math.min(button.x(), Math.max(0, screenWidth.getAsInt() - width - 4));
-        int menuY = button.y() + button.height();
-        if (menuY + maxHeight > screenHeight.getAsInt() - 4) {
-            menuY = Math.max(4, button.y() - maxHeight);
-        }
-        menu.positioning(Positioning.absolute(menuX, menuY));
-        versionMenu = menu;
-        overlays.child(menu);
-    }
-
-    private ButtonComponent versionChoice(Component label, String version) {
-        ButtonComponent choice = UIComponents.button(label, ignored -> {
-            closeVersionMenu();
-            onChange.accept(filter.get().withVersion(version));
-        });
-        choice.horizontalSizing(Sizing.fill());
-        return choice;
-    }
-
     private ButtonComponent sortButton(String key, ChatQuery.Sort sort) {
         return UIComponents.button(Component.translatable(key), button -> {
             if (filter.get().sort() == sort) return;
@@ -222,7 +143,7 @@ final class FilterOverlay {
         SearchFilter current = filter.get();
         oldestFirst.active(current.sort() != ChatQuery.Sort.ASCENDING);
         newestFirst.active(current.sort() != ChatQuery.Sort.DESCENDING);
-        if (versionButton != null) versionButton.setMessage(versionLabel());
+        versionsMenu.syncButton();
     }
 
     private FlowLayout dateField(String key, LocalDateTime value, Consumer<LocalDateTime> onParsed) {

@@ -7,13 +7,12 @@ import me.wolfii.allthelogs.data.importer.discover.LogCandidate;
 import me.wolfii.allthelogs.data.importer.discover.LogDiscovery;
 import me.wolfii.allthelogs.data.store.LogWriter;
 import me.wolfii.allthelogs.data.store.PreparedLog;
-import me.wolfii.allthelogs.data.store.Schema;
 import me.wolfii.allthelogs.data.store.SourceKind;
+import me.wolfii.allthelogs.data.store.StoredSources;
 import org.duckdb.DuckDBConnection;
 
 import java.nio.file.Path;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -45,11 +44,7 @@ public final class LogImporter {
     }
 
     private static LogSource sourceOf(PreparedLog log) {
-        return switch (log.sourceKind()) {
-            case FILE -> new LogSource.File(Path.of(log.sourcePath()));
-            case ARCHIVE -> new LogSource.Archive(Path.of(log.sourcePath()), log.entryPath());
-            case SESSION -> new LogSource.Session(log.sessionId());
-        };
+        return StoredSources.fromPrepared(log);
     }
 
     private static String failurePath(LogCandidate candidate) {
@@ -75,40 +70,20 @@ public final class LogImporter {
     /**
      * Imports every matching log file under {@code directory}.
      */
-    public ImportResult importDirectory(Path directory, ImportOptions options, Consumer<ImportProgress> progress) {
-        return importDirectory(directory, options, progress, () -> false);
-    }
-
     public ImportResult importDirectory(Path directory, ImportOptions options, Consumer<ImportProgress> progress,
                                         BooleanSupplier cancelled) {
         int estimate = FileCountEstimator.estimateDirectory(directory, options);
-        return runImport(options, discovery -> discovery.discoverDirectory(directory), progress, cancelled, estimate);
+        return importIntoStore(options, discovery -> discovery.discoverDirectory(directory), progress, cancelled,
+            estimate);
     }
 
     /**
      * Imports every matching log file inside {@code archive}.
      */
-    public ImportResult importArchive(Path archive, ImportOptions options, Consumer<ImportProgress> progress) {
-        return importArchive(archive, options, progress, () -> false);
-    }
-
     public ImportResult importArchive(Path archive, ImportOptions options, Consumer<ImportProgress> progress,
                                       BooleanSupplier cancelled) {
         int estimate = FileCountEstimator.estimateArchive(archive, options);
-        return runImport(options, discovery -> discovery.discoverArchive(archive), progress, cancelled, estimate);
-    }
-
-    private ImportResult runImport(ImportOptions options, Consumer<LogDiscovery> walk, Consumer<ImportProgress> progress,
-                                   BooleanSupplier cancelled, int estimatedFiles) {
-        ImportResult result = importIntoStore(options, walk, progress, cancelled, estimatedFiles);
-        if (result.importedFiles() > 0) {
-            try (Statement statement = connection.createStatement()) {
-                Schema.clusterEntries(statement);
-            } catch (SQLException e) {
-                throw new LogDataException("could not cluster imported chat entries", e);
-            }
-        }
-        return result;
+        return importIntoStore(options, discovery -> discovery.discoverArchive(archive), progress, cancelled, estimate);
     }
 
     private ImportResult importIntoStore(ImportOptions options, Consumer<LogDiscovery> walk,

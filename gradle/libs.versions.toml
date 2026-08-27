@@ -1,14 +1,29 @@
 [versions]
+minecraft = "26.2"
+fabric-loader = "0.19.3"
+fabric-loom = "1.17-SNAPSHOT"
+fabric-api = "0.158.0+26.2"
+owo = "0.13.1+26.2"
+modmenu = "20.0.1"
 duckdb = "1.5.5.1"
 commons-compress = "1.28.0"
 xz = "1.12"
 junit = "5.14.0"
+junit-platform = "1.14.0"
 juniversalchardet = "2.5.0"
 
 [libraries]
+minecraft = { module = "com.mojang:minecraft", version.ref = "minecraft" }
+fabric-loader = { module = "net.fabricmc:fabric-loader", version.ref = "fabric-loader" }
+fabric-api = { module = "net.fabricmc.fabric-api:fabric-api", version.ref = "fabric-api" }
+owo-lib = { module = "io.wispforest:owo-lib", version.ref = "owo" }
+modmenu = { module = "com.terraformersmc:modmenu", version.ref = "modmenu" }
 duckdb-jdbc = { module = "org.duckdb:duckdb_jdbc", version.ref = "duckdb" }
 commons-compress = { module = "org.apache.commons:commons-compress", version.ref = "commons-compress" }
 xz = { module = "org.tukaani:xz", version.ref = "xz" }
 juniversalchardet = { module = "com.github.albfernandez:juniversalchardet", version.ref = "juniversalchardet" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
-junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version = "1.14.0" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit-platform" }
+
+[plugins]
+fabric-loom = { id = "net.fabricmc.fabric-loom", version.ref = "fabric-loom" }

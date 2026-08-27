@@ -26,10 +26,7 @@ class ColorsTest {
 
     @Test
     void multiplyStacksChannelsAndWhiteIsANoOp() {
-        int highlightedContext = Colors.stack(Colors.MATCH_TEXT, Colors.CONTEXT_TEXT);
-        assertEquals(Colors.CONTEXT_TEXT, highlightedContext);
-        int escapedContext = Colors.stack(Colors.MATCH_TEXT, Colors.CONTEXT_TEXT, Colors.ESCAPE_TEXT);
-        assertEquals(Colors.multiply(Colors.CONTEXT_TEXT, Colors.ESCAPE_TEXT), escapedContext);
+        assertEquals(Colors.CONTEXT_TEXT, Colors.multiply(Colors.MATCH_TEXT, Colors.CONTEXT_TEXT));
         assertEquals(Colors.MATCH_TEXT, Colors.multiply(Colors.MATCH_TEXT, Colors.MATCH_TEXT));
     }
 }

@@ -3,6 +3,7 @@ package me.wolfii.allthelogs.data.store;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.function.DoubleConsumer;
 
 /**
  * Database layout. {@code chat_entry} has no index: both access patterns are full scans, and an ART index would
@@ -45,19 +46,35 @@ public final class Schema {
      * Same-timestamp lines from one log stay in line-index order, matching {@code ChatQueries#query}.
      */
     public static void clusterEntries(Statement statement) throws SQLException {
+        clusterEntries(statement, ignored -> {
+        });
+    }
+
+    /**
+     * Same as {@link #clusterEntries(Statement)}, reporting 0–1 progress as the rewrite moves.
+     */
+    public static void clusterEntries(Statement statement, DoubleConsumer progress) throws SQLException {
+        DoubleConsumer report = progress == null ? ignored -> {
+        } : progress;
         long count;
         try (ResultSet result = statement.executeQuery("SELECT count(*) FROM chat_entry")) {
             result.next();
             count = result.getLong(1);
         }
-        if (count == 0) return;
+        if (count == 0) {
+            report.accept(1d);
+            return;
+        }
+        report.accept(0.1);
         statement.execute("DROP TABLE IF EXISTS chat_entry_sorted");
         statement.execute("""
             CREATE TABLE chat_entry_sorted AS
             SELECT file_id, line_index, entry_time, message, formatting
             FROM chat_entry
             ORDER BY entry_time, file_id, line_index""");
+        report.accept(0.75);
         statement.execute("DROP TABLE chat_entry");
         statement.execute("ALTER TABLE chat_entry_sorted RENAME TO chat_entry");
+        report.accept(1d);
     }
 }

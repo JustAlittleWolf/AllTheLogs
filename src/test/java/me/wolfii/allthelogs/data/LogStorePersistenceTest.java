@@ -54,34 +54,34 @@ class LogStorePersistenceTest {
         assertTrue(Files.isRegularFile(database));
         try (LogStore store = LogStore.open(database)) {
             assertEquals(database, store.databasePath().orElseThrow());
-            assertEquals(8, store.chatEntries().size());
+            assertEquals(8, store.allEntries().size());
             assertEquals(3, store.chatLogs().size());
 
-            assertEquals(2, store.query(ChatQuery.all().withSubstring("NEEDLE")).size());
-            assertEquals(0, store.query(ChatQuery.all().withSubstringCaseSensitive("NEEDLE")).size());
+            assertEquals(2, store.findEntries(ChatQuery.all().withSubstring("NEEDLE")).size());
+            assertEquals(0, store.findEntries(ChatQuery.all().withSubstringCaseSensitive("NEEDLE")).size());
 
-            List<ChatEntry> regex = store.query(ChatQuery.all().withRegex("^(alpha|gamma)$"));
+            List<ChatEntry> regex = store.findEntries(ChatQuery.all().withRegex("^(alpha|gamma)$"));
             assertEquals(List.of("alpha", "gamma"), regex.stream().map(ChatEntry::message).toList());
 
-            List<ChatEntry> range = store.query(ChatQuery.all()
+            List<ChatEntry> range = store.findEntries(ChatQuery.all()
                     .startingAt(LocalDateTime.of(2026, 8, 25, 0, 0))
                     .upUntil(LocalDateTime.of(2026, 8, 26, 0, 0)));
             assertEquals(List.of("delta", "needle in here", "epsilon"),
                     range.stream().map(ChatEntry::message).toList());
 
-            List<ChatEntry> combined = store.query(ChatQuery.all()
+            List<ChatEntry> combined = store.findEntries(ChatQuery.all()
                     .withSubstring("needle")
                     .startingAt(LocalDateTime.of(2026, 8, 25, 0, 0))
                     .upUntil(LocalDateTime.of(2026, 8, 26, 0, 0)));
             assertEquals(List.of("needle in here"), combined.stream().map(ChatEntry::message).toList());
 
-            List<ChatEntry> withContext = store.query(ChatQuery.all()
+            List<ChatEntry> withContext = store.findEntries(ChatQuery.all()
                     .withSubstring("needle in here")
                     .withContextLines(1));
             assertEquals(List.of("delta", "needle in here", "epsilon"),
                     withContext.stream().map(ChatEntry::message).toList());
 
-            ChatEntry needle = store.query(ChatQuery.all().withSubstring("needle in here")).getFirst();
+            ChatEntry needle = store.findEntries(ChatQuery.all().withSubstring("needle in here")).getFirst();
             LogSource.File source = assertInstanceOf(LogSource.File.class, needle.chatLog().source());
             assertEquals(root.resolve("logs/2026-08-25-1.log.gz").toAbsolutePath().normalize(), source.path());
             assertEquals("26.2", needle.chatLog().minecraftVersion());
@@ -114,16 +114,16 @@ class LogStorePersistenceTest {
         }
 
         try (LogStore store = LogStore.open(database)) {
-            assertEquals(3, store.chatEntries().size());
+            assertEquals(3, store.allEntries().size());
             assertEquals(2, store.chatLogs().size());
             assertEquals(List.of("first session"),
-                    store.query(ChatQuery.all().withSubstring("first session"))
+                    store.findEntries(ChatQuery.all().withSubstring("first session"))
                             .stream().map(ChatEntry::message).toList());
             assertEquals(List.of("second session"),
-                    store.query(ChatQuery.all().withSubstring("second session"))
+                    store.findEntries(ChatQuery.all().withSubstring("second session"))
                             .stream().map(ChatEntry::message).toList());
             assertEquals(List.of("first session", "shared later", "second session"),
-                    store.chatEntries().stream().map(ChatEntry::message).toList());
+                    store.allEntries().stream().map(ChatEntry::message).toList());
         }
     }
 
@@ -149,7 +149,7 @@ class LogStorePersistenceTest {
             assertEquals(startedAt, log.startTime());
             assertEquals(startedAt.plusSeconds(2), log.endTime());
 
-            List<ChatEntry> withContext = store.query(ChatQuery.all()
+            List<ChatEntry> withContext = store.findEntries(ChatQuery.all()
                     .withSubstring("needle")
                     .withContextLines(1));
             assertEquals(List.of("before", "the needle", "after"),
@@ -164,9 +164,9 @@ class LogStorePersistenceTest {
 
         try (LogStore store = LogStore.open(database)) {
             assertEquals(2, store.chatLogs().size());
-            assertEquals(4, store.chatEntries().size());
-            assertEquals(1, store.query(ChatQuery.all().withSubstring("next session")).size());
-            assertEquals(1, store.query(ChatQuery.all().withSubstring("the needle")).size());
+            assertEquals(4, store.allEntries().size());
+            assertEquals(1, store.findEntries(ChatQuery.all().withSubstring("next session")).size());
+            assertEquals(1, store.findEntries(ChatQuery.all().withSubstring("the needle")).size());
         }
     }
 
@@ -192,7 +192,7 @@ class LogStorePersistenceTest {
             ImportResult result = store.importDirectory(tempDir);
             assertEquals(0, result.importedFiles());
             assertEquals(1, result.skippedFiles());
-            assertEquals(List.of("live"), store.chatEntries().stream().map(ChatEntry::message).toList());
+            assertEquals(List.of("live"), store.allEntries().stream().map(ChatEntry::message).toList());
         }
     }
 
@@ -239,14 +239,14 @@ class LogStorePersistenceTest {
         }
 
         try (LogStore store = LogStore.open(database)) {
-            ChatEntry entry = store.query(ChatQuery.all().withSubstring("archive needle")).getFirst();
+            ChatEntry entry = store.findEntries(ChatQuery.all().withSubstring("archive needle")).getFirst();
             LogSource.Archive source = assertInstanceOf(LogSource.Archive.class, entry.chatLog().source());
             assertEquals(archive.toAbsolutePath().normalize(), source.path());
             assertEquals("logs/2026-01-02-1.log.gz", source.entryPath());
             assertEquals("1.21.8", entry.chatLog().minecraftVersion());
             assertEquals(LocalDate.of(2026, 1, 2), entry.chatLog().date());
 
-            List<ChatEntry> withContext = store.query(ChatQuery.all()
+            List<ChatEntry> withContext = store.findEntries(ChatQuery.all()
                     .withSubstring("archive needle")
                     .withContextLines(1));
             assertEquals(List.of("in archive", "archive needle"),
@@ -274,10 +274,40 @@ class LogStorePersistenceTest {
         }
 
         try (LogStore store = LogStore.open(database)) {
-            assertEquals("hello 世界", store.query(ChatQuery.all().withSubstring("世界")).getFirst().message());
-            assertEquals("café", store.query(ChatQuery.all().withSubstring("café")).getFirst().message());
+            assertEquals("hello 世界", store.findEntries(ChatQuery.all().withSubstring("世界")).getFirst().message());
+            assertEquals("café", store.findEntries(ChatQuery.all().withSubstring("café")).getFirst().message());
             assertEquals("emoji \uD83C\uDFAE",
-                    store.query(ChatQuery.all().withSubstring("\uD83C\uDFAE")).getFirst().message());
+                    store.findEntries(ChatQuery.all().withSubstring("\uD83C\uDFAE")).getFirst().message());
+        }
+    }
+
+    @Test
+    void importCompactsTheFileAndKeepsAnActiveSessionWritable() throws IOException {
+        Path database = database();
+        Path root = instanceLogs();
+        LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+
+        try (LogStore store = LogStore.open(database)) {
+            store.startSession("26.2", startedAt);
+            assertTrue(store.importSessionMessage("live before import", startedAt));
+
+            ImportResult result = store.importDirectory(root);
+            assertEquals(3, result.importedFiles());
+            assertTrue(store.importSessionMessage("live after compact", startedAt.plusSeconds(5)));
+
+            assertEquals(10, store.allEntries().size());
+            assertEquals(List.of("live before import"),
+                store.findEntries(ChatQuery.all().withSubstring("live before import"))
+                    .stream().map(ChatEntry::message).toList());
+            assertEquals(List.of("live after compact"),
+                store.findEntries(ChatQuery.all().withSubstring("live after compact"))
+                    .stream().map(ChatEntry::message).toList());
+        }
+
+        try (LogStore store = LogStore.open(database)) {
+            assertEquals(10, store.allEntries().size());
+            assertTrue(store.allEntries().stream().map(ChatEntry::message).toList()
+                .containsAll(List.of("alpha", "live before import", "live after compact")));
         }
     }
 }

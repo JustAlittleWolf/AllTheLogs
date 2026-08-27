@@ -79,7 +79,7 @@ class SchemaMigrationTest {
         }
 
         try (LogStore store = LogStore.open(database)) {
-            List<String> messages = store.chatEntries().stream().map(ChatEntry::message).toList();
+            List<String> messages = store.allEntries().stream().map(ChatEntry::message).toList();
             assertEquals(List.of("hello from legacy"), messages);
         }
 

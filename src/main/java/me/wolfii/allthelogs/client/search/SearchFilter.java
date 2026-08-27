@@ -6,13 +6,23 @@ import java.time.LocalDateTime;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
 /**
- * Browser search: text, regex, dates, sort, and paging. {@link #toQuery()} is the store query;
- * {@link #messagePredicate()} marks hits after the query returns.
+ * What the browser's search bar and filter overlay currently ask for: text, regex, dates, sort, and paging.
+ * <p>
+ * The same filter drives two things. {@link #toQuery()} is the store query that fetches a page, and
+ * {@link #messagePredicate()} re-checks the rows that come back so hits can be told apart from the context
+ * lines around them.
+ *
+ * @param text         the search text, empty for no text filter
+ * @param regex        whether {@code text} is a regular expression rather than a literal substring
+ * @param limit        matches per page; negative means no cap
+ * @param offset       exclusive timestamp cursor the current page starts after, or {@code null} for the first page
+ * @param version      Minecraft version to restrict to, or {@code null} for all of them
  */
 public record SearchFilter(
     String text,
@@ -29,6 +39,9 @@ public record SearchFilter(
     public static final int MAX_CONTEXT_LINES = 1000;
     public static final int DEFAULT_LIMIT = 100;
     public static final int DEFAULT_CONTEXT_LINES = 4;
+    /**
+     * Value the version menu uses for "every version", stored as no version filter at all.
+     */
     public static final String ALL_VERSIONS = "ALL";
 
     public SearchFilter {
@@ -48,6 +61,9 @@ public record SearchFilter(
             null, null, null, null);
     }
 
+    /**
+     * Compiles a search regex for Java-side matching, or empty when the pattern is malformed.
+     */
     public static Optional<Pattern> compiledRegex(String regex, boolean caseSensitive) {
         try {
             int flags = caseSensitive ? 0 : Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE;
@@ -57,6 +73,9 @@ public record SearchFilter(
         }
     }
 
+    /**
+     * The same regex for DuckDB's RE2, which has no case-insensitive flag outside the pattern itself.
+     */
     static String regexPattern(String regex, boolean caseSensitive) {
         if (caseSensitive || hasInlineCaseFlag(regex)) return regex;
         return "(?i)" + regex;
@@ -67,53 +86,43 @@ public record SearchFilter(
     }
 
     public SearchFilter withText(String text) {
-        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset,
-            version);
+        return with(draft -> draft.text = text);
     }
 
     public SearchFilter withRegex(boolean regex) {
-        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset,
-            version);
+        return with(draft -> draft.regex = regex);
     }
 
     public SearchFilter withCaseSensitive(boolean caseSensitive) {
-        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset,
-            version);
+        return with(draft -> draft.caseSensitive = caseSensitive);
     }
 
     public SearchFilter withContextLines(int contextLines) {
-        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset,
-            version);
+        return with(draft -> draft.contextLines = contextLines);
     }
 
     public SearchFilter withLimit(long limit) {
-        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset,
-            version);
+        return with(draft -> draft.limit = limit);
     }
 
     public SearchFilter withSort(ChatQuery.Sort sort) {
-        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset,
-            version);
+        return with(draft -> draft.sort = sort);
     }
 
     public SearchFilter withStartingAt(LocalDateTime startingAt) {
-        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset,
-            version);
+        return with(draft -> draft.startingAt = startingAt);
     }
 
     public SearchFilter withUpUntil(LocalDateTime upUntil) {
-        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset,
-            version);
+        return with(draft -> draft.upUntil = upUntil);
     }
 
     public SearchFilter withOffset(LocalDateTime offset) {
-        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset,
-            version);
+        return with(draft -> draft.offset = offset);
     }
 
     public SearchFilter withVersion(String version) {
-        return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil, offset,
-            version);
+        return with(draft -> draft.version = version);
     }
 
     public SearchFilter withoutOffset() {
@@ -149,7 +158,7 @@ public record SearchFilter(
 
     /**
      * Same as {@link #toQuery()} but without context lines, a page limit, or an offset, for
-     * {@link me.wolfii.allthelogs.data.LogStore#summarize(ChatQuery)}.
+     * {@link me.wolfii.allthelogs.data.LogStore#summarizeMatches(ChatQuery)}.
      */
     public ChatQuery toSummaryQuery() {
         return withoutOffset().withContextLines(0).withLimit(-1).toQuery();
@@ -171,5 +180,49 @@ public record SearchFilter(
         }
         String needle = text.toLowerCase(Locale.ROOT);
         return message -> message.toLowerCase(Locale.ROOT).contains(needle);
+    }
+
+    /**
+     * Copies this filter with {@code change} applied, so each {@code with*} method only has to name the field
+     * it actually touches.
+     */
+    private SearchFilter with(Consumer<Draft> change) {
+        Draft draft = new Draft(this);
+        change.accept(draft);
+        return draft.build();
+    }
+
+    /**
+     * Mutable copy of a filter, used only between a {@code with*} call and the record it builds.
+     */
+    private static final class Draft {
+        private String text;
+        private boolean regex;
+        private boolean caseSensitive;
+        private int contextLines;
+        private long limit;
+        private ChatQuery.Sort sort;
+        private LocalDateTime startingAt;
+        private LocalDateTime upUntil;
+        private LocalDateTime offset;
+        private String version;
+
+        private Draft(SearchFilter filter) {
+            this.text = filter.text;
+            this.regex = filter.regex;
+            this.caseSensitive = filter.caseSensitive;
+            this.contextLines = filter.contextLines;
+            this.limit = filter.limit;
+            this.sort = filter.sort;
+            this.startingAt = filter.startingAt;
+            this.upUntil = filter.upUntil;
+            this.offset = filter.offset;
+            this.version = filter.version;
+        }
+
+        private SearchFilter build() {
+            return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil,
+                offset, version);
+        }
     }
 }

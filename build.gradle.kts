@@ -1,13 +1,10 @@
 @file:Suppress("AvoidDuplicateDependencies")
 
 plugins {
-    id("net.fabricmc.fabric-loom")
+    alias(libs.plugins.fabric.loom)
 }
 
-val minecraftVersion: String = providers.gradleProperty("minecraft_version").get()
-val loaderVersion: String = providers.gradleProperty("loader_version").get()
-val fabricApiVersion: String = providers.gradleProperty("fabric_api_version").get()
-val owoVersion: String = providers.gradleProperty("owo_version").get()
+val minecraftVersion: String = libs.versions.minecraft.get()
 val archivesBaseName: String = providers.gradleProperty("archives_base_name").get()
 val modVersion: String = providers.gradleProperty("mod_version").get()
 val mavenGroup: String = providers.gradleProperty("maven_group").get()
@@ -38,12 +35,12 @@ loom {
 }
 
 dependencies {
-    minecraft("com.mojang:minecraft:$minecraftVersion")
-    implementation("net.fabricmc:fabric-loader:$loaderVersion")
-    implementation("net.fabricmc.fabric-api:fabric-api:$fabricApiVersion")
+    minecraft(libs.minecraft)
+    implementation(libs.fabric.loader)
+    implementation(libs.fabric.api)
 
-    implementation("io.wispforest:owo-lib:$owoVersion")
-    compileOnly("com.terraformersmc:modmenu:${providers.gradleProperty("modmenu_version").get()}")
+    implementation(libs.owo.lib)
+    compileOnly(libs.modmenu)
 
     api(libs.duckdb.jdbc)
     include(libs.duckdb.jdbc)

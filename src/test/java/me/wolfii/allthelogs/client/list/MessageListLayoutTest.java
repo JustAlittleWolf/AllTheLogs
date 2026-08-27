@@ -6,7 +6,6 @@ import me.wolfii.allthelogs.data.LogSource;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -42,8 +41,8 @@ class MessageListLayoutTest {
     void insertsADateHeaderAndAClusterGapBetweenDistantMatches() {
         LocalDateTime time = LocalDateTime.of(2026, 8, 26, 10, 0);
         ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), time.toLocalDate(), "26.2", time, time);
-        DisplayRow first = new DisplayRow(new ChatEntry(log, time, 0, "a"), true, Duration.ZERO, List.of());
-        DisplayRow later = new DisplayRow(new ChatEntry(log, time.plusHours(1), 20, "b"), true, Duration.ZERO, List.of());
+        DisplayRow first = new DisplayRow(new ChatEntry(log, time, 0, "a"), true, List.of());
+        DisplayRow later = new DisplayRow(new ChatEntry(log, time.plusHours(1), 20, "b"), true, List.of());
         MessageListLayout layout = MessageListLayout.of(List.of(first, later), 5);
 
         assertEquals(1, layout.dates().size());
@@ -57,21 +56,21 @@ class MessageListLayoutTest {
     void doesNotGapAdjacentLinesFromTheSameLog() {
         LocalDateTime time = LocalDateTime.of(2026, 8, 26, 10, 0);
         ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), time.toLocalDate(), "26.2", time, time);
-        DisplayRow a = new DisplayRow(new ChatEntry(log, time, 0, "a"), true, Duration.ZERO, List.of());
-        DisplayRow b = new DisplayRow(new ChatEntry(log, time.plusMinutes(1), 1, "b"), true, Duration.ZERO, List.of());
+        DisplayRow a = new DisplayRow(new ChatEntry(log, time, 0, "a"), true, List.of());
+        DisplayRow b = new DisplayRow(new ChatEntry(log, time.plusMinutes(1), 1, "b"), true, List.of());
         MessageListLayout layout = MessageListLayout.of(List.of(a, b), 5);
         assertEquals(layout.rowY(0) + MessageListLayout.ROW_HEIGHT, layout.rowY(1));
         assertFalse(MessageListLayout.needsClusterGap(a, b, 5));
         assertTrue(MessageListLayout.needsClusterGap(a,
-            new DisplayRow(new ChatEntry(log, time.plusHours(2), 12, "c"), true, Duration.ZERO, List.of()), 5));
+            new DisplayRow(new ChatEntry(log, time.plusHours(2), 12, "c"), true, List.of()), 5));
     }
 
     @Test
     void wrappedLinesTakeARowHeightEach() {
         LocalDateTime time = LocalDateTime.of(2026, 8, 26, 10, 0);
         ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), time.toLocalDate(), "26.2", time, time);
-        DisplayRow row = new DisplayRow(new ChatEntry(log, time, 0, "abcdefghij"), true, Duration.ZERO, List.of());
-        MessageListLayout layout = MessageListLayout.of(List.of(row), 5, 4, String::length);
+        DisplayRow row = new DisplayRow(new ChatEntry(log, time, 0, "abcdefghij"), true, List.of());
+        MessageListLayout layout = MessageListLayout.of(List.of(row), 5, 4, charWidths());
         assertEquals(MessageListLayout.DATE_HEIGHT, layout.rowY(0));
         assertEquals(3 * MessageListLayout.ROW_HEIGHT, layout.rowHeight(0));
         MessageListLayout styled = MessageListLayout.of(List.of(row), 5, 6,
@@ -83,8 +82,8 @@ class MessageListLayoutTest {
     void hardNewlinesEachTakeARowHeight() {
         LocalDateTime time = LocalDateTime.of(2026, 8, 26, 10, 0);
         ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), time.toLocalDate(), "26.2", time, time);
-        DisplayRow row = new DisplayRow(new ChatEntry(log, time, 0, "a\nb\nc"), true, Duration.ZERO, List.of());
-        MessageListLayout layout = MessageListLayout.of(List.of(row), 5, 40, String::length);
+        DisplayRow row = new DisplayRow(new ChatEntry(log, time, 0, "a\nb\nc"), true, List.of());
+        MessageListLayout layout = MessageListLayout.of(List.of(row), 5, 40, charWidths());
         assertEquals(3 * MessageListLayout.ROW_HEIGHT, layout.rowHeight(0));
     }
 
@@ -99,9 +98,13 @@ class MessageListLayoutTest {
             layout.dates().get(1).y());
     }
 
+    private static MessageListLayout.RowRangeWidth charWidths() {
+        return (row, from, to) -> to - from;
+    }
+
     private static DisplayRow row(String file, int line, LocalDateTime time) {
         ChatLog log = new ChatLog(new LogSource.File(Path.of(file)), time.toLocalDate(), "26.2", time, time);
         ChatEntry entry = new ChatEntry(log, time, line, "msg-" + line);
-        return new DisplayRow(entry, true, Duration.ZERO, List.of());
+        return new DisplayRow(entry, true, List.of());
     }
 }
