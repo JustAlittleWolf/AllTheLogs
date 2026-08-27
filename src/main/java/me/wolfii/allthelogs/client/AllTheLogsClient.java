@@ -66,13 +66,22 @@ public final class AllTheLogsClient implements ClientModInitializer {
             .orElse("unknown");
     }
 
+    private static String currentUsername() {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null) return null;
+        var user = client.getUser();
+        if (user == null) return null;
+        String name = user.getName();
+        return name == null || name.isBlank() ? null : name;
+    }
+
     @Override
     public void onInitializeClient() {
         worker = new LogStoreWorker();
 
         worker.open(AllTheLogsPaths.database())
             .thenCompose(ignored -> importCurrentLogs())
-            .thenCompose(ignored -> worker.startSession(minecraftVersion()))
+            .thenCompose(ignored -> worker.startSession(minecraftVersion(), currentUsername()))
             .whenComplete((log, error) -> {
                 if (error != null) {
                     LOGGER.error("AllTheLogs failed to start", error);

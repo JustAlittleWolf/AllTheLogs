@@ -59,7 +59,11 @@ public final class LogStoreWorker implements AutoCloseable {
     }
 
     public CompletableFuture<ChatLog> startSession(String minecraftVersion) {
-        return submit(() -> requireStore().startSession(minecraftVersion));
+        return startSession(minecraftVersion, null);
+    }
+
+    public CompletableFuture<ChatLog> startSession(String minecraftVersion, String minecraftUser) {
+        return submit(() -> requireStore().startSession(minecraftVersion, minecraftUser));
     }
 
     /**

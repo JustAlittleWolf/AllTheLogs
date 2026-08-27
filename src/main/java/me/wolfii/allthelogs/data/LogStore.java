@@ -278,7 +278,25 @@ public final class LogStore implements AutoCloseable {
      * @see #startSession(String)
      */
     public ChatLog startSession(String minecraftVersion, LocalDateTime startedAt) {
-        return sessions.start(minecraftVersion, startedAt);
+        return startSession(minecraftVersion, startedAt, null);
+    }
+
+    /**
+     * Starts a capture session for the running game, recording {@code minecraftUser} when known.
+     *
+     * @see #startSession(String)
+     */
+    public ChatLog startSession(String minecraftVersion, String minecraftUser) {
+        return startSession(minecraftVersion, LocalDateTime.now(), minecraftUser);
+    }
+
+    /**
+     * Starts a capture session at an explicit time, recording {@code minecraftUser} when known.
+     *
+     * @see #startSession(String)
+     */
+    public ChatLog startSession(String minecraftVersion, LocalDateTime startedAt, String minecraftUser) {
+        return sessions.start(minecraftVersion, startedAt, minecraftUser);
     }
 
     /**
