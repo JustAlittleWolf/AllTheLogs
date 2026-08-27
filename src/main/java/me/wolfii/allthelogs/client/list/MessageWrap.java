@@ -2,6 +2,7 @@ package me.wolfii.allthelogs.client.list;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.IntUnaryOperator;
 import java.util.function.ToIntFunction;
 
 /**
@@ -93,6 +94,22 @@ public final class MessageWrap {
      */
     public static int charIndex(String text, int maxWidth, int line, int x, ToIntFunction<String> widthOf) {
         return charIndex(text, maxWidth, line, x, substringWidth(text, widthOf));
+    }
+
+    /**
+     * Range widths from one pass over per-character advances, so wrapping does not remeasure prefixes.
+     */
+    public static RangeWidth prefixWidths(int length, IntUnaryOperator charWidth) {
+        int size = Math.max(0, length);
+        int[] prefix = new int[size + 1];
+        for (int i = 0; i < size; i++) {
+            prefix[i + 1] = prefix[i] + charWidth.applyAsInt(i);
+        }
+        return (from, to) -> {
+            int start = Math.clamp(from, 0, size);
+            int end = Math.clamp(to, 0, size);
+            return end > start ? prefix[end] - prefix[start] : 0;
+        };
     }
 
     public static int charIndex(String text, int maxWidth, int line, int x, RangeWidth widthOf) {

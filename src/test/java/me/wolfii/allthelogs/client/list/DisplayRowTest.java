@@ -4,6 +4,7 @@ import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.LogSource;
 import me.wolfii.allthelogs.client.search.SearchFilter;
+import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
@@ -14,6 +15,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DisplayRowTest {
@@ -45,6 +47,19 @@ class DisplayRowTest {
         assertEquals(Duration.ZERO, rows.get(1).distanceFromMatch());
         assertEquals(Duration.ofMinutes(19), rows.get(2).distanceFromMatch());
         assertEquals(1, rows.get(1).highlights().size());
+    }
+
+    @Test
+    void cachesVisualTextAndRemappedFormatting() {
+        ChatLog log = log("a.log");
+        int red = PackedFormatting.color(0xFF5555);
+        ChatEntry entry = new ChatEntry(log, log.startTime(), 0, "  hello  ",
+            new long[]{PackedFormatting.run(2, 5, red)});
+        DisplayRow row = new DisplayRow(entry, true, Duration.ZERO, List.of());
+        assertEquals("hello", row.message());
+        assertSame(row.message(), row.message());
+        assertEquals(red, PackedFormatting.at(row.visualFormatting(), 0));
+        assertEquals(red, PackedFormatting.at(row.visualFormatting(), 4));
     }
 
     private static ChatLog log(String name) {

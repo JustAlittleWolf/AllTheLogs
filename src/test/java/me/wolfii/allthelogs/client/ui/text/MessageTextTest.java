@@ -18,6 +18,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MessageTextTest {
@@ -128,6 +129,22 @@ class MessageTextTest {
         assertEquals(0xFFFF5555, MessageText.stackedColor(coloured, 1, false));
         Component drawn = MessageText.message(coloured);
         assertEquals(0xFF5555, drawn.getStyle().getColor().getValue());
+        assertEquals("abc", drawn.getString());
+    }
+
+    @Test
+    void measureCharDropsObfuscationAndKeepsBold() {
+        int format = PackedFormatting.OBFUSCATED | PackedFormatting.BOLD;
+        Component glyph = MessageText.measureChar('k', format);
+        assertTrue(glyph.getStyle().isBold());
+        assertFalse(glyph.getStyle().isObfuscated());
+        LocalDateTime time = LocalDateTime.of(2026, 8, 27, 12, 0);
+        ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), LocalDate.of(2026, 8, 27), "26.2", time, time);
+        DisplayRow row = new DisplayRow(
+            new ChatEntry(log, time, 0, "abc", new long[]{PackedFormatting.run(0, 3, PackedFormatting.OBFUSCATED)}),
+            true, Duration.ZERO, List.of());
+        Component drawn = MessageText.message(row);
+        assertTrue(drawn.getStyle().isObfuscated());
         assertEquals("abc", drawn.getString());
     }
 

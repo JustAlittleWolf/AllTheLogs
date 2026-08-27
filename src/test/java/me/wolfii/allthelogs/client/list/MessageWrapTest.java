@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MessageWrapTest {
     @Test
@@ -52,5 +53,41 @@ class MessageWrapTest {
         assertEquals(List.of("bold", "plain"), MessageWrap.lines("boldplain", 8, boldFirst));
         assertEquals(4, MessageWrap.charIndex("boldplain", 8, 0, 7, boldFirst));
         assertEquals(6, MessageWrap.charIndex("boldplain", 8, 1, 2, boldFirst));
+    }
+
+    @Test
+    void prefixWidthsMeasureEachCharacterOnce() {
+        int[] calls = {0};
+        MessageWrap.RangeWidth widths = MessageWrap.prefixWidths(5, i -> {
+            calls[0]++;
+            return i < 2 ? 2 : 1;
+        });
+        assertEquals(5, calls[0]);
+        assertEquals(4, widths.width(0, 2));
+        assertEquals(3, widths.width(2, 5));
+        assertEquals(0, widths.width(3, 3));
+        assertEquals(List.of("ab", "cde"), MessageWrap.lines("abcde", 4, widths));
+        assertEquals(5, calls[0]);
+    }
+
+    @Test
+    void prefixWidthsAvoidRescanningEveryPrefixDuringWrap() {
+        String text = "obfuscated-magic-text ".repeat(20);
+        int[] visits = {0};
+        MessageWrap.RangeWidth naive = (from, to) -> {
+            for (int i = from; i < to; i++) visits[0]++;
+            return to - from;
+        };
+        MessageWrap.wrap(text, 30, naive);
+        int naiveVisits = visits[0];
+        visits[0] = 0;
+        MessageWrap.RangeWidth cached = MessageWrap.prefixWidths(text.length(), i -> {
+            visits[0]++;
+            return 1;
+        });
+        MessageWrap.wrap(text, 30, cached);
+        assertEquals(text.length(), visits[0]);
+        assertTrue(naiveVisits > visits[0] * 5,
+            "naive glyph visits " + naiveVisits + " should dwarf cached " + visits[0]);
     }
 }
