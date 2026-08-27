@@ -162,7 +162,7 @@ public final class LogStore implements AutoCloseable {
         Objects.requireNonNull(directory, "directory");
         Objects.requireNonNull(options, "options");
         return importThenOptimize(
-            sink -> importer.importDirectory(directory, options, sink, cancelled), progress);
+            sink -> importer.importDirectory(directory, options, sink, cancelled), progress, options);
     }
 
     /**
@@ -213,23 +213,24 @@ public final class LogStore implements AutoCloseable {
         Objects.requireNonNull(archive, "archive");
         Objects.requireNonNull(options, "options");
         return importThenOptimize(
-            sink -> importer.importArchive(archive, options, sink, cancelled), progress);
+            sink -> importer.importArchive(archive, options, sink, cancelled), progress, options);
     }
 
     private ImportResult importThenOptimize(Function<Consumer<ImportProgress>, ImportResult> importCall,
-                                            Consumer<ImportProgress> progress) {
+                                            Consumer<ImportProgress> progress, ImportOptions options) {
         ImportProgressTracker tracker = new ImportProgressTracker(progress);
         ImportResult result = importCall.apply(tracker);
-        optimizeAfterImport(result, tracker);
+        optimizeAfterImport(result, tracker, options);
         return result;
     }
 
     /**
      * After a batch import, rewrite {@code chat_entry} oldest-first (chunking) and compact the on-disk
      * file. Live session inserts already arrive in time order, so this stays off the hot path.
+     * Current-instance refreshes pass {@link ImportOptions#optimize()} as {@code false} and skip this work.
      */
-    private void optimizeAfterImport(ImportResult result, ImportProgressTracker tracker) {
-        if (result.importedFiles() <= 0) {
+    private void optimizeAfterImport(ImportResult result, ImportProgressTracker tracker, ImportOptions options) {
+        if (result.importedFiles() <= 0 || !options.optimize()) {
             tracker.complete();
             return;
         }
