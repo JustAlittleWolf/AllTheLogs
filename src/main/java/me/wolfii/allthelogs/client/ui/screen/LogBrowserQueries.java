@@ -308,6 +308,7 @@ final class LogBrowserQueries {
     private void jumpTo(MessageTimeline.ScrubJump jump, boolean preview) {
         LocalDateTime target = clampToBounds(jump == null ? null : jump.time());
         if (target == null && (jump == null || jump.skip() < 0)) {
+            if (preview && list != null) list.scrubQueryFinished();
             if (!preview) list.finishScrub();
             return;
         }
@@ -327,6 +328,7 @@ final class LogBrowserQueries {
         int gen = generation.incrementAndGet();
         if (!preview) list.setLoading(true);
         onClient(AllTheLogsClient.worker().query(requested), (entries, error) -> {
+            if (preview && list != null) list.scrubQueryFinished();
             if (gen != generation.get()) return;
             list.setLoading(false);
             if (error != null) {
