@@ -876,16 +876,61 @@ class LogStoreTest {
     }
 
     @Test
-    void importingAnEarlierSessionMessageDoesNotMoveLastEntryTimeBack() {
+    void updateSessionEndTimeRequiresAnActiveSession() {
+        assertThrows(LogDataException.class, () -> store.updateSessionEndTime(LocalDateTime.now()));
+    }
+
+    @Test
+    void updateSessionEndTimeDoesNotStoreAChatLine() {
+        LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+        store.startSession("26.2", startedAt);
+
+        store.updateSessionEndTime(startedAt.plusHours(2));
+
+        ChatLog file = store.chatLogs().getFirst();
+        assertEquals(startedAt, file.startTime());
+        assertEquals(startedAt.plusHours(2), file.endTime());
+        assertTrue(store.allEntries().isEmpty());
+    }
+
+    @Test
+    void updateSessionEndTimeDoesNotMoveEarlier() {
         LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
         store.startSession("26.2", startedAt);
         store.importSessionMessage("later", startedAt.plusMinutes(5));
 
-        store.importSessionMessage("late note", startedAt.plusMinutes(1));
+        store.updateSessionEndTime(startedAt.plusMinutes(1));
 
         ChatLog file = store.chatLogs().getFirst();
         assertEquals(startedAt.plusMinutes(5), file.endTime());
-        assertEquals(2, store.allEntries().size());
+        assertEquals(1, store.allEntries().size());
+    }
+
+    @Test
+    void updateSessionEndTimeCanAdvancePastTheLastMessage() {
+        LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+        store.startSession("26.2", startedAt);
+        store.importSessionMessage("chat", startedAt.plusMinutes(5));
+
+        store.updateSessionEndTime(startedAt.plusHours(1));
+
+        ChatLog file = store.chatLogs().getFirst();
+        assertEquals(startedAt, file.startTime());
+        assertEquals(startedAt.plusHours(1), file.endTime());
+        assertEquals(1, store.allEntries().size());
+    }
+
+    @Test
+    void importingAnEarlierSessionMessageDoesNotMoveLastEntryTimeBack() {
+        LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+        store.startSession("26.2", startedAt);
+        store.updateSessionEndTime(startedAt.plusHours(1));
+
+        store.importSessionMessage("late note", startedAt.plusMinutes(1));
+
+        ChatLog file = store.chatLogs().getFirst();
+        assertEquals(startedAt.plusHours(1), file.endTime());
+        assertEquals(1, store.allEntries().size());
     }
 
     @Test

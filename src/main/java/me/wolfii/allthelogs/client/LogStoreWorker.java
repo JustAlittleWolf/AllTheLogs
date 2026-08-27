@@ -5,6 +5,7 @@ import me.wolfii.allthelogs.data.parse.FormattingCodes;
 import net.minecraft.network.chat.Component;
 
 import java.nio.file.Path;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -74,6 +75,14 @@ public final class LogStoreWorker implements AutoCloseable {
         });
     }
 
+    /**
+     * Advances the live session's end time to now on the worker thread. No-op when the store is not open
+     * or no session is active.
+     */
+    public void touchSessionEndTime() {
+        executor.execute(this::touchSessionEndTimeNow);
+    }
+
     public boolean isOpen() {
         return store != null;
     }
@@ -119,8 +128,10 @@ public final class LogStoreWorker implements AutoCloseable {
     @Override
     public void close() {
         try {
+            submit(this::touchSessionEndTimeNow).join();
             submit(this::closeStore).join();
         } catch (CompletionException ignored) {
+            touchSessionEndTimeNow();
             closeStore();
         } finally {
             executor.shutdownNow();
@@ -138,6 +149,14 @@ public final class LogStoreWorker implements AutoCloseable {
         if (store != null) {
             store.close();
             store = null;
+        }
+    }
+
+    private void touchSessionEndTimeNow() {
+        if (store == null) return;
+        try {
+            store.updateSessionEndTime(LocalDateTime.now());
+        } catch (LogDataException ignored) {
         }
     }
 
