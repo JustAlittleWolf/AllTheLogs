@@ -191,7 +191,7 @@ final class LogBrowserQueries {
         }
         SearchFilter query = page;
         long startedAt = System.nanoTime();
-        onClient(AllTheLogsClient.worker().query(query.toQuery()), (entries, error) -> {
+        onClient(AllTheLogsClient.worker().findEntries(query.toQuery()), (entries, error) -> {
             if (gen != generation.get()) return;
             list.setLoading(false);
             if (error != null) {
@@ -218,7 +218,7 @@ final class LogBrowserQueries {
      * the list before rows arrive, or land on a newer search.
      */
     private void loadMatchSummary(int gen, SearchFilter page, long startedAt) {
-        onClient(AllTheLogsClient.worker().summarize(page.toSummaryQuery()), (summary, error) -> {
+        onClient(AllTheLogsClient.worker().summarizeMatches(page.toSummaryQuery()), (summary, error) -> {
             if (gen != generation.get() || error != null || list == null) return;
             matchSummary = summary == null ? MatchSummary.empty() : summary;
             list.setMatchSummary(matchSummary);
@@ -267,7 +267,7 @@ final class LogBrowserQueries {
         int lastVisible = list.lastVisibleIndex();
         Set<DisplayRow.RowKey> beforeKeys = keysOf(list.window().rows());
         int gen = generation.get();
-        onClient(AllTheLogsClient.worker().query(page.toQuery()), (entries, error) -> {
+        onClient(AllTheLogsClient.worker().findEntries(page.toQuery()), (entries, error) -> {
             if (gen != generation.get()) return;
             list.setLoading(false);
             if (error != null) {
@@ -302,7 +302,7 @@ final class LogBrowserQueries {
         int before = older ? extra : 0;
         int after = older ? 0 : extra;
         DisplayRow.RowKey anchor = row.key();
-        onClient(AllTheLogsClient.worker().around(row.chatLog(), row.lineIndex(), before, after), (entries, error) -> {
+        onClient(AllTheLogsClient.worker().entriesAround(row.chatLog(), row.lineIndex(), before, after), (entries, error) -> {
             if (error != null || list == null) {
                 if (error != null) AllTheLogsClient.LOGGER.warn("AllTheLogs expand query failed", error);
                 return;
@@ -342,7 +342,7 @@ final class LogBrowserQueries {
         ChatQuery requested = query;
         int gen = generation.incrementAndGet();
         if (!preview) list.setLoading(true);
-        onClient(AllTheLogsClient.worker().query(requested), (entries, error) -> {
+        onClient(AllTheLogsClient.worker().findEntries(requested), (entries, error) -> {
             if (preview && list != null) list.scrubQueryFinished();
             if (gen != generation.get()) return;
             if (error != null) {
@@ -378,7 +378,7 @@ final class LogBrowserQueries {
         SearchFilter extra = filter.withOffset(cursor).withSort(filter.sort().opposite())
             .withLimit(extraFillLimit(list.viewHeight(), pageLimit));
         Set<DisplayRow.RowKey> beforeKeys = keysOf(rows);
-        onClient(AllTheLogsClient.worker().query(extra.toQuery()), (entries, error) -> {
+        onClient(AllTheLogsClient.worker().findEntries(extra.toQuery()), (entries, error) -> {
             if (gen != generation.get()) return;
             if (error != null) {
                 applyJump(target, preview, rows, true, hasAfter, progress);

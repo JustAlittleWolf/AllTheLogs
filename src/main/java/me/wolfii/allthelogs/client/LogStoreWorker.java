@@ -73,41 +73,25 @@ public final class LogStoreWorker implements AutoCloseable {
         });
     }
 
-    public void importSessionMessage(String message) {
-        String copy = Objects.requireNonNull(message, "message");
-        executor.execute(() -> {
-            if (store == null) return;
-            store.importSessionMessage(copy);
-        });
-    }
-
-    public CompletableFuture<List<ChatEntry>> query(ChatQuery query) {
+    public CompletableFuture<List<ChatEntry>> findEntries(ChatQuery query) {
         ChatQuery copy = Objects.requireNonNull(query, "query");
-        return submit(() -> requireStore().query(copy));
+        return submit(() -> requireStore().findEntries(copy));
     }
 
-    public CompletableFuture<MatchSummary> summarize(ChatQuery query) {
+    public CompletableFuture<MatchSummary> summarizeMatches(ChatQuery query) {
         ChatQuery copy = Objects.requireNonNull(query, "query");
-        return submit(() -> requireStore().summarize(copy));
+        return submit(() -> requireStore().summarizeMatches(copy));
     }
 
-    public CompletableFuture<List<ChatEntry>> around(ChatLog log, int lineIndex, int radius) {
-        return around(log, lineIndex, radius, radius);
-    }
-
-    public CompletableFuture<List<ChatEntry>> around(ChatLog log, int lineIndex, int before, int after) {
+    public CompletableFuture<List<ChatEntry>> entriesAround(ChatLog log, int lineIndex, int before, int after) {
         ChatLog copy = Objects.requireNonNull(log, "log");
         int beforeLines = Math.max(0, before);
         int afterLines = Math.max(0, after);
-        return submit(() -> requireStore().around(copy, lineIndex, beforeLines, afterLines));
+        return submit(() -> requireStore().entriesAround(copy, lineIndex, beforeLines, afterLines));
     }
 
     public CompletableFuture<LogStoreMetadata> metadata() {
         return submit(() -> requireStore().metadata());
-    }
-
-    public boolean isOpen() {
-        return store != null;
     }
 
     @Override
