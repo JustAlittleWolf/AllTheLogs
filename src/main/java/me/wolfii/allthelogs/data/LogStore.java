@@ -256,8 +256,8 @@ public final class LogStore implements AutoCloseable {
      * Starts a capture session for a running Minecraft client and creates a {@link ChatLog} for it.
      * <p>
      * Chat lines imported with {@link #importSessionMessage(String)} are stored against this log. Its
-     * {@link ChatLog#startTime()} is the session start; {@link #importSessionMessage(String, LocalDateTime)} and
-     * {@link #updateSessionEndTime(LocalDateTime)} update {@link ChatLog#endTime()} as the session continues.
+     * {@link ChatLog#startTime()} is the session start; {@link #importSessionMessage(String, LocalDateTime)}
+     * updates {@link ChatLog#endTime()} as the session continues.
      * Starting another session leaves the previous log in place and switches subsequent imports to the new one.
      * <p>
      * The log's {@link ChatLog#source()} is a {@link LogSource.Session} with a unique id. Callers that capture from
@@ -321,18 +321,6 @@ public final class LogStore implements AutoCloseable {
      */
     public boolean importSessionMessage(String message, long[] formatting, LocalDateTime timestamp) {
         return sessions.importMessage(message, formatting, timestamp);
-    }
-
-    /**
-     * Updates {@link ChatLog#endTime()} of the current session, without storing a chat line.
-     * <p>
-     * Whole seconds only, matching {@link #importSessionMessage(String, LocalDateTime)}. If {@code timestamp} is
-     * earlier than the time already stored, the existing end time is kept.
-     *
-     * @throws LogDataException if no session is active, or the update cannot be written
-     */
-    public void updateSessionEndTime(LocalDateTime timestamp) {
-        sessions.updateEndTime(timestamp);
     }
 
     /**

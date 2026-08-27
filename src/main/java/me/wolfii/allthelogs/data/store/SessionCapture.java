@@ -107,27 +107,6 @@ public final class SessionCapture {
         }
     }
 
-    /**
-     * Updates the current session's end time without storing a chat line. Whole seconds only;
-     * an earlier timestamp than the one already stored is ignored.
-     *
-     * @throws LogDataException if no session is active, or the update cannot be written
-     */
-    public void updateEndTime(LocalDateTime timestamp) {
-        Objects.requireNonNull(timestamp, "timestamp");
-        requireActiveSession();
-        LocalDateTime stamp = timestamp.withNano(0);
-        try (PreparedStatement update = connection.prepareStatement("""
-            UPDATE log_file SET end_time = greatest(end_time, ?)
-            WHERE id = ?""")) {
-            update.setTimestamp(1, Timestamp.valueOf(stamp));
-            update.setLong(2, sessionFileId);
-            update.execute();
-        } catch (SQLException e) {
-            throw new LogDataException("could not update the session end time", e);
-        }
-    }
-
     private void requireActiveSession() {
         if (sessionFileId < 0) {
             throw new LogDataException("no client session is active; call startSession first");
