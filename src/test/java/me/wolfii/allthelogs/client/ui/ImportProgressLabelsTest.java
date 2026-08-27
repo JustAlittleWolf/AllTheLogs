@@ -10,14 +10,18 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class ImportProgressLabelsTest {
     @Test
-    void currentFileUsesTheLeafName() {
-        assertEquals("", ImportProgressLabels.currentFile(null));
-        assertEquals("latest.log", ImportProgressLabels.currentFile(
-            new LogSource.File(Path.of("/tmp/logs/latest.log"))));
+    void currentFileIsRelativeToTheImportPath() {
+        Path root = Path.of("/tmp/instance");
+        assertEquals("", ImportProgressLabels.currentFile(null, root));
+        assertEquals("logs/latest.log", ImportProgressLabels.currentFile(
+            new LogSource.File(Path.of("/tmp/instance/logs/latest.log")), root));
         assertEquals("backup.zip", ImportProgressLabels.currentFile(
-            new LogSource.Archive(Path.of("/tmp/backup.zip"), "")));
-        assertEquals("logs/2026-01-02-1.log.gz", ImportProgressLabels.currentFile(
-            new LogSource.Archive(Path.of("/tmp/backup.zip"), "logs/2026-01-02-1.log.gz")));
+            new LogSource.Archive(Path.of("/tmp/backup.zip"), ""), Path.of("/tmp/backup.zip")));
+        assertEquals("backup.zip!/logs/2026-01-02-1.log.gz", ImportProgressLabels.currentFile(
+            new LogSource.Archive(Path.of("/tmp/backup.zip"), "logs/2026-01-02-1.log.gz"),
+            Path.of("/tmp/backup.zip")));
+        assertEquals("backups/old.zip!/logs/chat.log", ImportProgressLabels.currentFile(
+            new LogSource.Archive(Path.of("/tmp/instance/backups/old.zip"), "logs/chat.log"), root));
     }
 
     @Test

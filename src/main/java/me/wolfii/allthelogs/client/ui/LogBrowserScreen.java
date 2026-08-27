@@ -13,7 +13,6 @@ import me.wolfii.allthelogs.client.view.DisplayRow;
 import me.wolfii.allthelogs.client.view.MessageListLayout;
 import me.wolfii.allthelogs.client.view.ResultWindow;
 import me.wolfii.allthelogs.data.ChatQuery;
-import me.wolfii.allthelogs.data.LogStoreMetadata;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -26,6 +25,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
@@ -44,6 +44,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
     private ButtonComponent oldestFirst;
     private ButtonComponent newestFirst;
     private ButtonComponent versionButton;
+    private ParentUIComponent versionMenu;
     private List<String> versions = List.of();
     private boolean filterOpen;
     private FlowLayout root;
@@ -65,40 +66,6 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         return time == null ? "" : time.toString().replace('T', ' ');
     }
 
-    static String formatBytes(long bytes) {
-        if (bytes < 1024) return bytes + " B";
-        double value = bytes / 1024.0;
-        String unit = "KB";
-        if (value >= 1024) {
-            value /= 1024;
-            unit = "MB";
-        }
-        if (value >= 1024) {
-            value /= 1024;
-            unit = "GB";
-        }
-        return "%.1f %s".formatted(value, unit);
-    }
-
-    static List<Component> metadataTooltip(LogStoreMetadata metadata) {
-        if (metadata.chatLogCount() == 0) {
-            return List.of(Component.translatable("allthelogs.meta.empty"));
-        }
-        List<Component> lines = new ArrayList<>();
-        String versions = metadata.minecraftVersions().isEmpty()
-            ? "—"
-            : String.join(", ", metadata.minecraftVersions());
-        lines.add(Component.translatable("allthelogs.meta.versions", versions));
-        if (metadata.firstLogDate() != null && metadata.lastLogDate() != null) {
-            lines.add(Component.translatable("allthelogs.meta.range",
-                metadata.firstLogDate().toString(), metadata.lastLogDate().toString()));
-        }
-        lines.add(Component.translatable("allthelogs.meta.logs", Long.toString(metadata.chatLogCount())));
-        lines.add(Component.translatable("allthelogs.meta.entries", Long.toString(metadata.chatEntryCount())));
-        lines.add(Component.translatable("allthelogs.meta.size", formatBytes(metadata.databaseSizeBytes())));
-        return lines;
-    }
-
     @Override
     protected @NotNull OwoUIAdapter<FlowLayout> createAdapter() {
         return OwoUIAdapter.create(this, UIContainers::verticalFlow);
@@ -108,7 +75,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
     protected void build(FlowLayout root) {
         this.root = root;
         root.gap(6);
-        root.surface(Surface.blur(3f, 8f).and(Surface.flat(0x99000000)))
+        root.surface(BrowserPanels.overlay())
             .padding(Insets.of(8))
             .horizontalAlignment(HorizontalAlignment.LEFT)
             .verticalAlignment(VerticalAlignment.TOP);
@@ -194,6 +161,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         oldestFirst = null;
         newestFirst = null;
         versionButton = null;
+        closeVersionMenu();
         filterOpen = false;
     }
 
@@ -235,7 +203,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         ScrollContainer<FlowLayout> panel = UIContainers.verticalScroll(
             Sizing.fixed(240), Sizing.fixed(panelHeight), content);
         panel.scrollbar(OverflowScrollbar.vanillaFlat());
-        panel.surface(Surface.flat(0xE0101010).and(Surface.outline(0xFF3C3C3C)));
+        panel.surface(BrowserPanels.card());
         return panel;
     }
 
@@ -250,7 +218,8 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         FlowLayout row = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
         row.gap(2);
         row.child(UIComponents.label(Component.translatable("allthelogs.filter.version")));
-        versionButton = UIComponents.button(versionLabel(), button -> openVersionMenu(button));
+        versionButton = UIComponents.button(versionLabel(), button -> toggleVersionMenu(button));
+        versionButton.horizontalSizing(Sizing.fill());
         row.child(versionButton);
         return row;
     }
@@ -262,17 +231,48 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         return Component.literal(filter.version());
     }
 
+    private void toggleVersionMenu(ButtonComponent button) {
+        if (versionMenu != null) {
+            closeVersionMenu();
+            return;
+        }
+        openVersionMenu(button);
+    }
+
+    private void closeVersionMenu() {
+        if (root != null && versionMenu != null) {
+            root.removeChild(versionMenu);
+        }
+        versionMenu = null;
+    }
+
     private void openVersionMenu(ButtonComponent button) {
         if (root == null) return;
-        DropdownComponent.openContextMenu(this, root, FlowLayout::child,
-            button.x(), button.y() + button.height(), dropdown -> {
-                dropdown.button(Component.translatable("allthelogs.filter.version.all"), ignored ->
-                    updateFilter(filter.withVersion(null)));
-                for (String version : versions) {
-                    dropdown.button(Component.literal(version), ignored ->
-                        updateFilter(filter.withVersion(version)));
-                }
-            });
+        closeVersionMenu();
+        FlowLayout items = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
+        items.gap(1).padding(Insets.of(2));
+        items.child(versionChoice(Component.translatable("allthelogs.filter.version.all"), null));
+        for (String version : versions) {
+            items.child(versionChoice(Component.literal(version), version));
+        }
+        int width = Math.max(180, button.width());
+        int height = Math.min(180, Math.max(24, (versions.size() + 1) * 20 + 8));
+        ScrollContainer<FlowLayout> menu = UIContainers.verticalScroll(
+            Sizing.fixed(width), Sizing.fixed(height), items);
+        menu.scrollbar(OverflowScrollbar.vanillaFlat());
+        menu.surface(BrowserPanels.menu());
+        menu.positioning(Positioning.absolute(button.x(), button.y() + button.height()));
+        versionMenu = menu;
+        root.child(menu);
+    }
+
+    private ButtonComponent versionChoice(Component label, String version) {
+        ButtonComponent choice = UIComponents.button(label, ignored -> {
+            closeVersionMenu();
+            updateFilter(filter.withVersion(version));
+        });
+        choice.horizontalSizing(Sizing.fill());
+        return choice;
     }
 
     private ButtonComponent sortButton(String key, ChatQuery.Sort sort) {
@@ -320,34 +320,30 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         list.setLoading(true);
         refreshStats();
         SearchFilter page = filter.withoutOffset();
-        AllTheLogsClient.worker().query(page.toQuery()).whenComplete((entries, error) -> {
-            Minecraft.getInstance().execute(() -> {
-                if (generation != queryGeneration.get()) return;
-                list.setLoading(false);
-                if (error != null) {
-                    AllTheLogsClient.LOGGER.warn("AllTheLogs query failed", error);
-                    list.reset(List.of(), false, false);
-                    list.showOverlay(Component.translatable("allthelogs.status.error"));
-                    return;
-                }
-                List<DisplayRow> rows = DisplayRow.from(entries, page);
-                list.reset(rows, false, pageIsFull(rows, page));
-                list.showMatchCount(ResultWindow.matchCount(rows));
-            });
+        onClient(AllTheLogsClient.worker().query(page.toQuery()), (entries, error) -> {
+            if (generation != queryGeneration.get()) return;
+            list.setLoading(false);
+            if (error != null) {
+                AllTheLogsClient.LOGGER.warn("AllTheLogs query failed", error);
+                list.reset(List.of(), false, false);
+                list.showOverlay(Component.translatable("allthelogs.status.error"));
+                return;
+            }
+            List<DisplayRow> rows = DisplayRow.from(entries, page);
+            list.reset(rows, false, pageIsFull(rows, page));
+            list.showMatchCount(ResultWindow.matchCount(rows));
         });
         if (resetTimeline) {
-            AllTheLogsClient.worker().matchBounds(page.toTimelineQuery()).whenComplete((bounds, error) -> {
-                Minecraft.getInstance().execute(() -> {
-                    if (error != null || list == null) return;
-                    list.setMatchBounds(bounds);
-                });
+            onClient(AllTheLogsClient.worker().matchBounds(page.toTimelineQuery()), (bounds, error) -> {
+                if (error != null || list == null) return;
+                list.setMatchBounds(bounds);
             });
         }
     }
 
     private void refreshStats() {
         if (info == null) return;
-        AllTheLogsClient.worker().metadata().whenComplete((metadata, error) -> Minecraft.getInstance().execute(() -> {
+        onClient(AllTheLogsClient.worker().metadata(), (metadata, error) -> {
             if (info == null) return;
             if (error != null || metadata == null) {
                 info.tooltip(List.of(
@@ -357,10 +353,10 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
             }
             List<Component> lines = new ArrayList<>();
             lines.add(Component.translatable("allthelogs.meta.hint"));
-            lines.addAll(metadataTooltip(metadata));
+            lines.addAll(StoreInfo.tooltip(metadata));
             info.tooltip(lines);
             versions = metadata.minecraftVersions();
-        }));
+        });
     }
 
     private void loadMore(TimelineLogList.Edge edge) {
@@ -379,27 +375,23 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         DisplayRow.RowKey anchor = list.visibleAnchor();
         int firstVisible = list.firstVisibleIndex();
         int lastVisible = list.lastVisibleIndex();
-        AllTheLogsClient.worker().query(page.toQuery()).whenComplete((entries, error) -> {
-            Minecraft.getInstance().execute(() -> {
-                list.setLoading(false);
-                if (error != null) {
-                    AllTheLogsClient.LOGGER.warn("AllTheLogs page query failed", error);
-                    return;
-                }
-                List<DisplayRow> incoming = DisplayRow.from(entries, filter);
-                if (olderPage) incoming = ResultWindow.reversed(incoming);
-                boolean more = pageIsFull(incoming, filter);
-                List<DisplayRow> older = olderPage ? incoming : list.window().rows();
-                List<DisplayRow> newer = olderPage ? list.window().rows() : incoming;
-                List<DisplayRow> trimmed = ResultWindow.trimToMatchLimit(
-                    ResultWindow.mergeUnique(older, newer),
-                    (int) Math.max(1, filter.limit()), firstVisible, lastVisible);
-                boolean hasBefore = list.window().hasBefore() || (olderPage && more);
-                boolean hasAfter = list.window().hasAfter() || (!olderPage && more);
-                if (olderPage && !more) hasBefore = false;
-                if (!olderPage && !more) hasAfter = false;
-                list.applyPage(trimmed, hasBefore, hasAfter, anchor);
-            });
+        onClient(AllTheLogsClient.worker().query(page.toQuery()), (entries, error) -> {
+            list.setLoading(false);
+            if (error != null) {
+                AllTheLogsClient.LOGGER.warn("AllTheLogs page query failed", error);
+                return;
+            }
+            List<DisplayRow> incoming = DisplayRow.from(entries, filter);
+            if (olderPage) incoming = ResultWindow.reversed(incoming);
+            boolean more = pageIsFull(incoming, filter);
+            List<DisplayRow> older = olderPage ? incoming : list.window().rows();
+            List<DisplayRow> newer = olderPage ? list.window().rows() : incoming;
+            List<DisplayRow> trimmed = ResultWindow.trimToMatchLimit(
+                ResultWindow.mergeUnique(older, newer),
+                (int) Math.max(1, filter.limit()), firstVisible, lastVisible);
+            boolean hasBefore = olderPage ? more : list.window().hasBefore();
+            boolean hasAfter = olderPage ? list.window().hasAfter() : more;
+            list.applyPage(trimmed, hasBefore, hasAfter, anchor);
         });
     }
 
@@ -407,30 +399,31 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         int extra = MessageListLayout.extraContextLines(filter.contextLines());
         if (extra <= 0 || list == null) return;
         DisplayRow.RowKey anchor = row.key();
-        AllTheLogsClient.worker().around(row.chatLog(), row.lineIndex(), extra).whenComplete((entries, error) -> {
-            Minecraft.getInstance().execute(() -> {
-                if (error != null || list == null) {
-                    if (error != null) AllTheLogsClient.LOGGER.warn("AllTheLogs expand query failed", error);
-                    return;
-                }
-                List<DisplayRow> extraRows = DisplayRow.from(entries, filter);
-                List<DisplayRow> merged = ResultWindow.mergeSorted(list.window().rows(), extraRows, filter.sort());
-                list.applyPage(merged, list.window().hasBefore(), list.window().hasAfter(), anchor);
-                list.setScrollY(list.scrollY());
-            });
+        onClient(AllTheLogsClient.worker().around(row.chatLog(), row.lineIndex(), extra), (entries, error) -> {
+            if (error != null || list == null) {
+                if (error != null) AllTheLogsClient.LOGGER.warn("AllTheLogs expand query failed", error);
+                return;
+            }
+            List<DisplayRow> extraRows = DisplayRow.from(entries, filter);
+            List<DisplayRow> merged = ResultWindow.mergeSorted(list.window().rows(), extraRows, filter.sort());
+            list.applyPage(merged, list.window().hasBefore(), list.window().hasAfter(), anchor);
+            list.setScrollY(list.scrollY());
         });
     }
 
     private void jumpTo(LocalDateTime time) {
         SearchFilter page = filter.withOffset(time.minusNanos(1));
         list.setLoading(true);
-        AllTheLogsClient.worker().query(page.toQuery()).whenComplete((entries, error) -> {
-            Minecraft.getInstance().execute(() -> {
-                list.setLoading(false);
-                if (error != null) return;
-                List<DisplayRow> rows = DisplayRow.from(entries, filter);
-                list.reset(rows, true, pageIsFull(rows, filter));
-            });
+        onClient(AllTheLogsClient.worker().query(page.toQuery()), (entries, error) -> {
+            list.setLoading(false);
+            if (error != null) return;
+            List<DisplayRow> rows = DisplayRow.from(entries, filter);
+            list.reset(rows, true, pageIsFull(rows, filter));
+            list.scrollToTime(time);
         });
+    }
+
+    private <T> void onClient(CompletableFuture<T> future, BiConsumer<T, Throwable> handler) {
+        future.whenComplete((value, error) -> Minecraft.getInstance().execute(() -> handler.accept(value, error)));
     }
 }

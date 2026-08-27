@@ -2,9 +2,14 @@ package me.wolfii.allthelogs.client.view;
 
 import me.wolfii.allthelogs.data.ChatQuery;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.*;
-import java.util.function.IntUnaryOperator;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * Sliding window of displayed log rows. Replacing the buffered page adjusts the scroll offset so the same
@@ -120,6 +125,14 @@ public final class ResultWindow {
         return List.copyOf(merged);
     }
 
+    /**
+     * Scroll offset that keeps an anchored row at the same screen position after the buffer is replaced.
+     */
+    public static double keepAnchor(int oldIndex, int newIndex, double oldY, double newY, double scrollY) {
+        if (oldIndex < 0 || newIndex < 0) return scrollY;
+        return newY - (oldY - scrollY);
+    }
+
     public List<DisplayRow> rows() {
         return rows;
     }
@@ -138,56 +151,9 @@ public final class ResultWindow {
         this.hasAfter = hasAfter;
     }
 
-    /**
-     * Replaces the buffer with {@code next} and returns the scroll offset that keeps {@code anchor} at the same
-     * pixel position, assuming a fixed {@code rowHeight}.
-     */
-    public double replaceKeepingAnchor(List<DisplayRow> next, boolean hasBefore, boolean hasAfter,
-                                       DisplayRow.RowKey anchor, double scrollY, int rowHeight) {
-        return replaceKeepingAnchor(next, hasBefore, hasAfter, anchor, scrollY, index -> index * rowHeight);
-    }
-
-    /**
-     * Replaces the buffer with {@code next} and returns the scroll offset that keeps {@code anchor} at the same
-     * pixel position using {@code indexToY} to map row indexes onto content coordinates.
-     */
-    public double replaceKeepingAnchor(List<DisplayRow> next, boolean hasBefore, boolean hasAfter,
-                                       DisplayRow.RowKey anchor, double scrollY, IntUnaryOperator indexToY) {
-        int oldIndex = indexOf(rows, anchor);
-        int newIndex = indexOf(next, anchor);
-        this.rows = List.copyOf(next);
-        this.hasBefore = hasBefore;
-        this.hasAfter = hasAfter;
-        if (oldIndex < 0 || newIndex < 0) {
-            return scrollY;
-        }
-        double screenY = indexToY.applyAsInt(oldIndex) - scrollY;
-        return indexToY.applyAsInt(newIndex) - screenY;
-    }
-
-    public DisplayRow.RowKey keyAtPixel(double scrollY, int rowHeight) {
-        if (rows.isEmpty() || rowHeight <= 0) return null;
-        int index = (int) Math.floor(Math.max(0, scrollY) / rowHeight);
-        if (index >= rows.size()) index = rows.size() - 1;
+    public DisplayRow.RowKey keyAt(int index) {
+        if (index < 0 || index >= rows.size()) return null;
         return rows.get(index).key();
-    }
-
-    public DisplayRow.RowKey keyAtY(double scrollY, IntUnaryOperator indexToY, int size) {
-        if (rows.isEmpty() || size <= 0) return null;
-        int index = 0;
-        for (int i = 0; i < size; i++) {
-            if (indexToY.applyAsInt(i) <= scrollY) {
-                index = i;
-            } else {
-                break;
-            }
-        }
-        if (index >= rows.size()) index = rows.size() - 1;
-        return rows.get(index).key();
-    }
-
-    public int contentHeight(int rowHeight) {
-        return rows.size() * rowHeight;
     }
 
     public LocalDateTime firstMatchTime() {
@@ -202,6 +168,38 @@ public final class ResultWindow {
             if (rows.get(i).match()) return rows.get(i).entry().timestamp();
         }
         return rows.isEmpty() ? null : rows.getLast().entry().timestamp();
+    }
+
+    /**
+     * Whether {@code time} falls between the earliest and latest timestamps currently buffered.
+     */
+    public boolean coversTime(LocalDateTime time) {
+        if (rows.isEmpty() || time == null) return false;
+        LocalDateTime min = rows.getFirst().entry().timestamp();
+        LocalDateTime max = min;
+        for (DisplayRow row : rows) {
+            LocalDateTime at = row.entry().timestamp();
+            if (at.isBefore(min)) min = at;
+            if (at.isAfter(max)) max = at;
+        }
+        return !time.isBefore(min) && !time.isAfter(max);
+    }
+
+    /**
+     * Index of the row whose timestamp is closest to {@code time}, or {@code -1} when the window is empty.
+     */
+    public int nearestIndex(LocalDateTime time) {
+        if (rows.isEmpty() || time == null) return -1;
+        int best = 0;
+        long bestDelta = Long.MAX_VALUE;
+        for (int i = 0; i < rows.size(); i++) {
+            long delta = Math.abs(Duration.between(rows.get(i).entry().timestamp(), time).toMillis());
+            if (delta < bestDelta) {
+                bestDelta = delta;
+                best = i;
+            }
+        }
+        return best;
     }
 
     public int matchCount() {

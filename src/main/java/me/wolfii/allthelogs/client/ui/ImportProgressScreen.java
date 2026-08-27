@@ -62,7 +62,7 @@ public final class ImportProgressScreen extends BaseOwoScreen<FlowLayout> {
         FlowLayout card = UIContainers.verticalFlow(Sizing.fill(70), Sizing.content());
         card.gap(10)
             .padding(Insets.of(16))
-            .surface(Surface.flat(0xE0101010).and(Surface.outline(0xFF3C3C3C)))
+            .surface(BrowserPanels.card())
             .horizontalAlignment(HorizontalAlignment.LEFT);
 
         heading = UIComponents.label(Component.translatable("allthelogs.status.importing"));
@@ -153,7 +153,7 @@ public final class ImportProgressScreen extends BaseOwoScreen<FlowLayout> {
                 Integer.toString(snapshot.completedFiles()),
                 Integer.toString(Math.max(snapshot.discoveredFiles(), snapshot.estimatedFiles()))));
         }
-        String file = ImportProgressLabels.currentFile(snapshot.current());
+        String file = ImportProgressLabels.currentFile(snapshot.current(), path);
         current.text(file.isEmpty()
             ? Component.empty()
             : Component.translatable("allthelogs.import.progress.current", file));

@@ -3,32 +3,42 @@ package me.wolfii.allthelogs.client.view;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.ToIntFunction;
 
 /**
  * Vertical layout for the virtualised message list: a sticky date header for each calendar day, a larger gap
- * when two neighbouring rows belong to matches further apart than the configured context, and a fixed row
- * height for every chat line.
+ * when two neighbouring rows belong to matches further apart than the configured context, and a height of
+ * {@link #ROW_HEIGHT} per wrapped chat line.
  */
 public final class MessageListLayout {
     public static final int ROW_HEIGHT = 12;
-    public static final int DATE_HEIGHT = 16;
+    public static final int DATE_HEIGHT = 20;
+    public static final int DATE_GAP = 6;
     public static final int CLUSTER_GAP = 8;
 
     private final int[] rowY;
+    private final int[] rowHeight;
     private final List<DateBand> dates;
     private final int contentHeight;
 
-    private MessageListLayout(int[] rowY, List<DateBand> dates, int contentHeight) {
+    private MessageListLayout(int[] rowY, int[] rowHeight, List<DateBand> dates, int contentHeight) {
         this.rowY = rowY;
+        this.rowHeight = rowHeight;
         this.dates = dates;
         this.contentHeight = contentHeight;
     }
 
     public static MessageListLayout of(List<DisplayRow> rows, int contextLines) {
+        return of(rows, contextLines, Integer.MAX_VALUE, text -> text.length());
+    }
+
+    public static MessageListLayout of(List<DisplayRow> rows, int contextLines, int messageWidth,
+                                       ToIntFunction<String> widthOf) {
         if (rows.isEmpty()) {
-            return new MessageListLayout(new int[0], List.of(), 0);
+            return new MessageListLayout(new int[0], new int[0], List.of(), 0);
         }
         int[] rowY = new int[rows.size()];
+        int[] rowHeight = new int[rows.size()];
         List<DateBand> dates = new ArrayList<>();
         int y = 0;
         LocalDate previousDate = null;
@@ -36,16 +46,21 @@ public final class MessageListLayout {
             DisplayRow row = rows.get(i);
             LocalDate date = row.entry().timestamp().toLocalDate();
             if (!date.equals(previousDate)) {
+                if (previousDate != null) {
+                    y += DATE_GAP;
+                }
                 dates.add(new DateBand(date, y, i));
                 y += DATE_HEIGHT;
                 previousDate = date;
             } else if (i > 0 && needsClusterGap(rows.get(i - 1), row, contextLines)) {
                 y += CLUSTER_GAP;
             }
+            int lines = Math.max(1, MessageWrap.lineCount(row.message(), messageWidth, widthOf));
             rowY[i] = y;
-            y += ROW_HEIGHT;
+            rowHeight[i] = lines * ROW_HEIGHT;
+            y += rowHeight[i];
         }
-        return new MessageListLayout(rowY, List.copyOf(dates), y);
+        return new MessageListLayout(rowY, rowHeight, List.copyOf(dates), y);
     }
 
     /**
@@ -56,14 +71,9 @@ public final class MessageListLayout {
     }
 
     static boolean needsClusterGap(DisplayRow previous, DisplayRow current, int contextLines) {
-        if (previous.chatLog().equals(current.chatLog())
-            && Math.abs(current.lineIndex() - previous.lineIndex()) == 1) {
-            return false;
-        }
-        if (!previous.chatLog().equals(current.chatLog())) {
-            return true;
-        }
-        return Math.abs(current.lineIndex() - previous.lineIndex()) > contextLines;
+        if (!previous.chatLog().equals(current.chatLog())) return true;
+        int gap = Math.abs(current.lineIndex() - previous.lineIndex());
+        return gap > 1 && gap > contextLines;
     }
 
     public int contentHeight() {
@@ -73,6 +83,11 @@ public final class MessageListLayout {
     public int rowY(int index) {
         if (index < 0 || index >= rowY.length) return 0;
         return rowY[index];
+    }
+
+    public int rowHeight(int index) {
+        if (index < 0 || index >= rowHeight.length) return 0;
+        return rowHeight[index];
     }
 
     public int size() {

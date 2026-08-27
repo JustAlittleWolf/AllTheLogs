@@ -12,25 +12,16 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ResultWindowTest {
     @Test
     void replacingThePageKeepsTheAnchorRowAtTheSameScreenPosition() {
-        ResultWindow window = new ResultWindow();
-        List<DisplayRow> first = List.of(row("a.log", 0), row("a.log", 1), row("a.log", 2), row("a.log", 3));
-        window.reset(first, false, true);
-
-        DisplayRow.RowKey anchor = first.get(2).key();
         double scrollY = 10;
         int rowHeight = 12;
-        double screenY = 2 * rowHeight - scrollY;
-
-        List<DisplayRow> next = List.of(row("a.log", 2), row("a.log", 3), row("a.log", 4), row("a.log", 5));
-        double newScroll = window.replaceKeepingAnchor(next, true, true, anchor, scrollY, rowHeight);
-
-        assertEquals(screenY, 0 * rowHeight - newScroll, 0.001);
-        assertEquals(4, window.rows().size());
-        assertEquals(2, window.rows().getFirst().lineIndex());
+        double newScroll = ResultWindow.keepAnchor(2, 0, 2 * rowHeight, 0, scrollY);
+        assertEquals(2 * rowHeight - scrollY, 0 * rowHeight - newScroll, 0.001);
     }
 
     @Test
@@ -51,6 +42,16 @@ class ResultWindowTest {
         ResultWindow window = new ResultWindow();
         window.reset(rows, false, false);
         assertEquals(2, window.matchCount());
+    }
+
+    @Test
+    void coversTimeAndNearestIndexUseBufferedTimestamps() {
+        ResultWindow window = new ResultWindow();
+        window.reset(List.of(row("a.log", 0), row("a.log", 10)), false, false);
+        LocalDateTime start = LocalDateTime.of(2026, 8, 26, 10, 0);
+        assertTrue(window.coversTime(start.plusSeconds(10)));
+        assertFalse(window.coversTime(start.plusHours(3)));
+        assertEquals(1, window.nearestIndex(start.plusSeconds(9)));
     }
 
     @Test

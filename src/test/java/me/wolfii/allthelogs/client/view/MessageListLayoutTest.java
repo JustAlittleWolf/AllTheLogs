@@ -52,12 +52,24 @@ class MessageListLayoutTest {
     }
 
     @Test
+    void wrappedLinesTakeARowHeightEach() {
+        LocalDateTime time = LocalDateTime.of(2026, 8, 26, 10, 0);
+        ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), time.toLocalDate(), "26.2", time, time);
+        DisplayRow row = new DisplayRow(new ChatEntry(log, time, 0, "abcdefghij"), true, Duration.ZERO, List.of());
+        MessageListLayout layout = MessageListLayout.of(List.of(row), 5, 4, String::length);
+        assertEquals(MessageListLayout.DATE_HEIGHT, layout.rowY(0));
+        assertEquals(3 * MessageListLayout.ROW_HEIGHT, layout.rowHeight(0));
+    }
+
+    @Test
     void stickyHeaderFollowsTheScrolledDate() {
         DisplayRow day1 = row("a.log", 0, LocalDateTime.of(2026, 8, 26, 10, 0));
         DisplayRow day2 = row("b.log", 0, LocalDateTime.of(2026, 8, 27, 10, 0));
         MessageListLayout layout = MessageListLayout.of(List.of(day1, day2), 5);
         assertEquals(LocalDate.of(2026, 8, 26), layout.stickyAt(0).date());
         assertEquals(LocalDate.of(2026, 8, 27), layout.stickyAt(layout.dates().get(1).y()).date());
+        assertEquals(MessageListLayout.DATE_HEIGHT + MessageListLayout.ROW_HEIGHT + MessageListLayout.DATE_GAP,
+            layout.dates().get(1).y());
     }
 
     private static DisplayRow row(String file, int line, LocalDateTime time) {
