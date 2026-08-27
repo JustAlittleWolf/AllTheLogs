@@ -84,4 +84,18 @@ class SearchFilterTest {
     void emptyTextMatchesEverything() {
         assertTrue(SearchFilter.defaults().messagePredicate().test("anything"));
     }
+
+    @Test
+    void isNarrowedIgnoresSortPagingAndContext() {
+        assertFalse(SearchFilter.defaults().isNarrowed());
+        assertFalse(SearchFilter.defaults().withSort(ChatQuery.Sort.DESCENDING).isNarrowed());
+        assertFalse(SearchFilter.defaults().withContextLines(12).isNarrowed());
+        assertFalse(SearchFilter.defaults().withLimit(50).isNarrowed());
+        assertFalse(SearchFilter.defaults().withRegex(true).withCaseSensitive(true).isNarrowed());
+        assertTrue(SearchFilter.defaults().withText("hi").isNarrowed());
+        assertTrue(SearchFilter.defaults().withVersion("26.2").isNarrowed());
+        assertTrue(SearchFilter.defaults().withStartingAt(LocalDateTime.of(2026, 1, 1, 0, 0)).isNarrowed());
+        assertTrue(SearchFilter.defaults().withUpUntil(LocalDateTime.of(2026, 1, 2, 0, 0)).isNarrowed());
+        assertFalse(SearchFilter.defaults().withVersion("ALL").isNarrowed());
+    }
 }

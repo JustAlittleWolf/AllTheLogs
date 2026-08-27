@@ -74,10 +74,10 @@ class MessageTextTest {
 
     @Test
     void listStatusOmitsDurationUnderATenthOfASecond() {
-        Component status = MessageText.listStatus(Component.empty(), false, true, 4, true, 12);
+        Component status = MessageText.listStatus(Component.empty(), false, true, 4, true, 12, true);
         assertEquals("allthelogs.status.matches", key(status));
         assertEquals("4", args(status)[0]);
-        Component timed = MessageText.listStatus(Component.empty(), false, true, 4, true, 120);
+        Component timed = MessageText.listStatus(Component.empty(), false, true, 4, true, 120, true);
         assertEquals("allthelogs.status.matches.timed", key(timed));
         assertEquals("4", args(timed)[0]);
         assertEquals("0.1", args(timed)[1]);
@@ -85,14 +85,43 @@ class MessageTextTest {
 
     @Test
     void listStatusUsesSingularMatchForOneHit() {
-        Component status = MessageText.listStatus(Component.empty(), false, true, 1, true, 0);
+        Component status = MessageText.listStatus(Component.empty(), false, true, 1, true, 0, true);
         assertEquals("allthelogs.status.match", key(status));
         assertEquals("1", args(status)[0]);
-        Component timed = MessageText.listStatus(Component.empty(), false, true, 1, true, 120);
+        Component timed = MessageText.listStatus(Component.empty(), false, true, 1, true, 120, true);
         assertEquals("allthelogs.status.match.timed", key(timed));
-        Component capped = MessageText.listStatus(Component.empty(), false, true, 100, false, 0);
+        Component capped = MessageText.listStatus(Component.empty(), false, true, 100, false, 0, true);
         assertEquals("allthelogs.status.matches", key(capped));
         assertEquals(">99", args(capped)[0]);
+    }
+
+    @Test
+    void listStatusUsesMessagesWhenTheListIsNotNarrowed() {
+        Component status = MessageText.listStatus(Component.empty(), false, true, 4, true, 12, false);
+        assertEquals("allthelogs.status.messages", key(status));
+        assertEquals("4", args(status)[0]);
+        Component singular = MessageText.listStatus(Component.empty(), false, true, 1, true, 0, false);
+        assertEquals("allthelogs.status.message", key(singular));
+        Component timed = MessageText.listStatus(Component.empty(), false, true, 4, true, 120, false);
+        assertEquals("allthelogs.status.messages.timed", key(timed));
+        Component singularTimed = MessageText.listStatus(Component.empty(), false, true, 1, true, 120, false);
+        assertEquals("allthelogs.status.message.timed", key(singularTimed));
+        Component capped = MessageText.listStatus(Component.empty(), false, true, 100, false, 0, false);
+        assertEquals("allthelogs.status.messages", key(capped));
+        assertEquals(">99", args(capped)[0]);
+    }
+
+    @Test
+    void helpAndStatsTooltipListsControlsThenTheStatsTitle() {
+        List<Component> tooltip = MessageText.helpAndStatsTooltip(
+            List.of(Component.translatable("allthelogs.meta.unavailable")));
+        assertEquals("allthelogs.help.select", key(tooltip.get(0)));
+        assertEquals("allthelogs.help.select_all", key(tooltip.get(1)));
+        assertEquals("allthelogs.help.copy", key(tooltip.get(2)));
+        assertEquals("allthelogs.help.expand", key(tooltip.get(3)));
+        assertEquals("allthelogs.help.scroll", key(tooltip.get(4)));
+        assertEquals("allthelogs.meta.hint", key(tooltip.get(5)));
+        assertEquals("allthelogs.meta.unavailable", key(tooltip.get(6)));
     }
 
     @Test

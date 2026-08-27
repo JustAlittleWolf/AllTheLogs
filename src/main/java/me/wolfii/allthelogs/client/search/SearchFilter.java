@@ -138,6 +138,13 @@ public record SearchFilter(
     }
 
     /**
+     * Whether the user has narrowed the result set. Sort, paging, and context lines do not count.
+     */
+    public boolean isNarrowed() {
+        return hasText() || hasVersion() || startingAt != null || upUntil != null;
+    }
+
+    /**
      * Store query for this filter. Empty text means every entry; regex uses DuckDB RE2 with an inline
      * {@code (?i)} flag when the search is case insensitive.
      */

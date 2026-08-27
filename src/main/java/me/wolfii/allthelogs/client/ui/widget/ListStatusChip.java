@@ -8,8 +8,8 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.network.chat.Component;
 
 /**
- * The chip in the top-right of the list: a persistent overlay message, a loading label, or the match count
- * and search duration.
+ * The chip in the top-right of the list: a persistent overlay message, a loading label, or the
+ * message/match count and search duration.
  * <p>
  * A fresh count is shown for {@link #VISIBLE_MS} and stays up for as long as the pointer is over the list, so
  * it can be re-read on demand without re-running the search. Loading is only announced after
@@ -24,6 +24,7 @@ final class ListStatusChip {
     private boolean exactMatchCount;
     private long elapsedMs;
     private boolean showMatchCount;
+    private boolean narrowed;
     private long visibleUntilMs;
     private Component overlay = Component.empty();
     private boolean loading;
@@ -54,7 +55,8 @@ final class ListStatusChip {
      * Shows the count of the page that just arrived. Counts above 99 read as {@code >99} until
      * {@link #showTotalMatchCount} supplies the unpaged total.
      */
-    void showMatchCount(long matches, long elapsedMs) {
+    void showMatchCount(long matches, long elapsedMs, boolean narrowed) {
+        this.narrowed = narrowed;
         show(matches, matches <= 99, elapsedMs);
         this.overlay = Component.empty();
     }
@@ -87,7 +89,7 @@ final class ListStatusChip {
             return;
         }
         Component text = MessageText.listStatus(overlay, showLoading, timed || showMatchCount, matchCount,
-            exactMatchCount, elapsedMs);
+            exactMatchCount, elapsedMs, narrowed);
         Font font = view.font();
         int listWidth = view.listWidth();
         int boxWidth = Math.min(listWidth - 2 * PAD_X, font.width(text) + 2 * PAD_X);

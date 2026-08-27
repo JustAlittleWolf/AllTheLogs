@@ -9,6 +9,7 @@ import me.wolfii.allthelogs.client.list.PageBounds;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.timeline.ScrubJump;
 import me.wolfii.allthelogs.client.timeline.TimelineEdge;
+import me.wolfii.allthelogs.client.ui.text.MessageText;
 import me.wolfii.allthelogs.client.ui.text.StoreSummary;
 import me.wolfii.allthelogs.client.ui.widget.MessageTimeline;
 import me.wolfii.allthelogs.data.ChatEntry;
@@ -18,7 +19,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -89,7 +89,7 @@ final class LogBrowserQueries {
         if (reloadPending || snapshot.isEmpty()) return;
         list.restore(snapshot.rows(), snapshot.hasBefore(), snapshot.hasAfter(), snapshot.scrollY());
         list.setMatchSummary(matchSummary);
-        list.showMatchCount(snapshot.matchCount(), snapshot.elapsedMs());
+        list.showMatchCount(snapshot.matchCount(), snapshot.elapsedMs(), filter.isNarrowed());
         if (snapshot.exactMatchCount()) {
             list.setTotalMatchCount(snapshot.matchCount());
         }
@@ -144,7 +144,7 @@ final class LogBrowserQueries {
             boolean full = PageBounds.isFull(rows, query.limit());
             list.reset(rows, chronological && full, !chronological && full);
             if (chronological) list.scrollToEnd();
-            list.showMatchCount(DisplayRows.matchCount(rows), elapsedMs(startedAt));
+            list.showMatchCount(DisplayRows.matchCount(rows), elapsedMs(startedAt), filter.isNarrowed());
             takeSnapshot();
             loadMatchSummary(gen, query, startedAt);
         });
@@ -156,15 +156,11 @@ final class LogBrowserQueries {
         onClient(AllTheLogsClient.worker().metadata(), (metadata, error) -> {
             if (info == null) return;
             if (error != null || metadata == null) {
-                info.tooltip(List.of(
-                    Component.translatable("allthelogs.meta.hint"),
-                    Component.translatable("allthelogs.meta.unavailable")));
+                info.tooltip(MessageText.helpAndStatsTooltip(
+                    List.of(Component.translatable("allthelogs.meta.unavailable"))));
                 return;
             }
-            List<Component> lines = new ArrayList<>();
-            lines.add(Component.translatable("allthelogs.meta.hint"));
-            lines.addAll(StoreSummary.tooltip(metadata));
-            info.tooltip(lines);
+            info.tooltip(MessageText.helpAndStatsTooltip(StoreSummary.tooltip(metadata)));
             versions = metadata.minecraftVersions();
         });
     }

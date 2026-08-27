@@ -176,11 +176,11 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     /**
-     * Shows {@code N match(es) (Xms)} over the list for a moment after a search. Counts above 99 read as
-     * {@code >99} until {@link #setTotalMatchCount} supplies the exact total.
+     * Shows {@code N message(s)} or {@code N match(es)} over the list for a moment after a search.
+     * Counts above 99 read as {@code >99} until {@link #setTotalMatchCount} supplies the exact total.
      */
-    public void showMatchCount(long matches, long elapsedMs) {
-        status.showMatchCount(matches, elapsedMs);
+    public void showMatchCount(long matches, long elapsedMs, boolean narrowed) {
+        status.showMatchCount(matches, elapsedMs, narrowed);
     }
 
     public void setTotalMatchCount(long total) {
