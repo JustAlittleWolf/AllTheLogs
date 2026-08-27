@@ -3,8 +3,9 @@ package me.wolfii.allthelogs.data.parse;
 import java.util.Arrays;
 
 /**
- * Packed {@code int[]} of {@code (offset, charCount, format)} triples describing non-overlapping runs.
+ * Packed {@code (offset, charCount, format)} triples describing non-overlapping runs.
  * Offsets are into the stored (stripped) message. {@code null} means the line has no formatting.
+ * Stored as a VARCHAR of decimal triples so typical small offsets and counts stay compact.
  * <p>
  * One format int per run, so each character has at most one colour and one set of style flags.
  * Reset is not stored: unformatted characters are simply omitted. Format bits:
@@ -122,32 +123,30 @@ public final class PackedFormatting {
     }
 
     /**
-     * DuckDB {@code INTEGER[]} / JSON list literal, or {@code null}.
+     * Compact VARCHAR payload for DuckDB, or {@code null}. Offset and count are decimal so short runs stay small;
+     * triples are comma-separated {@code offset,count,format}.
      */
     public static String toSqlLiteral(int[] packed) {
         if (packed == null || packed.length == 0) return null;
-        StringBuilder text = new StringBuilder(2 + packed.length * 4);
-        text.append('[');
+        StringBuilder text = new StringBuilder(packed.length * 3);
         for (int i = 0; i < packed.length; i++) {
             if (i > 0) text.append(',');
             text.append(packed[i]);
         }
-        return text.append(']').toString();
+        return text.toString();
     }
 
     /**
-     * Parses {@code [1, 2, 3]} / {@code [1,2,3]} as produced by DuckDB. Empty or {@code null} yield {@code null}.
+     * Parses a stored VARCHAR payload. Empty or {@code null} yield {@code null}.
      */
     public static int[] fromSqlLiteral(String literal) {
-        if (literal == null || literal.isBlank() || "null".equalsIgnoreCase(literal) || "[]".equals(literal)) {
+        if (literal == null || literal.isBlank() || "null".equalsIgnoreCase(literal)) {
             return null;
         }
-        String body = literal;
-        if (body.charAt(0) == '[') {
-            int end = body.endsWith("]") ? body.length() - 1 : body.length();
-            body = body.substring(1, end);
-        }
-        if (body.isBlank()) return null;
+        String body = literal.charAt(0) == '[' && literal.endsWith("]")
+            ? literal.substring(1, literal.length() - 1)
+            : literal;
+        if (body.isBlank() || "[]".equals(body)) return null;
         String[] parts = body.split(",");
         int[] values = new int[parts.length];
         int size = 0;

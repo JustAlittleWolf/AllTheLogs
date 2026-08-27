@@ -138,7 +138,7 @@ public final class SessionCapture {
         }
 
         try (PreparedStatement insert = connection.prepareStatement(
-            "INSERT INTO chat_entry (file_id, line_index, entry_time, message, formatting) VALUES (?, ?, ?, ?, CAST(? AS INTEGER[]))")) {
+            "INSERT INTO chat_entry (file_id, line_index, entry_time, message, formatting) VALUES (?, ?, ?, ?, ?)")) {
             insert.setLong(1, sessionFileId);
             insert.setInt(2, sessionLineIndex);
             insert.setTimestamp(3, Timestamp.valueOf(timestamp));

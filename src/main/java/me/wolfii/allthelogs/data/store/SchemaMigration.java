@@ -9,9 +9,7 @@ import java.sql.Statement;
  * <p>
  * Version history:
  * <ul>
- *   <li>1 — initial {@link Schema} layout ({@code log_file}, {@code chat_entry}, location index).
- *       {@code log_file.minecraft_user} is added with {@code ALTER TABLE ... IF NOT EXISTS} and does not bump this
- *       version. {@code chat_entry.formatting} is added the same way.</li>
+ *   <li>1 — {@link Schema} layout ({@code log_file}, {@code chat_entry}, location index).</li>
  * </ul>
  * <p>
  * To bump the schema:
@@ -65,7 +63,6 @@ public final class SchemaMigration {
         } else if (version < CURRENT_VERSION) {
             upgrade(statement, version, CURRENT_VERSION, PLAN);
         }
-        Schema.ensureOptionalColumns(statement);
     }
 
     private static UpgradeStep stepFrom(int fromVersion) {

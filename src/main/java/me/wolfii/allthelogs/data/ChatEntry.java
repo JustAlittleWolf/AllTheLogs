@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
  * @param lineIndex   zero based position of this entry among the chat entries of its log; consecutive entries of one
  *                    log have consecutive indices, which is what makes retrieving surrounding lines cheap
  * @param message     the chat text with legacy {@code §} codes stripped
- * @param formatting  packed {@code (offset, count, format)} triples into {@code message}, or {@code null}
+ * @param formatting  packed {@code (offset, count, format)} triples into {@code message}, stored as VARCHAR, or {@code null}
  */
 public record ChatEntry(
     ChatLog chatLog,

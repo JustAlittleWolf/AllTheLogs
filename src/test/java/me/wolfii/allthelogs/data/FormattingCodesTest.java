@@ -106,7 +106,9 @@ class FormattingCodesTest {
     @Test
     void packedSqlLiteralRoundTrips() {
         int[] packed = {0, 3, PackedFormatting.color(0xFF5555)};
-        assertArrayEquals(packed, PackedFormatting.fromSqlLiteral(PackedFormatting.toSqlLiteral(packed)));
+        String literal = PackedFormatting.toSqlLiteral(packed);
+        assertEquals("0,3," + PackedFormatting.color(0xFF5555), literal);
+        assertArrayEquals(packed, PackedFormatting.fromSqlLiteral(literal));
         assertArrayEquals(packed, PackedFormatting.fromSqlLiteral("[0, 3, " + PackedFormatting.color(0xFF5555) + "]"));
         assertNull(PackedFormatting.fromSqlLiteral(null));
         assertNull(PackedFormatting.fromSqlLiteral("[]"));

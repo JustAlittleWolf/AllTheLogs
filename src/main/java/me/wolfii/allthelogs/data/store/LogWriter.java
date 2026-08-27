@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.data.store;
 
+import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import org.duckdb.DuckDBAppender;
 import org.duckdb.DuckDBConnection;
 
@@ -124,7 +125,7 @@ public final class LogWriter implements AutoCloseable {
             if (formatting == null || formatting.length == 0) {
                 entryAppender.appendNull();
             } else {
-                entryAppender.append(formatting);
+                entryAppender.append(PackedFormatting.toSqlLiteral(formatting));
             }
             entryAppender.endRow();
         }
