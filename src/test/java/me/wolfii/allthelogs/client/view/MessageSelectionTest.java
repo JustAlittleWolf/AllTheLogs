@@ -33,9 +33,25 @@ class MessageSelectionTest {
         assertEquals("lo\nwo", selection.copy(List.of(row("hello"), row("world"))));
     }
 
+    @Test
+    void selectDateCoversEveryLoadedRowOnThatDay() {
+        DisplayRow earlier = rowOn(LocalDateTime.of(2026, 8, 26, 10, 0), "one");
+        DisplayRow sameDay = rowOn(LocalDateTime.of(2026, 8, 26, 23, 0), "two");
+        DisplayRow nextDay = rowOn(LocalDateTime.of(2026, 8, 27, 1, 0), "three");
+        MessageSelection selection = new MessageSelection();
+        selection.selectDate(List.of(earlier, sameDay, nextDay), LocalDate.of(2026, 8, 26));
+        assertEquals("one\ntwo", selection.copy(List.of(earlier, sameDay, nextDay)));
+        assertTrue(selection.covers(0, 0));
+        assertTrue(selection.covers(1, 0));
+        assertTrue(!selection.covers(2, 0));
+    }
+
     private static DisplayRow row(String message) {
-        LocalDateTime time = LocalDateTime.of(2026, 8, 26, 10, 0);
-        ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), LocalDate.of(2026, 8, 26), "26.2", time, time);
+        return rowOn(LocalDateTime.of(2026, 8, 26, 10, 0), message);
+    }
+
+    private static DisplayRow rowOn(LocalDateTime time, String message) {
+        ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), time.toLocalDate(), "26.2", time, time);
         return new DisplayRow(new ChatEntry(log, time, 0, message), true, Duration.ZERO, List.of());
     }
 }

@@ -43,4 +43,22 @@ public sealed interface LogSource permits LogSource.File, LogSource.Archive, Log
      */
     record Session(String id) implements LogSource {
     }
+
+    /**
+     * Short label for tooltips: the log file name, archive entry name, or {@code session}.
+     */
+    default String label() {
+        return switch (this) {
+            case File file -> {
+                Path name = file.path().getFileName();
+                yield name == null ? file.path().toString() : name.toString();
+            }
+            case Archive archive -> {
+                String entry = archive.entryPath();
+                int slash = entry.lastIndexOf('/');
+                yield slash < 0 ? entry : entry.substring(slash + 1);
+            }
+            case Session ignored -> "session";
+        };
+    }
 }

@@ -9,7 +9,9 @@ import java.sql.Statement;
  * <p>
  * Version history:
  * <ul>
- *   <li>1 — initial {@link Schema} layout ({@code log_file}, {@code chat_entry}, location index)</li>
+ *   <li>1 — initial {@link Schema} layout ({@code log_file}, {@code chat_entry}, location index).
+ *       {@code log_file.minecraft_user} is added with {@code ALTER TABLE ... IF NOT EXISTS} and does not bump this
+ *       version.</li>
  * </ul>
  * <p>
  * To bump the schema:
@@ -57,15 +59,13 @@ public final class SchemaMigration {
                 Schema.create(statement);
             }
             setVersion(statement, CURRENT_VERSION);
-            return;
-        }
-        if (version > CURRENT_VERSION) {
+        } else if (version > CURRENT_VERSION) {
             throw new SQLException("database schema version " + version
                 + " is newer than this mod supports (" + CURRENT_VERSION + ")");
-        }
-        if (version < CURRENT_VERSION) {
+        } else if (version < CURRENT_VERSION) {
             upgrade(statement, version, CURRENT_VERSION, PLAN);
         }
+        Schema.ensureOptionalColumns(statement);
     }
 
     private static UpgradeStep stepFrom(int fromVersion) {

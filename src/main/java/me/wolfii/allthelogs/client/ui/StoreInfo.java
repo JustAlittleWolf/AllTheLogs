@@ -1,7 +1,9 @@
 package me.wolfii.allthelogs.client.ui;
 
+import me.wolfii.allthelogs.client.view.ContextColors;
 import me.wolfii.allthelogs.data.LogStoreMetadata;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -15,16 +17,17 @@ final class StoreInfo {
 
     static List<Component> tooltip(LogStoreMetadata metadata) {
         if (metadata.chatLogCount() == 0) {
-            return List.of(Component.translatable("allthelogs.meta.empty"));
+            return List.of(muted(Component.translatable("allthelogs.meta.empty")));
         }
         List<Component> lines = new ArrayList<>();
         if (metadata.firstLogDate() != null && metadata.lastLogDate() != null) {
-            lines.add(Component.translatable("allthelogs.meta.range",
-                metadata.firstLogDate().toString(), metadata.lastLogDate().toString()));
+            lines.add(labeled("allthelogs.meta.range",
+                value(metadata.firstLogDate().toString()),
+                value(metadata.lastLogDate().toString())));
         }
-        lines.add(Component.translatable("allthelogs.meta.logs", Long.toString(metadata.chatLogCount())));
-        lines.add(Component.translatable("allthelogs.meta.entries", Long.toString(metadata.chatEntryCount())));
-        lines.add(Component.translatable("allthelogs.meta.size", formatBytes(metadata.databaseSizeBytes())));
+        lines.add(labeled("allthelogs.meta.logs", number(Long.toString(metadata.chatLogCount()))));
+        lines.add(labeled("allthelogs.meta.entries", number(Long.toString(metadata.chatEntryCount()))));
+        lines.add(labeled("allthelogs.meta.size", size(formatBytes(metadata.databaseSizeBytes()))));
         return lines;
     }
 
@@ -41,5 +44,29 @@ final class StoreInfo {
             unit = "GB";
         }
         return "%.1f %s".formatted(value, unit);
+    }
+
+    private static Component labeled(String key, Component... args) {
+        return muted(Component.translatable(key, (Object[]) args));
+    }
+
+    private static Component value(String text) {
+        return colored(text, ContextColors.META_VALUE);
+    }
+
+    private static Component number(String text) {
+        return colored(text, ContextColors.META_NUMBER);
+    }
+
+    private static Component size(String text) {
+        return colored(text, ContextColors.META_SIZE);
+    }
+
+    private static Component muted(Component component) {
+        return component.copy().withStyle(Style.EMPTY.withColor(ContextColors.META_LABEL & 0xFFFFFF));
+    }
+
+    private static Component colored(String text, int argb) {
+        return Component.literal(text).withStyle(Style.EMPTY.withColor(argb & 0xFFFFFF));
     }
 }

@@ -6,44 +6,45 @@ import java.util.function.ToIntFunction;
 
 /**
  * Wraps a chat line to a pixel width and maps pointer coordinates onto character indexes using prefix widths,
- * so selection matches what is drawn.
+ * so selection matches what is drawn. Hard newlines in the stored message become their own visual rows.
  */
 public final class MessageWrap {
     private MessageWrap() {
     }
 
+    /**
+     * One visual row of a wrapped message.
+     *
+     * @param text  the characters drawn on this row, never including a {@code \n}
+     * @param start index of {@code text} in the original message
+     */
+    public record Line(String text, int start) {
+    }
+
     public static List<String> lines(String text, int maxWidth, ToIntFunction<String> widthOf) {
-        if (text == null || text.isEmpty()) return List.of("");
-        if (maxWidth <= 0 || maxWidth == Integer.MAX_VALUE) return List.of(text);
-        if (widthOf.applyAsInt(text) <= maxWidth) return List.of(text);
-        List<String> lines = new ArrayList<>();
-        int start = 0;
-        while (start < text.length()) {
-            int end = start;
-            int breakAt = -1;
-            while (end < text.length()) {
-                int next = end + 1;
-                if (widthOf.applyAsInt(text.substring(start, next)) > maxWidth) {
-                    break;
-                }
-                end = next;
-                if (canBreakAfter(text.charAt(end - 1))) {
-                    breakAt = end;
-                }
+        return wrap(text, maxWidth, widthOf).stream().map(Line::text).toList();
+    }
+
+    public static List<Line> wrap(String text, int maxWidth, ToIntFunction<String> widthOf) {
+        if (text == null || text.isEmpty()) return List.of(new Line("", 0));
+        List<Line> lines = new ArrayList<>();
+        int index = 0;
+        while (true) {
+            int newline = text.indexOf('\n', index);
+            int end = newline < 0 ? text.length() : newline;
+            wrapParagraph(text, index, end, maxWidth, widthOf, lines);
+            if (newline < 0) break;
+            index = newline + 1;
+            if (index == text.length()) {
+                lines.add(new Line("", index));
+                break;
             }
-            if (end == start) {
-                end = Math.min(text.length(), start + 1);
-            } else if (end < text.length() && breakAt > start) {
-                end = breakAt;
-            }
-            lines.add(text.substring(start, end));
-            start = end;
         }
         return List.copyOf(lines);
     }
 
     public static int lineCount(String text, int maxWidth, ToIntFunction<String> widthOf) {
-        return lines(text, maxWidth, widthOf).size();
+        return wrap(text, maxWidth, widthOf).size();
     }
 
     /**
@@ -67,14 +68,46 @@ public final class MessageWrap {
      * Character index in {@code text} for a pointer on wrapped visual line {@code line} at pixel {@code x}.
      */
     public static int charIndex(String text, int maxWidth, int line, int x, ToIntFunction<String> widthOf) {
-        List<String> wrapped = lines(text, maxWidth, widthOf);
+        List<Line> wrapped = wrap(text, maxWidth, widthOf);
         if (wrapped.isEmpty()) return 0;
         int clampedLine = Math.clamp(line, 0, wrapped.size() - 1);
-        int index = 0;
-        for (int i = 0; i < clampedLine; i++) {
-            index += wrapped.get(i).length();
+        Line visual = wrapped.get(clampedLine);
+        return visual.start() + indexAtX(visual.text(), x, widthOf);
+    }
+
+    private static void wrapParagraph(String text, int start, int end, int maxWidth,
+                                      ToIntFunction<String> widthOf, List<Line> lines) {
+        if (start == end) {
+            lines.add(new Line("", start));
+            return;
         }
-        return index + indexAtX(wrapped.get(clampedLine), x, widthOf);
+        if (maxWidth <= 0 || maxWidth == Integer.MAX_VALUE
+            || widthOf.applyAsInt(text.substring(start, end)) <= maxWidth) {
+            lines.add(new Line(text.substring(start, end), start));
+            return;
+        }
+        int from = start;
+        while (from < end) {
+            int to = from;
+            int breakAt = -1;
+            while (to < end) {
+                int next = to + 1;
+                if (widthOf.applyAsInt(text.substring(from, next)) > maxWidth) {
+                    break;
+                }
+                to = next;
+                if (canBreakAfter(text.charAt(to - 1))) {
+                    breakAt = to;
+                }
+            }
+            if (to == from) {
+                to = Math.min(end, from + 1);
+            } else if (to < end && breakAt > from) {
+                to = breakAt;
+            }
+            lines.add(new Line(text.substring(from, to), from));
+            from = to;
+        }
     }
 
     private static boolean canBreakAfter(char c) {

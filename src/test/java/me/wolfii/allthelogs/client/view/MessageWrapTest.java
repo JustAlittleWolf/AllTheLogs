@@ -24,4 +24,19 @@ class MessageWrapTest {
         assertEquals(4, MessageWrap.indexAtX("abcd", 10, String::length));
         assertEquals(8, MessageWrap.charIndex("hello world", 6, 1, 2, String::length));
     }
+
+    @Test
+    void hardNewlinesBecomeVisualRowsAndKeepSourceIndexes() {
+        assertEquals(List.of("", "KING", "next"),
+            MessageWrap.lines("\nKING\nnext", Integer.MAX_VALUE, String::length));
+        List<MessageWrap.Line> wrapped = MessageWrap.wrap("hello\n\nworld", Integer.MAX_VALUE, String::length);
+        assertEquals(3, wrapped.size());
+        assertEquals("hello", wrapped.get(0).text());
+        assertEquals(0, wrapped.get(0).start());
+        assertEquals("", wrapped.get(1).text());
+        assertEquals(6, wrapped.get(1).start());
+        assertEquals("world", wrapped.get(2).text());
+        assertEquals(7, wrapped.get(2).start());
+        assertEquals(7, MessageWrap.charIndex("hello\n\nworld", 40, 2, 0, String::length));
+    }
 }

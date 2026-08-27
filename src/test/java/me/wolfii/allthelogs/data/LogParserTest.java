@@ -121,4 +121,64 @@ class LogParserTest {
         assertEquals(id, parsed.sessionId());
         assertEquals(List.of("hello"), parsed.entries().stream().map(ParsedLog.Entry::message).toList());
     }
+
+    @Test
+    void detectsForgeVersionWhenTheLoggerNameIsPresent() throws IOException {
+        ParsedLog parsed = parse("""
+                [17:43:34] [main/INFO] [FML]: Forge Mod Loader version 14.23.5.2860 for Minecraft 1.12.2 loading
+                [17:43:40] [Client thread/INFO]: [CHAT] hi
+                """);
+        assertEquals("1.12.2", parsed.minecraftVersion());
+    }
+
+    @Test
+    void detectsOptiFineVersion() throws IOException {
+        ParsedLog parsed = parse("""
+                [18:14:43] [main/INFO]: [OptiFine] OptiFine_1.12.2_HD_U_G6_pre1
+                [18:14:50] [Client thread/INFO]: [CHAT] hi
+                """);
+        assertEquals("1.12.2", parsed.minecraftVersion());
+    }
+
+    @Test
+    void detectsFabricVersionFromTheModsList() throws IOException {
+        ParsedLog parsed = parse("""
+                [12:04:36] [main/INFO]: [FabricLoader/]: Loading 4 mods:
+                \t- fabricloader 0.14.24
+                \t- java 17
+                \t- labymod 4.1.3
+                \t- minecraft 1.20.2
+                [12:04:40] [Render thread/INFO]: [CHAT] hi
+                """);
+        assertEquals("1.20.2", parsed.minecraftVersion());
+    }
+
+    @Test
+    void storesTheMinecraftUserFromTheSettingUserLine() throws IOException {
+        ParsedLog parsed = parse("""
+                [11:21:53] [Render thread/INFO]: Setting user: JustAlittleWolf
+                [11:21:54] [Render thread/INFO]: [CHAT] hi
+                """);
+        assertEquals("JustAlittleWolf", parsed.minecraftUser());
+    }
+
+    @Test
+    void keepsEmbeddedNewlinesAndStripsFormattingCodes() throws IOException {
+        ParsedLog parsed = parse("""
+                [19:22:14] [Client thread/INFO] [net.labymod.core_implementation.mc18.gui.GuiChatAdapter]: [CHAT]\s\s
+
+                            KING BENNY IS HOSTING A GIVEAWAY
+
+                           An online player will be chosen in 5m
+                              Winner will receive 5 Cubits! Good Luck
+
+                  \u00a77\u2588
+                """);
+        assertEquals(1, parsed.entries().size());
+        String message = parsed.entries().getFirst().message();
+        assertTrue(message.contains("KING BENNY IS HOSTING A GIVEAWAY"));
+        assertTrue(message.contains("\n"));
+        assertTrue(message.contains("\u2588"));
+        assertEquals(-1, message.indexOf('\u00a7'));
+    }
 }

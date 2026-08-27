@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.client.view;
 
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -35,6 +36,34 @@ public final class MessageSelection {
         }
         endRow = Math.max(0, row);
         endChar = Math.max(0, character);
+    }
+
+    /**
+     * Selects every currently loaded message that falls on {@code date}, from the first character of the
+     * first such row through the end of the last.
+     */
+    public void selectDate(List<DisplayRow> rows, LocalDate date) {
+        if (rows == null || rows.isEmpty() || date == null) {
+            clear();
+            return;
+        }
+        int first = -1;
+        int last = -1;
+        for (int i = 0; i < rows.size(); i++) {
+            if (date.equals(rows.get(i).entry().timestamp().toLocalDate())) {
+                if (first < 0) first = i;
+                last = i;
+            }
+        }
+        if (first < 0) {
+            clear();
+            return;
+        }
+        empty = false;
+        startRow = first;
+        startChar = 0;
+        endRow = last;
+        endChar = rows.get(last).message().length();
     }
 
     public String copy(List<DisplayRow> rows) {

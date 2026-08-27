@@ -62,6 +62,15 @@ class MessageListLayoutTest {
     }
 
     @Test
+    void hardNewlinesEachTakeARowHeight() {
+        LocalDateTime time = LocalDateTime.of(2026, 8, 26, 10, 0);
+        ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), time.toLocalDate(), "26.2", time, time);
+        DisplayRow row = new DisplayRow(new ChatEntry(log, time, 0, "a\nb\nc"), true, Duration.ZERO, List.of());
+        MessageListLayout layout = MessageListLayout.of(List.of(row), 5, 40, String::length);
+        assertEquals(3 * MessageListLayout.ROW_HEIGHT, layout.rowHeight(0));
+    }
+
+    @Test
     void stickyHeaderFollowsTheScrolledDate() {
         DisplayRow day1 = row("a.log", 0, LocalDateTime.of(2026, 8, 26, 10, 0));
         DisplayRow day2 = row("b.log", 0, LocalDateTime.of(2026, 8, 27, 10, 0));
