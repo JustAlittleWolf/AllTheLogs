@@ -7,6 +7,8 @@ import me.wolfii.allthelogs.client.list.DisplayRows;
 import me.wolfii.allthelogs.client.list.MessageListLayout;
 import me.wolfii.allthelogs.client.list.PageBounds;
 import me.wolfii.allthelogs.client.search.SearchFilter;
+import me.wolfii.allthelogs.client.timeline.ScrubJump;
+import me.wolfii.allthelogs.client.timeline.TimelineEdge;
 import me.wolfii.allthelogs.client.ui.text.StoreSummary;
 import me.wolfii.allthelogs.client.ui.widget.MessageTimeline;
 import me.wolfii.allthelogs.data.ChatEntry;
@@ -185,9 +187,9 @@ final class LogBrowserQueries {
      * Extends the buffer at whichever end the viewport has reached, then trims the far end back to the page
      * limit so the buffer cannot grow without bound while scrolling.
      */
-    private void loadMore(MessageTimeline.Edge edge) {
+    private void loadMore(TimelineEdge edge) {
         if (list.loading() || list.window().rows().isEmpty()) return;
-        boolean towardStart = edge == MessageTimeline.Edge.BEFORE;
+        boolean towardStart = edge == TimelineEdge.BEFORE;
         LocalDateTime cursor = towardStart ? list.window().firstMatchTime() : list.window().lastMatchTime();
         if (cursor == null) return;
         list.setLoading(true);
@@ -230,11 +232,11 @@ final class LogBrowserQueries {
     /**
      * Loads more context around a double-clicked row, on the side that was clicked.
      */
-    private void expandAround(DisplayRow row, MessageTimeline.Edge side) {
+    private void expandAround(DisplayRow row, TimelineEdge side) {
         int extra = MessageListLayout.extraContextLines(filter.contextLines());
         if (extra <= 0 || list == null) return;
         boolean older = MessageListLayout.expandOlderMessages(
-            side == MessageTimeline.Edge.BEFORE, filter.sort() == ChatQuery.Sort.ASCENDING);
+            side == TimelineEdge.BEFORE, filter.sort() == ChatQuery.Sort.ASCENDING);
         int before = older ? extra : 0;
         int after = older ? 0 : extra;
         DisplayRow.RowKey anchor = row.key();
@@ -265,7 +267,7 @@ final class LogBrowserQueries {
      * Loads the page a timeline drag points at. Previews, sent while the thumb is still held, fetch a smaller
      * page and leave the thumb where it is.
      */
-    private void jumpTo(MessageTimeline.ScrubJump jump, boolean preview) {
+    private void jumpTo(ScrubJump jump, boolean preview) {
         LocalDateTime target = clampToMatchedRange(jump == null ? null : jump.time());
         if (target == null && (jump == null || jump.skip() < 0)) {
             if (preview) {
@@ -299,7 +301,7 @@ final class LogBrowserQueries {
         });
     }
 
-    private ChatQuery jumpQuery(MessageTimeline.ScrubJump jump, LocalDateTime target, boolean preview) {
+    private ChatQuery jumpQuery(ScrubJump jump, LocalDateTime target, boolean preview) {
         SearchFilter page = filter.withoutOffset();
         ChatQuery query = jump != null && jump.skip() >= 0
             ? page.toQuery().withSkip(jump.skip())
@@ -369,22 +371,5 @@ final class LogBrowserQueries {
     private void takeSnapshot() {
         if (list == null) return;
         snapshot = ListSnapshot.of(list);
-    }
-
-    /**
-     * The last page applied to the widget, so it survives the widget being rebuilt on resize or reopen.
-     */
-    private record ListSnapshot(List<DisplayRow> rows, boolean hasBefore, boolean hasAfter, double scrollY,
-                                long matchCount, boolean exactMatchCount, long elapsedMs) {
-        private static final ListSnapshot EMPTY = new ListSnapshot(List.of(), false, false, 0, 0, false, 0);
-
-        private static ListSnapshot of(MessageTimeline list) {
-            return new ListSnapshot(list.window().rows(), list.window().hasBefore(), list.window().hasAfter(),
-                list.scrollY(), list.matchCount(), list.exactMatchCount(), list.matchElapsedMs());
-        }
-
-        private boolean isEmpty() {
-            return rows.isEmpty();
-        }
     }
 }
