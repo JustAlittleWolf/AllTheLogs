@@ -22,10 +22,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MessageTextTest {
     @Test
-    void matchCountTextCapsAt99() {
+    void matchCountTextCapsUntilTheExactTotalIsKnown() {
         assertEquals("0", MessageText.matchCountText(0));
         assertEquals("12", MessageText.matchCountText(12));
-        assertEquals(">99", MessageText.matchCountText(100));
+        assertEquals(">99", MessageText.matchCountText(100, false));
+        assertEquals("150", MessageText.matchCountText(150, true));
     }
 
     @Test
@@ -82,6 +83,18 @@ class MessageTextTest {
         assertEquals("allthelogs.status.matches.timed", key(timed));
         assertEquals("4", args(timed)[0]);
         assertEquals("0.1", args(timed)[1]);
+    }
+
+    @Test
+    void listStatusUsesSingularMatchForOneHit() {
+        Component status = MessageText.listStatus(Component.empty(), false, true, 1, true, 0);
+        assertEquals("allthelogs.status.match", key(status));
+        assertEquals("1", args(status)[0]);
+        Component timed = MessageText.listStatus(Component.empty(), false, true, 1, true, 120);
+        assertEquals("allthelogs.status.match.timed", key(timed));
+        Component capped = MessageText.listStatus(Component.empty(), false, true, 100, false, 0);
+        assertEquals("allthelogs.status.matches", key(capped));
+        assertEquals(">99", args(capped)[0]);
     }
 
     @Test

@@ -309,6 +309,14 @@ public final class LogStore implements AutoCloseable {
     }
 
     /**
+     * Number of matching entries for {@code query}, ignoring paging and context lines.
+     */
+    public long queryCount(ChatQuery query) {
+        Objects.requireNonNull(query, "query");
+        return queries.count(query);
+    }
+
+    /**
      * Chat lines from {@code log} within {@code radius} of {@code lineIndex}, inclusive of the centre line.
      */
     public List<ChatEntry> around(ChatLog log, int lineIndex, int radius) {

@@ -37,8 +37,20 @@ public final class MessageText {
     private MessageText() {
     }
 
-    public static String matchCountText(int matches) {
-        return matches > 99 ? ">99" : Integer.toString(matches);
+    public static String matchCountText(long matches) {
+        return matchCountText(matches, true);
+    }
+
+    /**
+     * Visible match count. Unknown totals above 99 are shown as {@code >99} until {@code queryCount} finishes.
+     */
+    public static String matchCountText(long matches, boolean exact) {
+        if (!exact && matches > 99) return ">99";
+        return Long.toString(Math.max(0, matches));
+    }
+
+    static boolean singularMatch(long matches, boolean exact) {
+        return exact && matches == 1;
     }
 
     /**
@@ -53,16 +65,24 @@ public final class MessageText {
     /**
      * Text for the list's status chip: a persistent overlay, then loading, then the match count and search time.
      */
-    public static Component listStatus(Component overlay, boolean loading, boolean showMatches, int matchCount,
+    public static Component listStatus(Component overlay, boolean loading, boolean showMatches, long matchCount,
                                        long elapsedMs) {
+        return listStatus(overlay, loading, showMatches, matchCount, true, elapsedMs);
+    }
+
+    public static Component listStatus(Component overlay, boolean loading, boolean showMatches, long matchCount,
+                                       boolean exactCount, long elapsedMs) {
         if (overlay != null && !overlay.getString().isEmpty()) return overlay;
         if (loading) return Component.translatable("allthelogs.status.loading");
         if (!showMatches) return Component.empty();
         String duration = searchDurationText(elapsedMs);
+        String count = matchCountText(matchCount, exactCount);
+        boolean singular = singularMatch(matchCount, exactCount);
         if (duration.isEmpty()) {
-            return Component.translatable("allthelogs.status.matches", matchCountText(matchCount));
+            return Component.translatable(singular ? "allthelogs.status.match" : "allthelogs.status.matches", count);
         }
-        return Component.translatable("allthelogs.status.matches.timed", matchCountText(matchCount), duration);
+        return Component.translatable(
+            singular ? "allthelogs.status.match.timed" : "allthelogs.status.matches.timed", count, duration);
     }
 
     public static Component timestamp(DisplayRow row) {

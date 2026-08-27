@@ -76,6 +76,39 @@ public final class MessageSelection {
         endChar = rows.get(last).message().length();
     }
 
+    /**
+     * Keeps the selected range when loaded rows are replaced, matching by {@link DisplayRow#key()}.
+     * Clears the selection if either end is no longer loaded.
+     */
+    public void retainIn(List<DisplayRow> previous, List<DisplayRow> next) {
+        if (empty) return;
+        if (previous == null || next == null || previous.isEmpty() || next.isEmpty()) {
+            clear();
+            return;
+        }
+        if (startRow < 0 || startRow >= previous.size() || endRow < 0 || endRow >= previous.size()) {
+            clear();
+            return;
+        }
+        DisplayRow.RowKey startKey = previous.get(startRow).key();
+        DisplayRow.RowKey endKey = previous.get(endRow).key();
+        int newStart = ResultWindow.indexOf(next, startKey);
+        int newEnd = ResultWindow.indexOf(next, endKey);
+        if (newStart < 0 || newEnd < 0) {
+            clear();
+            return;
+        }
+        startRow = newStart;
+        endRow = newEnd;
+        String startMessage = next.get(startRow).message();
+        String endMessage = next.get(endRow).message();
+        startChar = Math.clamp(startChar, 0, startMessage.length());
+        endChar = Math.clamp(endChar, 0, endMessage.length());
+        if (startRow == endRow && startChar == endChar) {
+            clear();
+        }
+    }
+
     public String copy(List<DisplayRow> rows) {
         if (empty || rows.isEmpty()) return "";
         int fromRow = Math.clamp(Math.min(startRow, endRow), 0, rows.size() - 1);

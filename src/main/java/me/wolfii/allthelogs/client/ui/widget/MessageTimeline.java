@@ -21,7 +21,6 @@ import net.minecraft.network.chat.Component;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.YearMonth;
 import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -37,7 +36,7 @@ public final class MessageTimeline extends BaseUIComponent {
     public static final int TIMELINE_WIDTH = 68;
     public static final int SCRUB_PAGE_SIZE = 32;
     private static final int TRACK_WIDTH = 8;
-    private static final int THUMB_HEIGHT = 16;
+    private static final int MIN_THUMB_HEIGHT = 16;
     private static final int BANNER_MS = 5000;
     private static final int HOVER_SLOP = 12;
     private static final int LIST_PAD = 4;
@@ -71,7 +70,7 @@ public final class MessageTimeline extends BaseUIComponent {
     private LocalDateTime boundsOldest;
     private LocalDateTime boundsNewest;
     private int uniqueMatchDates;
-    private List<YearMonth> matchMonths = List.of();
+    private List<LocalDate> matchDays = List.of();
     private double scrollY;
     private boolean loading;
     private boolean draggingTimeline;
@@ -84,6 +83,7 @@ public final class MessageTimeline extends BaseUIComponent {
     private boolean middleButtonDown;
     private boolean middleHoldMode;
     private int clickRow;
+    private DisplayRow.RowKey clickKey;
     private int clickChar;
     private double clickX;
     private double clickY;
@@ -91,7 +91,8 @@ public final class MessageTimeline extends BaseUIComponent {
     private double scrubY = Double.NaN;
     private long lastScrubQueryMs;
     private int laidOutWidth = -1;
-    private int matchCount;
+    private long matchCount;
+    private boolean exactMatchCount;
     private long matchElapsedMs;
     private boolean showMatchBanner;
     private long bannerUntilMs;
@@ -143,7 +144,7 @@ public final class MessageTimeline extends BaseUIComponent {
         this.boundsOldest = bounds == null ? null : bounds.oldest();
         this.boundsNewest = bounds == null ? null : bounds.newest();
         this.uniqueMatchDates = bounds == null ? 0 : bounds.uniqueDates();
-        this.matchMonths = bounds == null || bounds.months() == null ? List.of() : bounds.months();
+        this.matchDays = bounds == null || bounds.dates() == null ? List.of() : bounds.dates();
     }
 
     public void setLoading(boolean loading) {
@@ -181,6 +182,10 @@ public final class MessageTimeline extends BaseUIComponent {
         rebuildLayout();
         this.scrollY = 0;
         selection.clear();
+        clickKey = null;
+        clickRow = -1;
+        draggingSelection = false;
+        clickSelectsRow = false;
         finishScrub();
     }
 
@@ -192,14 +197,20 @@ public final class MessageTimeline extends BaseUIComponent {
      * Re-applies a previously loaded page after the widget is rebuilt (resize or focus), keeping scroll.
      */
     public void restore(List<DisplayRow> rows, boolean hasBefore, boolean hasAfter, double scrollY) {
+        List<DisplayRow> previous = window.rows();
         window.reset(rows, hasBefore, hasAfter);
+        remapSelection(previous, window.rows());
         rebuildLayout();
         this.scrollY = clampScroll(scrollY);
         finishScrub();
     }
 
-    public int matchCount() {
+    public long matchCount() {
         return matchCount;
+    }
+
+    public boolean exactMatchCount() {
+        return exactMatchCount;
     }
 
     public long matchElapsedMs() {
@@ -211,7 +222,9 @@ public final class MessageTimeline extends BaseUIComponent {
      * offset 0 first. Used while dragging the timeline so the thumb can stay put.
      */
     public void showAt(LocalDateTime time, List<DisplayRow> rows, boolean hasBefore, boolean hasAfter) {
+        List<DisplayRow> previous = window.rows();
         window.reset(rows, hasBefore, hasAfter);
+        remapSelection(previous, window.rows());
         rebuildLayout();
         scrollToTime(time);
     }
@@ -224,13 +237,18 @@ public final class MessageTimeline extends BaseUIComponent {
     public void scrollToTime(LocalDateTime time) {
         int index = window.nearestIndex(time);
         if (index < 0) return;
-        setScrollY(layout.rowY(index));
+        int rowTop = layout.rowY(index);
+        int rowHeight = layout.rowHeight(index);
+        double progress = TimelineLayout.progress(time, scrubOldest(), scrubNewest(), matchDays);
+        setScrollY(rowTop - progress * Math.max(0, height - rowHeight));
     }
 
     public void applyPage(List<DisplayRow> rows, boolean hasBefore, boolean hasAfter, DisplayRow.RowKey anchor) {
         int oldIndex = ResultWindow.indexOf(window.rows(), anchor);
         double oldY = layout.rowY(oldIndex);
+        List<DisplayRow> previous = window.rows();
         window.reset(rows, hasBefore, hasAfter);
+        remapSelection(previous, window.rows());
         rebuildLayout();
         int newIndex = ResultWindow.indexOf(window.rows(), anchor);
         setScrollY(ResultWindow.keepAnchor(oldIndex, newIndex, oldY, layout.rowY(newIndex), scrollY));
@@ -238,20 +256,32 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     /**
-     * Shows {@code N matches (Xms)} over the list for a moment after a search. Stays while the
-     * pointer is over the list, then fades out. Counts above 99 are shown as {@code >99}.
+     * Shows {@code N match(es) (Xms)} over the list for a moment after a search. Stays while the
+     * pointer is over the list, then fades out. Counts above 99 are shown as {@code >99} until
+     * {@link #setTotalMatchCount(long)} supplies the exact total.
      * While a query is running the chip shows loading instead of the count.
      */
-    public void showMatchCount(int matches, long elapsedMs) {
-        this.matchCount = matches;
+    public void showMatchCount(long matches, long elapsedMs) {
+        this.matchCount = Math.max(0, matches);
+        this.exactMatchCount = matches <= 99;
         this.matchElapsedMs = Math.max(0, elapsedMs);
         this.showMatchBanner = true;
         this.bannerUntilMs = System.currentTimeMillis() + BANNER_MS;
         this.overlayMessage = Component.empty();
     }
 
-    public void showMatchCount(int matches) {
+    public void showMatchCount(long matches) {
         showMatchCount(matches, 0);
+    }
+
+    /**
+     * Replaces the capped {@code >99} label with the exact total from {@code queryCount}.
+     */
+    public void setTotalMatchCount(long total) {
+        this.matchCount = Math.max(0, total);
+        this.exactMatchCount = true;
+        this.showMatchBanner = true;
+        this.bannerUntilMs = System.currentTimeMillis() + BANNER_MS;
     }
 
     public void showOverlay(Component message) {
@@ -272,6 +302,9 @@ public final class MessageTimeline extends BaseUIComponent {
             rebuildLayout();
         }
         graphics.fill(x, y, x + listWidth, y + height, LIST_BG);
+        if (draggingTimeline && !Double.isNaN(scrubY)) {
+            applyScrub(scrubY, false);
+        }
         applyAutoScroll(mouseY, delta);
         drawRows(graphics, listWidth);
         drawMessageInfo(graphics, mouseX, mouseY, listWidth);
@@ -341,6 +374,7 @@ public final class MessageTimeline extends BaseUIComponent {
         }
         clickSelectsRow = true;
         clickRow = row;
+        clickKey = window.rows().get(row).key();
         clickChar = charAt(row, click.x(), click.y());
         clickX = click.x();
         clickY = click.y();
@@ -408,6 +442,20 @@ public final class MessageTimeline extends BaseUIComponent {
         if (date == null) return false;
         selection.selectDate(rows, date);
         return true;
+    }
+
+    private void remapSelection(List<DisplayRow> previous, List<DisplayRow> next) {
+        selection.retainIn(previous, next);
+        if (clickKey == null) return;
+        int index = ResultWindow.indexOf(next, clickKey);
+        if (index < 0) {
+            clickSelectsRow = false;
+            draggingSelection = false;
+            clickRow = -1;
+            clickKey = null;
+            return;
+        }
+        clickRow = index;
     }
 
     private void rebuildLayout() {
@@ -538,14 +586,14 @@ public final class MessageTimeline extends BaseUIComponent {
             return;
         }
         Component text = MessageText.listStatus(overlayMessage, showLoading, timed || showMatchBanner, matchCount,
-            matchElapsedMs);
+            exactMatchCount, matchElapsedMs);
         Font font = font();
         int boxWidth = Math.min(listWidth - 16, font.width(text) + 16);
-        int boxHeight = 16;
+        int boxHeight = MessageListLayout.DATE_HEIGHT;
         int boxX = x + Math.max(8, listWidth - 8 - boxWidth);
-        int boxY = y + 8;
+        int boxY = y;
         HoverChip.fill(graphics, boxX, boxY, boxWidth, boxHeight, BANNER_BG);
-        graphics.drawText(text, boxX + 8, boxY + LIST_PAD, 1, TEXT);
+        graphics.drawText(text, boxX + 8, boxY + boxHeight, 1, TEXT, OwoUIGraphics.TextAnchor.BOTTOM_LEFT);
     }
 
     private void drawTimeline(OwoUIGraphics graphics, int mouseX, int mouseY) {
@@ -559,10 +607,10 @@ public final class MessageTimeline extends BaseUIComponent {
 
         drawDateTicks(graphics, trackX, oldest, newest);
 
-        int thumbCenter = thumbCenter(oldest, newest);
-        if (thumbCenter != Integer.MIN_VALUE) {
-            int thumbTop = Math.clamp(thumbCenter - THUMB_HEIGHT / 2, y, y + height - THUMB_HEIGHT);
-            graphics.fill(trackX + 1, thumbTop, trackX + TRACK_WIDTH - 1, thumbTop + THUMB_HEIGHT, THUMB);
+        int thumbHeight = thumbHeight();
+        if (thumbHeight > 0) {
+            int thumbTop = thumbTop(thumbHeight);
+            graphics.fill(trackX + 1, thumbTop, trackX + TRACK_WIDTH - 1, thumbTop + thumbHeight, THUMB);
         }
 
         boolean nearTrack = mouseX >= trackX - HOVER_SLOP && mouseX < x + width && mouseY >= y && mouseY < y + height;
@@ -579,19 +627,25 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     private void drawDateTicks(OwoUIGraphics graphics, int trackX, LocalDateTime oldest, LocalDateTime newest) {
-        for (TimelineLayout.DateTick tick : TimelineLayout.spacedTicks(oldest, newest, matchMonths, height, TICK_GAP_PX)) {
-            int tickY = TimelineLayout.yFromOldest(tick.at(), oldest, newest, matchMonths, y, height);
+        for (TimelineLayout.DateTick tick : TimelineLayout.spacedTicks(oldest, newest, matchDays, height, TICK_GAP_PX)) {
+            int tickY = TimelineLayout.yFromOldest(tick.at(), oldest, newest, matchDays, y, height);
             graphics.fill(trackX + 2, tickY, trackX + TRACK_WIDTH - 2, tickY + 1, TICK_DOT);
             graphics.drawText(Component.literal(tick.label()), trackX - 3, tickY + TICK_LABEL_OFFSET,
                 0.75f, TICK_LABEL, OwoUIGraphics.TextAnchor.BOTTOM_RIGHT);
         }
     }
 
-    private int thumbCenter(LocalDateTime oldest, LocalDateTime newest) {
-        if (!Double.isNaN(scrubY)) return y + (int) Math.round(scrubY);
-        LocalDateTime viewTime = visibleTime();
-        if (viewTime == null) return Integer.MIN_VALUE;
-        return TimelineLayout.yFromOldest(viewTime, oldest, newest, matchMonths, y, height);
+    private int thumbHeight() {
+        return TimelineLayout.thumbHeight(height, layout.contentHeight(), height, MIN_THUMB_HEIGHT);
+    }
+
+    private int thumbTop(int thumbHeight) {
+        if (!Double.isNaN(scrubY)) {
+            int center = y + (int) Math.round(Math.clamp(scrubY, 0, Math.max(0, height - 1)));
+            return Math.clamp(center - thumbHeight / 2, y, y + height - thumbHeight);
+        }
+        int offset = TimelineLayout.thumbOffset(height, layout.contentHeight(), height, scrollY, thumbHeight);
+        return y + offset;
     }
 
     private void updateCursor(int mouseX, int mouseY, int listWidth) {
@@ -678,7 +732,7 @@ public final class MessageTimeline extends BaseUIComponent {
         LocalDateTime newest = scrubNewest();
         if (oldest == null || newest == null) return null;
         double progress = localY / Math.max(1, height - 1);
-        return TimelineLayout.timeFromOldest(progress, oldest, newest, matchMonths);
+        return TimelineLayout.timeFromOldest(progress, oldest, newest, matchDays);
     }
 
     private LocalDateTime scrubOldest() {

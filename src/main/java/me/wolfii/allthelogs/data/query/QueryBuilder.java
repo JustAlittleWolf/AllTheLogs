@@ -92,14 +92,26 @@ public final class QueryBuilder {
     }
 
     /**
-     * Distinct year-months that contain matches, oldest first. Same filter as {@link #bounds(ChatQuery)}.
+     * Distinct calendar days that contain matches, oldest first. Same filter as {@link #bounds(ChatQuery)}.
      */
-    public static QueryBuilder months(ChatQuery query) {
+    public static QueryBuilder dates(ChatQuery query) {
         List<Object> parameters = new ArrayList<>();
         List<String> conditions = new ArrayList<>();
         addMatchConditions(query, false, conditions, parameters);
         String where = conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions);
-        String sql = "SELECT DISTINCT date_trunc('month', e.entry_time) FROM chat_entry e" + where + " ORDER BY 1";
+        String sql = "SELECT DISTINCT CAST(e.entry_time AS DATE) FROM chat_entry e" + where + " ORDER BY 1";
+        return new QueryBuilder(sql, parameters);
+    }
+
+    /**
+     * Number of matching entries, ignoring context, limit, and offset.
+     */
+    public static QueryBuilder count(ChatQuery query) {
+        List<Object> parameters = new ArrayList<>();
+        List<String> conditions = new ArrayList<>();
+        addMatchConditions(query, false, conditions, parameters);
+        String where = conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions);
+        String sql = "SELECT COUNT(*) FROM chat_entry e" + where;
         return new QueryBuilder(sql, parameters);
     }
 
