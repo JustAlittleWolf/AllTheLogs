@@ -17,6 +17,7 @@ import me.wolfii.allthelogs.data.ChatQuery;
 import net.minecraft.network.chat.Component;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.IntSupplier;
 import java.util.function.Supplier;

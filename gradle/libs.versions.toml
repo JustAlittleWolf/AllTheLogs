@@ -5,7 +5,6 @@ fabric-loom = "1.17-SNAPSHOT"
 fabric-api = "0.158.0+26.2"
 owo = "0.13.1+26.2"
 modmenu = "20.0.1"
-foojay-resolver = "1.0.0"
 duckdb = "1.5.5.1"
 commons-compress = "1.28.0"
 xz = "1.12"
@@ -28,4 +27,3 @@ junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher
 
 [plugins]
 fabric-loom = { id = "net.fabricmc.fabric-loom", version.ref = "fabric-loom" }
-foojay-resolver = { id = "org.gradle.toolchains.foojay-resolver-convention", version.ref = "foojay-resolver" }
