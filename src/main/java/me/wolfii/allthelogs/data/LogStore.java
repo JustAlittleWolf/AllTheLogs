@@ -309,11 +309,12 @@ public final class LogStore implements AutoCloseable {
     }
 
     /**
-     * Number of matching entries for {@code query}, ignoring paging and context lines.
+     * Number of matching entries for {@code query}. Honours offset and limit; ignores context lines.
+     * Callers that want every match for a filter should drop the page offset and pass a negative limit.
      */
-    public long queryCount(ChatQuery query) {
+    public long matches(ChatQuery query) {
         Objects.requireNonNull(query, "query");
-        return queries.count(query);
+        return queries.matches(query);
     }
 
     /**

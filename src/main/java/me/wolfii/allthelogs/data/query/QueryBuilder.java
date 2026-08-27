@@ -104,14 +104,18 @@ public final class QueryBuilder {
     }
 
     /**
-     * Number of matching entries, ignoring context, limit, and offset.
+     * Number of matching entries for {@code query}. Honours offset and limit; ignores context lines, which are
+     * not matches. Callers that want the unpaged total should pass a query with no offset and {@code limit < 0}.
      */
-    public static QueryBuilder count(ChatQuery query) {
+    public static QueryBuilder matches(ChatQuery query) {
         List<Object> parameters = new ArrayList<>();
         List<String> conditions = new ArrayList<>();
-        addMatchConditions(query, false, conditions, parameters);
+        addMatchConditions(query, true, conditions, parameters);
         String where = conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions);
-        String sql = "SELECT COUNT(*) FROM chat_entry e" + where;
+        String from = " FROM chat_entry e" + where;
+        String sql = query.limit() < 0
+            ? "SELECT COUNT(*)" + from
+            : "SELECT COUNT(*) FROM (SELECT 1" + from + " LIMIT " + query.limit() + ")";
         return new QueryBuilder(sql, parameters);
     }
 

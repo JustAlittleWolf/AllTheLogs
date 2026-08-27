@@ -137,13 +137,13 @@ final class LogBrowserQueries {
                 list.setMatchBounds(matchBounds);
             });
         }
-        scheduleQueryCount(gen, page);
+        scheduleMatchCount(gen);
     }
 
-    private void scheduleQueryCount(int gen, SearchFilter page) {
+    private void scheduleMatchCount(int gen) {
         CompletableFuture.delayedExecutor(COUNT_DEBOUNCE_MS, TimeUnit.MILLISECONDS).execute(() -> {
             if (gen != generation.get()) return;
-            onClient(AllTheLogsClient.worker().queryCount(page.toTimelineQuery()), (count, error) -> {
+            onClient(AllTheLogsClient.worker().matches(filter.toTimelineQuery()), (count, error) -> {
                 if (gen != generation.get() || error != null || count == null || list == null) return;
                 list.setTotalMatchCount(count);
                 snapshotCurrentList();

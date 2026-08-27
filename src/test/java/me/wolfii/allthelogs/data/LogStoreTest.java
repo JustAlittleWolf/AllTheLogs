@@ -408,10 +408,24 @@ class LogStoreTest {
     }
 
     @Test
-    void queryCountReturnsTheFullMatchTotal() throws IOException {
+    void matchesHonoursLimitAndIgnoresContext() throws IOException {
         store.importDirectory(logsDirectory());
-        assertEquals(store.query(ChatQuery.all()).size(), store.queryCount(ChatQuery.all()));
-        assertEquals(1, store.queryCount(ChatQuery.all().withSubstring("needle in here")));
+        assertEquals(store.query(ChatQuery.all()).size(), store.matches(ChatQuery.all()));
+        assertEquals(1, store.matches(ChatQuery.all().withSubstring("needle in here")));
+        ChatQuery withContext = ChatQuery.all().withSubstring("needle in here").withContextLines(1);
+        assertEquals(1, store.matches(withContext));
+        assertEquals(3, store.query(withContext).size());
+        assertEquals(2, store.matches(ChatQuery.all().withLimit(2)));
+    }
+
+    @Test
+    void matchesHonoursTimestampOffset() throws IOException {
+        importOffsetLog();
+        assertEquals(3, store.matches(ChatQuery.all()
+            .withOffset(LocalDateTime.of(2026, 6, 1, 10, 0, 11))));
+        assertEquals(2, store.matches(ChatQuery.all()
+            .withOffset(LocalDateTime.of(2026, 6, 1, 10, 0, 11))
+            .withLimit(2)));
     }
 
     @Test

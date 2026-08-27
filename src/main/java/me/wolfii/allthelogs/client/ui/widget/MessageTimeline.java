@@ -275,7 +275,7 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     /**
-     * Replaces the capped {@code >99} label with the exact total from {@code queryCount}.
+     * Replaces the capped {@code >99} label with the exact total from {@code matches}.
      */
     public void setTotalMatchCount(long total) {
         this.matchCount = Math.max(0, total);

@@ -108,10 +108,10 @@ public final class ChatQueries {
     }
 
     /**
-     * Number of matching entries for {@code query}, ignoring paging and context.
+     * Number of matching entries for {@code query}. Honours offset and limit; ignores context lines.
      */
-    public long count(ChatQuery query) {
-        QueryBuilder builder = QueryBuilder.count(query);
+    public long matches(ChatQuery query) {
+        QueryBuilder builder = QueryBuilder.matches(query);
         try (PreparedStatement prepared = connection.prepareStatement(builder.sql())) {
             builder.bind(prepared);
             try (ResultSet result = prepared.executeQuery()) {

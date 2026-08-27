@@ -42,7 +42,7 @@ public final class MessageText {
     }
 
     /**
-     * Visible match count. Unknown totals above 99 are shown as {@code >99} until {@code queryCount} finishes.
+     * Visible match count. Unknown totals above 99 are shown as {@code >99} until {@code matches} finishes.
      */
     public static String matchCountText(long matches, boolean exact) {
         if (!exact && matches > 99) return ">99";
