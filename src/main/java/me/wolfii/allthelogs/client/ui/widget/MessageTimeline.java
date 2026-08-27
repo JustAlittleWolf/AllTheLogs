@@ -46,7 +46,8 @@ public final class MessageTimeline extends BaseUIComponent {
     private static final int MIDDLE_HOLD_MS = 250;
     private static final int LOADING_CHIP_MS = 100;
     private static final int SELECT_DRAG_SLOP = 3;
-    private static final int DOUBLE_CLICK_MS = 350;
+    private static final int HIGHLIGHT_PAD_LEFT = 1;
+    private static final int HIGHLIGHT_TRIM_BOTTOM = 2;
     private static final int TICK_LABEL_OFFSET = 5;
 
     private static final int LIST_BG = 0x80000000;
@@ -81,8 +82,6 @@ public final class MessageTimeline extends BaseUIComponent {
     private double autoScrollOriginY;
     private double autoScrollMouseY;
     private boolean clickSelectsRow;
-    private int pendingSelectRow = -1;
-    private long pendingSelectAtMs;
     private boolean middleButtonDown;
     private boolean middleHoldMode;
     private int clickRow;
@@ -201,7 +200,6 @@ public final class MessageTimeline extends BaseUIComponent {
         selection.clear();
         clickKey = null;
         clickRow = -1;
-        pendingSelectRow = -1;
         draggingSelection = false;
         clickSelectsRow = false;
         finishScrub();
@@ -353,7 +351,6 @@ public final class MessageTimeline extends BaseUIComponent {
             continueScrub();
         }
         applyAutoScroll(mouseY, delta);
-        commitPendingRowSelect();
         drawRows(graphics, listWidth);
         drawMessageInfo(graphics, mouseX, mouseY, listWidth);
         drawBanner(graphics, listWidth, mouseX, mouseY);
@@ -407,13 +404,11 @@ public final class MessageTimeline extends BaseUIComponent {
             autoScrollMouseY = click.y();
             draggingSelection = false;
             clickSelectsRow = false;
-            pendingSelectRow = -1;
             return true;
         }
         if (click.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
             selection.clear();
             clickSelectsRow = false;
-            pendingSelectRow = -1;
             draggingSelection = false;
             return true;
         }
@@ -424,7 +419,6 @@ public final class MessageTimeline extends BaseUIComponent {
         if (row < 0) return super.onMouseDown(click, doubled);
         if (doubled) {
             clickSelectsRow = false;
-            pendingSelectRow = -1;
             draggingSelection = false;
             selection.clear();
             onExpand.accept(window.rows().get(row), expandSide(row, click.y()));
@@ -452,7 +446,6 @@ public final class MessageTimeline extends BaseUIComponent {
         }
         if (clickSelectsRow && movedPastSelectSlop(click.x(), click.y())) {
             clickSelectsRow = false;
-            pendingSelectRow = -1;
             draggingSelection = true;
             selection.start(clickRow, clickChar);
         }
@@ -475,8 +468,7 @@ public final class MessageTimeline extends BaseUIComponent {
         }
         if (click.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT && clickSelectsRow
             && clickRow >= 0 && clickRow < window.rows().size()) {
-            pendingSelectRow = clickRow;
-            pendingSelectAtMs = System.currentTimeMillis() + DOUBLE_CLICK_MS;
+            selection.selectRow(clickRow, window.rows().get(clickRow).message().length());
         }
         draggingSelection = false;
         clickSelectsRow = false;
@@ -513,11 +505,9 @@ public final class MessageTimeline extends BaseUIComponent {
             draggingSelection = false;
             clickRow = -1;
             clickKey = null;
-            pendingSelectRow = -1;
             return;
         }
         clickRow = index;
-        if (pendingSelectRow >= 0) pendingSelectRow = index;
     }
 
     private void rebuildLayout() {
@@ -573,9 +563,9 @@ public final class MessageTimeline extends BaseUIComponent {
                 int from = Math.max(span.start(), lineStart);
                 int to = Math.min(span.end(), lineEnd);
                 if (from >= to) continue;
-                int left = msgX + messageRangeWidth(row, lineStart, from);
+                int left = highlightLeft(msgX + messageRangeWidth(row, lineStart, from));
                 int right = msgX + messageRangeWidth(row, lineStart, to);
-                graphics.fill(left, lineY, right, lineY + ROW_HEIGHT, Colors.MATCH_HIGHLIGHT);
+                graphics.fill(left, lineY, right, lineY + highlightHeight(), Colors.MATCH_HIGHLIGHT);
             }
             lineY += ROW_HEIGHT;
         }
@@ -992,19 +982,17 @@ public final class MessageTimeline extends BaseUIComponent {
         return contentY < rowTop + rowHeight / 2.0;
     }
 
+    static int highlightLeft(int textX) {
+        return textX - HIGHLIGHT_PAD_LEFT;
+    }
+
+    static int highlightHeight() {
+        return ROW_HEIGHT - HIGHLIGHT_TRIM_BOTTOM;
+    }
+
     private Edge expandSide(int row, double localY) {
         int contentY = (int) Math.round(localY + scrollY - contentOrigin());
         return clickInTopHalf(contentY, layout.rowY(row), layout.rowHeight(row)) ? Edge.BEFORE : Edge.AFTER;
-    }
-
-    private void commitPendingRowSelect() {
-        if (pendingSelectRow < 0) return;
-        if (System.currentTimeMillis() < pendingSelectAtMs) return;
-        if (pendingSelectRow < window.rows().size()) {
-            DisplayRow row = window.rows().get(pendingSelectRow);
-            selection.selectRow(pendingSelectRow, row.message().length());
-        }
-        pendingSelectRow = -1;
     }
 
     private int rowAtLocalY(double localY) {
