@@ -38,4 +38,18 @@ class TimelineLayoutTest {
         assertEquals("Jan 1, 2026 00:00", TimelineLayout.hoverLabel(first, 2));
         assertEquals("Jan 1, 2026", TimelineLayout.hoverLabel(first, 5));
     }
+
+    @Test
+    void spacedTicksKeepAReadableGapOnANewestFirstTrack() {
+        LocalDateTime oldest = LocalDateTime.of(2024, 1, 1, 0, 0);
+        LocalDateTime newest = LocalDateTime.of(2026, 8, 1, 0, 0);
+        List<TimelineLayout.DateTick> ticks = TimelineLayout.spacedTicks(oldest, newest, 80, 16);
+        assertTrue(ticks.size() >= 2);
+        int previousY = Integer.MIN_VALUE / 2;
+        for (TimelineLayout.DateTick tick : ticks) {
+            int y = TimelineLayout.yFromNewest(tick.at(), oldest, newest, 0, 80);
+            assertTrue(y - previousY >= 16, () -> "ticks overlap at " + tick.label());
+            previousY = y;
+        }
+    }
 }

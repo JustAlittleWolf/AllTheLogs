@@ -135,6 +135,33 @@ public final class TimelineLayout {
     }
 
     /**
+     * Date labels placed along a newest-at-top track, spaced at least {@code minGapPx} apart so they stay readable.
+     */
+    public static List<DateTick> spacedTicks(LocalDateTime oldest, LocalDateTime newest, int height, int minGapPx) {
+        List<DateTick> raw = ticks(oldest, newest);
+        if (raw.isEmpty() || height <= 0 || minGapPx <= 0) return raw;
+        List<DateTick> ordered = new ArrayList<>(raw);
+        ordered.sort((a, b) -> Integer.compare(
+            yFromNewest(a.at(), oldest, newest, 0, height),
+            yFromNewest(b.at(), oldest, newest, 0, height)));
+        List<DateTick> kept = new ArrayList<>();
+        int lastY = Integer.MIN_VALUE / 2;
+        for (DateTick tick : ordered) {
+            int y = yFromNewest(tick.at(), oldest, newest, 0, height);
+            if (kept.isEmpty() || Math.abs(y - lastY) >= minGapPx) {
+                kept.add(tick);
+                lastY = y;
+            }
+        }
+        DateTick last = ordered.getLast();
+        int lastTickY = yFromNewest(last.at(), oldest, newest, 0, height);
+        if (!kept.getLast().equals(last) && Math.abs(lastTickY - lastY) >= minGapPx) {
+            kept.add(last);
+        }
+        return List.copyOf(kept);
+    }
+
+    /**
      * Downsamples markers so neighbouring timestamps are at least {@code minGapPx} apart on a track of
      * {@code height} pixels. The first and last markers are always kept.
      */

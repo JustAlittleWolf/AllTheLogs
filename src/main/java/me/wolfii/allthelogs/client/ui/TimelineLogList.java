@@ -22,20 +22,24 @@ import net.minecraft.network.chat.Component;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
  * Virtualised log list plus a timeline scrubber on the right. Newest is at the top. The scrubber maps the
- * matched-log range only; date ticks stay hidden until the pointer is near the track.
+ * matched-log range only and always shows date ticks along the track, Immich-style.
  */
 public final class TimelineLogList extends BaseUIComponent {
     public static final int ROW_HEIGHT = MessageListLayout.ROW_HEIGHT;
-    public static final int TIMELINE_WIDTH = 52;
-    private static final int TRACK_WIDTH = 10;
-    private static final int THUMB_HEIGHT = 18;
+    public static final int TIMELINE_WIDTH = 68;
+    public static final int SCRUB_PAGE_SIZE = 24;
+    private static final int TRACK_WIDTH = 8;
+    private static final int THUMB_HEIGHT = 16;
     private static final int BANNER_MS = 2200;
-    private static final int HOVER_SLOP = 10;
+    private static final int HOVER_SLOP = 12;
     private static final int LIST_PAD = 4;
+    private static final int SCRUB_THROTTLE_MS = 50;
+    private static final int TICK_GAP_PX = 16;
 
     private static final int LIST_BG = 0x80000000;
     private static final float DATE_SCALE = 1.25f;
@@ -44,6 +48,8 @@ public final class TimelineLogList extends BaseUIComponent {
     private static final int THUMB = 0xD0FFFFFF;
     private static final int TEXT = 0xFFFFFFFF;
     private static final int MUTED = 0xFFA0A0A0;
+    private static final int TICK_LABEL = 0xFF8E8E8E;
+    private static final int TICK_DOT = 0xFF9A9A9A;
     private static final int BANNER_BG = 0xE0181818;
     private static final int BANNER_BORDER = 0xFF3C3C3C;
     private static final int HOVER_BG = 0xF01C1C1C;
@@ -62,6 +68,7 @@ public final class TimelineLogList extends BaseUIComponent {
     private boolean draggingTimeline;
     private boolean draggingSelection;
     private double scrubY = Double.NaN;
+    private long lastScrubQueryMs;
     private int laidOutWidth = -1;
     private int matchCount;
     private boolean showMatchBanner;
@@ -69,9 +76,11 @@ public final class TimelineLogList extends BaseUIComponent {
     private Component overlayMessage = Component.empty();
     private Consumer<Edge> onApproachEdge = edge -> {
     };
-    private Consumer<LocalDateTime> onJump = time -> {
+    private BiConsumer<LocalDateTime, Boolean> onJump = (time, preview) -> {
     };
     private Consumer<DisplayRow> onExpand = row -> {
+    };
+    private Runnable onScrubBegin = () -> {
     };
 
     public TimelineLogList() {
@@ -91,12 +100,16 @@ public final class TimelineLogList extends BaseUIComponent {
         this.onApproachEdge = onApproachEdge;
     }
 
-    public void onJump(Consumer<LocalDateTime> onJump) {
+    public void onJump(BiConsumer<LocalDateTime, Boolean> onJump) {
         this.onJump = onJump;
     }
 
     public void onExpand(Consumer<DisplayRow> onExpand) {
         this.onExpand = onExpand;
+    }
+
+    public void onScrubBegin(Runnable onScrubBegin) {
+        this.onScrubBegin = onScrubBegin;
     }
 
     public void setContextLines(int contextLines) {
@@ -144,6 +157,22 @@ public final class TimelineLogList extends BaseUIComponent {
         rebuildLayout();
         this.scrollY = 0;
         selection.clear();
+        finishScrub();
+    }
+
+    /**
+     * Replaces the buffered page and scrolls so {@code time} is at the top, without flashing the list to
+     * offset 0 first. Used while dragging the timeline so the thumb can stay put.
+     */
+    public void showAt(LocalDateTime time, List<DisplayRow> rows, boolean hasBefore, boolean hasAfter) {
+        window.reset(rows, hasBefore, hasAfter);
+        rebuildLayout();
+        scrollToTime(time);
+    }
+
+    public void finishScrub() {
+        if (draggingTimeline) return;
+        scrubY = Double.NaN;
     }
 
     public void scrollToTime(LocalDateTime time) {
@@ -212,8 +241,12 @@ public final class TimelineLogList extends BaseUIComponent {
 
     @Override
     public boolean onMouseDown(MouseButtonEvent click, boolean doubled) {
+        if (focusHandler() != null) {
+            focusHandler().focus(this, UIComponent.FocusSource.MOUSE_CLICK);
+        }
         if (overTimelineLocal(click.x())) {
             draggingTimeline = true;
+            onScrubBegin.run();
             previewScrub(click.y());
             return true;
         }
@@ -248,19 +281,33 @@ public final class TimelineLogList extends BaseUIComponent {
 
     @Override
     public boolean onMouseUp(MouseButtonEvent click) {
-        if (draggingTimeline) commitScrub(click.y());
-        draggingTimeline = false;
+        if (draggingTimeline) {
+            draggingTimeline = false;
+            commitScrub(click.y());
+        }
         draggingSelection = false;
         return super.onMouseUp(click);
     }
 
     @Override
     public boolean onKeyPress(KeyEvent event) {
+        if (event.isSelectAll()) {
+            return selectAllOnVisibleDate();
+        }
         if (event.isCopy() && !selection.isEmpty()) {
             Minecraft.getInstance().keyboardHandler.setClipboard(selection.copy(window.rows()));
             return true;
         }
         return super.onKeyPress(event);
+    }
+
+    public boolean selectAllOnVisibleDate() {
+        List<DisplayRow> rows = window.rows();
+        if (rows.isEmpty()) return false;
+        LocalDate date = visibleDate();
+        if (date == null) return false;
+        selection.selectDate(rows, date);
+        return true;
     }
 
     private void rebuildLayout() {
@@ -396,13 +443,15 @@ public final class TimelineLogList extends BaseUIComponent {
     }
 
     private void drawTimeline(OwoUIGraphics graphics, int mouseX, int mouseY) {
-        int trackX = x + width - 2 - TRACK_WIDTH;
+        int trackX = x + width - 3 - TRACK_WIDTH;
         graphics.fill(trackX, y, trackX + TRACK_WIDTH, y + height, TRACK);
         graphics.fill(trackX, y, trackX + 1, y + height, TRACK_BORDER);
 
         LocalDateTime oldest = scrubOldest();
         LocalDateTime newest = scrubNewest();
         if (oldest == null || newest == null) return;
+
+        drawDateTicks(graphics, trackX, oldest, newest);
 
         int thumbCenter = thumbCenter(oldest, newest);
         if (thumbCenter != Integer.MIN_VALUE) {
@@ -423,8 +472,17 @@ public final class TimelineLogList extends BaseUIComponent {
         graphics.drawText(Component.literal(label), labelX + 5, labelY + 3, 0.85f, TEXT);
     }
 
+    private void drawDateTicks(OwoUIGraphics graphics, int trackX, LocalDateTime oldest, LocalDateTime newest) {
+        for (TimelineLayout.DateTick tick : TimelineLayout.spacedTicks(oldest, newest, height, TICK_GAP_PX)) {
+            int tickY = TimelineLayout.yFromNewest(tick.at(), oldest, newest, y, height);
+            graphics.fill(trackX + 2, tickY, trackX + TRACK_WIDTH - 2, tickY + 1, TICK_DOT);
+            graphics.drawText(Component.literal(tick.label()), trackX - 3, tickY,
+                0.7f, TICK_LABEL, OwoUIGraphics.TextAnchor.BOTTOM_RIGHT);
+        }
+    }
+
     private int thumbCenter(LocalDateTime oldest, LocalDateTime newest) {
-        if (draggingTimeline && !Double.isNaN(scrubY)) return y + (int) Math.round(scrubY);
+        if (!Double.isNaN(scrubY)) return y + (int) Math.round(scrubY);
         LocalDateTime viewTime = visibleTime();
         if (viewTime == null) return Integer.MIN_VALUE;
         return TimelineLayout.yFromNewest(viewTime, oldest, newest, y, height);
@@ -456,6 +514,13 @@ public final class TimelineLogList extends BaseUIComponent {
         return rows.get(index).entry().timestamp();
     }
 
+    private LocalDate visibleDate() {
+        MessageListLayout.DateBand sticky = layout.stickyAt(scrollY);
+        if (sticky != null) return sticky.date();
+        LocalDateTime time = visibleTime();
+        return time == null ? null : time.toLocalDate();
+    }
+
     private LocalDateTime timeAtLocalY(double localY) {
         LocalDateTime oldest = scrubOldest();
         LocalDateTime newest = scrubNewest();
@@ -479,7 +544,6 @@ public final class TimelineLogList extends BaseUIComponent {
 
     private void commitScrub(double localY) {
         applyScrub(Math.clamp(localY, 0, Math.max(0, height - 1)), true);
-        scrubY = Double.NaN;
     }
 
     private void applyScrub(double localY, boolean commit) {
@@ -487,14 +551,20 @@ public final class TimelineLogList extends BaseUIComponent {
         if (time == null) return;
         if (window.coversTime(time)) {
             scrollToTime(time);
-            maybeRequestMore();
+            if (!draggingTimeline) maybeRequestMore();
+            if (commit) finishScrub();
             return;
         }
-        if (commit) onJump.accept(time);
+        if (!commit) {
+            long now = System.currentTimeMillis();
+            if (now - lastScrubQueryMs < SCRUB_THROTTLE_MS) return;
+            lastScrubQueryMs = now;
+        }
+        onJump.accept(time, !commit);
     }
 
     private void maybeRequestMore() {
-        if (loading || window.rows().isEmpty()) return;
+        if (loading || draggingTimeline || window.rows().isEmpty()) return;
         int firstVisible = firstVisibleIndex();
         int lastVisible = lastVisibleIndex();
         if (window.hasBefore() && firstVisible <= 2) {

@@ -15,6 +15,7 @@ import me.wolfii.allthelogs.client.view.ResultWindow;
 import me.wolfii.allthelogs.data.ChatQuery;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -88,6 +89,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         list.onApproachEdge(this::loadMore);
         list.onJump(this::jumpTo);
         list.onExpand(this::expandAround);
+        list.onScrubBegin(this::beginScrub);
         root.child(list.verticalSizing(Sizing.expand()));
 
         reload(true);
@@ -104,6 +106,19 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
     @Override
     public void onClose() {
         Minecraft.getInstance().gui.setScreen(parent);
+    }
+
+    @Override
+    public boolean keyPressed(KeyEvent event) {
+        if (event.isSelectAll() && list != null && !searchHasFocus()) {
+            return list.selectAllOnVisibleDate();
+        }
+        return super.keyPressed(event);
+    }
+
+    private boolean searchHasFocus() {
+        if (search == null || search.focusHandler() == null) return false;
+        return search.focusHandler().focused() == search;
     }
 
     private FlowLayout buildToolbar(FlowLayout root) {
@@ -372,7 +387,9 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         DisplayRow.RowKey anchor = list.visibleAnchor();
         int firstVisible = list.firstVisibleIndex();
         int lastVisible = list.lastVisibleIndex();
+        int generation = queryGeneration.get();
         onClient(AllTheLogsClient.worker().query(page.toQuery()), (entries, error) -> {
+            if (generation != queryGeneration.get()) return;
             list.setLoading(false);
             if (error != null) {
                 AllTheLogsClient.LOGGER.warn("AllTheLogs page query failed", error);
@@ -408,15 +425,31 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         });
     }
 
-    private void jumpTo(LocalDateTime time) {
+    private void beginScrub() {
+        queryGeneration.incrementAndGet();
+        list.setLoading(false);
+    }
+
+    private void jumpTo(LocalDateTime time, boolean preview) {
         SearchFilter page = filter.withOffset(time.minusNanos(1));
-        list.setLoading(true);
-        onClient(AllTheLogsClient.worker().query(page.toQuery()), (entries, error) -> {
+        if (preview) {
+            long cap = filter.limit() < 0 ? TimelineLogList.SCRUB_PAGE_SIZE
+                : Math.min(TimelineLogList.SCRUB_PAGE_SIZE, filter.limit());
+            page = page.withLimit(Math.max(8, cap));
+        }
+        SearchFilter query = page;
+        int generation = queryGeneration.incrementAndGet();
+        if (!preview) list.setLoading(true);
+        onClient(AllTheLogsClient.worker().query(query.toQuery()), (entries, error) -> {
+            if (generation != queryGeneration.get()) return;
             list.setLoading(false);
-            if (error != null) return;
+            if (error != null) {
+                if (!preview) list.finishScrub();
+                return;
+            }
             List<DisplayRow> rows = DisplayRow.from(entries, filter);
-            list.reset(rows, true, pageIsFull(rows, filter));
-            list.scrollToTime(time);
+            list.showAt(time, rows, true, pageIsFull(rows, query));
+            if (!preview) list.finishScrub();
         });
     }
 
