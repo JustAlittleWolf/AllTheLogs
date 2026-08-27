@@ -402,6 +402,20 @@ class LogStoreTest {
         assertEquals(needles.oldest(), needles.newest());
         MatchBounds all = store.matchBounds(ChatQuery.all());
         assertTrue(all.uniqueDates() >= 2);
+        assertFalse(all.months().isEmpty());
+    }
+
+    @Test
+    void matchBoundsSkipEmptyMonthsBetweenHits() throws IOException {
+        LogFixtures.writeGzipped(tempDir.resolve("logs"), "2025-01-15-1.log.gz",
+            LogFixtures.modernLog("26.2", "old hit"));
+        LogFixtures.writeGzipped(tempDir.resolve("logs"), "2026-08-01-1.log.gz",
+            LogFixtures.modernLog("26.2", "new hit"));
+        store.importDirectory(tempDir);
+        MatchBounds bounds = store.matchBounds(ChatQuery.all().withSubstring("hit"));
+        assertEquals(2, bounds.months().size());
+        assertEquals(java.time.YearMonth.of(2025, 1), bounds.months().getFirst());
+        assertEquals(java.time.YearMonth.of(2026, 8), bounds.months().getLast());
     }
 
     @Test

@@ -56,7 +56,8 @@ public record DisplayRow(
             List<ChatEntry> hits = hitsByLog.get(entry.chatLog());
             boolean match = hits != null && hits.contains(entry);
             Duration distance = match ? Duration.ZERO : distanceToNearestHit(entry, hits);
-            List<HighlightSpan> highlights = match ? MatchHighlighter.spans(entry.message(), filter) : List.of();
+            String display = MessageDisplay.visual(entry.message(), MessageDisplay.interpretEscapes(entry.chatLog()));
+            List<HighlightSpan> highlights = match ? MatchHighlighter.spans(display, filter) : List.of();
             return new DisplayRow(entry, match, distance, highlights);
         }).toList();
     }
@@ -84,7 +85,7 @@ public record DisplayRow(
     }
 
     public String message() {
-        return entry.message();
+        return MessageDisplay.visual(entry.message(), MessageDisplay.interpretEscapes(entry.chatLog()));
     }
 
     public RowKey key() {

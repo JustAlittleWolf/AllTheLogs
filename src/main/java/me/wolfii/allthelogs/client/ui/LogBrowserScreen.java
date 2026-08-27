@@ -4,6 +4,7 @@ import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.*;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.ScrollContainer;
+import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.*;
 import me.wolfii.allthelogs.client.AllTheLogsClient;
@@ -32,7 +33,7 @@ import java.util.function.Consumer;
 /**
  * Transparent log browser. Search, filter, virtualised history, and a timeline of every hit.
  */
-public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
+public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     private static final int SEARCH_DEBOUNCE_MS = 100;
 
     private final Screen parent;
@@ -45,10 +46,11 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
     private ButtonComponent oldestFirst;
     private ButtonComponent newestFirst;
     private ButtonComponent versionButton;
-    private DropdownComponent versionMenu;
+    private ParentUIComponent versionMenu;
     private List<String> versions = List.of();
     private boolean filterOpen;
-    private FlowLayout root;
+    private StackLayout overlays;
+    private FlowLayout content;
 
     public LogBrowserScreen() {
         this(null);
@@ -68,21 +70,22 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
     }
 
     @Override
-    protected @NotNull OwoUIAdapter<FlowLayout> createAdapter() {
-        return OwoUIAdapter.create(this, UIContainers::verticalFlow);
+    protected @NotNull OwoUIAdapter<StackLayout> createAdapter() {
+        return OwoUIAdapter.create(this, UIContainers::stack);
     }
 
     @Override
-    protected void build(FlowLayout root) {
-        this.root = root;
-        root.gap(6);
-        root.allowOverflow(true);
-        root.surface(BrowserPanels.overlay())
+    protected void build(StackLayout root) {
+        this.overlays = root;
+        content = UIContainers.verticalFlow(Sizing.fill(), Sizing.fill());
+        content.gap(6);
+        content.allowOverflow(true);
+        content.surface(Surface.blur(5, 10).and(BrowserPanels.overlay()))
             .padding(Insets.of(8))
             .horizontalAlignment(HorizontalAlignment.LEFT)
             .verticalAlignment(VerticalAlignment.TOP);
 
-        root.child(buildToolbar(root));
+        content.child(buildToolbar());
 
         list = new TimelineLogList();
         list.setContextLines(filter.contextLines());
@@ -90,9 +93,8 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         list.onJump(this::jumpTo);
         list.onExpand(this::expandAround);
         list.onScrubBegin(this::beginScrub);
-        root.child(list.verticalSizing(Sizing.expand()));
-
-        reload(true);
+        content.child(list.verticalSizing(Sizing.expand()));
+        root.child(content);
     }
 
     @Override
@@ -100,6 +102,9 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         super.init();
         if (search != null && search.focusHandler() != null) {
             search.focusHandler().focus(search, UIComponent.FocusSource.KEYBOARD_CYCLE);
+        }
+        if (list != null) {
+            reload(true);
         }
     }
 
@@ -121,7 +126,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         return search.focusHandler().focused() == search;
     }
 
-    private FlowLayout buildToolbar(FlowLayout root) {
+    private FlowLayout buildToolbar() {
         FlowLayout bar = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
         bar.gap(4).verticalAlignment(VerticalAlignment.CENTER);
 
@@ -132,7 +137,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         bar.child(search);
 
         bar.child(UIComponents.button(Component.translatable("allthelogs.filter"),
-            button -> toggleFilter(root, button)));
+            button -> toggleFilter(button)));
         bar.child(UIComponents.button(Component.translatable("allthelogs.import.button"),
             button -> Minecraft.getInstance().gui.setScreen(new ImportScreen(this))));
 
@@ -156,9 +161,9 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         });
     }
 
-    private void toggleFilter(FlowLayout root, ButtonComponent button) {
+    private void toggleFilter(ButtonComponent button) {
         if (filterOpen) {
-            closeFilter(root);
+            closeFilter();
             return;
         }
         filterOpen = true;
@@ -166,12 +171,12 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         filterPanel.positioning(Positioning.absolute(
             Math.max(8, this.width - 258),
             button.y() + button.height() + 4));
-        root.child(filterPanel);
+        overlays.child(filterPanel);
     }
 
-    private void closeFilter(FlowLayout root) {
+    private void closeFilter() {
         if (filterPanel != null) {
-            root.removeChild(filterPanel);
+            overlays.removeChild(filterPanel);
             filterPanel = null;
         }
         oldestFirst = null;
@@ -256,35 +261,48 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
     }
 
     private boolean versionMenuOpen() {
-        return root != null && versionMenu != null && root.children().contains(versionMenu);
+        return overlays != null && versionMenu != null && overlays.children().contains(versionMenu);
     }
 
     private void closeVersionMenu() {
         if (versionMenuOpen()) {
-            root.removeChild(versionMenu);
+            overlays.removeChild(versionMenu);
         }
         versionMenu = null;
     }
 
     private void openVersionMenu(ButtonComponent button) {
-        if (root == null) return;
-        DropdownComponent.openContextMenu(this, root, (parent, dropdown) -> {
+        if (overlays == null) return;
+        closeVersionMenu();
+        FlowLayout items = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
+        items.gap(1);
+        items.child(versionChoice(Component.translatable("allthelogs.filter.version.all"), null));
+        for (String version : versions) {
+            items.child(versionChoice(Component.literal(version), version));
+        }
+        int width = Math.max(120, button.width());
+        int maxHeight = Math.max(48, Math.min(180, this.height - button.y() - button.height() - 12));
+        ScrollContainer<FlowLayout> menu = UIContainers.verticalScroll(
+            Sizing.fixed(width), Sizing.fixed(maxHeight), items);
+        menu.scrollbar(OverflowScrollbar.vanillaFlat());
+        menu.surface(BrowserPanels.menu());
+        int menuX = Math.min(button.x(), Math.max(0, this.width - width - 4));
+        int menuY = button.y() + button.height();
+        if (menuY + maxHeight > this.height - 4) {
+            menuY = Math.max(4, button.y() - maxHeight);
+        }
+        menu.positioning(Positioning.absolute(menuX, menuY));
+        versionMenu = menu;
+        overlays.child(menu);
+    }
+
+    private ButtonComponent versionChoice(Component label, String version) {
+        ButtonComponent choice = UIComponents.button(label, ignored -> {
             closeVersionMenu();
-            parent.child(dropdown);
-            versionMenu = dropdown;
-        }, button.x(), button.y() + button.height(), dropdown -> {
-            dropdown.surface(BrowserPanels.menu());
-            dropdown.button(Component.translatable("allthelogs.filter.version.all"), ignored -> {
-                closeVersionMenu();
-                updateFilter(filter.withVersion(null));
-            });
-            for (String version : versions) {
-                dropdown.button(Component.literal(version), ignored -> {
-                    closeVersionMenu();
-                    updateFilter(filter.withVersion(version));
-                });
-            }
+            updateFilter(filter.withVersion(version));
         });
+        choice.horizontalSizing(Sizing.fill());
+        return choice;
     }
 
     private ButtonComponent sortButton(String key, ChatQuery.Sort sort) {
@@ -332,6 +350,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
         list.setLoading(true);
         refreshStats();
         SearchFilter page = filter.withoutOffset();
+        long startedAt = System.nanoTime();
         onClient(AllTheLogsClient.worker().query(page.toQuery()), (entries, error) -> {
             if (generation != queryGeneration.get()) return;
             list.setLoading(false);
@@ -343,7 +362,8 @@ public final class LogBrowserScreen extends BaseOwoScreen<FlowLayout> {
             }
             List<DisplayRow> rows = DisplayRow.from(entries, page);
             list.reset(rows, false, pageIsFull(rows, page));
-            list.showMatchCount(ResultWindow.matchCount(rows));
+            long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
+            list.showMatchCount(ResultWindow.matchCount(rows), elapsedMs);
         });
         if (resetTimeline) {
             onClient(AllTheLogsClient.worker().matchBounds(page.toTimelineQuery()), (bounds, error) -> {

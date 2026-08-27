@@ -10,6 +10,7 @@ import java.sql.*;
 import java.sql.Date;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.*;
 
 /**
@@ -96,11 +97,31 @@ public final class ChatQueries {
                 Timestamp newest = result.getTimestamp(2);
                 int uniqueDates = result.getInt(3);
                 if (oldest == null || newest == null) return MatchBounds.empty();
-                return new MatchBounds(oldest.toLocalDateTime(), newest.toLocalDateTime(), uniqueDates);
+                return new MatchBounds(oldest.toLocalDateTime(), newest.toLocalDateTime(), uniqueDates,
+                    matchMonths(query));
             }
         } catch (SQLException | RuntimeException e) {
             throw new LogDataException("could not read match bounds for " + query, e);
         }
+    }
+
+    private List<YearMonth> matchMonths(ChatQuery query) {
+        QueryBuilder builder = QueryBuilder.months(query);
+        List<YearMonth> months = new ArrayList<>();
+        try (PreparedStatement prepared = connection.prepareStatement(builder.sql())) {
+            builder.bind(prepared);
+            try (ResultSet result = prepared.executeQuery()) {
+                while (result.next()) {
+                    Timestamp month = result.getTimestamp(1);
+                    if (month != null) {
+                        months.add(YearMonth.from(month.toLocalDateTime()));
+                    }
+                }
+            }
+        } catch (SQLException | RuntimeException e) {
+            throw new LogDataException("could not read match months for " + query, e);
+        }
+        return months;
     }
 
     /**

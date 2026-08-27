@@ -91,6 +91,18 @@ public final class QueryBuilder {
         return new QueryBuilder(sql, parameters);
     }
 
+    /**
+     * Distinct year-months that contain matches, oldest first. Same filter as {@link #bounds(ChatQuery)}.
+     */
+    public static QueryBuilder months(ChatQuery query) {
+        List<Object> parameters = new ArrayList<>();
+        List<String> conditions = new ArrayList<>();
+        addMatchConditions(query, false, conditions, parameters);
+        String where = conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions);
+        String sql = "SELECT DISTINCT date_trunc('month', e.entry_time) FROM chat_entry e" + where + " ORDER BY 1";
+        return new QueryBuilder(sql, parameters);
+    }
+
     private static void addMatchConditions(ChatQuery query, boolean includeOffset, List<String> conditions,
                                            List<Object> parameters) {
         if (query.startingAt() != null) {

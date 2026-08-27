@@ -40,6 +40,27 @@ class TimelineLayoutTest {
     }
 
     @Test
+    void compressedMonthsSkipTheEmptyGapBetweenHits() {
+        LocalDateTime jan2025 = LocalDateTime.of(2025, 1, 15, 12, 0);
+        LocalDateTime jan2026 = LocalDateTime.of(2026, 1, 15, 12, 0);
+        List<java.time.YearMonth> months = List.of(
+            java.time.YearMonth.of(2025, 1), java.time.YearMonth.of(2026, 1));
+        assertEquals(0.25, TimelineLayout.compressedProgress(jan2025, months), 0.02);
+        assertEquals(0.75, TimelineLayout.compressedProgress(jan2026, months), 0.02);
+        int y2026 = TimelineLayout.yFromNewest(jan2026, jan2025, jan2026, months, 0, 100);
+        int y2025 = TimelineLayout.yFromNewest(jan2025, jan2025, jan2026, months, 0, 100);
+        assertTrue(y2026 < 50);
+        assertTrue(y2025 > 50);
+        LocalDateTime linearMid = TimelineLayout.timeFromNewest(0.5, jan2025, jan2026);
+        assertEquals(2025, linearMid.getYear());
+        LocalDateTime compressedMid = TimelineLayout.timeFromNewest(0.5, jan2025, jan2026, months);
+        assertTrue(compressedMid.getYear() == 2025 || compressedMid.getYear() == 2026);
+        assertTrue(compressedMid.getMonthValue() == 1);
+        List<TimelineLayout.DateTick> ticks = TimelineLayout.ticks(months);
+        assertEquals(2, ticks.size());
+    }
+
+    @Test
     void spacedTicksKeepAReadableGapOnANewestFirstTrack() {
         LocalDateTime oldest = LocalDateTime.of(2024, 1, 1, 0, 0);
         LocalDateTime newest = LocalDateTime.of(2026, 8, 1, 0, 0);
