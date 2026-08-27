@@ -2,7 +2,7 @@ package me.wolfii.allthelogs.client;
 
 import com.terraformersmc.modmenu.api.ConfigScreenFactory;
 import com.terraformersmc.modmenu.api.ModMenuApi;
-import me.wolfii.allthelogs.client.ui.LogBrowserScreen;
+import me.wolfii.allthelogs.client.ui.screen.LogBrowserScreen;
 
 /**
  * Opens the log browser from Mod Menu's configure button.

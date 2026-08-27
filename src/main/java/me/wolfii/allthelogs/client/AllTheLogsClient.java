@@ -1,6 +1,6 @@
 package me.wolfii.allthelogs.client;
 
-import me.wolfii.allthelogs.client.ui.LogBrowserScreen;
+import me.wolfii.allthelogs.client.ui.screen.LogBrowserScreen;
 import me.wolfii.allthelogs.data.ImportOptions;
 import me.wolfii.allthelogs.data.LogSource;
 import me.wolfii.allthelogs.data.store.SessionMarker;
@@ -19,6 +19,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Fabric client entry: opens the log store, imports this instance's {@code logs} folder, captures live chat,
+ * and registers {@code /allthelogs}.
+ */
 public final class AllTheLogsClient implements ClientModInitializer {
     public static final String MOD_ID = "allthelogs";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);

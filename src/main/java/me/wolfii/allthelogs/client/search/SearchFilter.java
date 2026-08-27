@@ -11,8 +11,8 @@ import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
 /**
- * UI-facing description of a log search. {@link #toQuery()} is the store query; {@link #messagePredicate()} is
- * the matching used to mark hits and highlights after the query returns.
+ * Browser search: text, regex, dates, sort, and paging. {@link #toQuery()} is the store query;
+ * {@link #messagePredicate()} marks hits after the query returns.
  */
 public record SearchFilter(
     String text,
