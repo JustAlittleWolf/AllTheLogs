@@ -75,10 +75,18 @@ public final class MessageListLayout {
     }
 
     /**
-     * Extra lines fetched around a double-clicked row, on top of whatever is already on screen.
+     * Extra lines fetched when double-clicking a row, on top of whatever is already on screen.
      */
     public static int extraContextLines(int contextLines) {
         return Math.min(100, 2 * Math.max(0, contextLines));
+    }
+
+    /**
+     * Double-clicking the top half of a row loads toward the top of the list. Oldest-first lists
+     * keep older messages at the top, so that is older; newest-first is the opposite.
+     */
+    public static boolean expandOlderMessages(boolean clickInTopHalf, boolean oldestFirst) {
+        return clickInTopHalf == oldestFirst;
     }
 
     /**

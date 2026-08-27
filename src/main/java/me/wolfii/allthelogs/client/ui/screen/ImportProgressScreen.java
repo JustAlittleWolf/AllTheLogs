@@ -90,7 +90,7 @@ public final class ImportProgressScreen extends BaseOwoScreen<FlowLayout> {
         actions.gap(8);
         cancel = UIComponents.button(Component.translatable("allthelogs.import.progress.cancel"),
             button -> cancelImport());
-        done = UIComponents.button(Component.translatable("allthelogs.import.progress.back"),
+        done = UIComponents.button(Component.translatable("allthelogs.done"),
             button -> Minecraft.getInstance().gui.setScreen(parent));
         done.active(false);
         actions.child(cancel);

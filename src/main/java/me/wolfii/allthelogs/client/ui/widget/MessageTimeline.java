@@ -8,6 +8,7 @@ import io.wispforest.owo.ui.core.UIComponent;
 import me.wolfii.allthelogs.client.list.*;
 import me.wolfii.allthelogs.client.timeline.TimelineLayout;
 import me.wolfii.allthelogs.client.ui.text.MessageText;
+import me.wolfii.allthelogs.client.ui.theme.Colors;
 import me.wolfii.allthelogs.data.MatchDay;
 import me.wolfii.allthelogs.data.MatchSummary;
 import me.wolfii.allthelogs.data.parse.PackedFormatting;
@@ -45,6 +46,7 @@ public final class MessageTimeline extends BaseUIComponent {
     private static final int MIDDLE_HOLD_MS = 250;
     private static final int LOADING_CHIP_MS = 100;
     private static final int SELECT_DRAG_SLOP = 3;
+    private static final int DOUBLE_CLICK_MS = 250;
     private static final int TICK_LABEL_OFFSET = 5;
 
     private static final int LIST_BG = 0x80000000;
@@ -79,6 +81,8 @@ public final class MessageTimeline extends BaseUIComponent {
     private double autoScrollOriginY;
     private double autoScrollMouseY;
     private boolean clickSelectsRow;
+    private int pendingSelectRow = -1;
+    private long pendingSelectAtMs;
     private boolean middleButtonDown;
     private boolean middleHoldMode;
     private int clickRow;
@@ -106,7 +110,7 @@ public final class MessageTimeline extends BaseUIComponent {
     };
     private BiConsumer<ScrubJump, Boolean> onJump = (jump, preview) -> {
     };
-    private Consumer<DisplayRow> onExpand = row -> {
+    private BiConsumer<DisplayRow, Edge> onExpand = (row, side) -> {
     };
     private Runnable onScrubBegin = () -> {
     };
@@ -139,7 +143,7 @@ public final class MessageTimeline extends BaseUIComponent {
         this.onJump = onJump;
     }
 
-    public void onExpand(Consumer<DisplayRow> onExpand) {
+    public void onExpand(BiConsumer<DisplayRow, Edge> onExpand) {
         this.onExpand = onExpand;
     }
 
@@ -197,6 +201,7 @@ public final class MessageTimeline extends BaseUIComponent {
         selection.clear();
         clickKey = null;
         clickRow = -1;
+        pendingSelectRow = -1;
         draggingSelection = false;
         clickSelectsRow = false;
         finishScrub();
@@ -311,12 +316,17 @@ public final class MessageTimeline extends BaseUIComponent {
         showMatchCount(matches, 0);
     }
 
+    public void setTotalMatchCount(long total) {
+        setTotalMatchCount(total, matchElapsedMs);
+    }
+
     /**
      * Replaces the capped {@code >99} label with the exact total from {@code matches}.
      */
-    public void setTotalMatchCount(long total) {
+    public void setTotalMatchCount(long total, long elapsedMs) {
         this.matchCount = Math.max(0, total);
         this.exactMatchCount = true;
+        this.matchElapsedMs = Math.max(0, elapsedMs);
         this.showMatchBanner = true;
         this.bannerUntilMs = System.currentTimeMillis() + BANNER_MS;
     }
@@ -343,6 +353,7 @@ public final class MessageTimeline extends BaseUIComponent {
             continueScrub();
         }
         applyAutoScroll(mouseY, delta);
+        commitPendingRowSelect();
         drawRows(graphics, listWidth);
         drawMessageInfo(graphics, mouseX, mouseY, listWidth);
         drawBanner(graphics, listWidth, mouseX, mouseY);
@@ -396,11 +407,13 @@ public final class MessageTimeline extends BaseUIComponent {
             autoScrollMouseY = click.y();
             draggingSelection = false;
             clickSelectsRow = false;
+            pendingSelectRow = -1;
             return true;
         }
         if (click.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
             selection.clear();
             clickSelectsRow = false;
+            pendingSelectRow = -1;
             draggingSelection = false;
             return true;
         }
@@ -411,7 +424,10 @@ public final class MessageTimeline extends BaseUIComponent {
         if (row < 0) return super.onMouseDown(click, doubled);
         if (doubled) {
             clickSelectsRow = false;
-            onExpand.accept(window.rows().get(row));
+            pendingSelectRow = -1;
+            draggingSelection = false;
+            selection.clear();
+            onExpand.accept(window.rows().get(row), expandSide(row, click.y()));
             return true;
         }
         clickSelectsRow = true;
@@ -436,6 +452,7 @@ public final class MessageTimeline extends BaseUIComponent {
         }
         if (clickSelectsRow && movedPastSelectSlop(click.x(), click.y())) {
             clickSelectsRow = false;
+            pendingSelectRow = -1;
             draggingSelection = true;
             selection.start(clickRow, clickChar);
         }
@@ -458,7 +475,8 @@ public final class MessageTimeline extends BaseUIComponent {
         }
         if (click.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT && clickSelectsRow
             && clickRow >= 0 && clickRow < window.rows().size()) {
-            selection.selectRow(clickRow, window.rows().get(clickRow).message().length());
+            pendingSelectRow = clickRow;
+            pendingSelectAtMs = System.currentTimeMillis() + DOUBLE_CLICK_MS;
         }
         draggingSelection = false;
         clickSelectsRow = false;
@@ -495,9 +513,11 @@ public final class MessageTimeline extends BaseUIComponent {
             draggingSelection = false;
             clickRow = -1;
             clickKey = null;
+            pendingSelectRow = -1;
             return;
         }
         clickRow = index;
+        if (pendingSelectRow >= 0) pendingSelectRow = index;
     }
 
     private void rebuildLayout() {
@@ -525,8 +545,10 @@ public final class MessageTimeline extends BaseUIComponent {
                 int rowY = screenY(layout.rowY(i));
                 int msgX = x + LIST_PAD + timestampWidth;
                 List<MessageWrap.Line> lines = MessageWrap.wrap(row.message(), messageWidth, rangeWidth(row));
+                drawHighlights(graphics, row, lines, msgX, rowY);
                 drawSelection(graphics, row, i, lines, msgX, rowY);
-                graphics.drawText(MessageText.timestamp(row), x + LIST_PAD, rowY + 1, 1, MUTED);
+                int timestampColor = row.match() ? MUTED : Colors.CONTEXT_TIMESTAMP;
+                graphics.drawText(MessageText.timestamp(row), x + LIST_PAD, rowY + 1, 1, timestampColor);
                 int lineY = rowY;
                 for (MessageWrap.Line line : lines) {
                     graphics.drawText(MessageText.messageRange(row, line.start(), line.start() + line.text().length()),
@@ -537,6 +559,25 @@ public final class MessageTimeline extends BaseUIComponent {
             drawDateHeaders(graphics, listWidth);
         } finally {
             graphics.disableScissor();
+        }
+    }
+
+    private void drawHighlights(OwoUIGraphics graphics, DisplayRow row,
+                                List<MessageWrap.Line> lines, int msgX, int rowY) {
+        if (!row.match() || row.highlights().isEmpty()) return;
+        int lineY = rowY;
+        for (MessageWrap.Line line : lines) {
+            int lineStart = line.start();
+            int lineEnd = lineStart + line.text().length();
+            for (HighlightSpan span : row.highlights()) {
+                int from = Math.max(span.start(), lineStart);
+                int to = Math.min(span.end(), lineEnd);
+                if (from >= to) continue;
+                int left = msgX + messageRangeWidth(row, lineStart, from);
+                int right = msgX + messageRangeWidth(row, lineStart, to);
+                graphics.fill(left, lineY, right, lineY + ROW_HEIGHT, Colors.MATCH_HIGHLIGHT);
+            }
+            lineY += ROW_HEIGHT;
         }
     }
 
@@ -942,6 +983,28 @@ public final class MessageTimeline extends BaseUIComponent {
         } else if (window.hasAfter() && lastVisible >= window.rows().size() - 3) {
             onApproachEdge.accept(Edge.AFTER);
         }
+    }
+
+    /**
+     * Top half of a row expands toward the top of the list ({@link Edge#BEFORE}).
+     */
+    static boolean clickInTopHalf(double contentY, int rowTop, int rowHeight) {
+        return contentY < rowTop + rowHeight / 2.0;
+    }
+
+    private Edge expandSide(int row, double localY) {
+        int contentY = (int) Math.round(localY + scrollY - contentOrigin());
+        return clickInTopHalf(contentY, layout.rowY(row), layout.rowHeight(row)) ? Edge.BEFORE : Edge.AFTER;
+    }
+
+    private void commitPendingRowSelect() {
+        if (pendingSelectRow < 0) return;
+        if (System.currentTimeMillis() < pendingSelectAtMs) return;
+        if (pendingSelectRow < window.rows().size()) {
+            DisplayRow row = window.rows().get(pendingSelectRow);
+            selection.selectRow(pendingSelectRow, row.message().length());
+        }
+        pendingSelectRow = -1;
     }
 
     private int rowAtLocalY(double localY) {

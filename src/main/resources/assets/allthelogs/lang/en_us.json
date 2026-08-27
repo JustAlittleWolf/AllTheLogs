@@ -32,6 +32,7 @@
 	"allthelogs.import.parallelism": "Parallelism",
 	"allthelogs.import.timezone": "Timezone",
 	"allthelogs.import.start": "Start import",
+	"allthelogs.done": "Done",
 	"allthelogs.meta.marker": "?",
 	"allthelogs.meta.hint": "Database Statistics",
 	"allthelogs.meta.unavailable": "Log store is not ready",

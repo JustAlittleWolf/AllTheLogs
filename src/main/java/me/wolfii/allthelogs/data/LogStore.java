@@ -322,8 +322,15 @@ public final class LogStore implements AutoCloseable {
      * Chat lines from {@code log} within {@code radius} of {@code lineIndex}, inclusive of the centre line.
      */
     public List<ChatEntry> around(ChatLog log, int lineIndex, int radius) {
+        return around(log, lineIndex, radius, radius);
+    }
+
+    /**
+     * Chat lines from {@code log} between {@code lineIndex - before} and {@code lineIndex + after}.
+     */
+    public List<ChatEntry> around(ChatLog log, int lineIndex, int before, int after) {
         Objects.requireNonNull(log, "log");
-        return queries.around(log, lineIndex, radius);
+        return queries.around(log, lineIndex, before, after);
     }
 
     /**
