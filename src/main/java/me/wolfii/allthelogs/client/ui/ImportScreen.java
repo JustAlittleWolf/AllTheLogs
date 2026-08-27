@@ -8,7 +8,6 @@ import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.*;
 import me.wolfii.allthelogs.client.AllTheLogsPaths;
 import me.wolfii.allthelogs.client.CommonLogLocations;
-import me.wolfii.allthelogs.client.NativeFilePicker;
 import me.wolfii.allthelogs.data.ImportOptions;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -70,9 +69,9 @@ public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
         pathBox.setMaxLength(1024);
         pathRow.child(pathBox);
         pathRow.child(UIComponents.button(Component.translatable("allthelogs.import.browse"),
-            button -> NativeFilePicker.pickFolder(currentPath(), this::setFolder)));
+            button -> openBrowser(FileBrowserScreen.Mode.FOLDER)));
         pathRow.child(UIComponents.button(Component.translatable("allthelogs.import.browse.archive"),
-            button -> NativeFilePicker.pickArchive(currentPath(), this::setPath)));
+            button -> openBrowser(FileBrowserScreen.Mode.ARCHIVE)));
         form.child(pathRow);
 
         List<CommonLogLocations.Location> common = CommonLogLocations.defaults();
@@ -161,6 +160,16 @@ public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
         nestedArchives = options.nestedArchives();
         skipAlreadyImported = options.skipAlreadyImported();
         pathMatcher = options.pathMatcher() == null ? "" : options.pathMatcher();
+    }
+
+    private void openBrowser(FileBrowserScreen.Mode mode) {
+        Minecraft.getInstance().gui.setScreen(new FileBrowserScreen(this, mode, currentPath(), path -> {
+            if (mode == FileBrowserScreen.Mode.FOLDER) {
+                setFolder(path);
+            } else {
+                setPath(path);
+            }
+        }));
     }
 
     private void setFolder(Path path) {
