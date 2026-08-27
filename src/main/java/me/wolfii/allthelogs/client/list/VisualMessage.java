@@ -24,7 +24,7 @@ public final class VisualMessage {
             if (i > 0) out.append('\n');
             appendParagraph(out, paragraphs[i], interpretEscapes);
         }
-        return out.toString();
+        return trimNewlines(out.toString());
     }
 
     /**
@@ -65,5 +65,17 @@ public final class VisualMessage {
             if (escape < 0) break;
             from = escape + 2;
         }
+    }
+
+    /**
+     * Strips leading and trailing newline characters from a display string. Literal {@code \n} tokens are kept.
+     */
+    public static String trimNewlines(String visual) {
+        if (visual == null || visual.isEmpty()) return visual == null ? "" : visual;
+        int start = 0;
+        int end = visual.length();
+        while (start < end && visual.charAt(start) == '\n') start++;
+        while (end > start && visual.charAt(end - 1) == '\n') end--;
+        return start == 0 && end == visual.length() ? visual : visual.substring(start, end);
     }
 }

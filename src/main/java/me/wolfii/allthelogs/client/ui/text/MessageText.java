@@ -6,6 +6,7 @@ import me.wolfii.allthelogs.client.list.HighlightSpan;
 import me.wolfii.allthelogs.client.list.VisualMessage;
 import me.wolfii.allthelogs.client.list.MessageWrap;
 import me.wolfii.allthelogs.data.ChatLog;
+import me.wolfii.allthelogs.data.LogSource;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
@@ -26,6 +27,7 @@ public final class MessageText {
      * Timestamp column sample used to reserve width for {@code HH:mm:ss} plus a gap before the message.
      */
     public static final String TIMESTAMP_GUTTER = "00:00:00  ";
+    public static final float INFO_SCALE = 0.75f;
 
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss");
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("EEE, MMM d, yyyy", Locale.US);
@@ -39,6 +41,15 @@ public final class MessageText {
     }
 
     /**
+     * Search duration for the status chip: seconds with one decimal, or empty when under 0.1s after rounding.
+     */
+    public static String searchDurationText(long elapsedMs) {
+        double seconds = Math.round(Math.max(0, elapsedMs) / 100.0) / 10.0;
+        if (seconds < 0.1) return "";
+        return "%.1f".formatted(seconds);
+    }
+
+    /**
      * Text for the list's status chip: a persistent overlay, then loading, then the match count and search time.
      */
     public static Component listStatus(Component overlay, boolean loading, boolean showMatches, int matchCount,
@@ -46,8 +57,11 @@ public final class MessageText {
         if (overlay != null && !overlay.getString().isEmpty()) return overlay;
         if (loading) return Component.translatable("allthelogs.status.loading");
         if (!showMatches) return Component.empty();
-        return Component.translatable("allthelogs.status.matches", matchCountText(matchCount),
-            Long.toString(Math.max(0, elapsedMs)));
+        String duration = searchDurationText(elapsedMs);
+        if (duration.isEmpty()) {
+            return Component.translatable("allthelogs.status.matches", matchCountText(matchCount));
+        }
+        return Component.translatable("allthelogs.status.matches.timed", matchCountText(matchCount), duration);
     }
 
     public static Component timestamp(DisplayRow row) {
@@ -55,7 +69,7 @@ public final class MessageText {
     }
 
     /**
-     * Compact hover card for a message timestamp: full date, version/user, wrapped source path.
+     * Compact hover card for a message timestamp: full date, labelled version/user, path and archive entry.
      */
     public static List<Component> messageInfo(DisplayRow row) {
         return messageInfo(row, Integer.MAX_VALUE, text -> text.length());
@@ -65,24 +79,31 @@ public final class MessageText {
         List<Component> lines = new ArrayList<>();
         String date = row.entry().timestamp().withNano(0).format(FULL_DATE);
         lines.add(colored(date, Colors.INFO_DATE));
-        String played = playedLine(row.chatLog());
-        if (played != null) {
-            lines.add(colored(played, Colors.INFO_VERSION));
+        String version = displayVersion(row.chatLog());
+        if (version != null) {
+            lines.add(labeled("allthelogs.info.version", colored(version, Colors.INFO_VERSION)));
         }
-        String path = row.chatLog().source().fullPath();
-        if (path != null && !path.isBlank()) {
-            int width = Math.max(16, maxWidth);
-            for (MessageWrap.Line line : MessageWrap.wrap(path, width, widthOf)) {
-                lines.add(colored(line.text(), Colors.INFO_FILE));
+        String user = row.chatLog().minecraftUser();
+        if (user != null && !user.isBlank()) {
+            lines.add(labeled("allthelogs.info.playing", colored(user, Colors.INFO_VERSION)));
+        }
+        int width = Math.max(16, maxWidth);
+        switch (row.chatLog().source()) {
+            case LogSource.File file -> wrapLabeled(lines, "allthelogs.info.path",
+                file.path().toAbsolutePath().normalize().toString(), width, widthOf, Colors.INFO_FILE);
+            case LogSource.Archive archive -> {
+                wrapLabeled(lines, "allthelogs.info.path",
+                    archive.path().toAbsolutePath().normalize().toString(), width, widthOf, Colors.INFO_FILE);
+                wrapLabeled(lines, "allthelogs.info.entry", archive.entryPath(), width, widthOf, Colors.INFO_FILE);
+            }
+            case LogSource.Session ignored -> {
             }
         }
         return lines;
     }
 
     static String playedLine(ChatLog log) {
-        boolean version = log.minecraftVersion() != null
-            && !log.minecraftVersion().isBlank()
-            && !ChatLog.UNKNOWN_VERSION.equals(log.minecraftVersion());
+        boolean version = displayVersion(log) != null;
         String user = log.minecraftUser();
         boolean named = user != null && !user.isBlank();
         if (version && named) {
@@ -95,6 +116,12 @@ public final class MessageText {
             return "Played as " + user;
         }
         return null;
+    }
+
+    private static String displayVersion(ChatLog log) {
+        if (log.minecraftVersion() == null || log.minecraftVersion().isBlank()) return null;
+        if (ChatLog.UNKNOWN_VERSION.equals(log.minecraftVersion())) return null;
+        return log.minecraftVersion();
     }
 
     public static Component dateHeader(LocalDate date) {
@@ -110,58 +137,70 @@ public final class MessageText {
         int start = Math.clamp(from, 0, full.length());
         int end = Math.clamp(to, start, full.length());
         String text = full.substring(start, end);
+        if (text.isEmpty()) return Component.empty();
         boolean interpret = VisualMessage.interpretEscapes(row.chatLog());
-        if (!row.match()) {
-            return coloredRange(full, start, text, Colors.CONTEXT_TEXT, interpret);
-        }
-        if (row.highlights().isEmpty()) {
-            return coloredRange(full, start, text, Colors.MATCH_TEXT, interpret);
-        }
         MutableComponent result = Component.empty();
-        int cursor = 0;
-        for (HighlightSpan span : row.highlights()) {
-            int highlightStart = Math.clamp(span.start() - start, 0, text.length());
-            int highlightEnd = Math.clamp(span.end() - start, 0, text.length());
-            if (highlightEnd <= highlightStart) continue;
-            if (highlightStart > cursor) {
-                result.append(coloredRange(full, start + cursor, text.substring(cursor, highlightStart),
-                    Colors.MATCH_TEXT, interpret));
-            }
-            result.append(coloredRange(full, start + highlightStart, text.substring(highlightStart, highlightEnd),
-                Colors.MATCH_HIGHLIGHT, interpret));
-            cursor = highlightEnd;
-        }
-        if (cursor < text.length()) {
-            result.append(coloredRange(full, start + cursor, text.substring(cursor), Colors.MATCH_TEXT,
-                interpret));
-        }
-        return result;
-    }
-
-    private static Component coloredRange(String full, int start, String text, int color, boolean interpret) {
-        if (!interpret || text.isEmpty()) {
-            return colored(text, color);
-        }
-        MutableComponent result = Component.empty();
-        int i = 0;
-        while (i < text.length()) {
-            if (VisualMessage.escapeChar(full, start + i, true)) {
-                int run = i + 1;
-                while (run < text.length() && VisualMessage.escapeChar(full, start + run, true)) {
-                    run++;
-                }
-                result.append(colored(text.substring(i, run), Colors.ESCAPE_TEXT));
-                i = run;
-            } else {
-                int run = i + 1;
-                while (run < text.length() && !VisualMessage.escapeChar(full, start + run, true)) {
-                    run++;
-                }
-                result.append(colored(text.substring(i, run), color));
-                i = run;
+        int runStart = 0;
+        int runColor = stackedColor(row, start, interpret);
+        for (int i = 1; i <= text.length(); i++) {
+            int color = i < text.length() ? stackedColor(row, start + i, interpret) : runColor ^ 1;
+            if (color != runColor) {
+                result.append(colored(text.substring(runStart, i), runColor));
+                runStart = i;
+                runColor = color;
             }
         }
         return result.getSiblings().size() == 1 ? result.getSiblings().getFirst() : result;
+    }
+
+    /**
+     * Chat colour with match highlight, context dimming, and {@code \n} darkening multiplied in that order.
+     */
+    public static int stackedColor(DisplayRow row, int index, boolean interpretEscapes) {
+        int color = Colors.MATCH_TEXT;
+        if (highlighted(row, index)) {
+            color = Colors.multiply(color, Colors.MATCH_HIGHLIGHT);
+        }
+        if (!row.match()) {
+            color = Colors.multiply(color, Colors.CONTEXT_TEXT);
+        }
+        if (VisualMessage.escapeChar(row.message(), index, interpretEscapes)) {
+            color = Colors.multiply(color, Colors.ESCAPE_TEXT);
+        }
+        return color;
+    }
+
+    private static boolean highlighted(DisplayRow row, int index) {
+        if (!row.match()) return false;
+        for (HighlightSpan span : row.highlights()) {
+            if (index >= span.start() && index < span.end()) return true;
+        }
+        return false;
+    }
+
+    private static void wrapLabeled(List<Component> lines, String key, String value, int maxWidth,
+                                    ToIntFunction<String> widthOf, int valueColor) {
+        if (value == null || value.isBlank()) return;
+        String prefix = Component.translatable(key, "").getString();
+        int prefixWidth = widthOf.applyAsInt(prefix);
+        int valueWidth = Math.max(8, maxWidth - prefixWidth);
+        List<MessageWrap.Line> wrapped = MessageWrap.wrap(value, valueWidth, widthOf);
+        if (wrapped.isEmpty()) {
+            lines.add(labeled(key, colored(value, valueColor)));
+            return;
+        }
+        lines.add(labeled(key, colored(wrapped.getFirst().text(), valueColor)));
+        for (int i = 1; i < wrapped.size(); i++) {
+            lines.add(colored(wrapped.get(i).text(), valueColor));
+        }
+    }
+
+    private static Component labeled(String key, Component value) {
+        return muted(Component.translatable(key, value));
+    }
+
+    private static Component muted(Component component) {
+        return component.copy().withStyle(Style.EMPTY.withColor(Colors.META_LABEL & 0xFFFFFF));
     }
 
     private static Component colored(String text, int argb) {

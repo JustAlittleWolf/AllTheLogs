@@ -39,4 +39,11 @@ class VisualMessageTest {
         assertFalse(VisualMessage.escapeChar(visual, 0, true));
         assertFalse(VisualMessage.escapeChar(visual, 5, false));
     }
+
+    @Test
+    void trimsLeadingAndTrailingNewlinesForDisplay() {
+        assertEquals("hello", VisualMessage.visual("\nhello\n", false));
+        assertEquals("hello\\n\nworld", VisualMessage.visual("\nhello\\nworld\n", true));
+        assertEquals("hello", VisualMessage.trimNewlines("\n\nhello\n"));
+    }
 }

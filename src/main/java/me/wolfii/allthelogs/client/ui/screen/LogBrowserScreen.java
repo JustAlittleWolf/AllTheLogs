@@ -83,7 +83,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         if (search != null && search.focusHandler() != null) {
             search.focusHandler().focus(search, UIComponent.FocusSource.KEYBOARD_CYCLE);
         }
-        if (list != null) {
+        if (list != null && queries.consumeReload()) {
             queries.reload(true);
         }
     }
@@ -119,7 +119,10 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         bar.child(UIComponents.button(Component.translatable("allthelogs.filter"),
             button -> filters.toggle(button)));
         bar.child(UIComponents.button(Component.translatable("allthelogs.import.button"),
-            button -> Minecraft.getInstance().gui.setScreen(new ImportScreen(this))));
+            button -> {
+                queries.markReload();
+                Minecraft.getInstance().gui.setScreen(new ImportScreen(this));
+            }));
 
         infoButton = UIComponents.button(Component.translatable("allthelogs.meta.marker"), button -> {
         });
@@ -132,6 +135,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     }
 
     private void onSearchChanged(String text) {
+        if (text.equals(queries.filter().text())) return;
         queries.updateFilter(queries.filter().withText(text));
         int generation = queries.bumpGeneration();
         CompletableFuture.delayedExecutor(SEARCH_DEBOUNCE_MS, TimeUnit.MILLISECONDS).execute(() -> {
