@@ -1,10 +1,10 @@
 package me.wolfii.allthelogs.data.importer;
 
 import me.wolfii.allthelogs.data.*;
-import me.wolfii.allthelogs.data.discover.FileCountEstimator;
-import me.wolfii.allthelogs.data.discover.ImportObserver;
-import me.wolfii.allthelogs.data.discover.LogCandidate;
-import me.wolfii.allthelogs.data.discover.LogDiscovery;
+import me.wolfii.allthelogs.data.importer.discover.FileCountEstimator;
+import me.wolfii.allthelogs.data.importer.discover.ImportObserver;
+import me.wolfii.allthelogs.data.importer.discover.LogCandidate;
+import me.wolfii.allthelogs.data.importer.discover.LogDiscovery;
 import me.wolfii.allthelogs.data.store.LogWriter;
 import me.wolfii.allthelogs.data.store.PreparedLog;
 import me.wolfii.allthelogs.data.store.Schema;

@@ -1,6 +1,6 @@
 package me.wolfii.allthelogs.data.importer;
 
-import me.wolfii.allthelogs.data.discover.LogCandidate;
+import me.wolfii.allthelogs.data.importer.discover.LogCandidate;
 import me.wolfii.allthelogs.data.parse.LogDates;
 import me.wolfii.allthelogs.data.parse.LogParser;
 import me.wolfii.allthelogs.data.parse.ParsedLog;

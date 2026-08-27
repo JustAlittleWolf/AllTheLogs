@@ -1,4 +1,4 @@
-package me.wolfii.allthelogs.data.discover;
+package me.wolfii.allthelogs.data.importer.discover;
 
 import java.util.regex.Pattern;
 
