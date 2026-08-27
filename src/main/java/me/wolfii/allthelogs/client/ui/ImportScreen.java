@@ -8,6 +8,8 @@ import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.*;
 import me.wolfii.allthelogs.client.AllTheLogsPaths;
 import me.wolfii.allthelogs.client.CommonLogLocations;
+import me.wolfii.allthelogs.client.ImportPaths;
+import me.wolfii.allthelogs.client.NativeFilePicker;
 import me.wolfii.allthelogs.data.ImportOptions;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -63,16 +65,22 @@ public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
         description.maxWidth(Math.max(160, this.width - 64));
         form.child(description);
 
+        form.child(UIComponents.label(Component.translatable("allthelogs.import.source_path")));
+        pathBox = UIComponents.textBox(Sizing.fill(), "");
+        pathBox.setMaxLength(1024);
+        form.child(pathBox);
+
         FlowLayout pathRow = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
         pathRow.gap(8).verticalAlignment(VerticalAlignment.CENTER);
-        pathBox = UIComponents.textBox(Sizing.expand(), "");
-        pathBox.setMaxLength(1024);
-        pathRow.child(pathBox);
-        pathRow.child(UIComponents.button(Component.translatable("allthelogs.import.browse"),
-            button -> openBrowser(FileBrowserScreen.Mode.FOLDER)));
-        pathRow.child(UIComponents.button(Component.translatable("allthelogs.import.browse.archive"),
-            button -> openBrowser(FileBrowserScreen.Mode.ARCHIVE)));
+        pathRow.child(UIComponents.button(Component.translatable("allthelogs.import.from_folder"),
+            button -> NativeFilePicker.pickFolder(currentPath(), this::setFolder)));
+        pathRow.child(UIComponents.button(Component.translatable("allthelogs.import.from_archive"),
+            button -> NativeFilePicker.pickArchive(currentPath(), this::setPath)));
         form.child(pathRow);
+
+        LabelComponent dropHint = UIComponents.label(Component.translatable("allthelogs.import.drop_hint"));
+        dropHint.color(Color.ofRgb(0xA0A0A0));
+        form.child(dropHint);
 
         List<CommonLogLocations.Location> common = CommonLogLocations.defaults();
         if (!common.isEmpty()) {
@@ -162,14 +170,15 @@ public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
         pathMatcher = options.pathMatcher() == null ? "" : options.pathMatcher();
     }
 
-    private void openBrowser(FileBrowserScreen.Mode mode) {
-        Minecraft.getInstance().gui.setScreen(new FileBrowserScreen(this, mode, currentPath(), path -> {
-            if (mode == FileBrowserScreen.Mode.FOLDER) {
+    @Override
+    public void onFilesDrop(List<Path> paths) {
+        ImportPaths.fromDropped(paths).ifPresent(path -> {
+            if (Files.isDirectory(path)) {
                 setFolder(path);
             } else {
                 setPath(path);
             }
-        }));
+        });
     }
 
     private void setFolder(Path path) {
