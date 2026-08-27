@@ -4,7 +4,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
- * One occupied calendar day in a {@link MatchBounds} result: the actual first and last match times
+ * One occupied calendar day in a {@link MatchSummary}: the actual first and last match times
  * that day, and how many matches it holds. The timeline uses this so a day is not stretched across
  * empty hours, and a cluster at one timestamp can still be addressed by match rank.
  */

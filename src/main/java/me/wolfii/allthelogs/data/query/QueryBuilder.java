@@ -78,23 +78,10 @@ public final class QueryBuilder {
     }
 
     /**
-     * Oldest and newest match timestamps and how many distinct dates they cover. Ignores context, limit, and
-     * offset so the timeline can span every match for the filter.
+     * Occupied match days with first/last timestamps and counts, oldest first. One aggregation over matching
+     * timestamps; cheaper than selecting every matching row. Ignores context, limit, and offset.
      */
-    public static QueryBuilder bounds(ChatQuery query) {
-        List<Object> parameters = new ArrayList<>();
-        List<String> conditions = new ArrayList<>();
-        addMatchConditions(query, false, conditions, parameters);
-        String where = conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions);
-        String sql = "SELECT MIN(e.entry_time), MAX(e.entry_time), COUNT(DISTINCT CAST(e.entry_time AS DATE))"
-            + " FROM chat_entry e" + where;
-        return new QueryBuilder(sql, parameters);
-    }
-
-    /**
-     * Occupied match days with first/last timestamps and counts, oldest first. Same filter as {@link #bounds(ChatQuery)}.
-     */
-    public static QueryBuilder dates(ChatQuery query) {
+    public static QueryBuilder summary(ChatQuery query) {
         List<Object> parameters = new ArrayList<>();
         List<String> conditions = new ArrayList<>();
         addMatchConditions(query, false, conditions, parameters);

@@ -8,8 +8,8 @@ import io.wispforest.owo.ui.core.UIComponent;
 import me.wolfii.allthelogs.client.list.*;
 import me.wolfii.allthelogs.client.timeline.TimelineLayout;
 import me.wolfii.allthelogs.client.ui.text.MessageText;
-import me.wolfii.allthelogs.data.MatchBounds;
 import me.wolfii.allthelogs.data.MatchDay;
+import me.wolfii.allthelogs.data.MatchSummary;
 import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -152,12 +152,12 @@ public final class MessageTimeline extends BaseUIComponent {
         rebuildLayout();
     }
 
-    public void setMatchBounds(MatchBounds bounds) {
-        this.boundsOldest = bounds == null ? null : bounds.oldest();
-        this.boundsNewest = bounds == null ? null : bounds.newest();
-        this.uniqueMatchDates = bounds == null ? 0 : bounds.uniqueDates();
-        this.matchDays = bounds == null || bounds.dates() == null ? List.of() : bounds.dates();
-        this.matchDayStats = bounds == null || bounds.days() == null ? List.of() : bounds.days();
+    public void setMatchSummary(MatchSummary summary) {
+        this.boundsOldest = summary == null ? null : summary.oldest();
+        this.boundsNewest = summary == null ? null : summary.newest();
+        this.uniqueMatchDates = summary == null ? 0 : summary.uniqueDates();
+        this.matchDays = summary == null ? List.of() : summary.dates();
+        this.matchDayStats = summary == null || summary.days() == null ? List.of() : summary.days();
     }
 
     public void setLoading(boolean loading) {

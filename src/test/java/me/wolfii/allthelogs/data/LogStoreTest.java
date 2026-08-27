@@ -396,17 +396,25 @@ class LogStoreTest {
     }
 
     @Test
-    void matchBoundsCoverMatchingDatesOnly() throws IOException {
+    void summarizeCoversMatchingDatesAndSumsDayCounts() throws IOException {
         store.importDirectory(logsDirectory());
-        MatchBounds needles = store.matchBounds(ChatQuery.all().withSubstring("needle in here"));
+        MatchSummary needles = store.summarize(ChatQuery.all().withSubstring("needle in here"));
         assertEquals(1, needles.uniqueDates());
         assertEquals(needles.oldest(), needles.newest());
-        MatchBounds all = store.matchBounds(ChatQuery.all());
+        assertEquals(1, needles.matches());
+        MatchSummary all = store.summarize(ChatQuery.all());
         assertTrue(all.uniqueDates() >= 2);
         assertFalse(all.dates().isEmpty());
         assertEquals(all.uniqueDates(), all.dates().size());
         assertEquals(all.dates().size(), all.days().size());
         assertTrue(all.days().getFirst().matches() >= 1);
+        long summed = 0;
+        for (MatchDay day : all.days()) {
+            summed += day.matches();
+        }
+        assertEquals(summed, all.matches());
+        assertEquals(store.matches(ChatQuery.all()), all.matches());
+        assertEquals(store.query(ChatQuery.all()).size(), all.matches());
     }
 
     @Test
@@ -431,29 +439,31 @@ class LogStoreTest {
     }
 
     @Test
-    void matchBoundsSkipEmptyMonthsBetweenHits() throws IOException {
+    void summarizeSkipEmptyMonthsBetweenHits() throws IOException {
         LogFixtures.writeGzipped(tempDir.resolve("logs"), "2025-01-15-1.log.gz",
             LogFixtures.modernLog("26.2", "old hit"));
         LogFixtures.writeGzipped(tempDir.resolve("logs"), "2026-08-01-1.log.gz",
             LogFixtures.modernLog("26.2", "new hit"));
         store.importDirectory(tempDir);
-        MatchBounds bounds = store.matchBounds(ChatQuery.all().withSubstring("hit"));
-        assertEquals(2, bounds.dates().size());
-        assertEquals(java.time.LocalDate.of(2025, 1, 15), bounds.dates().getFirst());
-        assertEquals(java.time.LocalDate.of(2026, 8, 1), bounds.dates().getLast());
-        assertEquals(java.time.YearMonth.of(2025, 1), bounds.months().getFirst());
-        assertEquals(java.time.YearMonth.of(2026, 8), bounds.months().getLast());
+        MatchSummary summary = store.summarize(ChatQuery.all().withSubstring("hit"));
+        assertEquals(2, summary.dates().size());
+        assertEquals(java.time.LocalDate.of(2025, 1, 15), summary.dates().getFirst());
+        assertEquals(java.time.LocalDate.of(2026, 8, 1), summary.dates().getLast());
+        assertEquals(java.time.YearMonth.of(2025, 1), summary.months().getFirst());
+        assertEquals(java.time.YearMonth.of(2026, 8), summary.months().getLast());
+        assertEquals(2, summary.matches());
     }
 
     @Test
-    void matchBoundsKeepOnlyTheDaysThatHaveHitsInAMonth() throws IOException {
+    void summarizeKeepOnlyTheDaysThatHaveHitsInAMonth() throws IOException {
         LogFixtures.writeGzipped(tempDir.resolve("logs"), "2026-01-01-1.log.gz",
             LogFixtures.modernLog("26.2", "first of month"));
         LogFixtures.writeGzipped(tempDir.resolve("logs"), "2026-01-31-1.log.gz",
             LogFixtures.modernLog("26.2", "last of month"));
         store.importDirectory(tempDir);
-        MatchBounds bounds = store.matchBounds(ChatQuery.all().withSubstring("of month"));
-        assertEquals(List.of(java.time.LocalDate.of(2026, 1, 1), java.time.LocalDate.of(2026, 1, 31)), bounds.dates());
+        MatchSummary summary = store.summarize(ChatQuery.all().withSubstring("of month"));
+        assertEquals(List.of(java.time.LocalDate.of(2026, 1, 1), java.time.LocalDate.of(2026, 1, 31)), summary.dates());
+        assertEquals(2, summary.matches());
     }
 
     @Test
