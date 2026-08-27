@@ -109,6 +109,27 @@ public final class ResultWindow {
     }
 
     /**
+     * Whether {@code window} dropped rows from the start of {@code merged} (newer messages in newest-first order).
+     */
+    public static boolean trimmedHead(List<DisplayRow> merged, List<DisplayRow> window) {
+        return droppedEdge(merged, window, true);
+    }
+
+    /**
+     * Whether {@code window} dropped rows from the end of {@code merged} (older messages in newest-first order).
+     */
+    public static boolean trimmedTail(List<DisplayRow> merged, List<DisplayRow> window) {
+        return droppedEdge(merged, window, false);
+    }
+
+    private static boolean droppedEdge(List<DisplayRow> merged, List<DisplayRow> window, boolean head) {
+        if (merged == null || window == null || merged.isEmpty() || window.isEmpty()) return false;
+        DisplayRow.RowKey mergedKey = head ? merged.getFirst().key() : merged.getLast().key();
+        DisplayRow.RowKey windowKey = head ? window.getFirst().key() : window.getLast().key();
+        return !mergedKey.equals(windowKey);
+    }
+
+    /**
      * Merges {@code extra} into {@code existing} without duplicates, then orders by timestamp, file, and line
      * in {@code sort} order.
      */

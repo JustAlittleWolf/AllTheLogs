@@ -33,6 +33,12 @@ class ResultWindowTest {
         // Visible rows 6-8, limit 4 matches → keep a window covering 6-8.
         List<DisplayRow> trimmed = ResultWindow.trimToMatchLimit(rows, 4, 6, 8);
         assertEquals(List.of(5, 6, 7, 8), trimmed.stream().map(DisplayRow::lineIndex).toList());
+        List<DisplayRow> merged = new java.util.ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            merged.add(row("a.log", i));
+        }
+        assertTrue(ResultWindow.trimmedHead(merged, trimmed));
+        assertTrue(ResultWindow.trimmedTail(merged, trimmed));
     }
 
     @Test

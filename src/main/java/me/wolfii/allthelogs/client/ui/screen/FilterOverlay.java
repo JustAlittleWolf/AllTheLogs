@@ -14,6 +14,7 @@ import io.wispforest.owo.ui.core.ParentUIComponent;
 import io.wispforest.owo.ui.core.Positioning;
 import io.wispforest.owo.ui.core.Sizing;
 import me.wolfii.allthelogs.client.search.DateParser;
+import me.wolfii.allthelogs.client.search.MinecraftVersions;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
@@ -94,7 +95,6 @@ final class FilterOverlay {
             onChange.accept(filter.get().withRegex(value))));
         content.child(checkbox("allthelogs.filter.case_sensitive", current.caseSensitive(), value ->
             onChange.accept(filter.get().withCaseSensitive(value))));
-        content.child(versionRow());
         content.child(labeledField("allthelogs.filter.context", String.valueOf(current.contextLines()), text -> {
             try {
                 onChange.accept(filter.get().withContextLines(Integer.parseInt(text.trim())));
@@ -118,6 +118,7 @@ final class FilterOverlay {
             onChange.accept(filter.get().withUpUntil(parsed))));
         content.child(UIComponents.label(Component.translatable("allthelogs.filter.date_hint"))
             .color(Color.ofRgb(0x888888)));
+        content.child(versionRow());
 
         int panelHeight = Math.max(96, Math.min(screenHeight.getAsInt() - 40, 280));
         ScrollContainer<FlowLayout> panel = UIContainers.verticalScroll(
@@ -177,7 +178,7 @@ final class FilterOverlay {
         FlowLayout items = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
         items.gap(1);
         items.child(versionChoice(Component.translatable("allthelogs.filter.version.all"), null));
-        for (String version : versions.get()) {
+        for (String version : MinecraftVersions.newestFirst(versions.get())) {
             items.child(versionChoice(Component.literal(version), version));
         }
         int width = Math.max(120, button.width());

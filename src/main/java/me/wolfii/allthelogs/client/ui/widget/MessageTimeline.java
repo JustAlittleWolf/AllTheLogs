@@ -45,6 +45,10 @@ public final class MessageTimeline extends BaseUIComponent {
     private static final int TICK_GAP_PX = 16;
     private static final int INFO_MAX_WIDTH = 240;
     private static final int AUTO_SCROLL_DEADZONE = 8;
+    private static final int MIDDLE_HOLD_MS = 250;
+    private static final int LOADING_CHIP_MS = 100;
+    private static final int SELECT_DRAG_SLOP = 3;
+    private static final int TICK_LABEL_OFFSET = 5;
 
     private static final int LIST_BG = 0x80000000;
     private static final float DATE_SCALE = 1.25f;
@@ -73,8 +77,15 @@ public final class MessageTimeline extends BaseUIComponent {
     private boolean draggingTimeline;
     private boolean draggingSelection;
     private boolean autoScrolling;
+    private long autoScrollDownAtMs;
     private double autoScrollOriginY;
     private double autoScrollMouseY;
+    private boolean clickSelectsRow;
+    private int clickRow;
+    private int clickChar;
+    private double clickX;
+    private double clickY;
+    private long loadingSinceMs;
     private double scrubY = Double.NaN;
     private long lastScrubQueryMs;
     private int laidOutWidth = -1;
@@ -135,6 +146,7 @@ public final class MessageTimeline extends BaseUIComponent {
 
     public void setLoading(boolean loading) {
         this.loading = loading;
+        this.loadingSinceMs = loading ? System.currentTimeMillis() : 0;
     }
 
     public boolean loading() {
@@ -171,6 +183,24 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     /**
+     * Re-applies a previously loaded page after the widget is rebuilt (resize or focus), keeping scroll.
+     */
+    public void restore(List<DisplayRow> rows, boolean hasBefore, boolean hasAfter, double scrollY) {
+        window.reset(rows, hasBefore, hasAfter);
+        rebuildLayout();
+        this.scrollY = clampScroll(scrollY);
+        finishScrub();
+    }
+
+    public int matchCount() {
+        return matchCount;
+    }
+
+    public long matchElapsedMs() {
+        return matchElapsedMs;
+    }
+
+    /**
      * Replaces the buffered page and scrolls so {@code time} is at the top, without flashing the list to
      * offset 0 first. Used while dragging the timeline so the thumb can stay put.
      */
@@ -198,6 +228,7 @@ public final class MessageTimeline extends BaseUIComponent {
         rebuildLayout();
         int newIndex = ResultWindow.indexOf(window.rows(), anchor);
         setScrollY(ResultWindow.keepAnchor(oldIndex, newIndex, oldY, layout.rowY(newIndex), scrollY));
+        maybeRequestMore();
     }
 
     /**
@@ -277,9 +308,11 @@ public final class MessageTimeline extends BaseUIComponent {
         }
         if (click.button() == GLFW.GLFW_MOUSE_BUTTON_MIDDLE) {
             autoScrolling = true;
+            autoScrollDownAtMs = System.currentTimeMillis();
             autoScrollOriginY = click.y();
             autoScrollMouseY = click.y();
             draggingSelection = false;
+            clickSelectsRow = false;
             return true;
         }
         int row = rowAtLocalY(click.y());
@@ -288,13 +321,14 @@ public final class MessageTimeline extends BaseUIComponent {
             onExpand.accept(window.rows().get(row));
             return true;
         }
-        if (click.x() >= messageLocalX()) {
-            draggingSelection = true;
-            selection.start(row, charAt(row, click.x(), click.y()));
-            return true;
-        }
-        selection.clear();
-        return super.onMouseDown(click, doubled);
+        clickSelectsRow = true;
+        clickRow = row;
+        clickChar = charAt(row, click.x(), click.y());
+        clickX = click.x();
+        clickY = click.y();
+        draggingSelection = false;
+        selection.selectRow(row, window.rows().get(row).message().length());
+        return true;
     }
 
     @Override
@@ -306,6 +340,11 @@ public final class MessageTimeline extends BaseUIComponent {
         if (autoScrolling) {
             autoScrollMouseY = click.y();
             return true;
+        }
+        if (clickSelectsRow && movedPastSelectSlop(click.x(), click.y())) {
+            clickSelectsRow = false;
+            draggingSelection = true;
+            selection.start(clickRow, clickChar);
         }
         if (draggingSelection) {
             int row = rowAtLocalY(click.y());
@@ -322,7 +361,11 @@ public final class MessageTimeline extends BaseUIComponent {
             commitScrub(click.y());
         }
         draggingSelection = false;
+        clickSelectsRow = false;
         if (click.button() == GLFW.GLFW_MOUSE_BUTTON_MIDDLE) {
+            if (autoScrolling && System.currentTimeMillis() - autoScrollDownAtMs >= MIDDLE_HOLD_MS) {
+                stopAutoScroll();
+            }
             return true;
         }
         return super.onMouseUp(click);
@@ -359,7 +402,9 @@ public final class MessageTimeline extends BaseUIComponent {
         graphics.enableScissor(x, y, x + listWidth, y + height);
         try {
             if (rows.isEmpty()) {
-                graphics.drawText(Component.translatable("allthelogs.status.empty"), x + 8, y + 8, 1, MUTED);
+                if (!showingLoading()) {
+                    graphics.drawText(Component.translatable("allthelogs.status.empty"), x + 8, y + 8, 1, MUTED);
+                }
                 return;
             }
             Font font = font();
@@ -415,12 +460,12 @@ public final class MessageTimeline extends BaseUIComponent {
         Font font = font();
         int maxTextWidth = Math.min(INFO_MAX_WIDTH, Math.max(48, listWidth - 16));
         List<Component> lines = MessageText.messageInfo(window.rows().get(row), maxTextWidth,
-            text -> (int) Math.ceil(font.width(text) * 0.85f));
-        int lineHeight = 10;
+            text -> (int) Math.ceil(font.width(text) * MessageText.INFO_SCALE));
+        int lineHeight = Math.max(8, Math.round(font.lineHeight * MessageText.INFO_SCALE) + 1);
         int pad = 5;
         int textWidth = 0;
         for (Component line : lines) {
-            textWidth = Math.max(textWidth, (int) Math.ceil(font.width(line) * 0.85f));
+            textWidth = Math.max(textWidth, (int) Math.ceil(font.width(line) * MessageText.INFO_SCALE));
         }
         int boxWidth = Math.min(listWidth - 8, textWidth + pad * 2);
         int boxHeight = pad * 2 + lines.size() * lineHeight - 2;
@@ -434,7 +479,7 @@ public final class MessageTimeline extends BaseUIComponent {
         int textY = boxY + pad;
         for (Component line : lines) {
             int color = line.getStyle().getColor() == null ? TEXT : (0xFF000000 | line.getStyle().getColor().getValue());
-            graphics.drawText(line, boxX + pad, textY, 0.85f, color);
+            graphics.drawText(line, boxX + pad, textY, MessageText.INFO_SCALE, color);
             textY += lineHeight;
         }
     }
@@ -469,11 +514,12 @@ public final class MessageTimeline extends BaseUIComponent {
         boolean overList = mouseX >= x && mouseX < x + listWidth && mouseY >= y && mouseY < y + height;
         boolean persistent = !overlayMessage.getString().isEmpty();
         boolean timed = showMatchBanner && (overList || System.currentTimeMillis() < bannerUntilMs);
-        if (!persistent && !timed && !loading) {
+        boolean showLoading = showingLoading();
+        if (!persistent && !timed && !showLoading) {
             showMatchBanner = false;
             return;
         }
-        Component text = MessageText.listStatus(overlayMessage, loading, timed || showMatchBanner, matchCount,
+        Component text = MessageText.listStatus(overlayMessage, showLoading, timed || showMatchBanner, matchCount,
             matchElapsedMs);
         Font font = font();
         int boxWidth = Math.min(listWidth - 16, font.width(text) + 16);
@@ -518,7 +564,7 @@ public final class MessageTimeline extends BaseUIComponent {
         for (TimelineLayout.DateTick tick : TimelineLayout.spacedTicks(oldest, newest, matchMonths, height, TICK_GAP_PX)) {
             int tickY = TimelineLayout.yFromNewest(tick.at(), oldest, newest, matchMonths, y, height);
             graphics.fill(trackX + 2, tickY, trackX + TRACK_WIDTH - 2, tickY + 1, TICK_DOT);
-            graphics.drawText(Component.literal(tick.label()), trackX - 3, tickY,
+            graphics.drawText(Component.literal(tick.label()), trackX - 3, tickY + TICK_LABEL_OFFSET,
                 0.7f, TICK_LABEL, OwoUIGraphics.TextAnchor.BOTTOM_RIGHT);
         }
     }
@@ -556,6 +602,16 @@ public final class MessageTimeline extends BaseUIComponent {
 
     private void stopAutoScroll() {
         autoScrolling = false;
+    }
+
+    private boolean showingLoading() {
+        return loading && loadingSinceMs > 0 && System.currentTimeMillis() - loadingSinceMs >= LOADING_CHIP_MS;
+    }
+
+    private boolean movedPastSelectSlop(double mouseX, double mouseY) {
+        double dx = mouseX - clickX;
+        double dy = mouseY - clickY;
+        return dx * dx + dy * dy >= SELECT_DRAG_SLOP * SELECT_DRAG_SLOP;
     }
 
     private LocalDateTime visibleTime() {

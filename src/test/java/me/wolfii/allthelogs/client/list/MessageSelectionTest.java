@@ -46,6 +46,17 @@ class MessageSelectionTest {
         assertTrue(!selection.covers(2, 0));
     }
 
+    @Test
+    void selectRowCoversTheWholeMessage() {
+        DisplayRow row = row("hello");
+        MessageSelection selection = new MessageSelection();
+        selection.selectRow(0, row.message().length());
+        assertEquals("hello", selection.copy(List.of(row)));
+        assertTrue(selection.covers(0, 0));
+        assertTrue(selection.covers(0, 4));
+        assertTrue(!selection.covers(0, 5));
+    }
+
     private static DisplayRow row(String message) {
         return rowOn(LocalDateTime.of(2026, 8, 26, 10, 0), message);
     }

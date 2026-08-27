@@ -29,6 +29,16 @@ public final class MessageSelection {
         startChar = endChar = Math.max(0, character);
     }
 
+    /**
+     * Selects every character of {@code row}. Used for a single click on a message.
+     */
+    public void selectRow(int row, int length) {
+        empty = false;
+        startRow = endRow = Math.max(0, row);
+        startChar = 0;
+        endChar = Math.max(0, length);
+    }
+
     public void extend(int row, int character) {
         if (empty) {
             start(row, character);
