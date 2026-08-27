@@ -40,6 +40,10 @@ public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
     private String pathMatcher = "";
     private String timezone = ZoneId.systemDefault().getId();
     private int parallelism = Math.max(1, Runtime.getRuntime().availableProcessors());
+    private CheckboxComponent recursiveBox;
+    private CheckboxComponent nestedBox;
+    private CheckboxComponent skipBox;
+    private TextBoxComponent pathMatcherBox;
 
     public ImportScreen(Screen parent) {
         super(Component.translatable("allthelogs.screen.import"));
@@ -126,39 +130,40 @@ public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
         FlowLayout advanced = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
         advanced.gap(4).padding(Insets.of(4));
 
-        CheckboxComponent recursiveBox = UIComponents.checkbox(Component.translatable("allthelogs.import.recursive"));
+        recursiveBox = UIComponents.checkbox(Component.translatable("allthelogs.import.recursive"));
         recursiveBox.checked(recursive);
         recursiveBox.onChanged(value -> recursive = value);
         advanced.child(recursiveBox);
 
-        CheckboxComponent nestedBox = UIComponents.checkbox(Component.translatable("allthelogs.import.nested_archives"));
+        nestedBox = UIComponents.checkbox(Component.translatable("allthelogs.import.nested_archives"));
         nestedBox.checked(nestedArchives);
         nestedBox.onChanged(value -> nestedArchives = value);
         advanced.child(nestedBox);
 
-        CheckboxComponent skipBox = UIComponents.checkbox(Component.translatable("allthelogs.import.skip_imported"));
+        skipBox = UIComponents.checkbox(Component.translatable("allthelogs.import.skip_imported"));
         skipBox.checked(skipAlreadyImported);
         skipBox.onChanged(value -> skipAlreadyImported = value);
         advanced.child(skipBox);
 
-        advanced.child(field("allthelogs.import.path_matcher", pathMatcher, value -> pathMatcher = value));
-        advanced.child(field("allthelogs.import.timezone", timezone, value -> timezone = value));
+        advanced.child(field("allthelogs.import.path_matcher", pathMatcher, value -> pathMatcher = value, box -> pathMatcherBox = box));
+        advanced.child(field("allthelogs.import.timezone", timezone, value -> timezone = value, null));
         advanced.child(field("allthelogs.import.parallelism", String.valueOf(parallelism), value -> {
             try {
                 parallelism = Math.max(1, Integer.parseInt(value.trim()));
             } catch (NumberFormatException ignored) {
             }
-        }));
+        }, null));
         return advanced;
     }
 
-    private FlowLayout field(String key, String value, Consumer<String> onChange) {
+    private FlowLayout field(String key, String value, Consumer<String> onChange, Consumer<TextBoxComponent> bind) {
         FlowLayout row = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
         row.gap(2);
         row.child(UIComponents.label(Component.translatable(key)));
         TextBoxComponent box = UIComponents.textBox(Sizing.fill(), value);
         box.setMaxLength(128);
         box.onChanged().subscribe(onChange::accept);
+        if (bind != null) bind.accept(box);
         row.child(box);
         return row;
     }
@@ -169,11 +174,7 @@ public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
                 setPath(location.resolveAll().getFirst());
             }
         });
-        ImportOptions options = location.suggestedOptions();
-        recursive = options.recursive();
-        nestedArchives = options.nestedArchives();
-        skipAlreadyImported = options.skipAlreadyImported();
-        pathMatcher = options.pathMatcher() == null ? "" : options.pathMatcher();
+        applyOptions(location.suggestedOptions());
     }
 
     @Override
@@ -188,8 +189,19 @@ public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
     }
 
     private void setFolder(Path path) {
-        nestedArchives = true;
+        applyOptions(ImportPaths.optionsForFolder(path));
         setPath(path);
+    }
+
+    private void applyOptions(ImportOptions options) {
+        recursive = options.recursive();
+        nestedArchives = options.nestedArchives();
+        skipAlreadyImported = options.skipAlreadyImported();
+        pathMatcher = options.pathMatcher() == null ? "" : options.pathMatcher();
+        if (recursiveBox != null) recursiveBox.checked(recursive);
+        if (nestedBox != null) nestedBox.checked(nestedArchives);
+        if (skipBox != null) skipBox.checked(skipAlreadyImported);
+        if (pathMatcherBox != null) pathMatcherBox.text(pathMatcher);
     }
 
     private void setPath(Path path) {

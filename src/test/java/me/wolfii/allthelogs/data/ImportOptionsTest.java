@@ -7,8 +7,10 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ImportOptionsTest {
     @Test
@@ -50,5 +52,23 @@ class ImportOptionsTest {
     void withTimezoneRejectsAnUnknownIanaName() {
         assertThrows(DateTimeException.class,
                 () -> ImportOptions.defaults().withTimezone("Not/AZone"));
+    }
+
+    @Test
+    void currentLogsDirectoryLooksInsideTheLogsFolderRecursivelyWithoutOpeningArchives() {
+        ImportOptions options = ImportOptions.currentLogsDirectory();
+        assertTrue(options.recursive());
+        assertFalse(options.nestedArchives());
+        assertTrue(options.skipAlreadyImported());
+        assertEquals(ImportOptions.LOGS_DIRECTORY_MATCHER, options.pathMatcher());
+    }
+
+    @Test
+    void currentGameDirectoryStaysInsideLogsFoldersAndSkipsZips() {
+        ImportOptions options = ImportOptions.currentGameDirectory();
+        assertTrue(options.recursive());
+        assertFalse(options.nestedArchives());
+        assertTrue(options.skipAlreadyImported());
+        assertEquals(ImportOptions.GAME_DIRECTORY_MATCHER, options.pathMatcher());
     }
 }

@@ -11,7 +11,6 @@ import me.wolfii.allthelogs.data.store.Schema;
 import me.wolfii.allthelogs.data.store.SourceKind;
 import org.duckdb.DuckDBConnection;
 
-import java.io.IOException;
 import java.nio.file.Path;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -33,6 +32,8 @@ import java.util.function.Consumer;
  */
 public final class LogImporter {
     private static final int WRITE_QUEUE_CAPACITY = 64;
+    /** Caps how many unread log files sit in memory waiting to parse, so a full re-import cannot balloon. */
+    private static final int PARSE_QUEUE_CAPACITY = 16;
     private static final PreparedLog END_OF_STREAM = new PreparedLog(
         "", SourceKind.FILE, "", "", LocalDate.EPOCH, "", List.of(), List.of(), List.of(),
         false, null, null, null, null);
@@ -123,7 +124,11 @@ public final class LogImporter {
 
         try (LogWriter writer = new LogWriter(connection)) {
             var failureRef = new AtomicReference<RuntimeException>();
-            ExecutorService parsers = Executors.newFixedThreadPool(options.parallelism());
+            ExecutorService parsers = new ThreadPoolExecutor(
+                options.parallelism(), options.parallelism(),
+                0L, TimeUnit.MILLISECONDS,
+                new ArrayBlockingQueue<>(Math.max(PARSE_QUEUE_CAPACITY, options.parallelism())),
+                new ThreadPoolExecutor.CallerRunsPolicy());
             LogDiscovery discovery = new LogDiscovery(options, candidate -> {
                 if (stop.getAsBoolean()) return;
                 if (options.skipAlreadyImported() && writer.isAlreadyImported(candidate.sourcePath(), candidate.entryPath())) {
@@ -131,39 +136,43 @@ public final class LogImporter {
                     observer.fileCompleted();
                     return;
                 }
-                parsers.execute(() -> {
-                    if (stop.getAsBoolean()) {
-                        observer.fileCompleted();
-                        return;
-                    }
-                    try {
-                        PreparedLog prepared = LogPreparer.prepare(candidate, options.timezone());
-                        // Not stored: missing timestamps, or no chat and no resource-manager reload.
-                        // Empty files are stored logs that have no chat lines.
-                        if (prepared.firstLineTime() == null || prepared.lastLineTime() == null
-                            || (prepared.messages().isEmpty() && !prepared.resourceManagerReloaded())) {
-                            skipped.incrementAndGet();
+                try {
+                    parsers.execute(() -> {
+                        if (stop.getAsBoolean()) {
                             observer.fileCompleted();
                             return;
                         }
-                        if (prepared.sessionId() != null && writer.hasSession(prepared.sessionId())) {
-                            skipped.incrementAndGet();
+                        try {
+                            PreparedLog prepared = LogPreparer.prepare(candidate, options.timezone());
+                            // Not stored: missing timestamps, or no chat and no resource-manager reload.
+                            // Empty files are stored logs that have no chat lines.
+                            if (prepared.firstLineTime() == null || prepared.lastLineTime() == null
+                                || (prepared.messages().isEmpty() && !prepared.resourceManagerReloaded())) {
+                                skipped.incrementAndGet();
+                                observer.fileCompleted();
+                                return;
+                            }
+                            if (prepared.sessionId() != null && writer.hasSession(prepared.sessionId())) {
+                                skipped.incrementAndGet();
+                                observer.fileCompleted();
+                                return;
+                            }
+                            if (prepared.messages().isEmpty()) {
+                                empty.incrementAndGet();
+                            }
+                            queue.put(prepared);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
                             observer.fileCompleted();
-                            return;
+                        } catch (Exception e) {
+                            parseFailures.add(new ImportResult.Failure(failurePath(candidate),
+                                "could not parse: " + e.getMessage()));
+                            observer.fileCompleted();
                         }
-                        if (prepared.messages().isEmpty()) {
-                            empty.incrementAndGet();
-                        }
-                        queue.put(prepared);
-                    } catch (IOException e) {
-                        parseFailures.add(new ImportResult.Failure(failurePath(candidate),
-                            "could not parse: " + e.getMessage()));
-                        observer.fileCompleted();
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        observer.fileCompleted();
-                    }
-                });
+                    });
+                } catch (RejectedExecutionException e) {
+                    observer.fileCompleted();
+                }
             }, observer, stop);
 
             Thread discoverer = new Thread(() -> {

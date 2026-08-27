@@ -62,4 +62,23 @@ class GlobsTest {
         assertTrue(matches("{*.log.gz,*.log}", "debug.log"));
         assertTrue(matches("{*.log.gz,*.log}", "latest.log"));
     }
+
+    @Test
+    void logsDirectoryMatcherIncludesNestedFilesAndSkipsOtherFolders() {
+        String glob = ImportOptions.LOGS_DIRECTORY_MATCHER;
+        assertTrue(matches(glob, "2026-08-26-1.log.gz"));
+        assertTrue(matches(glob, "debug.log"));
+        assertTrue(matches(glob, "old/2026-01-02-1.log.gz"));
+        assertFalse(matches(glob, "notes.txt"));
+    }
+
+    @Test
+    void gameDirectoryMatcherSelectsLogsFoldersOnly() {
+        String glob = ImportOptions.GAME_DIRECTORY_MATCHER;
+        assertTrue(matches(glob, "logs/2026-08-26-1.log.gz"));
+        assertTrue(matches(glob, "logs/old/2026-01-02-1.log.gz"));
+        assertTrue(matches(glob, "instances/pack/logs/debug.log"));
+        assertFalse(matches(glob, "resourcepacks/pack.zip"));
+        assertFalse(matches(glob, "2026-08-26-1.log.gz"));
+    }
 }

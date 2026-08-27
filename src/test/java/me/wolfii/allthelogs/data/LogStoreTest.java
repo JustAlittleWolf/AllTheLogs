@@ -97,17 +97,66 @@ class LogStoreTest {
         LogFixtures.writePlain(logs, "debug.log", LogFixtures.legacyLog("debug"));
         LogFixtures.writeGzipped(logs, "2026-08-26-1.log.gz", LogFixtures.modernLog("26.2", "rotated"));
 
-        ImportResult result = store.importDirectory(logs, ImportOptions.defaults()
-            .withRecursive(false)
-            .withNestedArchives(false)
-            .withSkipAlreadyImported(true)
-            .withPathMatcher("{*.log.gz,*.log}"));
+        ImportResult result = store.importDirectory(logs, ImportOptions.currentLogsDirectory());
 
         assertEquals(2, result.importedFiles());
         List<String> messages = store.chatEntries().stream().map(ChatEntry::message).toList();
         assertTrue(messages.contains("debug"));
         assertTrue(messages.contains("rotated"));
         assertFalse(messages.contains("live"));
+    }
+
+    @Test
+    void currentLogsImportIncludesNestedLogFiles() throws IOException {
+        Path logs = tempDir.resolve("logs");
+        LogFixtures.writeGzipped(logs, "2026-08-26-1.log.gz", LogFixtures.modernLog("26.2", "top"));
+        LogFixtures.writeGzipped(logs.resolve("old"), "2026-01-02-1.log.gz", LogFixtures.modernLog("1.21.8", "nested"));
+        LogFixtures.writePlain(logs, "latest.log", LogFixtures.legacyLog("live"));
+
+        ImportResult result = store.importDirectory(logs, ImportOptions.currentLogsDirectory());
+
+        assertEquals(2, result.importedFiles());
+        List<String> messages = store.chatEntries().stream().map(ChatEntry::message).toList();
+        assertTrue(messages.contains("top"));
+        assertTrue(messages.contains("nested"));
+        assertFalse(messages.contains("live"));
+    }
+
+    @Test
+    void currentGameDirectoryImportFindsLogsAndIgnoresResourcePackZips() throws IOException {
+        Path gameDir = tempDir.resolve("instance");
+        LogFixtures.writeGzipped(gameDir.resolve("logs"), "2026-08-26-1.log.gz",
+            LogFixtures.modernLog("26.2", "from logs"));
+        LogFixtures.writeGzipped(gameDir.resolve("logs/old"), "2026-01-02-1.log.gz",
+            LogFixtures.modernLog("1.21.8", "from nested"));
+        LogFixtures.writePlain(gameDir.resolve("logs"), "latest.log", LogFixtures.legacyLog("live"));
+        LogFixtures.writeZip(gameDir.resolve("resourcepacks/pack.zip"), new LinkedHashMap<>(Map.of(
+            "assets/pack.png", "not a log",
+            "logs/2026-03-01-1.log.gz", LogFixtures.modernLog("1.21.8", "from resource pack"))));
+
+        ImportResult result = store.importDirectory(gameDir, ImportOptions.currentGameDirectory());
+
+        assertTrue(result.failures().isEmpty(), () -> "unexpected failures: " + result.failures());
+        assertEquals(2, result.importedFiles());
+        List<String> messages = store.chatEntries().stream().map(ChatEntry::message).toList();
+        assertTrue(messages.contains("from logs"));
+        assertTrue(messages.contains("from nested"));
+        assertFalse(messages.contains("live"));
+        assertFalse(messages.contains("from resource pack"));
+    }
+
+    @Test
+    void overlappingChatKeepsEveryLogFileAfterAFreshImport() throws IOException {
+        Path logs = tempDir.resolve("logs");
+        String shared = LogFixtures.modernLog("26.2", "same line", "also same");
+        LogFixtures.writeGzipped(logs, "2026-08-26-1.log.gz", shared);
+        LogFixtures.writePlain(logs, "debug.log", shared);
+
+        ImportResult result = store.importDirectory(logs, ImportOptions.currentLogsDirectory());
+
+        assertEquals(2, result.importedFiles());
+        assertEquals(2, store.chatLogs().size());
+        assertEquals(2, store.chatEntries().size());
     }
 
     @Test

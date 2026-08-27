@@ -38,16 +38,20 @@ public final class AllTheLogsClient implements ClientModInitializer {
     }
 
     private static CompletableFuture<Void> importCurrentLogs() {
-        Path logs = AllTheLogsPaths.gameDirectory().resolve("logs");
-        if (!Files.isDirectory(logs)) {
+        Path gameDir = AllTheLogsPaths.gameDirectory();
+        Path logs = gameDir.resolve("logs");
+        Path root;
+        ImportOptions options;
+        if (Files.isDirectory(logs)) {
+            root = logs;
+            options = ImportOptions.currentLogsDirectory();
+        } else if (Files.isDirectory(gameDir)) {
+            root = gameDir;
+            options = ImportOptions.currentGameDirectory();
+        } else {
             return CompletableFuture.completedFuture(null);
         }
-        ImportOptions options = ImportOptions.defaults()
-            .withRecursive(false)
-            .withNestedArchives(false)
-            .withSkipAlreadyImported(true)
-            .withPathMatcher("{*.log.gz,*.log}");
-        return worker.importDirectory(logs, options, null)
+        return worker.importDirectory(root, options, null)
             .thenAccept(result -> LOGGER.info(
                 "Imported instance logs: {} files, {} entries ({} skipped)",
                 result.importedFiles(), result.importedEntries(), result.skippedFiles()));

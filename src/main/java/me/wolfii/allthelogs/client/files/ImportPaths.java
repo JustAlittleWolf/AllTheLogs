@@ -1,5 +1,7 @@
 package me.wolfii.allthelogs.client.files;
 
+import me.wolfii.allthelogs.data.ImportOptions;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -72,5 +74,17 @@ public final class ImportPaths {
             return initial.toAbsolutePath().normalize().getParent();
         }
         return Path.of(System.getProperty("user.home", ".")).toAbsolutePath().normalize();
+    }
+
+    /**
+     * Import knobs for a folder chosen in the import form. A Minecraft instance directory (one that contains
+     * a {@code logs} folder) is walked for {@code **/logs/**} without opening resource-pack zips. Other
+     * folders keep the recursive nested-archive defaults.
+     */
+    public static ImportOptions optionsForFolder(Path folder) {
+        if (folder != null && Files.isDirectory(folder.resolve("logs"))) {
+            return ImportOptions.currentGameDirectory();
+        }
+        return ImportOptions.defaults().withSkipAlreadyImported(true);
     }
 }
