@@ -42,7 +42,7 @@ public final class MessageTimeline extends BaseUIComponent {
     private static final int LIST_PAD = 4;
     private static final int SCRUB_THROTTLE_MS = 50;
     private static final int TICK_GAP_PX = 16;
-    private static final int INFO_MAX_WIDTH = 240;
+    private static final int INFO_MAX_WIDTH = 144;
     private static final int AUTO_SCROLL_DEADZONE = 8;
     private static final int MIDDLE_HOLD_MS = 250;
     private static final int LOADING_CHIP_MS = 100;
@@ -89,6 +89,9 @@ public final class MessageTimeline extends BaseUIComponent {
     private double clickY;
     private long loadingSinceMs;
     private double scrubY = Double.NaN;
+    private double dragThumbTop = Double.NaN;
+    private double thumbGrabOffset;
+    private int scrubThumbHeight;
     private long lastScrubQueryMs;
     private int laidOutWidth = -1;
     private long matchCount;
@@ -232,6 +235,9 @@ public final class MessageTimeline extends BaseUIComponent {
     public void finishScrub() {
         if (draggingTimeline) return;
         scrubY = Double.NaN;
+        dragThumbTop = Double.NaN;
+        thumbGrabOffset = 0;
+        scrubThumbHeight = 0;
     }
 
     public void scrollToTime(LocalDateTime time) {
@@ -302,8 +308,8 @@ public final class MessageTimeline extends BaseUIComponent {
             rebuildLayout();
         }
         graphics.fill(x, y, x + listWidth, y + height, LIST_BG);
-        if (draggingTimeline && !Double.isNaN(scrubY)) {
-            applyScrub(scrubY, false);
+        if (draggingTimeline) {
+            continueScrub();
         }
         applyAutoScroll(mouseY, delta);
         drawRows(graphics, listWidth);
@@ -337,6 +343,9 @@ public final class MessageTimeline extends BaseUIComponent {
         if (overTimelineLocal(click.x())) {
             stopAutoScroll();
             draggingTimeline = true;
+            scrubThumbHeight = Math.max(MIN_THUMB_HEIGHT, thumbHeight());
+            int thumbTop = thumbTop(scrubThumbHeight) - y;
+            thumbGrabOffset = TimelineLayout.thumbGrabOffset(click.y(), thumbTop, scrubThumbHeight, height);
             onScrubBegin.run();
             previewScrub(click.y());
             return true;
@@ -459,7 +468,7 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     private void rebuildLayout() {
-        layout = MessageListLayout.of(window.rows(), contextLines, messageWidth(), font()::width);
+        layout = MessageListLayout.of(window.rows(), contextLines, messageWidth(), this::messageRangeWidth);
         this.scrollY = clampScroll(scrollY);
     }
 
@@ -473,7 +482,6 @@ public final class MessageTimeline extends BaseUIComponent {
                 }
                 return;
             }
-            Font font = font();
             int timestampWidth = timestampWidth();
             int messageWidth = messageWidth();
             int first = Math.max(0, layout.rowAtY(scrollY));
@@ -482,8 +490,9 @@ public final class MessageTimeline extends BaseUIComponent {
                 DisplayRow row = rows.get(i);
                 int rowY = screenY(layout.rowY(i));
                 int msgX = x + LIST_PAD + timestampWidth;
-                List<MessageWrap.Line> lines = MessageWrap.wrap(row.message(), messageWidth, font::width);
-                drawSelection(graphics, font, i, lines, msgX, rowY);
+                List<MessageWrap.Line> lines = MessageWrap.wrap(row.message(), messageWidth,
+                    (from, to) -> messageRangeWidth(row, from, to));
+                drawSelection(graphics, row, i, lines, msgX, rowY);
                 graphics.drawText(MessageText.timestamp(row), x + LIST_PAD, rowY + 1, 1, MUTED);
                 int lineY = rowY;
                 for (MessageWrap.Line line : lines) {
@@ -498,18 +507,19 @@ public final class MessageTimeline extends BaseUIComponent {
         }
     }
 
-    private void drawSelection(OwoUIGraphics graphics, Font font, int row, List<MessageWrap.Line> lines, int msgX, int rowY) {
+    private void drawSelection(OwoUIGraphics graphics, DisplayRow row, int rowIndex,
+                               List<MessageWrap.Line> lines, int msgX, int rowY) {
         if (selection.isEmpty()) return;
         int lineY = rowY;
         for (MessageWrap.Line line : lines) {
             String text = line.text();
             int start = -1;
             for (int i = 0; i <= text.length(); i++) {
-                boolean covered = i < text.length() && selection.covers(row, line.start() + i);
+                boolean covered = i < text.length() && selection.covers(rowIndex, line.start() + i);
                 if (covered && start < 0) start = i;
                 if (!covered && start >= 0) {
-                    int left = msgX + font.width(text.substring(0, start));
-                    int right = msgX + font.width(text.substring(0, i));
+                    int left = msgX + messageRangeWidth(row, line.start(), line.start() + start);
+                    int right = msgX + messageRangeWidth(row, line.start(), line.start() + i);
                     graphics.fill(left, lineY, right, lineY + ROW_HEIGHT, SELECTION);
                     start = -1;
                 }
@@ -593,7 +603,8 @@ public final class MessageTimeline extends BaseUIComponent {
         int boxX = x + Math.max(8, listWidth - 8 - boxWidth);
         int boxY = y;
         HoverChip.fill(graphics, boxX, boxY, boxWidth, boxHeight, BANNER_BG);
-        graphics.drawText(text, boxX + 8, boxY + boxHeight, 1, TEXT, OwoUIGraphics.TextAnchor.BOTTOM_LEFT);
+        int textY = boxY + Math.max(0, (boxHeight - font.lineHeight) / 2);
+        graphics.drawText(text, boxX + 8, textY, 1, TEXT);
     }
 
     private void drawTimeline(OwoUIGraphics graphics, int mouseX, int mouseY) {
@@ -618,12 +629,15 @@ public final class MessageTimeline extends BaseUIComponent {
         LocalDateTime hoverTime = timeAtLocalY(mouseY - y);
         if (hoverTime == null) return;
         String label = TimelineLayout.hoverLabel(hoverTime, uniqueMatchDates);
-        int labelWidth = (int) (font().width(label) * 0.85f) + 10;
-        int labelHeight = 14;
+        Font font = font();
+        int padX = 5;
+        int labelWidth = font.width(label) + padX * 2;
+        int labelHeight = Math.max(14, font.lineHeight + 6);
         int labelY = Math.clamp(mouseY - labelHeight / 2, y, y + height - labelHeight);
         int labelX = trackX - 6 - labelWidth;
         HoverChip.fill(graphics, labelX, labelY, labelWidth, labelHeight, HOVER_BG);
-        graphics.drawText(Component.literal(label), labelX + 5, labelY + 3, 1.0f, TEXT);
+        int textY = labelY + Math.max(0, (labelHeight - font.lineHeight) / 2);
+        graphics.drawText(Component.literal(label), labelX + padX, textY, 1.0f, TEXT);
     }
 
     private void drawDateTicks(OwoUIGraphics graphics, int trackX, LocalDateTime oldest, LocalDateTime newest) {
@@ -636,16 +650,33 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     private int thumbHeight() {
-        return TimelineLayout.thumbHeight(height, layout.contentHeight(), height, MIN_THUMB_HEIGHT);
+        if (draggingTimeline && scrubThumbHeight > 0) return scrubThumbHeight;
+        LocalDateTime oldest = scrubOldest();
+        LocalDateTime newest = scrubNewest();
+        if (oldest == null || newest == null || window.rows().isEmpty() || height <= 0) return 0;
+        int first = firstVisibleIndex();
+        int last = lastVisibleIndex();
+        LocalDateTime start = window.rows().get(first).entry().timestamp();
+        LocalDateTime end = window.rows().get(last).entry().timestamp();
+        double startProgress = TimelineLayout.progress(start, oldest, newest, matchDays);
+        double endProgress = TimelineLayout.progress(end, oldest, newest, matchDays);
+        return TimelineLayout.thumbHeightFromProgress(height, startProgress, endProgress, MIN_THUMB_HEIGHT);
     }
 
     private int thumbTop(int thumbHeight) {
+        if (!Double.isNaN(dragThumbTop)) {
+            return y + (int) Math.round(Math.clamp(dragThumbTop, 0, Math.max(0, height - thumbHeight)));
+        }
         if (!Double.isNaN(scrubY)) {
             int center = y + (int) Math.round(Math.clamp(scrubY, 0, Math.max(0, height - 1)));
-            return Math.clamp(center - thumbHeight / 2, y, y + height - thumbHeight);
+            return Math.clamp(center - Math.max(1, thumbHeight) / 2, y, y + Math.max(0, height - thumbHeight));
         }
-        int offset = TimelineLayout.thumbOffset(height, layout.contentHeight(), height, scrollY, thumbHeight);
-        return y + offset;
+        LocalDateTime time = visibleTime();
+        LocalDateTime oldest = scrubOldest();
+        LocalDateTime newest = scrubNewest();
+        if (time == null || oldest == null || newest == null) return y;
+        double progress = TimelineLayout.progress(time, oldest, newest, matchDays);
+        return y + TimelineLayout.thumbOffset(height, progress, thumbHeight);
     }
 
     private void updateCursor(int mouseX, int mouseY, int listWidth) {
@@ -744,16 +775,42 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     private void previewScrub(double localY) {
-        scrubY = Math.clamp(localY, 0, Math.max(0, height - 1));
-        applyScrub(scrubY, false);
+        applyThumbScrub(localY, false);
     }
 
     private void commitScrub(double localY) {
-        applyScrub(Math.clamp(localY, 0, Math.max(0, height - 1)), true);
+        applyThumbScrub(localY, true);
     }
 
-    private void applyScrub(double localY, boolean commit) {
-        LocalDateTime time = timeAtLocalY(localY);
+    private void applyThumbScrub(double localY, boolean commit) {
+        int thumbHeight = draggingTimeline && scrubThumbHeight > 0 ? scrubThumbHeight : thumbHeight();
+        LocalDateTime time;
+        if (thumbHeight <= 0 || thumbHeight >= height) {
+            scrubY = Math.clamp(localY, 0, Math.max(0, height - 1));
+            dragThumbTop = Double.NaN;
+            time = timeAtLocalY(scrubY);
+        } else {
+            double top = Math.clamp(localY - thumbGrabOffset, 0, height - thumbHeight);
+            dragThumbTop = top;
+            scrubY = Double.NaN;
+            double progress = TimelineLayout.progressFromThumb((int) Math.round(top), height, thumbHeight);
+            time = TimelineLayout.timeFromOldest(progress, scrubOldest(), scrubNewest(), matchDays);
+        }
+        applyScrub(time, commit);
+    }
+
+    private void continueScrub() {
+        if (!Double.isNaN(dragThumbTop) && scrubThumbHeight > 0 && scrubThumbHeight < height) {
+            double progress = TimelineLayout.progressFromThumb((int) Math.round(dragThumbTop), height, scrubThumbHeight);
+            applyScrub(TimelineLayout.timeFromOldest(progress, scrubOldest(), scrubNewest(), matchDays), false);
+            return;
+        }
+        if (!Double.isNaN(scrubY)) {
+            applyScrub(timeAtLocalY(scrubY), false);
+        }
+    }
+
+    private void applyScrub(LocalDateTime time, boolean commit) {
         if (time == null) return;
         if (window.coversTime(time)) {
             scrollToTime(time);
@@ -828,7 +885,14 @@ public final class MessageTimeline extends BaseUIComponent {
         int xInMessage = (int) Math.round(localX - messageLocalX());
         int yInRow = (int) Math.round(localY + scrollY - layout.rowY(row));
         int line = yInRow < 0 ? 0 : yInRow / ROW_HEIGHT;
-        return MessageWrap.charIndex(rows.get(row).message(), messageWidth(), line, xInMessage, font()::width);
+        DisplayRow displayRow = rows.get(row);
+        return MessageWrap.charIndex(displayRow.message(), messageWidth(), line, xInMessage,
+            (from, to) -> messageRangeWidth(displayRow, from, to));
+    }
+
+    private int messageRangeWidth(DisplayRow row, int from, int to) {
+        if (from >= to) return 0;
+        return font().width(MessageText.messageRange(row, from, to));
     }
 
     private double clampScroll(double value) {

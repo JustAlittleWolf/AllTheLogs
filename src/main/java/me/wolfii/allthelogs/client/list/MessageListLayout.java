@@ -29,11 +29,21 @@ public final class MessageListLayout {
     }
 
     public static MessageListLayout of(List<DisplayRow> rows, int contextLines) {
-        return of(rows, contextLines, Integer.MAX_VALUE, text -> text.length());
+        return of(rows, contextLines, Integer.MAX_VALUE, (row, from, to) -> to - from);
     }
 
     public static MessageListLayout of(List<DisplayRow> rows, int contextLines, int messageWidth,
                                        ToIntFunction<String> widthOf) {
+        return of(rows, contextLines, messageWidth,
+            (row, from, to) -> widthOf.applyAsInt(row.message().substring(from, to)));
+    }
+
+    /**
+     * Lays out rows using per-character widths from {@code widthOf}, so bold and other styles that change
+     * glyph width wrap the same way they are drawn.
+     */
+    public static MessageListLayout of(List<DisplayRow> rows, int contextLines, int messageWidth,
+                                       RowRangeWidth widthOf) {
         if (rows.isEmpty()) {
             return new MessageListLayout(new int[0], new int[0], List.of(), 0);
         }
@@ -55,12 +65,18 @@ public final class MessageListLayout {
             } else if (i > 0 && needsClusterGap(rows.get(i - 1), row, contextLines)) {
                 y += CLUSTER_GAP;
             }
-            int lines = Math.max(1, MessageWrap.lineCount(row.message(), messageWidth, widthOf));
+            int lines = Math.max(1, MessageWrap.lineCount(row.message(), messageWidth,
+                (from, to) -> widthOf.width(row, from, to)));
             rowY[i] = y;
             rowHeight[i] = lines * ROW_HEIGHT;
             y += rowHeight[i];
         }
         return new MessageListLayout(rowY, rowHeight, List.copyOf(dates), y);
+    }
+
+    @FunctionalInterface
+    public interface RowRangeWidth {
+        int width(DisplayRow row, int from, int to);
     }
 
     /**

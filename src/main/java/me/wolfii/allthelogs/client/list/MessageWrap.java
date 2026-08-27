@@ -13,6 +13,14 @@ public final class MessageWrap {
     }
 
     /**
+     * Pixel width of {@code text[from, to)}. Indexes are into the original message.
+     */
+    @FunctionalInterface
+    public interface RangeWidth {
+        int width(int from, int to);
+    }
+
+    /**
      * One visual row of a wrapped message.
      *
      * @param text  the characters drawn on this row, never including a {@code \n}
@@ -25,7 +33,15 @@ public final class MessageWrap {
         return wrap(text, maxWidth, widthOf).stream().map(Line::text).toList();
     }
 
+    public static List<String> lines(String text, int maxWidth, RangeWidth widthOf) {
+        return wrap(text, maxWidth, widthOf).stream().map(Line::text).toList();
+    }
+
     public static List<Line> wrap(String text, int maxWidth, ToIntFunction<String> widthOf) {
+        return wrap(text, maxWidth, substringWidth(text, widthOf));
+    }
+
+    public static List<Line> wrap(String text, int maxWidth, RangeWidth widthOf) {
         if (text == null || text.isEmpty()) return List.of(new Line("", 0));
         List<Line> lines = new ArrayList<>();
         int index = 0;
@@ -47,14 +63,22 @@ public final class MessageWrap {
         return wrap(text, maxWidth, widthOf).size();
     }
 
+    public static int lineCount(String text, int maxWidth, RangeWidth widthOf) {
+        return wrap(text, maxWidth, widthOf).size();
+    }
+
     /**
      * Character index whose left edge is at or just after {@code x} pixels into {@code text}.
      */
     public static int indexAtX(String text, int x, ToIntFunction<String> widthOf) {
+        return indexAtX(text, x, substringWidth(text, widthOf));
+    }
+
+    public static int indexAtX(String text, int x, RangeWidth widthOf) {
         if (text == null || text.isEmpty() || x <= 0) return 0;
         int previousWidth = 0;
         for (int i = 1; i <= text.length(); i++) {
-            int width = widthOf.applyAsInt(text.substring(0, i));
+            int width = widthOf.width(0, i);
             if (width >= x) {
                 int midpoint = previousWidth + (width - previousWidth) / 2;
                 return x < midpoint ? i - 1 : i;
@@ -68,21 +92,30 @@ public final class MessageWrap {
      * Character index in {@code text} for a pointer on wrapped visual line {@code line} at pixel {@code x}.
      */
     public static int charIndex(String text, int maxWidth, int line, int x, ToIntFunction<String> widthOf) {
+        return charIndex(text, maxWidth, line, x, substringWidth(text, widthOf));
+    }
+
+    public static int charIndex(String text, int maxWidth, int line, int x, RangeWidth widthOf) {
         List<Line> wrapped = wrap(text, maxWidth, widthOf);
         if (wrapped.isEmpty()) return 0;
         int clampedLine = Math.clamp(line, 0, wrapped.size() - 1);
         Line visual = wrapped.get(clampedLine);
-        return visual.start() + indexAtX(visual.text(), x, widthOf);
+        return visual.start() + indexAtX(visual.text(), x,
+            (from, to) -> widthOf.width(visual.start() + from, visual.start() + to));
+    }
+
+    private static RangeWidth substringWidth(String text, ToIntFunction<String> widthOf) {
+        return (from, to) -> widthOf.applyAsInt(text.substring(from, to));
     }
 
     private static void wrapParagraph(String text, int start, int end, int maxWidth,
-                                      ToIntFunction<String> widthOf, List<Line> lines) {
+                                      RangeWidth widthOf, List<Line> lines) {
         if (start == end) {
             lines.add(new Line("", start));
             return;
         }
         if (maxWidth <= 0 || maxWidth == Integer.MAX_VALUE
-            || widthOf.applyAsInt(text.substring(start, end)) <= maxWidth) {
+            || widthOf.width(start, end) <= maxWidth) {
             lines.add(new Line(text.substring(start, end), start));
             return;
         }
@@ -92,7 +125,7 @@ public final class MessageWrap {
             int breakAt = -1;
             while (to < end) {
                 int next = to + 1;
-                if (widthOf.applyAsInt(text.substring(from, next)) > maxWidth) {
+                if (widthOf.width(from, next) > maxWidth) {
                     break;
                 }
                 to = next;

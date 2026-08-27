@@ -39,4 +39,18 @@ class MessageWrapTest {
         assertEquals(7, wrapped.get(2).start());
         assertEquals(7, MessageWrap.charIndex("hello\n\nworld", 40, 2, 0, String::length));
     }
+
+    @Test
+    void rangeWidthsWrapAndHitTestUsingStyledGlyphWidths() {
+        MessageWrap.RangeWidth boldFirst = (from, to) -> {
+            int width = 0;
+            for (int i = from; i < to; i++) {
+                width += i < 4 ? 2 : 1;
+            }
+            return width;
+        };
+        assertEquals(List.of("bold", "plain"), MessageWrap.lines("boldplain", 8, boldFirst));
+        assertEquals(4, MessageWrap.charIndex("boldplain", 8, 0, 7, boldFirst));
+        assertEquals(6, MessageWrap.charIndex("boldplain", 8, 1, 2, boldFirst));
+    }
 }
