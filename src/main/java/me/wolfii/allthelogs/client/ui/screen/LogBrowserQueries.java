@@ -27,6 +27,7 @@ import java.util.function.BiConsumer;
  * Runs log-store queries for the browser and applies the pages to {@link MessageTimeline}.
  */
 final class LogBrowserQueries {
+    static final int COUNT_DEBOUNCE_MS = 500;
     private final AtomicInteger generation = new AtomicInteger();
     private SearchFilter filter = SearchFilter.defaults();
     private MessageTimeline list;
@@ -38,7 +39,8 @@ final class LogBrowserQueries {
     private boolean restoredHasBefore;
     private boolean restoredHasAfter;
     private double restoredScrollY;
-    private int restoredMatchCount;
+    private long restoredMatchCount;
+    private boolean restoredExactMatchCount;
     private long restoredElapsedMs;
 
     SearchFilter filter() {
@@ -72,6 +74,9 @@ final class LogBrowserQueries {
             list.restore(restoredRows, restoredHasBefore, restoredHasAfter, restoredScrollY);
             list.setMatchBounds(matchBounds);
             list.showMatchCount(restoredMatchCount, restoredElapsedMs);
+            if (restoredExactMatchCount) {
+                list.setTotalMatchCount(restoredMatchCount);
+            }
         }
     }
 
@@ -132,6 +137,18 @@ final class LogBrowserQueries {
                 list.setMatchBounds(matchBounds);
             });
         }
+        scheduleMatchCount(gen);
+    }
+
+    private void scheduleMatchCount(int gen) {
+        CompletableFuture.delayedExecutor(COUNT_DEBOUNCE_MS, TimeUnit.MILLISECONDS).execute(() -> {
+            if (gen != generation.get()) return;
+            onClient(AllTheLogsClient.worker().matches(filter.toTimelineQuery()), (count, error) -> {
+                if (gen != generation.get() || error != null || count == null || list == null) return;
+                list.setTotalMatchCount(count);
+                snapshotCurrentList();
+            });
+        });
     }
 
     void refreshStats() {
@@ -314,6 +331,7 @@ final class LogBrowserQueries {
         restoredHasAfter = list.window().hasAfter();
         restoredScrollY = list.scrollY();
         restoredMatchCount = list.matchCount();
+        restoredExactMatchCount = list.exactMatchCount();
         restoredElapsedMs = list.matchElapsedMs();
     }
 

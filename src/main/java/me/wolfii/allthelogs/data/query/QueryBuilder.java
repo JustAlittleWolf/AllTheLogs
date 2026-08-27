@@ -92,14 +92,30 @@ public final class QueryBuilder {
     }
 
     /**
-     * Distinct year-months that contain matches, oldest first. Same filter as {@link #bounds(ChatQuery)}.
+     * Distinct calendar days that contain matches, oldest first. Same filter as {@link #bounds(ChatQuery)}.
      */
-    public static QueryBuilder months(ChatQuery query) {
+    public static QueryBuilder dates(ChatQuery query) {
         List<Object> parameters = new ArrayList<>();
         List<String> conditions = new ArrayList<>();
         addMatchConditions(query, false, conditions, parameters);
         String where = conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions);
-        String sql = "SELECT DISTINCT date_trunc('month', e.entry_time) FROM chat_entry e" + where + " ORDER BY 1";
+        String sql = "SELECT DISTINCT CAST(e.entry_time AS DATE) FROM chat_entry e" + where + " ORDER BY 1";
+        return new QueryBuilder(sql, parameters);
+    }
+
+    /**
+     * Number of matching entries for {@code query}. Honours offset and limit; ignores context lines, which are
+     * not matches. Callers that want the unpaged total should pass a query with no offset and {@code limit < 0}.
+     */
+    public static QueryBuilder matches(ChatQuery query) {
+        List<Object> parameters = new ArrayList<>();
+        List<String> conditions = new ArrayList<>();
+        addMatchConditions(query, true, conditions, parameters);
+        String where = conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions);
+        String from = " FROM chat_entry e" + where;
+        String sql = query.limit() < 0
+            ? "SELECT COUNT(*)" + from
+            : "SELECT COUNT(*) FROM (SELECT 1" + from + " LIMIT " + query.limit() + ")";
         return new QueryBuilder(sql, parameters);
     }
 

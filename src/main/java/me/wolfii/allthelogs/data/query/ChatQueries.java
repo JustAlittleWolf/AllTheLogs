@@ -11,7 +11,6 @@ import java.sql.*;
 import java.sql.Date;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.YearMonth;
 import java.util.*;
 
 /**
@@ -101,30 +100,46 @@ public final class ChatQueries {
                 int uniqueDates = result.getInt(3);
                 if (oldest == null || newest == null) return MatchBounds.empty();
                 return new MatchBounds(oldest.toLocalDateTime(), newest.toLocalDateTime(), uniqueDates,
-                    matchMonths(query));
+                    matchDates(query));
             }
         } catch (SQLException | RuntimeException e) {
             throw new LogDataException("could not read match bounds for " + query, e);
         }
     }
 
-    private List<YearMonth> matchMonths(ChatQuery query) {
-        QueryBuilder builder = QueryBuilder.months(query);
-        List<YearMonth> months = new ArrayList<>();
+    /**
+     * Number of matching entries for {@code query}. Honours offset and limit; ignores context lines.
+     */
+    public long matches(ChatQuery query) {
+        QueryBuilder builder = QueryBuilder.matches(query);
+        try (PreparedStatement prepared = connection.prepareStatement(builder.sql())) {
+            builder.bind(prepared);
+            try (ResultSet result = prepared.executeQuery()) {
+                if (!result.next()) return 0;
+                return result.getLong(1);
+            }
+        } catch (SQLException | RuntimeException e) {
+            throw new LogDataException("could not count matches for " + query, e);
+        }
+    }
+
+    private List<LocalDate> matchDates(ChatQuery query) {
+        QueryBuilder builder = QueryBuilder.dates(query);
+        List<LocalDate> dates = new ArrayList<>();
         try (PreparedStatement prepared = connection.prepareStatement(builder.sql())) {
             builder.bind(prepared);
             try (ResultSet result = prepared.executeQuery()) {
                 while (result.next()) {
-                    Timestamp month = result.getTimestamp(1);
-                    if (month != null) {
-                        months.add(YearMonth.from(month.toLocalDateTime()));
+                    Date date = result.getDate(1);
+                    if (date != null) {
+                        dates.add(date.toLocalDate());
                     }
                 }
             }
         } catch (SQLException | RuntimeException e) {
-            throw new LogDataException("could not read match months for " + query, e);
+            throw new LogDataException("could not read match dates for " + query, e);
         }
-        return months;
+        return dates;
     }
 
     /**

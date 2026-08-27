@@ -309,6 +309,15 @@ public final class LogStore implements AutoCloseable {
     }
 
     /**
+     * Number of matching entries for {@code query}. Honours offset and limit; ignores context lines.
+     * Callers that want every match for a filter should drop the page offset and pass a negative limit.
+     */
+    public long matches(ChatQuery query) {
+        Objects.requireNonNull(query, "query");
+        return queries.matches(query);
+    }
+
+    /**
      * Chat lines from {@code log} within {@code radius} of {@code lineIndex}, inclusive of the centre line.
      */
     public List<ChatEntry> around(ChatLog log, int lineIndex, int radius) {

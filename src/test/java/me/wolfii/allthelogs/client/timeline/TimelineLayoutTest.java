@@ -44,24 +44,45 @@ class TimelineLayoutTest {
     }
 
     @Test
-    void compressedMonthsSkipTheEmptyGapBetweenHits() {
+    void compressedDaysSkipTheEmptyGapBetweenHits() {
         LocalDateTime jan2025 = LocalDateTime.of(2025, 1, 15, 12, 0);
         LocalDateTime jan2026 = LocalDateTime.of(2026, 1, 15, 12, 0);
-        List<java.time.YearMonth> months = List.of(
-            java.time.YearMonth.of(2025, 1), java.time.YearMonth.of(2026, 1));
-        assertEquals(0.25, TimelineLayout.compressedProgress(jan2025, months), 0.02);
-        assertEquals(0.75, TimelineLayout.compressedProgress(jan2026, months), 0.02);
-        int y2026 = TimelineLayout.yFromNewest(jan2026, jan2025, jan2026, months, 0, 100);
-        int y2025 = TimelineLayout.yFromNewest(jan2025, jan2025, jan2026, months, 0, 100);
+        List<LocalDate> days = List.of(LocalDate.of(2025, 1, 15), LocalDate.of(2026, 1, 15));
+        assertEquals(0.25, TimelineLayout.compressedProgress(jan2025, days), 0.02);
+        assertEquals(0.75, TimelineLayout.compressedProgress(jan2026, days), 0.02);
+        int y2026 = TimelineLayout.yFromNewest(jan2026, jan2025, jan2026, days, 0, 100);
+        int y2025 = TimelineLayout.yFromNewest(jan2025, jan2025, jan2026, days, 0, 100);
         assertTrue(y2026 < 50);
         assertTrue(y2025 > 50);
         LocalDateTime linearMid = TimelineLayout.timeFromNewest(0.5, jan2025, jan2026);
         assertEquals(2025, linearMid.getYear());
-        LocalDateTime compressedMid = TimelineLayout.timeFromNewest(0.5, jan2025, jan2026, months);
+        LocalDateTime compressedMid = TimelineLayout.timeFromNewest(0.5, jan2025, jan2026, days);
         assertTrue(compressedMid.getYear() == 2025 || compressedMid.getYear() == 2026);
         assertTrue(compressedMid.getMonthValue() == 1);
-        List<TimelineLayout.DateTick> ticks = TimelineLayout.ticks(months);
+        List<TimelineLayout.DateTick> ticks = TimelineLayout.ticks(days);
         assertEquals(2, ticks.size());
+    }
+
+    @Test
+    void compressedDaysDoNotFillEmptyDaysInsideAMonth() {
+        LocalDateTime first = LocalDateTime.of(2026, 1, 1, 12, 0);
+        LocalDateTime last = LocalDateTime.of(2026, 1, 31, 12, 0);
+        List<LocalDate> days = List.of(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31));
+        assertEquals(0.25, TimelineLayout.compressedProgress(first, days), 0.02);
+        assertEquals(0.75, TimelineLayout.compressedProgress(last, days), 0.02);
+        LocalDateTime mid = TimelineLayout.timeFromOldest(0.5, first, last, days);
+        assertTrue(mid.getDayOfMonth() == 1 || mid.getDayOfMonth() == 31);
+        assertEquals(0, TimelineLayout.yFromOldest(first.toLocalDate().atStartOfDay(), first, last, days, 0, 100));
+        assertTrue(TimelineLayout.yFromOldest(last, first, last, days, 0, 100) > 50);
+    }
+
+    @Test
+    void thumbFillsTheTrackWhenContentFitsAndPinsToTheEdgesWhenScrolling() {
+        assertEquals(0, TimelineLayout.thumbHeight(200, 150, 200, 16));
+        assertEquals(50, TimelineLayout.thumbHeight(200, 800, 200, 16));
+        assertEquals(16, TimelineLayout.thumbHeight(200, 10_000, 200, 16));
+        assertEquals(0, TimelineLayout.thumbOffset(200, 800, 200, 0, 50));
+        assertEquals(150, TimelineLayout.thumbOffset(200, 800, 200, 600, 50));
     }
 
     @Test

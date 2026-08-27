@@ -62,12 +62,12 @@ public final class TimelineLayout {
     }
 
     /**
-     * Pixel Y with newest at the top. When {@code months} lists the months that actually contain matches,
-     * empty months between them are omitted and each listed month gets an equal share of the track.
+     * Pixel Y with newest at the top. When {@code days} lists the days that actually contain matches,
+     * empty days between them are omitted and each listed day gets an equal share of the track.
      */
     public static int yFromNewest(LocalDateTime time, LocalDateTime oldest, LocalDateTime newest,
-                                  List<YearMonth> months, int top, int height) {
-        double fromNewest = 1 - progress(time, oldest, newest, months);
+                                  List<LocalDate> days, int top, int height) {
+        double fromNewest = 1 - progress(time, oldest, newest, days);
         return top + (int) Math.round(fromNewest * Math.max(0, height - 1));
     }
 
@@ -75,8 +75,8 @@ public final class TimelineLayout {
      * Pixel Y with oldest at the top and newest at the bottom, matching chronological message order.
      */
     public static int yFromOldest(LocalDateTime time, LocalDateTime oldest, LocalDateTime newest,
-                                  List<YearMonth> months, int top, int height) {
-        double fromOldest = progress(time, oldest, newest, months);
+                                  List<LocalDate> days, int top, int height) {
+        double fromOldest = progress(time, oldest, newest, days);
         return top + (int) Math.round(fromOldest * Math.max(0, height - 1));
     }
 
@@ -85,14 +85,14 @@ public final class TimelineLayout {
     }
 
     public static LocalDateTime timeFromNewest(double progressFromTop, LocalDateTime oldest, LocalDateTime newest,
-                                               List<YearMonth> months) {
-        return timeFromOldest(1 - Math.clamp(progressFromTop, 0, 1), oldest, newest, months);
+                                               List<LocalDate> days) {
+        return timeFromOldest(1 - Math.clamp(progressFromTop, 0, 1), oldest, newest, days);
     }
 
     public static LocalDateTime timeFromOldest(double progressFromTop, LocalDateTime oldest, LocalDateTime newest,
-                                               List<YearMonth> months) {
-        if (months != null && months.size() >= 2) {
-            return timeFromCompressedMonths(progressFromTop, months);
+                                               List<LocalDate> days) {
+        if (days != null && days.size() >= 2) {
+            return timeFromCompressedDays(progressFromTop, days);
         }
         LocalDateTime first = earlier(oldest, newest);
         LocalDateTime last = later(oldest, newest);
@@ -103,61 +103,83 @@ public final class TimelineLayout {
     }
 
     public static double progress(LocalDateTime time, LocalDateTime oldest, LocalDateTime newest,
-                                  List<YearMonth> months) {
-        if (months != null && months.size() >= 2) {
-            return compressedProgress(time, months);
+                                  List<LocalDate> days) {
+        if (days != null && days.size() >= 2) {
+            return compressedProgress(time, days);
         }
         return progress(time, oldest, newest);
     }
 
     /**
-     * 0 at the start of the oldest listed month, 1 at the end of the newest. Each month occupies the same
-     * fraction of the track, so a year with no matches between two hits does not take space.
+     * 0 at the start of the oldest listed day, 1 at the end of the newest. Each matched day occupies the same
+     * fraction of the track, so empty days between hits do not take space.
      */
-    public static double compressedProgress(LocalDateTime time, List<YearMonth> months) {
-        if (time == null || months == null || months.isEmpty()) return 0;
-        YearMonth target = YearMonth.from(time);
+    public static double compressedProgress(LocalDateTime time, List<LocalDate> days) {
+        if (time == null || days == null || days.isEmpty()) return 0;
+        LocalDate target = time.toLocalDate();
         int index = 0;
-        for (int i = 0; i < months.size(); i++) {
-            YearMonth month = months.get(i);
-            if (month.equals(target)) {
+        for (int i = 0; i < days.size(); i++) {
+            LocalDate day = days.get(i);
+            if (day.equals(target)) {
                 index = i;
                 break;
             }
-            if (month.isBefore(target)) {
+            if (day.isBefore(target)) {
                 index = i;
             } else {
                 break;
             }
         }
-        YearMonth month = months.get(index);
+        LocalDate day = days.get(index);
         double fraction = 0;
-        if (month.equals(target)) {
-            LocalDateTime start = month.atDay(1).atStartOfDay();
-            LocalDateTime end = month.plusMonths(1).atDay(1).atStartOfDay();
+        if (day.equals(target)) {
+            LocalDateTime start = day.atStartOfDay();
+            LocalDateTime end = day.plusDays(1).atStartOfDay();
             double total = Duration.between(start, end).toMillis();
             fraction = total <= 0 ? 0 : Duration.between(start, time).toMillis() / total;
             fraction = Math.clamp(fraction, 0, 1);
-        } else if (target.isAfter(month)) {
+        } else if (target.isAfter(day)) {
             fraction = 1;
         }
-        return (index + fraction) / months.size();
+        return (index + fraction) / days.size();
     }
 
-    static LocalDateTime timeFromCompressedMonths(double progressFromTop, List<YearMonth> months) {
+    static LocalDateTime timeFromCompressedDays(double progressFromTop, List<LocalDate> days) {
         double fromOldest = Math.clamp(progressFromTop, 0, 1);
-        double scaled = fromOldest * months.size();
-        int index = Math.min(months.size() - 1, (int) Math.floor(scaled));
+        double scaled = fromOldest * days.size();
+        int index = Math.min(days.size() - 1, (int) Math.floor(scaled));
         if (index < 0) index = 0;
         double fraction = Math.clamp(scaled - index, 0, 1);
-        if (index == months.size() - 1 && fromOldest >= 1) {
+        if (index == days.size() - 1 && fromOldest >= 1) {
             fraction = 1;
         }
-        YearMonth month = months.get(index);
-        LocalDateTime start = month.atDay(1).atStartOfDay();
-        LocalDateTime end = month.plusMonths(1).atDay(1).atStartOfDay();
+        LocalDate day = days.get(index);
+        LocalDateTime start = day.atStartOfDay();
+        LocalDateTime end = day.plusDays(1).atStartOfDay();
         long millis = Math.round(Duration.between(start, end).toMillis() * fraction);
         return start.plus(Duration.ofMillis(millis));
+    }
+
+    /**
+     * Thumb height on a track of {@code trackHeight} for a viewport of {@code viewHeight} in content of
+     * {@code contentHeight}. Zero when everything fits, so the thumb can be hidden.
+     */
+    public static int thumbHeight(int trackHeight, int contentHeight, int viewHeight, int minThumb) {
+        if (trackHeight <= 0 || viewHeight <= 0 || contentHeight <= viewHeight) return 0;
+        int sized = (int) Math.round((double) viewHeight / contentHeight * trackHeight);
+        return Math.clamp(sized, Math.max(1, minThumb), trackHeight);
+    }
+
+    /**
+     * Thumb top offset from the track origin. {@code 0} when scrolled to the start, {@code trackHeight - thumbHeight}
+     * when scrolled so the last content sits at the bottom of the view.
+     */
+    public static int thumbOffset(int trackHeight, int contentHeight, int viewHeight, double scrollY, int thumbHeight) {
+        if (thumbHeight <= 0 || thumbHeight >= trackHeight) return 0;
+        double maxScroll = Math.max(0, contentHeight - viewHeight);
+        if (maxScroll <= 0) return 0;
+        double t = Math.clamp(scrollY / maxScroll, 0, 1);
+        return (int) Math.round(t * (trackHeight - thumbHeight));
     }
 
     public static LocalDateTime oldest(List<LocalDateTime> times) {
@@ -189,12 +211,23 @@ public final class TimelineLayout {
     }
 
     /**
-     * One label per occupied month when there are a handful of them, otherwise years. Oldest-at-top
-     * placement is done by {@link #spacedTicks}.
+     * Labels for occupied match days. A handful of days get a tick each; otherwise occupied months or years.
+     * Oldest-at-top placement is done by {@link #spacedTicks}.
      */
-    public static List<DateTick> ticks(List<YearMonth> months) {
-        if (months == null || months.isEmpty()) return List.of();
-        boolean multiYear = months.getFirst().getYear() != months.getLast().getYear();
+    public static List<DateTick> ticks(List<LocalDate> days) {
+        if (days == null || days.isEmpty()) return List.of();
+        boolean multiYear = days.getFirst().getYear() != days.getLast().getYear();
+        if (days.size() <= 8) {
+            DateTimeFormatter format = multiYear
+                ? DateTimeFormatter.ofPattern("MMM d yyyy", Locale.US)
+                : DAY;
+            List<DateTick> ticks = new ArrayList<>(days.size());
+            for (LocalDate day : days) {
+                ticks.add(new DateTick(day.atStartOfDay(), day.format(format)));
+            }
+            return List.copyOf(ticks);
+        }
+        List<YearMonth> months = monthsOf(days);
         if (months.size() > 36) {
             List<DateTick> ticks = new ArrayList<>();
             Integer previousYear = null;
@@ -211,6 +244,20 @@ public final class TimelineLayout {
             ticks.add(new DateTick(month.atDay(1).atStartOfDay(), month.format(format)));
         }
         return List.copyOf(ticks);
+    }
+
+    static List<YearMonth> monthsOf(List<LocalDate> days) {
+        if (days == null || days.isEmpty()) return List.of();
+        List<YearMonth> months = new ArrayList<>();
+        YearMonth previous = null;
+        for (LocalDate day : days) {
+            YearMonth month = YearMonth.from(day);
+            if (!month.equals(previous)) {
+                months.add(month);
+                previous = month;
+            }
+        }
+        return months;
     }
 
     public static List<DateTick> ticks(LocalDateTime first, LocalDateTime last) {
@@ -255,25 +302,25 @@ public final class TimelineLayout {
         return spacedTicks(oldest, newest, List.of(), height, minGapPx);
     }
 
-    public static List<DateTick> spacedTicks(LocalDateTime oldest, LocalDateTime newest, List<YearMonth> months,
+    public static List<DateTick> spacedTicks(LocalDateTime oldest, LocalDateTime newest, List<LocalDate> days,
                                              int height, int minGapPx) {
-        List<DateTick> raw = months != null && months.size() >= 2 ? ticks(months) : ticks(oldest, newest);
+        List<DateTick> raw = days != null && days.size() >= 2 ? ticks(days) : ticks(oldest, newest);
         if (raw.isEmpty() || height <= 0 || minGapPx <= 0) return raw;
         List<DateTick> ordered = new ArrayList<>(raw);
         ordered.sort((a, b) -> Integer.compare(
-            yFromOldest(a.at(), oldest, newest, months, 0, height),
-            yFromOldest(b.at(), oldest, newest, months, 0, height)));
+            yFromOldest(a.at(), oldest, newest, days, 0, height),
+            yFromOldest(b.at(), oldest, newest, days, 0, height)));
         List<DateTick> kept = new ArrayList<>();
         int lastY = Integer.MIN_VALUE / 2;
         for (DateTick tick : ordered) {
-            int y = yFromOldest(tick.at(), oldest, newest, months, 0, height);
+            int y = yFromOldest(tick.at(), oldest, newest, days, 0, height);
             if (kept.isEmpty() || Math.abs(y - lastY) >= minGapPx) {
                 kept.add(tick);
                 lastY = y;
             }
         }
         DateTick last = ordered.getLast();
-        int lastTickY = yFromOldest(last.at(), oldest, newest, months, 0, height);
+        int lastTickY = yFromOldest(last.at(), oldest, newest, days, 0, height);
         if (!kept.getLast().equals(last) && Math.abs(lastTickY - lastY) >= minGapPx) {
             kept.add(last);
         }

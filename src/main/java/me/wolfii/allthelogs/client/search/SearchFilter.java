@@ -130,7 +130,8 @@ public record SearchFilter(
     }
 
     /**
-     * Same as {@link #toQuery()} but without context lines, a page limit, or an offset, for timeline bounds.
+     * Same as {@link #toQuery()} but without context lines, a page limit, or an offset, for timeline
+     * bounds and the unpaged {@link me.wolfii.allthelogs.data.LogStore#matches(ChatQuery)} total.
      */
     public ChatQuery toTimelineQuery() {
         return withoutOffset().withContextLines(0).withLimit(-1).toQuery();
