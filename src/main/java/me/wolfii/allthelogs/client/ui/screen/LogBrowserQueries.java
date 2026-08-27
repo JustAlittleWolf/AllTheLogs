@@ -193,7 +193,16 @@ final class LogBrowserQueries {
             if (chronological) list.scrollToEnd();
             list.showMatchCount(ResultWindow.matchCount(rows), elapsedMs(startedAt));
             snapshotCurrentList();
+            loadMatchSummary(gen, query, startedAt);
         });
+        refreshStats();
+    }
+
+    /**
+     * Timeline totals after the page is on screen, so a slower summarize cannot overwrite
+     * the list before rows arrive, or land on a newer search.
+     */
+    private void loadMatchSummary(int gen, SearchFilter page, long startedAt) {
         onClient(AllTheLogsClient.worker().summarize(page.toSummaryQuery()), (summary, error) -> {
             if (gen != generation.get() || error != null || list == null) return;
             matchSummary = summary == null ? MatchSummary.empty() : summary;
@@ -201,7 +210,6 @@ final class LogBrowserQueries {
             list.setTotalMatchCount(matchSummary.matches(), elapsedMs(startedAt));
             snapshotCurrentList();
         });
-        refreshStats();
     }
 
     private static long elapsedMs(long startedAtNanos) {
