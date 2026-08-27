@@ -116,7 +116,7 @@ class LogStoreTest {
         ImportResult result = store.importDirectory(logs, ImportOptions.currentLogsDirectory());
 
         assertEquals(2, result.importedFiles());
-        List<String> messages = store.chatEntries().stream().map(ChatEntry::message).toList();
+        List<String> messages = store.allEntries().stream().map(ChatEntry::message).toList();
         assertTrue(messages.contains("top"));
         assertTrue(messages.contains("nested"));
         assertFalse(messages.contains("live"));
@@ -138,7 +138,7 @@ class LogStoreTest {
 
         assertTrue(result.failures().isEmpty(), () -> "unexpected failures: " + result.failures());
         assertEquals(2, result.importedFiles());
-        List<String> messages = store.chatEntries().stream().map(ChatEntry::message).toList();
+        List<String> messages = store.allEntries().stream().map(ChatEntry::message).toList();
         assertTrue(messages.contains("from logs"));
         assertTrue(messages.contains("from nested"));
         assertFalse(messages.contains("live"));
@@ -1192,7 +1192,7 @@ class LogStoreTest {
             + " failures=" + result.failures());
         assertEquals(0, result.skippedFiles());
         assertEquals(List.of("from an older session"),
-            store.chatEntries().stream()
+            store.allEntries().stream()
                 .filter(entry -> entry.chatLog().source() instanceof LogSource.File)
                 .map(ChatEntry::message).toList());
     }
@@ -1212,7 +1212,7 @@ class LogStoreTest {
         assertEquals(3, result.importedFiles(), () -> "skipped=" + result.skippedFiles()
             + " failures=" + result.failures());
         assertEquals(0, result.skippedFiles());
-        assertEquals(3, store.chatEntries().size());
+        assertEquals(3, store.allEntries().size());
     }
 
     @Test

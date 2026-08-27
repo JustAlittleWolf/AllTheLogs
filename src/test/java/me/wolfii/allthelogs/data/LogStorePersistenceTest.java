@@ -221,8 +221,8 @@ class LogStorePersistenceTest {
                 + " failures=" + result.failures() + " logs=" + store.chatLogs());
             assertEquals(0, result.skippedFiles());
             assertEquals(List.of("only in the file"),
-                store.chatEntries().stream().map(ChatEntry::message).toList());
-            assertInstanceOf(LogSource.File.class, store.chatEntries().getFirst().chatLog().source());
+                store.allEntries().stream().map(ChatEntry::message).toList());
+            assertInstanceOf(LogSource.File.class, store.allEntries().getFirst().chatLog().source());
         }
     }
 
