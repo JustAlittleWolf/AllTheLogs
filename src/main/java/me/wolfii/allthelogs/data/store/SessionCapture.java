@@ -17,11 +17,19 @@ import java.util.Objects;
  */
 public final class SessionCapture {
 
-    private final DuckDBConnection connection;
+    private DuckDBConnection connection;
     private long sessionFileId = -1;
     private int sessionLineIndex;
 
     public SessionCapture(DuckDBConnection connection) {
+        this.connection = connection;
+    }
+
+    /**
+     * Points this capture at a replacement connection after the store compacted the database file.
+     * Session identity ({@code sessionFileId} / line index) is unchanged because those rows were copied.
+     */
+    public void attach(DuckDBConnection connection) {
         this.connection = connection;
     }
 

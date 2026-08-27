@@ -12,6 +12,7 @@ import me.wolfii.allthelogs.client.AllTheLogsClient;
 import me.wolfii.allthelogs.client.ui.text.ImportProgressText;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
 import me.wolfii.allthelogs.data.ImportOptions;
+import me.wolfii.allthelogs.data.ImportPhase;
 import me.wolfii.allthelogs.data.ImportProgress;
 import me.wolfii.allthelogs.data.ImportResult;
 import net.minecraft.client.Minecraft;
@@ -145,20 +146,34 @@ public final class ImportProgressScreen extends BaseOwoScreen<FlowLayout> {
         if (finished) return;
         int percent = ImportProgressText.percent(snapshot);
         fill.horizontalSizing(Sizing.fill(Math.max(1, percent)));
-        if (snapshot.discoveryComplete()) {
-            counts.text(Component.translatable("allthelogs.import.progress.counts",
-                Integer.toString(snapshot.completedFiles()),
-                Integer.toString(Math.max(snapshot.discoveredFiles(), snapshot.estimatedFiles())),
-                Integer.toString(percent)));
-        } else {
-            counts.text(Component.translatable("allthelogs.import.progress.discovering",
-                Integer.toString(snapshot.completedFiles()),
-                Integer.toString(Math.max(snapshot.discoveredFiles(), snapshot.estimatedFiles()))));
+        switch (snapshot.phase()) {
+            case CHUNKING -> {
+                heading.text(Component.translatable("allthelogs.status.chunking"));
+                counts.text(Component.translatable("allthelogs.import.progress.chunking", Integer.toString(percent)));
+                current.text(Component.empty());
+            }
+            case OPTIMIZING -> {
+                heading.text(Component.translatable("allthelogs.status.optimizing"));
+                counts.text(Component.translatable("allthelogs.import.progress.optimizing", Integer.toString(percent)));
+                current.text(Component.empty());
+            }
+            case IMPORT -> {
+                if (snapshot.discoveryComplete()) {
+                    counts.text(Component.translatable("allthelogs.import.progress.counts",
+                        Integer.toString(snapshot.completedFiles()),
+                        Integer.toString(Math.max(snapshot.discoveredFiles(), snapshot.estimatedFiles())),
+                        Integer.toString(percent)));
+                } else {
+                    counts.text(Component.translatable("allthelogs.import.progress.discovering",
+                        Integer.toString(snapshot.completedFiles()),
+                        Integer.toString(Math.max(snapshot.discoveredFiles(), snapshot.estimatedFiles()))));
+                }
+                String file = ImportProgressText.currentFile(snapshot.current(), path);
+                current.text(file.isEmpty()
+                    ? Component.empty()
+                    : Component.translatable("allthelogs.import.progress.current", file));
+            }
         }
-        String file = ImportProgressText.currentFile(snapshot.current(), path);
-        current.text(file.isEmpty()
-            ? Component.empty()
-            : Component.translatable("allthelogs.import.progress.current", file));
     }
 
     @Override

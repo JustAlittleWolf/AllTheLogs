@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.client.ui.text;
 
+import me.wolfii.allthelogs.data.ImportPhase;
 import me.wolfii.allthelogs.data.ImportProgress;
 import me.wolfii.allthelogs.data.LogSource;
 import org.junit.jupiter.api.Test;
@@ -27,8 +28,12 @@ class ImportProgressTextTest {
     @Test
     void percentIsTheCompletedFraction() {
         assertEquals(0, ImportProgressText.percent(new ImportProgress(0, 0, 0, false, null)));
-        assertEquals(50, ImportProgressText.percent(new ImportProgress(1, 2, 0, true, null)));
-        assertEquals(100, ImportProgressText.percent(new ImportProgress(4, 4, 8, true, null)));
-        assertEquals(25, ImportProgressText.percent(new ImportProgress(2, 2, 8, false, null)));
+        assertEquals(30, ImportProgressText.percent(new ImportProgress(1, 2, 0, true, null)));
+        assertEquals(60, ImportProgressText.percent(new ImportProgress(4, 4, 8, true, null)));
+        assertEquals(15, ImportProgressText.percent(new ImportProgress(2, 2, 8, false, null)));
+        assertEquals(80, ImportProgressText.percent(
+            new ImportProgress(4, 4, 4, true, null, ImportPhase.CHUNKING, 1d)));
+        assertEquals(100, ImportProgressText.percent(
+            new ImportProgress(4, 4, 4, true, null, ImportPhase.OPTIMIZING, 1d)));
     }
 }

@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.data.importer.discover;
 
+import me.wolfii.allthelogs.data.ImportPhase;
 import me.wolfii.allthelogs.data.ImportProgress;
 import me.wolfii.allthelogs.data.LogSource;
 
@@ -107,6 +108,7 @@ public final class ImportObserver {
     }
 
     private ImportProgress snapshot() {
-        return new ImportProgress(completedFiles, discoveredFiles, estimatedFiles, discoveryComplete, current);
+        return new ImportProgress(completedFiles, discoveredFiles, estimatedFiles, discoveryComplete, current,
+            ImportPhase.IMPORT, 0d);
     }
 }

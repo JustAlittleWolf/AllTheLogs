@@ -228,8 +228,46 @@ class ImportProgressTest {
     @Test
     void fractionIsZeroWhenNothingHasBeenDiscovered() {
         assertEquals(0d, new ImportProgress(0, 0, 0, false, null).fraction());
-        assertEquals(0.5, new ImportProgress(1, 2, 0, false, null).fraction());
-        assertEquals(0.1, new ImportProgress(1, 1, 10, false, null).fraction());
-        assertEquals(1.0, new ImportProgress(4, 4, 10, true, null).fraction());
+        assertEquals(0.5 * ImportProgress.IMPORT_SHARE, new ImportProgress(1, 2, 0, false, null).fraction());
+        assertEquals(0.1 * ImportProgress.IMPORT_SHARE, new ImportProgress(1, 1, 10, false, null).fraction());
+        assertEquals(ImportProgress.IMPORT_SHARE, new ImportProgress(4, 4, 10, true, null).fraction());
+        assertEquals(ImportProgress.IMPORT_SHARE,
+            new ImportProgress(4, 4, 10, true, null, ImportPhase.CHUNKING, 0d).fraction());
+        assertEquals(ImportProgress.IMPORT_SHARE + ImportProgress.CHUNKING_SHARE,
+            new ImportProgress(4, 4, 10, true, null, ImportPhase.CHUNKING, 1d).fraction());
+        assertEquals(1.0,
+            new ImportProgress(4, 4, 10, true, null, ImportPhase.OPTIMIZING, 1d).fraction());
+    }
+
+    @Test
+    void reportsChunkingAndOptimizingAfterFilesAreImported() throws IOException {
+        Path root = logsDirectory();
+        List<ImportProgress> updates = new CopyOnWriteArrayList<>();
+
+        store.importDirectory(root, updates::add);
+
+        List<ImportPhase> phases = updates.stream().map(ImportProgress::phase).distinct().toList();
+        assertEquals(List.of(ImportPhase.IMPORT, ImportPhase.CHUNKING, ImportPhase.OPTIMIZING), phases);
+        ImportProgress last = updates.getLast();
+        assertEquals(ImportPhase.OPTIMIZING, last.phase());
+        assertEquals(1.0, last.fraction());
+        assertNull(last.current());
+        assertTrue(updates.stream()
+            .filter(progress -> progress.phase() == ImportPhase.IMPORT)
+            .allMatch(progress -> progress.fraction() <= ImportProgress.IMPORT_SHARE + 1e-9));
+    }
+
+    @Test
+    void skippedRerunStillEndsAtFullProgressWithoutChunkingWork() throws IOException {
+        Path root = logsDirectory();
+        store.importDirectory(root);
+        List<ImportProgress> updates = new CopyOnWriteArrayList<>();
+
+        store.importDirectory(root, ImportOptions.defaults().withSkipAlreadyImported(true), updates::add);
+
+        ImportProgress last = updates.getLast();
+        assertEquals(1.0, last.fraction());
+        assertEquals(ImportPhase.OPTIMIZING, last.phase());
+        assertTrue(updates.stream().noneMatch(progress -> progress.phase() == ImportPhase.CHUNKING));
     }
 }

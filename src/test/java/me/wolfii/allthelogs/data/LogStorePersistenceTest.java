@@ -250,4 +250,34 @@ class LogStorePersistenceTest {
                     store.findEntries(ChatQuery.all().withSubstring("\uD83C\uDFAE")).getFirst().message());
         }
     }
+
+    @Test
+    void importCompactsTheFileAndKeepsAnActiveSessionWritable() throws IOException {
+        Path database = database();
+        Path root = instanceLogs();
+        LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+
+        try (LogStore store = LogStore.open(database)) {
+            store.startSession("26.2", startedAt);
+            assertTrue(store.importSessionMessage("live before import", startedAt));
+
+            ImportResult result = store.importDirectory(root);
+            assertEquals(3, result.importedFiles());
+            assertTrue(store.importSessionMessage("live after compact", startedAt.plusSeconds(5)));
+
+            assertEquals(9, store.allEntries().size());
+            assertEquals(List.of("live before import"),
+                store.findEntries(ChatQuery.all().withSubstring("live before import"))
+                    .stream().map(ChatEntry::message).toList());
+            assertEquals(List.of("live after compact"),
+                store.findEntries(ChatQuery.all().withSubstring("live after compact"))
+                    .stream().map(ChatEntry::message).toList());
+        }
+
+        try (LogStore store = LogStore.open(database)) {
+            assertEquals(9, store.allEntries().size());
+            assertTrue(store.allEntries().stream().map(ChatEntry::message).toList()
+                .containsAll(List.of("alpha", "live before import", "live after compact")));
+        }
+    }
 }

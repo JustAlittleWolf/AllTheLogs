@@ -2,20 +2,24 @@ package me.wolfii.allthelogs.data;
 
 import me.wolfii.allthelogs.data.importer.LogImporter;
 import me.wolfii.allthelogs.data.query.ChatQueries;
+import me.wolfii.allthelogs.data.store.Schema;
 import me.wolfii.allthelogs.data.store.SessionCapture;
 import me.wolfii.allthelogs.data.store.StoreConnections;
+import me.wolfii.allthelogs.data.store.StoreOptimizer;
 import org.duckdb.DuckDBConnection;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * Imports Minecraft chat logs into a single portable database file and queries them back as plain Java objects.
@@ -38,17 +42,22 @@ import java.util.function.Consumer;
  * ({@link #startSession(String)}, {@link #importSessionMessage(String)}) does not report progress.
  */
 public final class LogStore implements AutoCloseable {
-    private final DuckDBConnection connection;
+    private DuckDBConnection connection;
     private final Path databasePath;
-    private final LogImporter importer;
+    private LogImporter importer;
     private final SessionCapture sessions;
-    private final ChatQueries queries;
+    private ChatQueries queries;
 
     private LogStore(DuckDBConnection connection, Path databasePath) {
-        this.connection = connection;
         this.databasePath = databasePath;
-        this.importer = new LogImporter(connection);
         this.sessions = new SessionCapture(connection);
+        bind(connection);
+    }
+
+    private void bind(DuckDBConnection connection) {
+        this.connection = connection;
+        this.importer = new LogImporter(connection);
+        this.sessions.attach(connection);
         this.queries = new ChatQueries(connection);
     }
 
@@ -152,7 +161,8 @@ public final class LogStore implements AutoCloseable {
                                         BooleanSupplier cancelled) {
         Objects.requireNonNull(directory, "directory");
         Objects.requireNonNull(options, "options");
-        return importer.importDirectory(directory, options, progress, cancelled);
+        return importThenOptimize(
+            sink -> importer.importDirectory(directory, options, sink, cancelled), progress);
     }
 
     /**
@@ -202,7 +212,44 @@ public final class LogStore implements AutoCloseable {
                                       BooleanSupplier cancelled) {
         Objects.requireNonNull(archive, "archive");
         Objects.requireNonNull(options, "options");
-        return importer.importArchive(archive, options, progress, cancelled);
+        return importThenOptimize(
+            sink -> importer.importArchive(archive, options, sink, cancelled), progress);
+    }
+
+    private ImportResult importThenOptimize(Function<Consumer<ImportProgress>, ImportResult> importCall,
+                                            Consumer<ImportProgress> progress) {
+        ImportProgressTracker tracker = new ImportProgressTracker(progress);
+        ImportResult result = importCall.apply(tracker);
+        optimizeAfterImport(result, tracker);
+        return result;
+    }
+
+    /**
+     * After a batch import, rewrite {@code chat_entry} oldest-first (chunking) and compact the on-disk
+     * file. Live session inserts already arrive in time order, so this stays off the hot path.
+     */
+    private void optimizeAfterImport(ImportResult result, ImportProgressTracker tracker) {
+        if (result.importedFiles() <= 0) {
+            tracker.complete();
+            return;
+        }
+        try {
+            tracker.phase(ImportPhase.CHUNKING, 0d);
+            try (Statement statement = connection.createStatement()) {
+                Schema.clusterEntries(statement, fraction -> tracker.phase(ImportPhase.CHUNKING, fraction));
+            }
+            tracker.phase(ImportPhase.OPTIMIZING, 0d);
+            try (Statement statement = connection.createStatement()) {
+                StoreOptimizer.analyzeAndCheckpoint(statement);
+            }
+            tracker.phase(ImportPhase.OPTIMIZING, 0.3);
+            if (databasePath != null) {
+                bind(StoreOptimizer.replaceWithCompactCopy(connection, databasePath));
+            }
+            tracker.complete();
+        } catch (SQLException | IOException e) {
+            throw new LogDataException("could not optimize imported chat entries", e);
+        }
     }
 
     /**
@@ -368,6 +415,32 @@ public final class LogStore implements AutoCloseable {
             connection.close();
         } catch (SQLException e) {
             throw new LogDataException("could not close the log database", e);
+        }
+    }
+
+    /**
+     * Remembers the last file-count snapshot so chunking and optimization can keep reporting overall progress.
+     */
+    private static final class ImportProgressTracker implements Consumer<ImportProgress> {
+        private final Consumer<ImportProgress> downstream;
+        private ImportProgress last = new ImportProgress(0, 0, 0, true, null);
+
+        private ImportProgressTracker(Consumer<ImportProgress> downstream) {
+            this.downstream = downstream;
+        }
+
+        @Override
+        public void accept(ImportProgress snapshot) {
+            last = snapshot;
+            if (downstream != null) downstream.accept(snapshot);
+        }
+
+        private void phase(ImportPhase phase, double phaseFraction) {
+            accept(last.withPhase(phase, phaseFraction));
+        }
+
+        private void complete() {
+            phase(ImportPhase.OPTIMIZING, 1d);
         }
     }
 }
