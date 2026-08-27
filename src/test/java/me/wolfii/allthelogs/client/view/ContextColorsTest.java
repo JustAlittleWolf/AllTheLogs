@@ -7,8 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class ContextColorsTest {
     @Test
     void contextUsesASingleMediumGrey() {
-        assertEquals(0xFFA0A0A0, ContextColors.CONTEXT_TEXT);
-        assertEquals(ContextColors.TIMESTAMP, ContextColors.CONTEXT_TEXT);
+        assertEquals(0xFFA4A4A4, ContextColors.CONTEXT_TEXT);
     }
 
     @Test

@@ -11,7 +11,7 @@ public final class ContextColors {
      */
     public static final int MATCH_HIGHLIGHT = 0xFFA8DC9C;
     public static final int TIMESTAMP = 0xFFA0A0A0;
-    public static final int CONTEXT_TEXT = 0xFFA0A0A0;
+    public static final int CONTEXT_TEXT = 0xFFA4A4A4;
 
     private ContextColors() {
     }
