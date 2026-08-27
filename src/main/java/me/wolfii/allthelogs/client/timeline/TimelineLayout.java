@@ -171,15 +171,56 @@ public final class TimelineLayout {
     }
 
     /**
+     * Thumb height for the visible slice of a timeline, from the progress of the first and last visible times.
+     */
+    public static int thumbHeightFromProgress(int trackHeight, double startProgress, double endProgress, int minThumb) {
+        if (trackHeight <= 0) return 0;
+        double span = Math.abs(endProgress - startProgress);
+        int sized = (int) Math.round(span * trackHeight);
+        int min = Math.min(trackHeight, Math.max(1, minThumb));
+        if (sized <= 0) return min;
+        return Math.clamp(sized, min, trackHeight);
+    }
+
+    /**
      * Thumb top offset from the track origin. {@code 0} when scrolled to the start, {@code trackHeight - thumbHeight}
      * when scrolled so the last content sits at the bottom of the view.
      */
     public static int thumbOffset(int trackHeight, int contentHeight, int viewHeight, double scrollY, int thumbHeight) {
-        if (thumbHeight <= 0 || thumbHeight >= trackHeight) return 0;
         double maxScroll = Math.max(0, contentHeight - viewHeight);
         if (maxScroll <= 0) return 0;
-        double t = Math.clamp(scrollY / maxScroll, 0, 1);
+        return thumbOffset(trackHeight, scrollY / maxScroll, thumbHeight);
+    }
+
+    /**
+     * Thumb top for a 0–1 timeline progress. Oldest is 0 at the top.
+     */
+    public static int thumbOffset(int trackHeight, double progress, int thumbHeight) {
+        if (thumbHeight <= 0 || thumbHeight >= trackHeight) return 0;
+        double t = Math.clamp(progress, 0, 1);
         return (int) Math.round(t * (trackHeight - thumbHeight));
+    }
+
+    /**
+     * Inverse of {@link #thumbOffset(int, double, int)}.
+     */
+    public static double progressFromThumb(int thumbTop, int trackHeight, int thumbHeight) {
+        if (thumbHeight <= 0 || thumbHeight >= trackHeight) return 0;
+        int travel = trackHeight - thumbHeight;
+        if (travel <= 0) return 0;
+        return Math.clamp(thumbTop / (double) travel, 0, 1);
+    }
+
+    /**
+     * Distance from the thumb top to the pointer. Clicks on the thumb keep that grip; clicks on the track
+     * grab the centre so the thumb does not jump.
+     */
+    public static double thumbGrabOffset(double localY, int thumbTop, int thumbHeight, int trackHeight) {
+        if (thumbHeight <= 0 || thumbHeight >= trackHeight) return 0;
+        if (localY >= thumbTop && localY < thumbTop + thumbHeight) {
+            return localY - thumbTop;
+        }
+        return thumbHeight / 2.0;
     }
 
     public static LocalDateTime oldest(List<LocalDateTime> times) {

@@ -83,6 +83,14 @@ class TimelineLayoutTest {
         assertEquals(16, TimelineLayout.thumbHeight(200, 10_000, 200, 16));
         assertEquals(0, TimelineLayout.thumbOffset(200, 800, 200, 0, 50));
         assertEquals(150, TimelineLayout.thumbOffset(200, 800, 200, 600, 50));
+        assertEquals(0, TimelineLayout.thumbOffset(200, 0, 50));
+        assertEquals(150, TimelineLayout.thumbOffset(200, 1, 50));
+        assertEquals(0.5, TimelineLayout.progressFromThumb(75, 200, 50), 0.0001);
+        assertEquals(75, TimelineLayout.thumbOffset(200, TimelineLayout.progressFromThumb(75, 200, 50), 50));
+        assertEquals(16, TimelineLayout.thumbHeightFromProgress(200, 0.4, 0.41, 16));
+        assertEquals(100, TimelineLayout.thumbHeightFromProgress(200, 0, 0.5, 16));
+        assertEquals(8, TimelineLayout.thumbGrabOffset(18, 10, 20, 200), 0.0001);
+        assertEquals(10, TimelineLayout.thumbGrabOffset(4, 10, 20, 200), 0.0001);
     }
 
     @Test

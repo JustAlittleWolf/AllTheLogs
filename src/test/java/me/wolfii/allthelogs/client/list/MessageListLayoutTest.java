@@ -59,6 +59,9 @@ class MessageListLayoutTest {
         MessageListLayout layout = MessageListLayout.of(List.of(row), 5, 4, String::length);
         assertEquals(MessageListLayout.DATE_HEIGHT, layout.rowY(0));
         assertEquals(3 * MessageListLayout.ROW_HEIGHT, layout.rowHeight(0));
+        MessageListLayout styled = MessageListLayout.of(List.of(row), 5, 6,
+            (displayRow, from, to) -> (to - from) * 2);
+        assertEquals(4 * MessageListLayout.ROW_HEIGHT, styled.rowHeight(0));
     }
 
     @Test
