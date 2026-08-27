@@ -303,22 +303,28 @@ final class LogBrowserQueries {
         list.setLoading(false);
     }
 
-    private void jumpTo(LocalDateTime time, boolean preview) {
-        LocalDateTime target = clampToBounds(time);
-        if (target == null) {
+    private void jumpTo(MessageTimeline.ScrubJump jump, boolean preview) {
+        LocalDateTime target = clampToBounds(jump == null ? null : jump.time());
+        if (target == null && (jump == null || jump.skip() < 0)) {
             if (!preview) list.finishScrub();
             return;
         }
-        SearchFilter page = filter.withOffset(exclusiveOffset(target, filter.sort()));
+        SearchFilter page = filter.withoutOffset();
+        ChatQuery query;
+        if (jump != null && jump.skip() >= 0) {
+            query = page.toQuery().withSkip(jump.skip());
+        } else {
+            query = page.withOffset(exclusiveOffset(target, filter.sort())).toQuery();
+        }
         if (preview) {
             long cap = filter.limit() < 0 ? MessageTimeline.SCRUB_PAGE_SIZE
                 : Math.min(MessageTimeline.SCRUB_PAGE_SIZE, filter.limit());
-            page = page.withLimit(Math.max(8, cap));
+            query = query.withLimit(Math.max(8, cap));
         }
-        SearchFilter query = page;
+        ChatQuery requested = query;
         int gen = generation.incrementAndGet();
         if (!preview) list.setLoading(true);
-        onClient(AllTheLogsClient.worker().query(query.toQuery()), (entries, error) -> {
+        onClient(AllTheLogsClient.worker().query(requested), (entries, error) -> {
             if (gen != generation.get()) return;
             list.setLoading(false);
             if (error != null) {
@@ -330,9 +336,10 @@ final class LogBrowserQueries {
                 if (!preview) list.finishScrub();
                 return;
             }
-            boolean full = pageIsFull(rows, query);
+            boolean full = requested.limit() > 0 && ResultWindow.matchCount(rows) >= requested.limit();
+            double progress = jump == null ? Double.NaN : jump.progress();
             list.showAt(target, rows, pageHasBefore(filter.sort(), rows, matchBounds),
-                pageHasAfter(filter.sort(), full, rows, matchBounds));
+                pageHasAfter(filter.sort(), full, rows, matchBounds), progress);
             if (!preview) list.finishScrub();
             snapshotCurrentList();
         });

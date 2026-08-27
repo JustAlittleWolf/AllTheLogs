@@ -405,6 +405,8 @@ class LogStoreTest {
         assertTrue(all.uniqueDates() >= 2);
         assertFalse(all.dates().isEmpty());
         assertEquals(all.uniqueDates(), all.dates().size());
+        assertEquals(all.dates().size(), all.days().size());
+        assertTrue(all.days().getFirst().matches() >= 1);
     }
 
     @Test

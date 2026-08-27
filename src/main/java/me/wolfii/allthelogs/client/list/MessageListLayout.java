@@ -151,6 +151,23 @@ public final class MessageListLayout {
         return current;
     }
 
+    public DateBand dateBand(LocalDate date) {
+        if (date == null) return null;
+        for (DateBand band : dates) {
+            if (band.date().equals(date)) return band;
+        }
+        return null;
+    }
+
+    /**
+     * Content-y just past the last pixel of {@code band}'s rows, which is the next date header or the
+     * bottom of the list.
+     */
+    public int dateEndY(DateBand band) {
+        DateBand next = nextDate(band);
+        return next == null ? contentHeight : next.y();
+    }
+
     public DateBand nextDate(DateBand band) {
         if (band == null) return dates.isEmpty() ? null : dates.getFirst();
         int index = dates.indexOf(band);

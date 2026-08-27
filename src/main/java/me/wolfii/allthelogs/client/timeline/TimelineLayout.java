@@ -1,5 +1,7 @@
 package me.wolfii.allthelogs.client.timeline;
 
+import me.wolfii.allthelogs.data.MatchDay;
+
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -112,7 +114,9 @@ public final class TimelineLayout {
 
     /**
      * 0 at the start of the oldest listed day, 1 at the end of the newest. Each matched day occupies the same
-     * fraction of the track, so empty days between hits do not take space.
+     * fraction of the track, so empty days between hits do not take space. Within a day, progress follows that
+     * day's first and last match times rather than midnight-to-midnight. {@code collapsedFraction} is used when
+     * every match on the day shares a timestamp, so clock-time cannot distinguish them.
      */
     public static double compressedProgress(LocalDateTime time, List<LocalDate> days) {
         if (time == null || days == null || days.isEmpty()) return 0;
@@ -142,6 +146,102 @@ public final class TimelineLayout {
             fraction = 1;
         }
         return (index + fraction) / days.size();
+    }
+
+    /**
+     * Occupied-day progress using each day's real first/last match times. {@code collapsedFraction} is used
+     * when a day has no time span.
+     */
+    public static double matchDayProgress(LocalDateTime time, List<MatchDay> days, double collapsedFraction) {
+        if (time == null || days == null || days.isEmpty()) return 0;
+        int index = dayIndex(time.toLocalDate(), days);
+        MatchDay day = days.get(index);
+        double fraction = dayFraction(time, day, collapsedFraction);
+        return (index + fraction) / days.size();
+    }
+
+    static int dayIndex(LocalDate target, List<MatchDay> days) {
+        int index = 0;
+        for (int i = 0; i < days.size(); i++) {
+            LocalDate day = days.get(i).date();
+            if (day.equals(target)) return i;
+            if (day.isBefore(target)) index = i;
+            else break;
+        }
+        return index;
+    }
+
+    static double dayFraction(LocalDateTime time, MatchDay day, double collapsedFraction) {
+        if (day.collapsed()) {
+            return Double.isNaN(collapsedFraction) ? 0 : Math.clamp(collapsedFraction, 0, 1);
+        }
+        if (time == null) return 0;
+        if (time.toLocalDate().isBefore(day.date())) return 0;
+        if (time.toLocalDate().isAfter(day.date())) return 1;
+        return progress(time, day.oldest(), day.newest());
+    }
+
+    public static LocalDateTime timeFromMatchDays(double progressFromTop, List<MatchDay> days) {
+        if (days == null || days.isEmpty()) return null;
+        double fromOldest = Math.clamp(progressFromTop, 0, 1);
+        double scaled = fromOldest * days.size();
+        int index = Math.min(days.size() - 1, (int) Math.floor(scaled));
+        if (index < 0) index = 0;
+        double fraction = Math.clamp(scaled - index, 0, 1);
+        if (index == days.size() - 1 && fromOldest >= 1) fraction = 1;
+        MatchDay day = days.get(index);
+        if (day.collapsed()) return day.oldest();
+        return interpolate(day.oldest(), day.newest(), fraction);
+    }
+
+    /**
+     * Match rank to {@code OFFSET} when the target day is collapsed to one timestamp, otherwise {@code -1}
+     * to jump by time.
+     */
+    public static long skipFromProgress(double progressFromTop, List<MatchDay> days) {
+        if (days == null || days.isEmpty()) return -1;
+        double fromOldest = Math.clamp(progressFromTop, 0, 1);
+        double scaled = fromOldest * days.size();
+        int index = Math.min(days.size() - 1, (int) Math.floor(scaled));
+        if (index < 0) index = 0;
+        double fraction = Math.clamp(scaled - index, 0, 1);
+        if (index == days.size() - 1 && fromOldest >= 1) fraction = 1;
+        MatchDay day = days.get(index);
+        if (!day.collapsed()) return -1;
+        long prefix = 0;
+        for (int i = 0; i < index; i++) {
+            prefix += days.get(i).matches();
+        }
+        long within = Math.round(fraction * Math.max(0, day.matches() - 1));
+        return prefix + within;
+    }
+
+    public static double fractionInDay(double progressFromTop, List<MatchDay> days) {
+        if (days == null || days.isEmpty()) return Math.clamp(progressFromTop, 0, 1);
+        double fromOldest = Math.clamp(progressFromTop, 0, 1);
+        double scaled = fromOldest * days.size();
+        int index = Math.min(days.size() - 1, (int) Math.floor(scaled));
+        if (index < 0) index = 0;
+        double fraction = Math.clamp(scaled - index, 0, 1);
+        if (index == days.size() - 1 && fromOldest >= 1) return 1;
+        return fraction;
+    }
+
+    public static MatchDay dayAtProgress(double progressFromTop, List<MatchDay> days) {
+        if (days == null || days.isEmpty()) return null;
+        double fromOldest = Math.clamp(progressFromTop, 0, 1);
+        double scaled = fromOldest * days.size();
+        int index = Math.min(days.size() - 1, (int) Math.floor(scaled));
+        if (index < 0) index = 0;
+        return days.get(index);
+    }
+
+    static LocalDateTime interpolate(LocalDateTime first, LocalDateTime last, double fraction) {
+        if (first == null) return last;
+        if (last == null || !last.isAfter(first)) return first;
+        double clamped = Math.clamp(fraction, 0, 1);
+        long millis = Math.round(Duration.between(first, last).toMillis() * clamped);
+        return first.plus(Duration.ofMillis(millis));
     }
 
     static LocalDateTime timeFromCompressedDays(double progressFromTop, List<LocalDate> days) {
@@ -185,6 +285,15 @@ public final class TimelineLayout {
         if (trackHeight <= 0 || viewHeight <= 0 || contentHeight <= viewHeight) return 0;
         int sized = (int) Math.round((double) viewHeight / contentHeight * trackHeight);
         return Math.clamp(sized, Math.max(1, minThumb), trackHeight);
+    }
+
+    /**
+     * Scroll offset that walks through a day's loaded rows. {@code 0} puts the date header at the top of the
+     * view; {@code 1} puts the last content of that day on the bottom edge when the day is taller than the view.
+     */
+    public static double scrollForDateFraction(int dateStartY, int dateEndY, int viewHeight, double fraction) {
+        int travel = Math.max(0, dateEndY - dateStartY - Math.max(0, viewHeight));
+        return dateStartY + Math.clamp(fraction, 0, 1) * travel;
     }
 
     /**

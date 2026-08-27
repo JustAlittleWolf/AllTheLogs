@@ -42,7 +42,7 @@ public final class QueryBuilder {
         String where = conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions);
         String order = orderBy(query, "e.entry_time", "e.file_id", "e.line_index");
         boolean expandContext = query.contextLines() > 0 && query.hasTextFilter();
-        String limit = query.limit() < 0 || expandContext ? "" : " LIMIT " + query.limit();
+        String limit = query.limit() < 0 || expandContext ? "" : " LIMIT " + query.limit() + offsetSql(query);
 
         String sql;
         if (!expandContext) {
@@ -65,7 +65,7 @@ public final class QueryBuilder {
             }
             String contextWhere = contextFilters.isEmpty() ? "" : " WHERE " + String.join(" AND ", contextFilters);
             String matchOrder = orderBy(query, "entry_time", "file_id", "line_index");
-            String matchLimit = query.limit() < 0 ? "" : " " + matchOrder + " LIMIT " + query.limit();
+            String matchLimit = query.limit() < 0 ? "" : " " + matchOrder + " LIMIT " + query.limit() + offsetSql(query);
             sql = "WITH matches AS (SELECT file_id, line_index FROM chat_entry" + where + matchLimit + "), "
                 + "wanted AS (SELECT DISTINCT m.file_id, m.line_index + o.offset AS line_index FROM matches m, "
                 + "(SELECT unnest(range(-" + context + ", " + context + " + 1)) AS offset) o) "
@@ -92,15 +92,20 @@ public final class QueryBuilder {
     }
 
     /**
-     * Distinct calendar days that contain matches, oldest first. Same filter as {@link #bounds(ChatQuery)}.
+     * Occupied match days with first/last timestamps and counts, oldest first. Same filter as {@link #bounds(ChatQuery)}.
      */
     public static QueryBuilder dates(ChatQuery query) {
         List<Object> parameters = new ArrayList<>();
         List<String> conditions = new ArrayList<>();
         addMatchConditions(query, false, conditions, parameters);
         String where = conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions);
-        String sql = "SELECT DISTINCT CAST(e.entry_time AS DATE) FROM chat_entry e" + where + " ORDER BY 1";
+        String sql = "SELECT CAST(e.entry_time AS DATE), MIN(e.entry_time), MAX(e.entry_time), COUNT(*)"
+            + " FROM chat_entry e" + where + " GROUP BY 1 ORDER BY 1";
         return new QueryBuilder(sql, parameters);
+    }
+
+    private static String offsetSql(ChatQuery query) {
+        return query.skip() > 0 ? " OFFSET " + query.skip() : "";
     }
 
     /**
