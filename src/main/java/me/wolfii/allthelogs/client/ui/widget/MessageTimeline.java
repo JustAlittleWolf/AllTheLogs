@@ -46,7 +46,7 @@ public final class MessageTimeline extends BaseUIComponent {
     private static final int MIDDLE_HOLD_MS = 250;
     private static final int LOADING_CHIP_MS = 100;
     private static final int SELECT_DRAG_SLOP = 3;
-    private static final int DOUBLE_CLICK_MS = 250;
+    private static final int DOUBLE_CLICK_MS = 350;
     private static final int TICK_LABEL_OFFSET = 5;
 
     private static final int LIST_BG = 0x80000000;
