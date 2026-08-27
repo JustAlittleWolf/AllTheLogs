@@ -161,6 +161,23 @@ public final class TimelineLayout {
     }
 
     /**
+     * Small Immich-style scrubber thumb. Taller when few occupied days are in the query, shorter when many
+     * are. Independent of scroll position and of the loaded page.
+     */
+    public static int thumbHeightForDays(int trackHeight, int uniqueDates) {
+        if (trackHeight <= 0) return 0;
+        int min = Math.min(trackHeight, 16);
+        int max = Math.min(trackHeight, Math.max(min, trackHeight / 5));
+        int few = Math.min(max, Math.max(min, (int) Math.round(trackHeight * 0.16)));
+        int many = min;
+        int dates = Math.max(0, uniqueDates);
+        if (dates <= 1) return few;
+        if (dates >= 30) return many;
+        double t = (dates - 1) / 29.0;
+        return (int) Math.round(few + (many - few) * t);
+    }
+
+    /**
      * Thumb height on a track of {@code trackHeight} for a viewport of {@code viewHeight} in content of
      * {@code contentHeight}. Zero when everything fits, so the thumb can be hidden.
      */

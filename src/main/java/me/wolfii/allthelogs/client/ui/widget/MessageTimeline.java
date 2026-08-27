@@ -29,8 +29,8 @@ import org.lwjgl.glfw.GLFW;
 
 /**
  * Virtualised log list plus a timeline scrubber on the right. Newest is at the bottom. The scrubber maps the
- * matched-log range only, sizes its thumb from the query (matches and context), and always shows date ticks
- * along the track. Short pages sit on the bottom edge of the list.
+ * matched-log range only, keeps a small thumb sized from how many match days are in the query, and always
+ * shows date ticks along the track. Short pages sit on the bottom edge of the list.
  */
 public final class MessageTimeline extends BaseUIComponent {
     public static final int ROW_HEIGHT = MessageListLayout.ROW_HEIGHT;
@@ -660,9 +660,9 @@ public final class MessageTimeline extends BaseUIComponent {
 
     private int thumbHeight() {
         if (draggingTimeline && scrubThumbHeight > 0) return scrubThumbHeight;
-        if (window.rows().isEmpty() || height <= 0 || matchCount <= 0) return 0;
-        int contentHeight = MessageListLayout.estimatedContentHeight(matchCount, contextLines, uniqueMatchDates);
-        return TimelineLayout.thumbHeight(height, contentHeight, height, MIN_THUMB_HEIGHT);
+        if (window.rows().isEmpty() || height <= 0) return 0;
+        int days = uniqueMatchDates > 0 ? uniqueMatchDates : matchDays.size();
+        return TimelineLayout.thumbHeightForDays(height, days);
     }
 
     private int thumbTop(int thumbHeight) {
