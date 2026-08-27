@@ -29,8 +29,8 @@ import java.util.function.Consumer;
 import org.lwjgl.glfw.GLFW;
 
 /**
- * Virtualised log list plus a timeline scrubber on the right. Newest is at the top. The scrubber maps the
- * matched-log range only and always shows date ticks along the track, Immich-style.
+ * Virtualised log list plus a timeline scrubber on the right. Newest is at the bottom. The scrubber maps the
+ * matched-log range only and always shows date ticks along the track.
  */
 public final class MessageTimeline extends BaseUIComponent {
     public static final int ROW_HEIGHT = MessageListLayout.ROW_HEIGHT;
@@ -81,6 +81,8 @@ public final class MessageTimeline extends BaseUIComponent {
     private double autoScrollOriginY;
     private double autoScrollMouseY;
     private boolean clickSelectsRow;
+    private boolean middleButtonDown;
+    private boolean middleHoldMode;
     private int clickRow;
     private int clickChar;
     private double clickX;
@@ -180,6 +182,10 @@ public final class MessageTimeline extends BaseUIComponent {
         this.scrollY = 0;
         selection.clear();
         finishScrub();
+    }
+
+    public void scrollToEnd() {
+        setScrollY(Math.max(0, layout.contentHeight() - height));
     }
 
     /**
@@ -308,6 +314,8 @@ public final class MessageTimeline extends BaseUIComponent {
         }
         if (click.button() == GLFW.GLFW_MOUSE_BUTTON_MIDDLE) {
             autoScrolling = true;
+            middleButtonDown = true;
+            middleHoldMode = false;
             autoScrollDownAtMs = System.currentTimeMillis();
             autoScrollOriginY = click.y();
             autoScrollMouseY = click.y();
@@ -315,9 +323,19 @@ public final class MessageTimeline extends BaseUIComponent {
             clickSelectsRow = false;
             return true;
         }
+        if (click.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
+            selection.clear();
+            clickSelectsRow = false;
+            draggingSelection = false;
+            return true;
+        }
+        if (click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+            return super.onMouseDown(click, doubled);
+        }
         int row = rowAtLocalY(click.y());
         if (row < 0) return super.onMouseDown(click, doubled);
         if (doubled) {
+            clickSelectsRow = false;
             onExpand.accept(window.rows().get(row));
             return true;
         }
@@ -327,7 +345,6 @@ public final class MessageTimeline extends BaseUIComponent {
         clickX = click.x();
         clickY = click.y();
         draggingSelection = false;
-        selection.selectRow(row, window.rows().get(row).message().length());
         return true;
     }
 
@@ -360,14 +377,15 @@ public final class MessageTimeline extends BaseUIComponent {
             draggingTimeline = false;
             commitScrub(click.y());
         }
-        draggingSelection = false;
-        clickSelectsRow = false;
         if (click.button() == GLFW.GLFW_MOUSE_BUTTON_MIDDLE) {
-            if (autoScrolling && System.currentTimeMillis() - autoScrollDownAtMs >= MIDDLE_HOLD_MS) {
-                stopAutoScroll();
-            }
             return true;
         }
+        if (click.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT && clickSelectsRow
+            && clickRow >= 0 && clickRow < window.rows().size()) {
+            selection.selectRow(clickRow, window.rows().get(clickRow).message().length());
+        }
+        draggingSelection = false;
+        clickSelectsRow = false;
         return super.onMouseUp(click);
     }
 
@@ -525,7 +543,7 @@ public final class MessageTimeline extends BaseUIComponent {
         int boxWidth = Math.min(listWidth - 16, font.width(text) + 16);
         int boxHeight = 16;
         int boxX = x + Math.max(8, listWidth - 8 - boxWidth);
-        int boxY = y + height - 8 - boxHeight;
+        int boxY = y + 8;
         HoverChip.fill(graphics, boxX, boxY, boxWidth, boxHeight, BANNER_BG);
         graphics.drawText(text, boxX + 8, boxY + LIST_PAD, 1, TEXT);
     }
@@ -562,7 +580,7 @@ public final class MessageTimeline extends BaseUIComponent {
 
     private void drawDateTicks(OwoUIGraphics graphics, int trackX, LocalDateTime oldest, LocalDateTime newest) {
         for (TimelineLayout.DateTick tick : TimelineLayout.spacedTicks(oldest, newest, matchMonths, height, TICK_GAP_PX)) {
-            int tickY = TimelineLayout.yFromNewest(tick.at(), oldest, newest, matchMonths, y, height);
+            int tickY = TimelineLayout.yFromOldest(tick.at(), oldest, newest, matchMonths, y, height);
             graphics.fill(trackX + 2, tickY, trackX + TRACK_WIDTH - 2, tickY + 1, TICK_DOT);
             graphics.drawText(Component.literal(tick.label()), trackX - 3, tickY + TICK_LABEL_OFFSET,
                 0.75f, TICK_LABEL, OwoUIGraphics.TextAnchor.BOTTOM_RIGHT);
@@ -573,7 +591,7 @@ public final class MessageTimeline extends BaseUIComponent {
         if (!Double.isNaN(scrubY)) return y + (int) Math.round(scrubY);
         LocalDateTime viewTime = visibleTime();
         if (viewTime == null) return Integer.MIN_VALUE;
-        return TimelineLayout.yFromNewest(viewTime, oldest, newest, matchMonths, y, height);
+        return TimelineLayout.yFromOldest(viewTime, oldest, newest, matchMonths, y, height);
     }
 
     private void updateCursor(int mouseX, int mouseY, int listWidth) {
@@ -591,6 +609,18 @@ public final class MessageTimeline extends BaseUIComponent {
 
     private void applyAutoScroll(int mouseY, float delta) {
         if (!autoScrolling) return;
+        if (middleButtonDown) {
+            boolean pressed = middleMousePressed();
+            long heldMs = System.currentTimeMillis() - autoScrollDownAtMs;
+            middleHoldMode = latchMiddleHold(middleHoldMode, pressed, heldMs);
+            if (!pressed) {
+                middleButtonDown = false;
+                if (middleHoldMode) {
+                    stopAutoScroll();
+                    return;
+                }
+            }
+        }
         autoScrollMouseY = mouseY - y;
         double offset = autoScrollMouseY - autoScrollOriginY;
         if (Math.abs(offset) <= AUTO_SCROLL_DEADZONE) return;
@@ -602,6 +632,21 @@ public final class MessageTimeline extends BaseUIComponent {
 
     private void stopAutoScroll() {
         autoScrolling = false;
+        middleButtonDown = false;
+        middleHoldMode = false;
+    }
+
+    /**
+     * Once the middle button has been held for {@link #MIDDLE_HOLD_MS}, releasing it should stop auto-scroll.
+     */
+    static boolean latchMiddleHold(boolean alreadyLatched, boolean buttonDown, long heldMs) {
+        return alreadyLatched || (buttonDown && heldMs >= MIDDLE_HOLD_MS);
+    }
+
+    private boolean middleMousePressed() {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.getWindow() == null) return false;
+        return GLFW.glfwGetMouseButton(client.getWindow().handle(), GLFW.GLFW_MOUSE_BUTTON_MIDDLE) == GLFW.GLFW_PRESS;
     }
 
     private boolean showingLoading() {
@@ -633,7 +678,7 @@ public final class MessageTimeline extends BaseUIComponent {
         LocalDateTime newest = scrubNewest();
         if (oldest == null || newest == null) return null;
         double progress = localY / Math.max(1, height - 1);
-        return TimelineLayout.timeFromNewest(progress, oldest, newest, matchMonths);
+        return TimelineLayout.timeFromOldest(progress, oldest, newest, matchMonths);
     }
 
     private LocalDateTime scrubOldest() {

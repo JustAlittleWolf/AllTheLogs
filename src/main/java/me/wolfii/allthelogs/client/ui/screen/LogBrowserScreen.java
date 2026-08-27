@@ -67,13 +67,13 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
             .horizontalAlignment(HorizontalAlignment.LEFT)
             .verticalAlignment(VerticalAlignment.TOP);
 
-        content.child(buildToolbar());
-
         list = new MessageTimeline();
+        FlowLayout toolbar = buildToolbar();
         queries.attach(list, infoButton);
         filters = new FilterOverlay(overlays, () -> this.width, () -> this.height,
             queries::filter, queries::versions, this::applyFilter);
         content.child(list.verticalSizing(Sizing.expand()));
+        content.child(toolbar);
         root.child(content);
     }
 

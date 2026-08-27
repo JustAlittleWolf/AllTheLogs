@@ -910,6 +910,21 @@ class LogStoreTest {
     }
 
     @Test
+    void queryKeepsLineIndexOrderWhenTimestampsMatch() {
+        LocalDateTime at = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+        store.startSession("26.2", at);
+        store.importSessionMessage("first", at);
+        store.importSessionMessage("second", at);
+        store.importSessionMessage("third", at);
+
+        List<ChatEntry> entries = store.query(ChatQuery.all());
+        assertEquals(List.of("first", "second", "third"), entries.stream().map(ChatEntry::message).toList());
+        assertEquals(List.of(0, 1, 2), entries.stream().map(ChatEntry::lineIndex).toList());
+        List<ChatEntry> newestFirst = store.query(ChatQuery.all().withSort(ChatQuery.Sort.DESCENDING));
+        assertEquals(List.of("third", "second", "first"), newestFirst.stream().map(ChatEntry::message).toList());
+    }
+
+    @Test
     void clientEntriesSupportContextLines() {
         LocalDateTime base = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
         store.startSession("26.2", base);

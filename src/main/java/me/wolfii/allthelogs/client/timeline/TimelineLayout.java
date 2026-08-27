@@ -48,15 +48,14 @@ public final class TimelineLayout {
     }
 
     /**
-     * Pixel Y with oldest at the top. Prefer {@link #yFromNewest} for the log browser, which matches
-     * newest-first message order.
+     * Pixel Y with oldest at the top. Matches chronological message order in the log browser.
      */
     public static int y(LocalDateTime time, LocalDateTime first, LocalDateTime last, int top, int height) {
-        return top + (int) Math.round(progress(time, first, last) * Math.max(0, height - 1));
+        return yFromOldest(time, first, last, List.of(), top, height);
     }
 
     /**
-     * Pixel Y with newest at the top and oldest at the bottom, like Immich's timeline scrubber.
+     * Pixel Y with newest at the top and oldest at the bottom.
      */
     public static int yFromNewest(LocalDateTime time, LocalDateTime oldest, LocalDateTime newest, int top, int height) {
         return yFromNewest(time, oldest, newest, List.of(), top, height);
@@ -72,11 +71,25 @@ public final class TimelineLayout {
         return top + (int) Math.round(fromNewest * Math.max(0, height - 1));
     }
 
+    /**
+     * Pixel Y with oldest at the top and newest at the bottom, matching chronological message order.
+     */
+    public static int yFromOldest(LocalDateTime time, LocalDateTime oldest, LocalDateTime newest,
+                                  List<YearMonth> months, int top, int height) {
+        double fromOldest = progress(time, oldest, newest, months);
+        return top + (int) Math.round(fromOldest * Math.max(0, height - 1));
+    }
+
     public static LocalDateTime timeFromNewest(double progressFromTop, LocalDateTime oldest, LocalDateTime newest) {
         return timeFromNewest(progressFromTop, oldest, newest, List.of());
     }
 
     public static LocalDateTime timeFromNewest(double progressFromTop, LocalDateTime oldest, LocalDateTime newest,
+                                               List<YearMonth> months) {
+        return timeFromOldest(1 - Math.clamp(progressFromTop, 0, 1), oldest, newest, months);
+    }
+
+    public static LocalDateTime timeFromOldest(double progressFromTop, LocalDateTime oldest, LocalDateTime newest,
                                                List<YearMonth> months) {
         if (months != null && months.size() >= 2) {
             return timeFromCompressedMonths(progressFromTop, months);
@@ -85,7 +98,7 @@ public final class TimelineLayout {
         LocalDateTime last = later(oldest, newest);
         if (first == null || last == null) return first;
         double clamped = Math.clamp(progressFromTop, 0, 1);
-        long millis = Math.round(Duration.between(first, last).toMillis() * (1 - clamped));
+        long millis = Math.round(Duration.between(first, last).toMillis() * clamped);
         return first.plus(Duration.ofMillis(millis));
     }
 
@@ -132,7 +145,7 @@ public final class TimelineLayout {
     }
 
     static LocalDateTime timeFromCompressedMonths(double progressFromTop, List<YearMonth> months) {
-        double fromOldest = 1 - Math.clamp(progressFromTop, 0, 1);
+        double fromOldest = Math.clamp(progressFromTop, 0, 1);
         double scaled = fromOldest * months.size();
         int index = Math.min(months.size() - 1, (int) Math.floor(scaled));
         if (index < 0) index = 0;
@@ -176,7 +189,7 @@ public final class TimelineLayout {
     }
 
     /**
-     * One label per occupied month when there are a handful of them, otherwise years. Newest-at-top
+     * One label per occupied month when there are a handful of them, otherwise years. Oldest-at-top
      * placement is done by {@link #spacedTicks}.
      */
     public static List<DateTick> ticks(List<YearMonth> months) {
@@ -236,7 +249,7 @@ public final class TimelineLayout {
     }
 
     /**
-     * Date labels placed along a newest-at-top track, spaced at least {@code minGapPx} apart so they stay readable.
+     * Date labels placed along an oldest-at-top track, spaced at least {@code minGapPx} apart so they stay readable.
      */
     public static List<DateTick> spacedTicks(LocalDateTime oldest, LocalDateTime newest, int height, int minGapPx) {
         return spacedTicks(oldest, newest, List.of(), height, minGapPx);
@@ -248,19 +261,19 @@ public final class TimelineLayout {
         if (raw.isEmpty() || height <= 0 || minGapPx <= 0) return raw;
         List<DateTick> ordered = new ArrayList<>(raw);
         ordered.sort((a, b) -> Integer.compare(
-            yFromNewest(a.at(), oldest, newest, months, 0, height),
-            yFromNewest(b.at(), oldest, newest, months, 0, height)));
+            yFromOldest(a.at(), oldest, newest, months, 0, height),
+            yFromOldest(b.at(), oldest, newest, months, 0, height)));
         List<DateTick> kept = new ArrayList<>();
         int lastY = Integer.MIN_VALUE / 2;
         for (DateTick tick : ordered) {
-            int y = yFromNewest(tick.at(), oldest, newest, months, 0, height);
+            int y = yFromOldest(tick.at(), oldest, newest, months, 0, height);
             if (kept.isEmpty() || Math.abs(y - lastY) >= minGapPx) {
                 kept.add(tick);
                 lastY = y;
             }
         }
         DateTick last = ordered.getLast();
-        int lastTickY = yFromNewest(last.at(), oldest, newest, months, 0, height);
+        int lastTickY = yFromOldest(last.at(), oldest, newest, months, 0, height);
         if (!kept.getLast().equals(last) && Math.abs(lastTickY - lastY) >= minGapPx) {
             kept.add(last);
         }

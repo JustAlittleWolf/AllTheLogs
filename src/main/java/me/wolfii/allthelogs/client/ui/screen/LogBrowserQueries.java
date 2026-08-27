@@ -99,9 +99,14 @@ final class LogBrowserQueries {
         int gen = generation.incrementAndGet();
         list.setLoading(true);
         refreshStats();
+        boolean chronological = filter.sort() == ChatQuery.Sort.ASCENDING;
         SearchFilter page = filter.withoutOffset();
+        if (chronological) {
+            page = page.withSort(ChatQuery.Sort.DESCENDING);
+        }
+        SearchFilter query = page;
         long startedAt = System.nanoTime();
-        onClient(AllTheLogsClient.worker().query(page.toQuery()), (entries, error) -> {
+        onClient(AllTheLogsClient.worker().query(query.toQuery()), (entries, error) -> {
             if (gen != generation.get()) return;
             list.setLoading(false);
             if (error != null) {
@@ -111,8 +116,11 @@ final class LogBrowserQueries {
                 snapshotCurrentList();
                 return;
             }
-            List<DisplayRow> rows = DisplayRow.from(entries, page);
-            list.reset(rows, false, pageIsFull(rows, page));
+            List<DisplayRow> rows = DisplayRow.from(entries, filter);
+            if (chronological) rows = ResultWindow.reversed(rows);
+            boolean full = pageIsFull(rows, query);
+            list.reset(rows, chronological && full, !chronological && full);
+            if (chronological) list.scrollToEnd();
             long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
             list.showMatchCount(ResultWindow.matchCount(rows), elapsedMs);
             snapshotCurrentList();
@@ -239,9 +247,8 @@ final class LogBrowserQueries {
                 return;
             }
             boolean full = pageIsFull(rows, query);
-            boolean hasBefore = hasMatchesBeyond(rows, true);
-            boolean hasAfter = full || hasMatchesBeyond(rows, false);
-            list.showAt(target, rows, hasBefore, hasAfter);
+            list.showAt(target, rows, pageHasBefore(filter.sort(), rows, matchBounds),
+                pageHasAfter(filter.sort(), full, rows, matchBounds));
             if (!preview) list.finishScrub();
             snapshotCurrentList();
         });
@@ -267,22 +274,33 @@ final class LogBrowserQueries {
         return time.minusNanos(1);
     }
 
-    private boolean hasMatchesBeyond(List<DisplayRow> rows, boolean newer) {
-        LocalDateTime edge = newer ? firstMatchTime(rows) : lastMatchTime(rows);
-        if (edge == null) return false;
-        LocalDateTime bound = newer ? matchBounds.newest() : matchBounds.oldest();
-        if (bound == null) return true;
-        return newer ? bound.isAfter(edge) : bound.isBefore(edge);
+    static boolean pageHasBefore(ChatQuery.Sort sort, List<DisplayRow> rows, MatchBounds bounds) {
+        LocalDateTime first = firstMatchTime(rows);
+        if (first == null || bounds == null) return false;
+        if (sort == ChatQuery.Sort.ASCENDING) {
+            return bounds.oldest() != null && bounds.oldest().isBefore(first);
+        }
+        return bounds.newest() != null && bounds.newest().isAfter(first);
     }
 
-    private static LocalDateTime firstMatchTime(List<DisplayRow> rows) {
+    static boolean pageHasAfter(ChatQuery.Sort sort, boolean full, List<DisplayRow> rows, MatchBounds bounds) {
+        if (full) return true;
+        LocalDateTime last = lastMatchTime(rows);
+        if (last == null || bounds == null) return false;
+        if (sort == ChatQuery.Sort.ASCENDING) {
+            return bounds.newest() != null && bounds.newest().isAfter(last);
+        }
+        return bounds.oldest() != null && bounds.oldest().isBefore(last);
+    }
+
+    static LocalDateTime firstMatchTime(List<DisplayRow> rows) {
         for (DisplayRow row : rows) {
             if (row.match()) return row.entry().timestamp();
         }
         return rows.isEmpty() ? null : rows.getFirst().entry().timestamp();
     }
 
-    private static LocalDateTime lastMatchTime(List<DisplayRow> rows) {
+    static LocalDateTime lastMatchTime(List<DisplayRow> rows) {
         for (int i = rows.size() - 1; i >= 0; i--) {
             if (rows.get(i).match()) return rows.get(i).entry().timestamp();
         }

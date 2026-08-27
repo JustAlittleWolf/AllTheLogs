@@ -1,0 +1,16 @@
+package me.wolfii.allthelogs.client.ui.widget;
+
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class MessageTimelineTest {
+    @Test
+    void middleHoldLatchesOnlyAfterTheHoldThresholdWhileTheButtonIsDown() {
+        assertFalse(MessageTimeline.latchMiddleHold(false, true, 249));
+        assertTrue(MessageTimeline.latchMiddleHold(false, true, 250));
+        assertFalse(MessageTimeline.latchMiddleHold(false, false, 500));
+        assertTrue(MessageTimeline.latchMiddleHold(true, false, 500));
+    }
+}

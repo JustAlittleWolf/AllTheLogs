@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
 import java.time.Duration;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -67,10 +66,27 @@ class ResultWindowTest {
         assertEquals(List.of(3, 4, 5), chronological.stream().map(DisplayRow::lineIndex).toList());
     }
 
+    @Test
+    void mergeSortedPutsTheHigherLineIndexLaterWhenTimestampsMatch() {
+        LocalDateTime time = LocalDateTime.of(2026, 8, 26, 10, 0);
+        DisplayRow first = rowAt(time, 1);
+        DisplayRow second = rowAt(time, 4);
+        List<DisplayRow> merged = ResultWindow.mergeSorted(List.of(second), List.of(first),
+            me.wolfii.allthelogs.data.ChatQuery.Sort.ASCENDING);
+        assertEquals(List.of(1, 4), merged.stream().map(DisplayRow::lineIndex).toList());
+    }
+
     private static DisplayRow row(String file, int line) {
-        LocalDateTime start = LocalDateTime.of(2026, 8, 26, 10, 0);
-        ChatLog log = new ChatLog(new LogSource.File(Path.of(file)), LocalDate.of(2026, 8, 26), "26.2", start, start);
-        ChatEntry entry = new ChatEntry(log, start.plusSeconds(line), line, "msg-" + line);
+        return rowAt(LocalDateTime.of(2026, 8, 26, 10, 0).plusSeconds(line), line, file);
+    }
+
+    private static DisplayRow rowAt(LocalDateTime time, int line) {
+        return rowAt(time, line, "a.log");
+    }
+
+    private static DisplayRow rowAt(LocalDateTime time, int line, String file) {
+        ChatLog log = new ChatLog(new LogSource.File(Path.of(file)), time.toLocalDate(), "26.2", time, time);
+        ChatEntry entry = new ChatEntry(log, time, line, "msg-" + line);
         return new DisplayRow(entry, true, Duration.ZERO, List.of());
     }
 }

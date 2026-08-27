@@ -26,6 +26,10 @@ class TimelineLayoutTest {
         assertEquals(99, TimelineLayout.yFromNewest(first, first, last, 0, 100));
         assertEquals(last, TimelineLayout.timeFromNewest(0, first, last));
         assertEquals(first, TimelineLayout.timeFromNewest(1, first, last));
+        assertEquals(first, TimelineLayout.timeFromOldest(0, first, last, List.of()));
+        assertEquals(last, TimelineLayout.timeFromOldest(1, first, last, List.of()));
+        assertEquals(0, TimelineLayout.yFromOldest(first, first, last, List.of(), 0, 100));
+        assertEquals(99, TimelineLayout.yFromOldest(last, first, last, List.of(), 0, 100));
         assertEquals(first, TimelineLayout.oldest(List.of(last, first.plusHours(3), first)));
         assertEquals(last, TimelineLayout.newest(List.of(first, last, first.plusHours(3))));
 
@@ -61,14 +65,14 @@ class TimelineLayoutTest {
     }
 
     @Test
-    void spacedTicksKeepAReadableGapOnANewestFirstTrack() {
+    void spacedTicksKeepAReadableGapOnAnOldestFirstTrack() {
         LocalDateTime oldest = LocalDateTime.of(2024, 1, 1, 0, 0);
         LocalDateTime newest = LocalDateTime.of(2026, 8, 1, 0, 0);
         List<TimelineLayout.DateTick> ticks = TimelineLayout.spacedTicks(oldest, newest, 80, 16);
         assertTrue(ticks.size() >= 2);
         int previousY = Integer.MIN_VALUE / 2;
         for (TimelineLayout.DateTick tick : ticks) {
-            int y = TimelineLayout.yFromNewest(tick.at(), oldest, newest, 0, 80);
+            int y = TimelineLayout.yFromOldest(tick.at(), oldest, newest, List.of(), 0, 80);
             assertTrue(y - previousY >= 16, () -> "ticks overlap at " + tick.label());
             previousY = y;
         }
