@@ -35,7 +35,7 @@ import org.lwjgl.glfw.GLFW;
 public final class MessageTimeline extends BaseUIComponent {
     public static final int ROW_HEIGHT = MessageListLayout.ROW_HEIGHT;
     public static final int TIMELINE_WIDTH = 68;
-    public static final int SCRUB_PAGE_SIZE = 24;
+    public static final int SCRUB_PAGE_SIZE = 32;
     private static final int TRACK_WIDTH = 8;
     private static final int THUMB_HEIGHT = 16;
     private static final int BANNER_MS = 5000;
