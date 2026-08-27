@@ -16,6 +16,8 @@ import java.util.Objects;
  * @param parallelism          number of log files parsed concurrently
  * @param skipAlreadyImported  whether files whose source and entry path are already present in the database are
  *                             skipped instead of replaced
+ * @param optimize             whether a successful import of new files should cluster {@code chat_entry} and compact
+ *                             the database file afterwards
  * @param timezone             timezone the timestamps inside the imported log files are expressed in; they are
  *                             converted to the JVM's default timezone for storage, so that files written in different
  *                             zones stay comparable. Passing the default timezone leaves the values unchanged
@@ -26,6 +28,7 @@ public record ImportOptions(
     String pathMatcher,
     int parallelism,
     boolean skipAlreadyImported,
+    boolean optimize,
     ZoneId timezone
 ) {
     public ImportOptions {
@@ -46,59 +49,72 @@ public record ImportOptions(
     public static final String GAME_DIRECTORY_MATCHER = "**/logs/**";
 
     /**
-     * Defaults to a recursive import of nested archives, one parser per CPU, replacing already imported files, and
-     * treating log timestamps as local time.
+     * Defaults to a recursive import of nested archives, one parser per CPU, replacing already imported files,
+     * clustering and compacting afterwards, and treating log timestamps as local time.
      */
     public static ImportOptions defaults() {
-        return new ImportOptions(true, true, null, Runtime.getRuntime().availableProcessors(), false,
+        return new ImportOptions(true, true, null, Runtime.getRuntime().availableProcessors(), false, true,
             ZoneId.systemDefault());
     }
 
     /**
      * Startup import of this instance's {@code logs} folder: recursive, no nested archives, skip files already
-     * stored, and only {@code .log} / {@code .log.gz} names.
+     * stored, only {@code .log} / {@code .log.gz} names, and skip post-import clustering and compact.
      */
     public static ImportOptions currentLogsDirectory() {
         return defaults()
             .withRecursive(true)
             .withNestedArchives(false)
             .withSkipAlreadyImported(true)
+            .withOptimize(false)
             .withPathMatcher(LOGS_DIRECTORY_MATCHER);
     }
 
     /**
      * Import of a Minecraft instance / game directory: walk {@code **&#47;logs&#47;**} and do not open zips found
-     * elsewhere in the tree.
+     * elsewhere in the tree. Skips post-import clustering and compact because this path is used for frequent local
+     * refreshes.
      */
     public static ImportOptions currentGameDirectory() {
         return defaults()
             .withRecursive(true)
             .withNestedArchives(false)
             .withSkipAlreadyImported(true)
+            .withOptimize(false)
             .withPathMatcher(GAME_DIRECTORY_MATCHER);
     }
 
     public ImportOptions withRecursive(boolean recursive) {
-        return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, timezone);
+        return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
+            timezone);
     }
 
     public ImportOptions withNestedArchives(boolean nestedArchives) {
-        return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, timezone);
+        return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
+            timezone);
     }
 
     /**
      * @param pathMatcher a glob such as {@code **&#47;logs&#47;**}, or {@code null} to accept every file
      */
     public ImportOptions withPathMatcher(String pathMatcher) {
-        return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, timezone);
+        return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
+            timezone);
     }
 
     public ImportOptions withParallelism(int parallelism) {
-        return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, timezone);
+        return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
+            timezone);
     }
 
     public ImportOptions withSkipAlreadyImported(boolean skipAlreadyImported) {
-        return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, timezone);
+        return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
+            timezone);
+    }
+
+    public ImportOptions withOptimize(boolean optimize) {
+        return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
+            timezone);
     }
 
     /**
@@ -107,7 +123,8 @@ public record ImportOptions(
      * leaves the values unchanged.
      */
     public ImportOptions withTimezone(ZoneId timezone) {
-        return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, timezone);
+        return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
+            timezone);
     }
 
     /**

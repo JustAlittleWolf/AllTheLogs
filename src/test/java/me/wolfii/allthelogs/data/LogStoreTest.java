@@ -146,6 +146,23 @@ class LogStoreTest {
     }
 
     @Test
+    void currentLogsImportSkipsOptimizeAndAcceptsASecondPass() throws IOException {
+        Path logs = tempDir.resolve("logs");
+        LogFixtures.writeGzipped(logs, "2026-08-26-1.log.gz", LogFixtures.modernLog("26.2", "first"));
+
+        ImportResult first = store.importDirectory(logs, ImportOptions.currentLogsDirectory());
+        assertEquals(1, first.importedFiles());
+
+        LogFixtures.writeGzipped(logs, "2026-08-27-1.log.gz", LogFixtures.modernLog("26.2", "second"));
+        ImportResult second = store.importDirectory(logs, ImportOptions.currentLogsDirectory());
+
+        assertEquals(1, second.importedFiles());
+        List<String> messages = store.allEntries().stream().map(ChatEntry::message).toList();
+        assertTrue(messages.contains("first"));
+        assertTrue(messages.contains("second"));
+    }
+
+    @Test
     void importsChatEntriesFromADirectory() throws IOException {
         ImportResult result = store.importDirectory(logsDirectory());
 

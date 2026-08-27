@@ -270,4 +270,28 @@ class ImportProgressTest {
         assertEquals(ImportPhase.OPTIMIZING, last.phase());
         assertTrue(updates.stream().noneMatch(progress -> progress.phase() == ImportPhase.CHUNKING));
     }
+
+    @Test
+    void optimizeFalseSkipsChunkingAndASecondImportStillWorks() throws IOException {
+        Path root = logsDirectory();
+        List<ImportProgress> updates = new CopyOnWriteArrayList<>();
+
+        ImportResult first = store.importDirectory(root, ImportOptions.defaults().withOptimize(false),
+            updates::add);
+
+        assertTrue(first.importedFiles() > 0);
+        assertTrue(updates.stream().noneMatch(progress -> progress.phase() == ImportPhase.CHUNKING));
+        ImportProgress last = updates.getLast();
+        assertEquals(1.0, last.fraction());
+        assertEquals(ImportPhase.OPTIMIZING, last.phase());
+
+        LogFixtures.writeGzipped(root.resolve("logs"), "2026-08-26-1.log.gz",
+            LogFixtures.modernLog("26.2", "second pass"));
+        ImportResult second = store.importDirectory(root, ImportOptions.defaults().withOptimize(false));
+
+        assertEquals(1, second.importedFiles());
+        List<String> messages = store.allEntries().stream().map(ChatEntry::message).toList();
+        assertTrue(messages.contains("alpha"));
+        assertTrue(messages.contains("second pass"));
+    }
 }

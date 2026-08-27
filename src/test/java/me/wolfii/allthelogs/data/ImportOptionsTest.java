@@ -35,6 +35,7 @@ class ImportOptionsTest {
         assertEquals(original.pathMatcher(), updated.pathMatcher());
         assertEquals(original.parallelism(), updated.parallelism());
         assertEquals(original.skipAlreadyImported(), updated.skipAlreadyImported());
+        assertEquals(original.optimize(), updated.optimize());
     }
 
     @Test
@@ -61,6 +62,7 @@ class ImportOptionsTest {
         assertFalse(options.nestedArchives());
         assertTrue(options.skipAlreadyImported());
         assertEquals(ImportOptions.LOGS_DIRECTORY_MATCHER, options.pathMatcher());
+        assertFalse(options.optimize());
     }
 
     @Test
@@ -70,5 +72,32 @@ class ImportOptionsTest {
         assertFalse(options.nestedArchives());
         assertTrue(options.skipAlreadyImported());
         assertEquals(ImportOptions.GAME_DIRECTORY_MATCHER, options.pathMatcher());
+        assertFalse(options.optimize());
+    }
+
+    @Test
+    void defaultsOptimizeAfterImport() {
+        assertTrue(ImportOptions.defaults().optimize());
+    }
+
+    @Test
+    void withOptimizeReplacesOnlyTheOptimizeFlag() {
+        ImportOptions original = ImportOptions.defaults()
+            .withRecursive(false)
+            .withNestedArchives(false)
+            .withPathMatcher("**/logs/**")
+            .withParallelism(2)
+            .withSkipAlreadyImported(true);
+
+        ImportOptions skipped = original.withOptimize(false);
+
+        assertFalse(skipped.optimize());
+        assertTrue(original.optimize());
+        assertEquals(original.recursive(), skipped.recursive());
+        assertEquals(original.nestedArchives(), skipped.nestedArchives());
+        assertEquals(original.pathMatcher(), skipped.pathMatcher());
+        assertEquals(original.parallelism(), skipped.parallelism());
+        assertEquals(original.skipAlreadyImported(), skipped.skipAlreadyImported());
+        assertEquals(original.timezone(), skipped.timezone());
     }
 }
