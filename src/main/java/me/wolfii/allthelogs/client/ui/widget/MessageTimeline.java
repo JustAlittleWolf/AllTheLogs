@@ -42,7 +42,7 @@ public final class MessageTimeline extends BaseUIComponent {
     private static final int LIST_PAD = 4;
     private static final int SCRUB_THROTTLE_MS = 100;
     private static final int TICK_GAP_PX = 16;
-    private static final int INFO_MAX_WIDTH = 144;
+    private static final int INFO_MAX_WIDTH = 160;
     private static final int AUTO_SCROLL_DEADZONE = 8;
     private static final int MIDDLE_HOLD_MS = 250;
     private static final int LOADING_CHIP_MS = 100;
