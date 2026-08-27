@@ -158,9 +158,16 @@ public final class ChatQueries {
      * Entries from {@code log} whose line index is within {@code radius} of {@code lineIndex}, inclusive.
      */
     public List<ChatEntry> around(ChatLog log, int lineIndex, int radius) {
+        return around(log, lineIndex, radius, radius);
+    }
+
+    /**
+     * Entries from {@code log} between {@code lineIndex - before} and {@code lineIndex + after}, inclusive.
+     */
+    public List<ChatEntry> around(ChatLog log, int lineIndex, int before, int after) {
         Objects.requireNonNull(log, "log");
-        int from = Math.max(0, lineIndex - Math.max(0, radius));
-        int to = lineIndex + Math.max(0, radius);
+        int from = Math.max(0, lineIndex - Math.max(0, before));
+        int to = lineIndex + Math.max(0, after);
         String sourcePath = storedSourcePath(log.source());
         String entryPath = storedEntryPath(log.source());
         String sql = SELECT_AROUND;

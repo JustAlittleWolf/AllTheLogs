@@ -6,10 +6,14 @@ package me.wolfii.allthelogs.client.ui.theme;
 public final class Colors {
     public static final int MATCH_TEXT = 0xFFFFFFFF;
     /**
-     * Multiply layer for search hits. Applied on top of the chat colour so later coloured messages stay tinted.
+     * Marker fill for search hits: the previous highlight green at 33% opacity.
      */
-    public static final int MATCH_HIGHLIGHT = 0xFFA8DC9C;
+    public static final int MATCH_HIGHLIGHT = 0x54A8DC9C;
     public static final int TIMESTAMP = 0xFFA0A0A0;
+    /**
+     * Timestamp on context lines, a step darker than {@link #TIMESTAMP}.
+     */
+    public static final int CONTEXT_TIMESTAMP = 0xFF7E7E7E;
     /**
      * Multiply layer that darkens context lines relative to matches.
      */

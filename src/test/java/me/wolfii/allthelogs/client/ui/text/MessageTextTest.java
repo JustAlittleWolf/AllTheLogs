@@ -116,7 +116,7 @@ class MessageTextTest {
         ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), LocalDate.of(2026, 8, 27), "26.2", time, time);
         DisplayRow match = new DisplayRow(new ChatEntry(log, time, 0, "needle"), true, Duration.ZERO,
             List.of(new HighlightSpan(0, 3)));
-        assertEquals(Colors.MATCH_HIGHLIGHT, MessageText.stackedColor(match, 0, false));
+        assertEquals(Colors.MATCH_TEXT, MessageText.stackedColor(match, 0, false));
         assertEquals(Colors.MATCH_TEXT, MessageText.stackedColor(match, 3, false));
         DisplayRow context = new DisplayRow(new ChatEntry(log, time, 1, "hello\\nworld"), false, Duration.ofSeconds(1),
             List.of());
@@ -146,6 +146,19 @@ class MessageTextTest {
         Component drawn = MessageText.message(row);
         assertTrue(drawn.getStyle().isObfuscated());
         assertEquals("abc", drawn.getString());
+    }
+
+    @Test
+    void contextTimestampsAreDarkerThanMatchTimestamps() {
+        LocalDateTime time = LocalDateTime.of(2026, 8, 27, 12, 0, 4);
+        ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), LocalDate.of(2026, 8, 27), "26.2", time, time);
+        DisplayRow match = new DisplayRow(new ChatEntry(log, time, 0, "needle"), true, Duration.ZERO, List.of());
+        DisplayRow context = new DisplayRow(new ChatEntry(log, time, 1, "around"), false, Duration.ofSeconds(1),
+            List.of());
+        assertEquals("12:00:04", MessageText.timestamp(match).getString());
+        assertEquals(Colors.TIMESTAMP & 0xFFFFFF, MessageText.timestamp(match).getStyle().getColor().getValue());
+        assertEquals(Colors.CONTEXT_TIMESTAMP & 0xFFFFFF,
+            MessageText.timestamp(context).getStyle().getColor().getValue());
     }
 
     private static String key(Component component) {

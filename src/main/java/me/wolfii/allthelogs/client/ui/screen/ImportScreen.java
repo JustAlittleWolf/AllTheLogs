@@ -116,6 +116,8 @@ public final class ImportScreen extends BaseOwoScreen<FlowLayout> {
         FlowLayout actions = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
         actions.gap(8).verticalAlignment(VerticalAlignment.CENTER);
         actions.child(UIComponents.button(Component.translatable("allthelogs.import.start"), button -> startImport()));
+        actions.child(UIComponents.button(Component.translatable("allthelogs.done"),
+            button -> Minecraft.getInstance().gui.setScreen(parent)));
         actions.child(status);
         root.child(actions);
     }

@@ -393,6 +393,10 @@ class LogStoreTest {
         ChatEntry hit = store.query(ChatQuery.all().withSubstring("needle in here")).getFirst();
         assertEquals(List.of("delta", "needle in here", "epsilon"),
             store.around(hit.chatLog(), hit.lineIndex(), 1).stream().map(ChatEntry::message).toList());
+        assertEquals(List.of("delta", "needle in here"),
+            store.around(hit.chatLog(), hit.lineIndex(), 1, 0).stream().map(ChatEntry::message).toList());
+        assertEquals(List.of("needle in here", "epsilon"),
+            store.around(hit.chatLog(), hit.lineIndex(), 0, 1).stream().map(ChatEntry::message).toList());
     }
 
     @Test

@@ -13,4 +13,12 @@ class MessageTimelineTest {
         assertFalse(MessageTimeline.latchMiddleHold(false, false, 500));
         assertTrue(MessageTimeline.latchMiddleHold(true, false, 500));
     }
+
+    @Test
+    void clickInTopHalfUsesTheClickedRowHalf() {
+        assertTrue(MessageTimeline.clickInTopHalf(0, 0, 12));
+        assertTrue(MessageTimeline.clickInTopHalf(5, 0, 12));
+        assertFalse(MessageTimeline.clickInTopHalf(6, 0, 12));
+        assertFalse(MessageTimeline.clickInTopHalf(11, 0, 12));
+    }
 }

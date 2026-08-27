@@ -153,7 +153,7 @@ final class LogBrowserQueries {
 
     void setFilter(SearchFilter next) {
         updateFilter(next);
-        reload(true);
+        reload();
     }
 
     int bumpGeneration() {
@@ -164,12 +164,11 @@ final class LogBrowserQueries {
         return generation.get();
     }
 
-    void reload(boolean resetTimeline) {
+    void reload() {
         if (list == null) return;
         reloadPending = false;
         int gen = generation.incrementAndGet();
         list.setLoading(true);
-        refreshStats();
         boolean chronological = filter.sort() == ChatQuery.Sort.ASCENDING;
         SearchFilter page = filter.withoutOffset();
         if (chronological) {
@@ -192,19 +191,21 @@ final class LogBrowserQueries {
             boolean full = pageIsFull(rows, query);
             list.reset(rows, chronological && full, !chronological && full);
             if (chronological) list.scrollToEnd();
-            long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
-            list.showMatchCount(ResultWindow.matchCount(rows), elapsedMs);
+            list.showMatchCount(ResultWindow.matchCount(rows), elapsedMs(startedAt));
             snapshotCurrentList();
         });
-        if (resetTimeline) {
-            onClient(AllTheLogsClient.worker().summarize(page.toSummaryQuery()), (summary, error) -> {
-                if (gen != generation.get() || error != null || list == null) return;
-                matchSummary = summary == null ? MatchSummary.empty() : summary;
-                list.setMatchSummary(matchSummary);
-                list.setTotalMatchCount(matchSummary.matches());
-                snapshotCurrentList();
-            });
-        }
+        onClient(AllTheLogsClient.worker().summarize(page.toSummaryQuery()), (summary, error) -> {
+            if (gen != generation.get() || error != null || list == null) return;
+            matchSummary = summary == null ? MatchSummary.empty() : summary;
+            list.setMatchSummary(matchSummary);
+            list.setTotalMatchCount(matchSummary.matches(), elapsedMs(startedAt));
+            snapshotCurrentList();
+        });
+        refreshStats();
+    }
+
+    private static long elapsedMs(long startedAtNanos) {
+        return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos);
     }
 
     void refreshStats() {
@@ -270,11 +271,15 @@ final class LogBrowserQueries {
         });
     }
 
-    private void expandAround(DisplayRow row) {
+    private void expandAround(DisplayRow row, MessageTimeline.Edge side) {
         int extra = MessageListLayout.extraContextLines(filter.contextLines());
         if (extra <= 0 || list == null) return;
+        boolean older = MessageListLayout.expandOlderMessages(
+            side == MessageTimeline.Edge.BEFORE, filter.sort() == ChatQuery.Sort.ASCENDING);
+        int before = older ? extra : 0;
+        int after = older ? 0 : extra;
         DisplayRow.RowKey anchor = row.key();
-        onClient(AllTheLogsClient.worker().around(row.chatLog(), row.lineIndex(), extra), (entries, error) -> {
+        onClient(AllTheLogsClient.worker().around(row.chatLog(), row.lineIndex(), before, after), (entries, error) -> {
             if (error != null || list == null) {
                 if (error != null) AllTheLogsClient.LOGGER.warn("AllTheLogs expand query failed", error);
                 return;
