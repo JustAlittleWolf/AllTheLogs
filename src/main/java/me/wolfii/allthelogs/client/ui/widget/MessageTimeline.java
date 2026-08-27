@@ -29,7 +29,8 @@ import org.lwjgl.glfw.GLFW;
 
 /**
  * Virtualised log list plus a timeline scrubber on the right. Newest is at the bottom. The scrubber maps the
- * matched-log range only and always shows date ticks along the track.
+ * matched-log range only, sizes its thumb from the query (matches and context), and always shows date ticks
+ * along the track. Short pages sit on the bottom edge of the list.
  */
 public final class MessageTimeline extends BaseUIComponent {
     public static final int ROW_HEIGHT = MessageListLayout.ROW_HEIGHT;
@@ -168,12 +169,12 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     public int firstVisibleIndex() {
-        return Math.max(0, layout.rowAtY(scrollY));
+        return Math.max(0, layout.rowAtY(scrollY - contentOrigin()));
     }
 
     public int lastVisibleIndex() {
         if (layout.size() == 0) return 0;
-        return Math.max(firstVisibleIndex(), layout.rowAtY(scrollY + Math.max(0, height)));
+        return Math.max(firstVisibleIndex(), layout.rowAtY(scrollY - contentOrigin() + Math.max(0, height)));
     }
 
     public DisplayRow.RowKey visibleAnchor() {
@@ -243,10 +244,7 @@ public final class MessageTimeline extends BaseUIComponent {
     public void scrollToTime(LocalDateTime time) {
         int index = window.nearestIndex(time);
         if (index < 0) return;
-        int rowTop = layout.rowY(index);
-        int rowHeight = layout.rowHeight(index);
-        double progress = TimelineLayout.progress(time, scrubOldest(), scrubNewest(), matchDays);
-        setScrollY(rowTop - progress * Math.max(0, height - rowHeight));
+        setScrollY(TimelineLayout.scrollToRow(layout.rowY(index), layout.contentHeight(), height));
     }
 
     public void applyPage(List<DisplayRow> rows, boolean hasBefore, boolean hasAfter, DisplayRow.RowKey anchor) {
@@ -342,8 +340,10 @@ public final class MessageTimeline extends BaseUIComponent {
         }
         if (overTimelineLocal(click.x())) {
             stopAutoScroll();
+            int thumb = thumbHeight();
+            if (thumb <= 0) return true;
             draggingTimeline = true;
-            scrubThumbHeight = Math.max(MIN_THUMB_HEIGHT, thumbHeight());
+            scrubThumbHeight = Math.max(MIN_THUMB_HEIGHT, thumb);
             int thumbTop = thumbTop(scrubThumbHeight) - y;
             thumbGrabOffset = TimelineLayout.thumbGrabOffset(click.y(), thumbTop, scrubThumbHeight, height);
             onScrubBegin.run();
@@ -484,8 +484,9 @@ public final class MessageTimeline extends BaseUIComponent {
             }
             int timestampWidth = timestampWidth();
             int messageWidth = messageWidth();
-            int first = Math.max(0, layout.rowAtY(scrollY));
-            int last = Math.min(rows.size() - 1, layout.rowAtY(scrollY + height) + 1);
+            int origin = contentOrigin();
+            int first = Math.max(0, layout.rowAtY(scrollY - origin));
+            int last = Math.min(rows.size() - 1, layout.rowAtY(scrollY - origin + height) + 1);
             for (int i = first; i <= last; i++) {
                 DisplayRow row = rows.get(i);
                 int rowY = screenY(layout.rowY(i));
@@ -561,6 +562,14 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     private void drawDateHeaders(OwoUIGraphics graphics, int listWidth) {
+        if (contentOrigin() > 0) {
+            for (MessageListLayout.DateBand band : layout.dates()) {
+                int headerY = screenY(band.y());
+                if (headerY + MessageListLayout.DATE_HEIGHT < y || headerY > y + height) continue;
+                drawDateBand(graphics, band.date(), headerY, listWidth);
+            }
+            return;
+        }
         MessageListLayout.DateBand sticky = layout.stickyAt(scrollY);
         for (MessageListLayout.DateBand band : layout.dates()) {
             int headerY = screenY(band.y());
@@ -651,16 +660,9 @@ public final class MessageTimeline extends BaseUIComponent {
 
     private int thumbHeight() {
         if (draggingTimeline && scrubThumbHeight > 0) return scrubThumbHeight;
-        LocalDateTime oldest = scrubOldest();
-        LocalDateTime newest = scrubNewest();
-        if (oldest == null || newest == null || window.rows().isEmpty() || height <= 0) return 0;
-        int first = firstVisibleIndex();
-        int last = lastVisibleIndex();
-        LocalDateTime start = window.rows().get(first).entry().timestamp();
-        LocalDateTime end = window.rows().get(last).entry().timestamp();
-        double startProgress = TimelineLayout.progress(start, oldest, newest, matchDays);
-        double endProgress = TimelineLayout.progress(end, oldest, newest, matchDays);
-        return TimelineLayout.thumbHeightFromProgress(height, startProgress, endProgress, MIN_THUMB_HEIGHT);
+        if (window.rows().isEmpty() || height <= 0 || matchCount <= 0) return 0;
+        int contentHeight = MessageListLayout.estimatedContentHeight(matchCount, contextLines, uniqueMatchDates);
+        return TimelineLayout.thumbHeight(height, contentHeight, height, MIN_THUMB_HEIGHT);
     }
 
     private int thumbTop(int thumbHeight) {
@@ -812,7 +814,7 @@ public final class MessageTimeline extends BaseUIComponent {
 
     private void applyScrub(LocalDateTime time, boolean commit) {
         if (time == null) return;
-        if (window.coversTime(time)) {
+        if (window.showsDate(time)) {
             scrollToTime(time);
             if (!draggingTimeline) maybeRequestMore();
             if (commit) finishScrub();
@@ -839,7 +841,7 @@ public final class MessageTimeline extends BaseUIComponent {
 
     private int rowAtLocalY(double localY) {
         if (layout.size() == 0) return -1;
-        int contentY = (int) Math.round(localY + scrollY);
+        int contentY = (int) Math.round(localY + scrollY - contentOrigin());
         int index = layout.rowAtY(contentY);
         if (index < 0 || index >= window.rows().size()) return -1;
         int top = layout.rowY(index);
@@ -848,7 +850,11 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     private int screenY(int contentY) {
-        return y + contentY - (int) Math.round(scrollY);
+        return y + contentOrigin() + contentY - (int) Math.round(scrollY);
+    }
+
+    private int contentOrigin() {
+        return MessageListLayout.bottomPad(layout.contentHeight(), height);
     }
 
     private Font font() {
@@ -883,7 +889,7 @@ public final class MessageTimeline extends BaseUIComponent {
         List<DisplayRow> rows = window.rows();
         if (row < 0 || row >= rows.size()) return 0;
         int xInMessage = (int) Math.round(localX - messageLocalX());
-        int yInRow = (int) Math.round(localY + scrollY - layout.rowY(row));
+        int yInRow = (int) Math.round(localY + scrollY - contentOrigin() - layout.rowY(row));
         int line = yInRow < 0 ? 0 : yInRow / ROW_HEIGHT;
         DisplayRow displayRow = rows.get(row);
         return MessageWrap.charIndex(displayRow.message(), messageWidth(), line, xInMessage,

@@ -57,6 +57,21 @@ class ResultWindowTest {
         assertTrue(window.coversTime(start.plusSeconds(10)));
         assertFalse(window.coversTime(start.plusHours(3)));
         assertEquals(1, window.nearestIndex(start.plusSeconds(9)));
+        assertTrue(window.showsDate(start.plusSeconds(10)));
+        assertFalse(window.showsDate(start.plusDays(1)));
+    }
+
+    @Test
+    void showsDateDoesNotTreatTheEmptyGapBetweenBufferedDaysAsLoaded() {
+        LocalDateTime first = LocalDateTime.of(2026, 8, 26, 10, 0);
+        LocalDateTime last = LocalDateTime.of(2026, 8, 28, 10, 0);
+        ResultWindow window = new ResultWindow();
+        window.reset(List.of(rowAt(first, 0), rowAt(last, 1)), false, false);
+        LocalDateTime gap = LocalDateTime.of(2026, 8, 27, 12, 0);
+        assertTrue(window.coversTime(gap));
+        assertFalse(window.showsDate(gap));
+        assertTrue(window.showsDate(first.plusHours(1)));
+        assertTrue(window.showsDate(last.minusHours(1)));
     }
 
     @Test
