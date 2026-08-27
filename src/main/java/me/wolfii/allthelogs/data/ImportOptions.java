@@ -34,12 +34,48 @@ public record ImportOptions(
     }
 
     /**
+     * Glob relative to a {@code logs} directory. Matches rotated and debug logs in that folder and any
+     * subdirectory; {@code latest.log} is still skipped by discovery because it is the live Minecraft log.
+     */
+    public static final String LOGS_DIRECTORY_MATCHER = "**/*.{log,log.gz}";
+
+    /**
+     * Glob relative to a Minecraft instance / game directory. Restricts discovery to {@code logs} folders so
+     * resource packs, worlds, and other zips are not opened as archives.
+     */
+    public static final String GAME_DIRECTORY_MATCHER = "**/logs/**";
+
+    /**
      * Defaults to a recursive import of nested archives, one parser per CPU, replacing already imported files, and
      * treating log timestamps as local time.
      */
     public static ImportOptions defaults() {
         return new ImportOptions(true, true, null, Runtime.getRuntime().availableProcessors(), false,
             ZoneId.systemDefault());
+    }
+
+    /**
+     * Startup import of this instance's {@code logs} folder: recursive, no nested archives, skip files already
+     * stored, and only {@code .log} / {@code .log.gz} names.
+     */
+    public static ImportOptions currentLogsDirectory() {
+        return defaults()
+            .withRecursive(true)
+            .withNestedArchives(false)
+            .withSkipAlreadyImported(true)
+            .withPathMatcher(LOGS_DIRECTORY_MATCHER);
+    }
+
+    /**
+     * Import of a Minecraft instance / game directory: walk {@code **&#47;logs&#47;**} and do not open zips found
+     * elsewhere in the tree.
+     */
+    public static ImportOptions currentGameDirectory() {
+        return defaults()
+            .withRecursive(true)
+            .withNestedArchives(false)
+            .withSkipAlreadyImported(true)
+            .withPathMatcher(GAME_DIRECTORY_MATCHER);
     }
 
     public ImportOptions withRecursive(boolean recursive) {

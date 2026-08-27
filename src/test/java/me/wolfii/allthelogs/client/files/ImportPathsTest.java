@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.client.files;
 
+import me.wolfii.allthelogs.data.ImportOptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -59,5 +60,22 @@ class ImportPathsTest {
         Files.writeString(file, "x");
         assertEquals(root.toAbsolutePath().normalize(), ImportPaths.startDirectory(file));
         assertEquals(root.toAbsolutePath().normalize(), ImportPaths.startDirectory(root));
+    }
+
+    @Test
+    void gameDirectoryFolderUsesLogsOnlyOptions(@TempDir Path root) throws IOException {
+        Files.createDirectory(root.resolve("logs"));
+        var options = ImportPaths.optionsForFolder(root);
+        assertEquals(ImportOptions.GAME_DIRECTORY_MATCHER, options.pathMatcher());
+        assertFalse(options.nestedArchives());
+        assertTrue(options.recursive());
+    }
+
+    @Test
+    void ordinaryFolderKeepsNestedArchiveDefaults(@TempDir Path root) {
+        var options = ImportPaths.optionsForFolder(root);
+        assertTrue(options.nestedArchives());
+        assertTrue(options.recursive());
+        assertTrue(options.skipAlreadyImported());
     }
 }

@@ -97,17 +97,52 @@ class LogStoreTest {
         LogFixtures.writePlain(logs, "debug.log", LogFixtures.legacyLog("debug"));
         LogFixtures.writeGzipped(logs, "2026-08-26-1.log.gz", LogFixtures.modernLog("26.2", "rotated"));
 
-        ImportResult result = store.importDirectory(logs, ImportOptions.defaults()
-            .withRecursive(false)
-            .withNestedArchives(false)
-            .withSkipAlreadyImported(true)
-            .withPathMatcher("{*.log.gz,*.log}"));
+        ImportResult result = store.importDirectory(logs, ImportOptions.currentLogsDirectory());
 
         assertEquals(2, result.importedFiles());
         List<String> messages = store.allEntries().stream().map(ChatEntry::message).toList();
         assertTrue(messages.contains("debug"));
         assertTrue(messages.contains("rotated"));
         assertFalse(messages.contains("live"));
+    }
+
+    @Test
+    void currentLogsImportIncludesNestedLogFiles() throws IOException {
+        Path logs = tempDir.resolve("logs");
+        LogFixtures.writeGzipped(logs, "2026-08-26-1.log.gz", LogFixtures.modernLog("26.2", "top"));
+        LogFixtures.writeGzipped(logs.resolve("old"), "2026-01-02-1.log.gz", LogFixtures.modernLog("1.21.8", "nested"));
+        LogFixtures.writePlain(logs, "latest.log", LogFixtures.legacyLog("live"));
+
+        ImportResult result = store.importDirectory(logs, ImportOptions.currentLogsDirectory());
+
+        assertEquals(2, result.importedFiles());
+        List<String> messages = store.allEntries().stream().map(ChatEntry::message).toList();
+        assertTrue(messages.contains("top"));
+        assertTrue(messages.contains("nested"));
+        assertFalse(messages.contains("live"));
+    }
+
+    @Test
+    void currentGameDirectoryImportFindsLogsAndIgnoresResourcePackZips() throws IOException {
+        Path gameDir = tempDir.resolve("instance");
+        LogFixtures.writeGzipped(gameDir.resolve("logs"), "2026-08-26-1.log.gz",
+            LogFixtures.modernLog("26.2", "from logs"));
+        LogFixtures.writeGzipped(gameDir.resolve("logs/old"), "2026-01-02-1.log.gz",
+            LogFixtures.modernLog("1.21.8", "from nested"));
+        LogFixtures.writePlain(gameDir.resolve("logs"), "latest.log", LogFixtures.legacyLog("live"));
+        LogFixtures.writeZip(gameDir.resolve("resourcepacks/pack.zip"), new LinkedHashMap<>(Map.of(
+            "assets/pack.png", "not a log",
+            "logs/2026-03-01-1.log.gz", LogFixtures.modernLog("1.21.8", "from resource pack"))));
+
+        ImportResult result = store.importDirectory(gameDir, ImportOptions.currentGameDirectory());
+
+        assertTrue(result.failures().isEmpty(), () -> "unexpected failures: " + result.failures());
+        assertEquals(2, result.importedFiles());
+        List<String> messages = store.allEntries().stream().map(ChatEntry::message).toList();
+        assertTrue(messages.contains("from logs"));
+        assertTrue(messages.contains("from nested"));
+        assertFalse(messages.contains("live"));
+        assertFalse(messages.contains("from resource pack"));
     }
 
     @Test
@@ -1142,6 +1177,42 @@ class LogStoreTest {
         assertEquals(0, result.skippedFiles());
         assertEquals(List.of("from the file"), store.allEntries().stream().map(ChatEntry::message).toList());
         assertInstanceOf(LogSource.File.class, store.allEntries().getFirst().chatLog().source());
+    }
+
+    @Test
+    void logTaggedWithAForeignSessionIdIsImportedEvenIfALiveSessionExists() throws IOException {
+        store.startSession("26.2", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
+        String otherId = SessionMarker.newId();
+        LogFixtures.writeGzipped(tempDir.resolve("logs"), "2026-08-26-1.log.gz",
+            taggedLog(otherId, "10:00:10", "from an older session"));
+
+        ImportResult result = store.importDirectory(tempDir, ImportOptions.currentLogsDirectory());
+
+        assertEquals(1, result.importedFiles(), () -> "skipped=" + result.skippedFiles()
+            + " failures=" + result.failures());
+        assertEquals(0, result.skippedFiles());
+        assertEquals(List.of("from an older session"),
+            store.allEntries().stream()
+                .filter(entry -> entry.chatLog().source() instanceof LogSource.File)
+                .map(ChatEntry::message).toList());
+    }
+
+    @Test
+    void severalSessionTaggedLogsImportWhenNoneOfThoseSessionsAreStored() throws IOException {
+        Path logs = tempDir.resolve("logs");
+        LogFixtures.writeGzipped(logs, "2026-08-24-1.log.gz",
+            taggedLog(SessionMarker.newId(), "10:00:10", "day one"));
+        LogFixtures.writeGzipped(logs, "2026-08-25-1.log.gz",
+            taggedLog(SessionMarker.newId(), "10:00:10", "day two"));
+        LogFixtures.writeGzipped(logs, "2026-08-26-1.log.gz",
+            taggedLog(SessionMarker.newId(), "10:00:10", "day three"));
+
+        ImportResult result = store.importDirectory(logs, ImportOptions.currentLogsDirectory());
+
+        assertEquals(3, result.importedFiles(), () -> "skipped=" + result.skippedFiles()
+            + " failures=" + result.failures());
+        assertEquals(0, result.skippedFiles());
+        assertEquals(3, store.allEntries().size());
     }
 
     @Test
