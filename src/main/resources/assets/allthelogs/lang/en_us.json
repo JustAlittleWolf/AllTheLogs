@@ -33,7 +33,7 @@
 	"allthelogs.import.timezone": "Timezone",
 	"allthelogs.import.start": "Start import",
 	"allthelogs.meta.marker": "?",
-	"allthelogs.meta.hint": "Database Info?",
+	"allthelogs.meta.hint": "Database Statistics",
 	"allthelogs.meta.unavailable": "Log store is not ready",
 	"allthelogs.meta.empty": "No logs imported yet",
 	"allthelogs.meta.range": "Log dates: %s to %s",
