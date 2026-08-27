@@ -22,6 +22,7 @@ import org.lwjgl.glfw.GLFW;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -39,7 +40,7 @@ public final class MessageTimeline extends BaseUIComponent {
     private static final int BANNER_MS = 5000;
     private static final int HOVER_SLOP = 12;
     private static final int LIST_PAD = 4;
-    private static final int SCRUB_THROTTLE_MS = 50;
+    private static final int SCRUB_THROTTLE_MS = 100;
     private static final int TICK_GAP_PX = 16;
     private static final int INFO_MAX_WIDTH = 144;
     private static final int AUTO_SCROLL_DEADZONE = 8;
@@ -95,6 +96,8 @@ public final class MessageTimeline extends BaseUIComponent {
     private double thumbGrabOffset;
     private int scrubThumbHeight;
     private long lastScrubQueryMs;
+    private boolean scrubQueryInFlight;
+    private ScrubJump lastSentScrubJump;
     private int laidOutWidth = -1;
     private DisplayRow cachedWidthRow;
     private Font cachedWidthFont;
@@ -124,6 +127,25 @@ public final class MessageTimeline extends BaseUIComponent {
      */
     static boolean latchMiddleHold(boolean alreadyLatched, boolean buttonDown, long heldMs) {
         return alreadyLatched || (buttonDown && heldMs >= MIDDLE_HOLD_MS);
+    }
+
+    /**
+     * Preview jumps while the thumb is held: at most one in-flight store query, at least
+     * {@code throttleMs} between requests. A later position still fires after the wait so a
+     * parked thumb can catch up.
+     */
+    static boolean shouldSendPreviewScrubQuery(boolean inFlight, long nowMs, long lastQueryMs,
+                                               int throttleMs, ScrubJump requested, ScrubJump lastSent) {
+        if (inFlight || nowMs - lastQueryMs < throttleMs) return false;
+        return !sameScrubTarget(requested, lastSent);
+    }
+
+    static boolean sameScrubTarget(ScrubJump left, ScrubJump right) {
+        if (left == right) return true;
+        if (left == null || right == null) return false;
+        return left.skip() == right.skip()
+            && Double.compare(left.progress(), right.progress()) == 0
+            && Objects.equals(left.time(), right.time());
     }
 
     public ResultWindow window() {
@@ -166,6 +188,10 @@ public final class MessageTimeline extends BaseUIComponent {
     public void setLoading(boolean loading) {
         this.loading = loading;
         this.loadingSinceMs = loading ? System.currentTimeMillis() : 0;
+    }
+
+    public void scrubQueryFinished() {
+        scrubQueryInFlight = false;
     }
 
     public boolean loading() {
@@ -388,6 +414,7 @@ public final class MessageTimeline extends BaseUIComponent {
             int thumbTop = thumbTop(scrubThumbHeight) - y;
             thumbGrabOffset = TimelineLayout.thumbGrabOffset(click.y(), thumbTop, scrubThumbHeight, height);
             onScrubBegin.run();
+            lastSentScrubJump = null;
             previewScrub(click.y());
             return true;
         }
@@ -958,8 +985,15 @@ public final class MessageTimeline extends BaseUIComponent {
         if (jump.time() == null && jump.skip() < 0) return;
         if (!commit) {
             long now = System.currentTimeMillis();
-            if (now - lastScrubQueryMs < SCRUB_THROTTLE_MS) return;
+            if (!shouldSendPreviewScrubQuery(scrubQueryInFlight, now, lastScrubQueryMs,
+                SCRUB_THROTTLE_MS, jump, lastSentScrubJump)) {
+                return;
+            }
             lastScrubQueryMs = now;
+            lastSentScrubJump = jump;
+            scrubQueryInFlight = true;
+        } else {
+            lastSentScrubJump = jump;
         }
         onJump.accept(jump, !commit);
     }
