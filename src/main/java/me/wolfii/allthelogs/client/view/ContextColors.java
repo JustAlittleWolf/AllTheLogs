@@ -14,7 +14,7 @@ public final class ContextColors {
     public static final int MATCH_HIGHLIGHT = 0xFFA8DC9C;
     public static final int TIMESTAMP = 0xFFA0A0A0;
 
-    static final int NEAR_GRAY = 0xA0;
+    static final int NEAR_GRAY = 0xA4;
     static final int FAR_GRAY = 0x72;
     static final long MAX_DISTANCE_MILLIS = Duration.ofMinutes(15).toMillis();
 

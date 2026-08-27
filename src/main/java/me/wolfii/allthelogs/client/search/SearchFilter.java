@@ -28,7 +28,7 @@ public record SearchFilter(
 ) {
     public static final int MAX_CONTEXT_LINES = 1000;
     public static final int DEFAULT_LIMIT = 100;
-    public static final int DEFAULT_CONTEXT_LINES = 5;
+    public static final int DEFAULT_CONTEXT_LINES = 4;
     public static final String ALL_VERSIONS = "ALL";
 
     public SearchFilter {

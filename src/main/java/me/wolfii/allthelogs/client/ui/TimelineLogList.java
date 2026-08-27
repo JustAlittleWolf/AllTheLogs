@@ -37,7 +37,7 @@ public final class TimelineLogList extends BaseUIComponent {
     private static final int LIST_PAD = 4;
 
     private static final int LIST_BG = 0x80000000;
-    private static final float DATE_SCALE = 1.3f;
+    private static final float DATE_SCALE = 1.25f;
     private static final int TRACK = 0xFF2B2B2B;
     private static final int TRACK_BORDER = 0xFF3A3A3A;
     private static final int THUMB = 0xD0FFFFFF;
