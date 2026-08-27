@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
  * Transparent log browser: search bar, filter overlay, virtualised history, and a timeline of every hit.
  */
 public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
-    private static final int SEARCH_DEBOUNCE_MS = 100;
+    private static final int SEARCH_DEBOUNCE_MS = 250;
 
     private final Screen parent;
     private final LogBrowserQueries queries = new LogBrowserQueries();
@@ -78,7 +78,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
             search.focusHandler().focus(search, UIComponent.FocusSource.KEYBOARD_CYCLE);
         }
         if (list != null && queries.consumeReload()) {
-            queries.reload(true);
+            queries.reload();
         }
     }
 
@@ -134,7 +134,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         int generation = queries.bumpGeneration();
         CompletableFuture.delayedExecutor(SEARCH_DEBOUNCE_MS, TimeUnit.MILLISECONDS).execute(() -> {
             if (generation == queries.currentGeneration()) {
-                Minecraft.getInstance().execute(() -> queries.reload(true));
+                Minecraft.getInstance().execute(() -> queries.reload());
             }
         });
     }

@@ -86,19 +86,20 @@ public final class LogStoreWorker implements AutoCloseable {
         return submit(() -> requireStore().query(copy));
     }
 
-    public CompletableFuture<MatchBounds> matchBounds(ChatQuery query) {
+    public CompletableFuture<MatchSummary> summarize(ChatQuery query) {
         ChatQuery copy = Objects.requireNonNull(query, "query");
-        return submit(() -> requireStore().matchBounds(copy));
-    }
-
-    public CompletableFuture<Long> matches(ChatQuery query) {
-        ChatQuery copy = Objects.requireNonNull(query, "query");
-        return submit(() -> requireStore().matches(copy));
+        return submit(() -> requireStore().summarize(copy));
     }
 
     public CompletableFuture<List<ChatEntry>> around(ChatLog log, int lineIndex, int radius) {
+        return around(log, lineIndex, radius, radius);
+    }
+
+    public CompletableFuture<List<ChatEntry>> around(ChatLog log, int lineIndex, int before, int after) {
         ChatLog copy = Objects.requireNonNull(log, "log");
-        return submit(() -> requireStore().around(copy, lineIndex, radius));
+        int beforeLines = Math.max(0, before);
+        int afterLines = Math.max(0, after);
+        return submit(() -> requireStore().around(copy, lineIndex, beforeLines, afterLines));
     }
 
     public CompletableFuture<LogStoreMetadata> metadata() {

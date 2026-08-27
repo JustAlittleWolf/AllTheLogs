@@ -5,7 +5,7 @@ import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.ChatQuery;
 import me.wolfii.allthelogs.data.LogSource;
-import me.wolfii.allthelogs.data.MatchBounds;
+import me.wolfii.allthelogs.data.MatchSummary;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
@@ -30,13 +30,13 @@ class LogBrowserQueriesTest {
         LocalDateTime first = LocalDateTime.of(2026, 8, 27, 10, 0, 0);
         LocalDateTime last = first.plusMinutes(1);
         List<DisplayRow> rows = List.of(row(first, 0), row(last, 1));
-        MatchBounds bounds = new MatchBounds(first.minusHours(1), last.plusHours(1), 1, List.of());
-        assertTrue(LogBrowserQueries.pageHasBefore(ChatQuery.Sort.ASCENDING, rows, bounds));
-        assertTrue(LogBrowserQueries.pageHasAfter(ChatQuery.Sort.ASCENDING, false, rows, bounds));
+        MatchSummary summary = new MatchSummary(first.minusHours(1), last.plusHours(1), 1, List.of());
+        assertTrue(LogBrowserQueries.pageHasBefore(ChatQuery.Sort.ASCENDING, rows, summary));
+        assertTrue(LogBrowserQueries.pageHasAfter(ChatQuery.Sort.ASCENDING, false, rows, summary));
         assertFalse(LogBrowserQueries.pageHasBefore(ChatQuery.Sort.ASCENDING, rows,
-            new MatchBounds(first, last, 1, List.of())));
+            new MatchSummary(first, last, 1, List.of())));
         assertTrue(LogBrowserQueries.pageHasAfter(ChatQuery.Sort.ASCENDING, true, rows,
-            new MatchBounds(first, last, 1, List.of())));
+            new MatchSummary(first, last, 1, List.of())));
     }
 
     @Test
@@ -44,9 +44,9 @@ class LogBrowserQueriesTest {
         LocalDateTime newest = LocalDateTime.of(2026, 8, 27, 12, 0, 0);
         LocalDateTime oldest = newest.minusMinutes(1);
         List<DisplayRow> rows = List.of(row(newest, 1), row(oldest, 0));
-        MatchBounds bounds = new MatchBounds(oldest.minusHours(1), newest.plusHours(1), 1, List.of());
-        assertTrue(LogBrowserQueries.pageHasBefore(ChatQuery.Sort.DESCENDING, rows, bounds));
-        assertTrue(LogBrowserQueries.pageHasAfter(ChatQuery.Sort.DESCENDING, false, rows, bounds));
+        MatchSummary summary = new MatchSummary(oldest.minusHours(1), newest.plusHours(1), 1, List.of());
+        assertTrue(LogBrowserQueries.pageHasBefore(ChatQuery.Sort.DESCENDING, rows, summary));
+        assertTrue(LogBrowserQueries.pageHasAfter(ChatQuery.Sort.DESCENDING, false, rows, summary));
     }
 
     @Test

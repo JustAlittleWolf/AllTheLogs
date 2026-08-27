@@ -1,7 +1,6 @@
 package me.wolfii.allthelogs.client.ui.text;
 
 import me.wolfii.allthelogs.client.list.DisplayRow;
-import me.wolfii.allthelogs.client.list.HighlightSpan;
 import me.wolfii.allthelogs.client.list.MessageWrap;
 import me.wolfii.allthelogs.client.list.VisualMessage;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
@@ -86,7 +85,8 @@ public final class MessageText {
     }
 
     public static Component timestamp(DisplayRow row) {
-        return colored(row.entry().timestamp().toLocalTime().withNano(0).format(TIME), Colors.TIMESTAMP);
+        int color = row.match() ? Colors.TIMESTAMP : Colors.CONTEXT_TIMESTAMP;
+        return colored(row.entry().timestamp().toLocalTime().withNano(0).format(TIME), color);
     }
 
     /**
@@ -179,7 +179,8 @@ public final class MessageText {
     }
 
     /**
-     * Chat colour with match highlight, context dimming, and {@code \n} darkening multiplied in that order.
+     * Chat colour with context dimming and {@code \n} darkening multiplied in that order.
+     * Search hits are marked with a background fill, not a text tint.
      */
     public static int stackedColor(DisplayRow row, int index, boolean interpretEscapes) {
         return stackedColor(row, index, interpretEscapes, PackedFormatting.at(row.visualFormatting(), index));
@@ -197,9 +198,6 @@ public final class MessageText {
         int color = PackedFormatting.hasColor(format)
             ? 0xFF000000 | PackedFormatting.rgb(format)
             : Colors.MATCH_TEXT;
-        if (highlighted(row, index)) {
-            color = Colors.multiply(color, Colors.MATCH_HIGHLIGHT);
-        }
         if (!row.match()) {
             color = Colors.multiply(color, Colors.CONTEXT_TEXT);
         }
@@ -207,14 +205,6 @@ public final class MessageText {
             color = Colors.multiply(color, Colors.ESCAPE_TEXT);
         }
         return color;
-    }
-
-    private static boolean highlighted(DisplayRow row, int index) {
-        if (!row.match()) return false;
-        for (HighlightSpan span : row.highlights()) {
-            if (index >= span.start() && index < span.end()) return true;
-        }
-        return false;
     }
 
     private static void wrapLabeled(List<Component> lines, String key, String value, int maxWidth,

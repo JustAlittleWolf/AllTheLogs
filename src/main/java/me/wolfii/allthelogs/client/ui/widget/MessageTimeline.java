@@ -8,7 +8,9 @@ import io.wispforest.owo.ui.core.UIComponent;
 import me.wolfii.allthelogs.client.list.*;
 import me.wolfii.allthelogs.client.timeline.TimelineLayout;
 import me.wolfii.allthelogs.client.ui.text.MessageText;
-import me.wolfii.allthelogs.data.MatchBounds;
+import me.wolfii.allthelogs.client.ui.theme.Colors;
+import me.wolfii.allthelogs.data.MatchDay;
+import me.wolfii.allthelogs.data.MatchSummary;
 import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -20,6 +22,7 @@ import org.lwjgl.glfw.GLFW;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -37,13 +40,15 @@ public final class MessageTimeline extends BaseUIComponent {
     private static final int BANNER_MS = 5000;
     private static final int HOVER_SLOP = 12;
     private static final int LIST_PAD = 4;
-    private static final int SCRUB_THROTTLE_MS = 50;
+    private static final int SCRUB_THROTTLE_MS = 100;
     private static final int TICK_GAP_PX = 16;
-    private static final int INFO_MAX_WIDTH = 144;
+    private static final int INFO_MAX_WIDTH = 160;
     private static final int AUTO_SCROLL_DEADZONE = 8;
     private static final int MIDDLE_HOLD_MS = 250;
     private static final int LOADING_CHIP_MS = 100;
     private static final int SELECT_DRAG_SLOP = 3;
+    private static final int HIGHLIGHT_PAD_LEFT = 1;
+    private static final int HIGHLIGHT_TRIM_BOTTOM = 2;
     private static final int TICK_LABEL_OFFSET = 5;
 
     private static final int LIST_BG = 0x80000000;
@@ -68,6 +73,7 @@ public final class MessageTimeline extends BaseUIComponent {
     private LocalDateTime boundsNewest;
     private int uniqueMatchDates;
     private List<LocalDate> matchDays = List.of();
+    private List<MatchDay> matchDayStats = List.of();
     private double scrollY;
     private boolean loading;
     private boolean draggingTimeline;
@@ -90,6 +96,8 @@ public final class MessageTimeline extends BaseUIComponent {
     private double thumbGrabOffset;
     private int scrubThumbHeight;
     private long lastScrubQueryMs;
+    private boolean scrubQueryInFlight;
+    private ScrubJump lastSentScrubJump;
     private int laidOutWidth = -1;
     private DisplayRow cachedWidthRow;
     private Font cachedWidthFont;
@@ -102,9 +110,9 @@ public final class MessageTimeline extends BaseUIComponent {
     private Component overlayMessage = Component.empty();
     private Consumer<Edge> onApproachEdge = edge -> {
     };
-    private BiConsumer<LocalDateTime, Boolean> onJump = (time, preview) -> {
+    private BiConsumer<ScrubJump, Boolean> onJump = (jump, preview) -> {
     };
-    private Consumer<DisplayRow> onExpand = row -> {
+    private BiConsumer<DisplayRow, Edge> onExpand = (row, side) -> {
     };
     private Runnable onScrubBegin = () -> {
     };
@@ -121,6 +129,25 @@ public final class MessageTimeline extends BaseUIComponent {
         return alreadyLatched || (buttonDown && heldMs >= MIDDLE_HOLD_MS);
     }
 
+    /**
+     * Preview jumps while the thumb is held: at most one in-flight store query, at least
+     * {@code throttleMs} between requests. A later position still fires after the wait so a
+     * parked thumb can catch up.
+     */
+    static boolean shouldSendPreviewScrubQuery(boolean inFlight, long nowMs, long lastQueryMs,
+                                               int throttleMs, ScrubJump requested, ScrubJump lastSent) {
+        if (inFlight || nowMs - lastQueryMs < throttleMs) return false;
+        return !sameScrubTarget(requested, lastSent);
+    }
+
+    static boolean sameScrubTarget(ScrubJump left, ScrubJump right) {
+        if (left == right) return true;
+        if (left == null || right == null) return false;
+        return left.skip() == right.skip()
+            && Double.compare(left.progress(), right.progress()) == 0
+            && Objects.equals(left.time(), right.time());
+    }
+
     public ResultWindow window() {
         return window;
     }
@@ -133,11 +160,11 @@ public final class MessageTimeline extends BaseUIComponent {
         this.onApproachEdge = onApproachEdge;
     }
 
-    public void onJump(BiConsumer<LocalDateTime, Boolean> onJump) {
+    public void onJump(BiConsumer<ScrubJump, Boolean> onJump) {
         this.onJump = onJump;
     }
 
-    public void onExpand(Consumer<DisplayRow> onExpand) {
+    public void onExpand(BiConsumer<DisplayRow, Edge> onExpand) {
         this.onExpand = onExpand;
     }
 
@@ -150,16 +177,21 @@ public final class MessageTimeline extends BaseUIComponent {
         rebuildLayout();
     }
 
-    public void setMatchBounds(MatchBounds bounds) {
-        this.boundsOldest = bounds == null ? null : bounds.oldest();
-        this.boundsNewest = bounds == null ? null : bounds.newest();
-        this.uniqueMatchDates = bounds == null ? 0 : bounds.uniqueDates();
-        this.matchDays = bounds == null || bounds.dates() == null ? List.of() : bounds.dates();
+    public void setMatchSummary(MatchSummary summary) {
+        this.boundsOldest = summary == null ? null : summary.oldest();
+        this.boundsNewest = summary == null ? null : summary.newest();
+        this.uniqueMatchDates = summary == null ? 0 : summary.uniqueDates();
+        this.matchDays = summary == null ? List.of() : summary.dates();
+        this.matchDayStats = summary == null || summary.days() == null ? List.of() : summary.days();
     }
 
     public void setLoading(boolean loading) {
         this.loading = loading;
         this.loadingSinceMs = loading ? System.currentTimeMillis() : 0;
+    }
+
+    public void scrubQueryFinished() {
+        scrubQueryInFlight = false;
     }
 
     public boolean loading() {
@@ -232,12 +264,42 @@ public final class MessageTimeline extends BaseUIComponent {
      * offset 0 first. Used while dragging the timeline so the thumb can stay put.
      */
     public void showAt(LocalDateTime time, List<DisplayRow> rows, boolean hasBefore, boolean hasAfter) {
+        showAt(time, rows, hasBefore, hasAfter, Double.NaN);
+    }
+
+    public void showAt(LocalDateTime time, List<DisplayRow> rows, boolean hasBefore, boolean hasAfter, double progress) {
         List<DisplayRow> previous = window.rows();
         window.reset(rows, hasBefore, hasAfter);
         remapSelection(previous, window.rows());
         rebuildLayout();
-        scrollToTime(time);
+        if (!Double.isNaN(progress)) {
+            scrollToScrubProgress(progress);
+        } else {
+            scrollToTime(time);
+        }
         if (!draggingTimeline) maybeRequestMore();
+    }
+
+    public void scrollToTime(LocalDateTime time) {
+        int index = window.nearestIndex(time);
+        if (index < 0) return;
+        int header = contentOrigin() > 0 ? 0 : MessageListLayout.DATE_HEIGHT;
+        setScrollY(TimelineLayout.scrollToRow(layout.rowY(index) - header, layout.contentHeight(), height));
+    }
+
+    private void scrollToScrubProgress(double progress) {
+        double clamped = Math.clamp(progress, 0, 1);
+        if (clamped <= 0) {
+            setScrollY(0);
+            return;
+        }
+        if (clamped >= 1) {
+            scrollToEnd();
+            return;
+        }
+        if (!scrollLocally(clamped, timeAtProgress(clamped), -1)) {
+            scrollToTime(timeAtProgress(clamped));
+        }
     }
 
     public void finishScrub() {
@@ -246,12 +308,6 @@ public final class MessageTimeline extends BaseUIComponent {
         dragThumbTop = Double.NaN;
         thumbGrabOffset = 0;
         scrubThumbHeight = 0;
-    }
-
-    public void scrollToTime(LocalDateTime time) {
-        int index = window.nearestIndex(time);
-        if (index < 0) return;
-        setScrollY(TimelineLayout.scrollToRow(layout.rowY(index), layout.contentHeight(), height));
     }
 
     public void applyPage(List<DisplayRow> rows, boolean hasBefore, boolean hasAfter, DisplayRow.RowKey anchor) {
@@ -291,12 +347,17 @@ public final class MessageTimeline extends BaseUIComponent {
         showMatchCount(matches, 0);
     }
 
+    public void setTotalMatchCount(long total) {
+        setTotalMatchCount(total, matchElapsedMs);
+    }
+
     /**
      * Replaces the capped {@code >99} label with the exact total from {@code matches}.
      */
-    public void setTotalMatchCount(long total) {
+    public void setTotalMatchCount(long total, long elapsedMs) {
         this.matchCount = Math.max(0, total);
         this.exactMatchCount = true;
+        this.matchElapsedMs = Math.max(0, elapsedMs);
         this.showMatchBanner = true;
         this.bannerUntilMs = System.currentTimeMillis() + BANNER_MS;
     }
@@ -364,6 +425,7 @@ public final class MessageTimeline extends BaseUIComponent {
                 thumbGrabOffset = TimelineLayout.thumbGrabOffset(click.y(), thumbTop, scrubThumbHeight, height);
             }
             onScrubBegin.run();
+            lastSentScrubJump = null;
             previewScrub(click.y());
             return true;
         }
@@ -395,7 +457,9 @@ public final class MessageTimeline extends BaseUIComponent {
         if (row < 0) return super.onMouseDown(click, doubled);
         if (doubled) {
             clickSelectsRow = false;
-            onExpand.accept(window.rows().get(row));
+            draggingSelection = false;
+            selection.clear();
+            onExpand.accept(window.rows().get(row), expandSide(row, click.y()));
             return true;
         }
         clickSelectsRow = true;
@@ -509,8 +573,10 @@ public final class MessageTimeline extends BaseUIComponent {
                 int rowY = screenY(layout.rowY(i));
                 int msgX = x + LIST_PAD + timestampWidth;
                 List<MessageWrap.Line> lines = MessageWrap.wrap(row.message(), messageWidth, rangeWidth(row));
+                drawHighlights(graphics, row, lines, msgX, rowY);
                 drawSelection(graphics, row, i, lines, msgX, rowY);
-                graphics.drawText(MessageText.timestamp(row), x + LIST_PAD, rowY + 1, 1, MUTED);
+                int timestampColor = row.match() ? MUTED : Colors.CONTEXT_TIMESTAMP;
+                graphics.drawText(MessageText.timestamp(row), x + LIST_PAD, rowY + 1, 1, timestampColor);
                 int lineY = rowY;
                 for (MessageWrap.Line line : lines) {
                     graphics.drawText(MessageText.messageRange(row, line.start(), line.start() + line.text().length()),
@@ -521,6 +587,25 @@ public final class MessageTimeline extends BaseUIComponent {
             drawDateHeaders(graphics, listWidth);
         } finally {
             graphics.disableScissor();
+        }
+    }
+
+    private void drawHighlights(OwoUIGraphics graphics, DisplayRow row,
+                                List<MessageWrap.Line> lines, int msgX, int rowY) {
+        if (!row.match() || row.highlights().isEmpty()) return;
+        int lineY = rowY;
+        for (MessageWrap.Line line : lines) {
+            int lineStart = line.start();
+            int lineEnd = lineStart + line.text().length();
+            for (HighlightSpan span : row.highlights()) {
+                int from = Math.max(span.start(), lineStart);
+                int to = Math.min(span.end(), lineEnd);
+                if (from >= to) continue;
+                int left = highlightLeft(msgX + messageRangeWidth(row, lineStart, from));
+                int right = msgX + messageRangeWidth(row, lineStart, to);
+                graphics.fill(left, lineY, right, lineY + highlightHeight(), Colors.MATCH_HIGHLIGHT);
+            }
+            lineY += ROW_HEIGHT;
         }
     }
 
@@ -667,7 +752,13 @@ public final class MessageTimeline extends BaseUIComponent {
 
     private void drawDateTicks(OwoUIGraphics graphics, int trackX, LocalDateTime oldest, LocalDateTime newest) {
         for (TimelineLayout.DateTick tick : TimelineLayout.spacedTicks(oldest, newest, matchDays, height, TICK_GAP_PX)) {
-            int tickY = TimelineLayout.yFromOldest(tick.at(), oldest, newest, matchDays, y, height);
+            int tickY;
+            if (!matchDayStats.isEmpty()) {
+                double progress = TimelineLayout.matchDayProgress(tick.at(), matchDayStats, 0);
+                tickY = y + (int) Math.round(progress * Math.max(0, height - 1));
+            } else {
+                tickY = TimelineLayout.yFromOldest(tick.at(), oldest, newest, matchDays, y, height);
+            }
             graphics.fill(trackX + 2, tickY, trackX + TRACK_WIDTH - 2, tickY + 1, TICK_DOT);
             graphics.drawText(Component.literal(tick.label()), trackX - 3, tickY + TICK_LABEL_OFFSET,
                 0.75f, TICK_LABEL, OwoUIGraphics.TextAnchor.BOTTOM_RIGHT);
@@ -693,8 +784,7 @@ public final class MessageTimeline extends BaseUIComponent {
         LocalDateTime oldest = scrubOldest();
         LocalDateTime newest = scrubNewest();
         if (time == null || oldest == null || newest == null) return y;
-        double progress = TimelineLayout.pinnedProgress(
-            TimelineLayout.progress(time, oldest, newest, matchDays), scrolledToStart(), scrolledToEnd());
+        double progress = TimelineLayout.pinnedProgress(thumbProgress(time), scrolledToStart(), scrolledToEnd());
         return y + TimelineLayout.thumbOffset(height, progress, thumbHeight);
     }
 
@@ -769,7 +859,8 @@ public final class MessageTimeline extends BaseUIComponent {
     private LocalDateTime visibleTime() {
         List<DisplayRow> rows = window.rows();
         if (rows.isEmpty()) return null;
-        int index = Math.clamp(layout.rowAtY(scrollY - contentOrigin()), 0, rows.size() - 1);
+        int header = contentOrigin() > 0 ? 0 : MessageListLayout.DATE_HEIGHT;
+        int index = Math.clamp(layout.rowAtY(scrollY - contentOrigin() + header), 0, rows.size() - 1);
         return rows.get(index).entry().timestamp();
     }
 
@@ -781,11 +872,39 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     private LocalDateTime timeAtLocalY(double localY) {
+        double progress = localY / Math.max(1, height - 1);
+        return timeAtProgress(progress);
+    }
+
+    private LocalDateTime timeAtProgress(double progress) {
+        if (!matchDayStats.isEmpty()) {
+            return TimelineLayout.timeFromMatchDays(progress, matchDayStats);
+        }
         LocalDateTime oldest = scrubOldest();
         LocalDateTime newest = scrubNewest();
         if (oldest == null || newest == null) return null;
-        double progress = localY / Math.max(1, height - 1);
         return TimelineLayout.timeFromOldest(progress, oldest, newest, matchDays);
+    }
+
+    private double thumbProgress(LocalDateTime time) {
+        if (!matchDayStats.isEmpty()) {
+            return TimelineLayout.matchDayProgress(time, matchDayStats, collapsedFraction(time.toLocalDate()));
+        }
+        return TimelineLayout.progress(time, scrubOldest(), scrubNewest(), matchDays);
+    }
+
+    private double collapsedFraction(LocalDate date) {
+        MessageListLayout.DateBand band = layout.dateBand(date);
+        if (band == null) return 0;
+        int start = band.y();
+        int end = layout.dateEndY(band);
+        int travel = Math.max(0, end - start - Math.max(0, height));
+        if (travel <= 0) {
+            double max = Math.max(0, layout.contentHeight() - height);
+            if (max <= 0) return 0;
+            return Math.clamp(scrollY / max, 0, 1);
+        }
+        return Math.clamp((scrollY - start) / (double) travel, 0, 1);
     }
 
     private LocalDateTime scrubOldest() {
@@ -806,46 +925,98 @@ public final class MessageTimeline extends BaseUIComponent {
 
     private void applyThumbScrub(double localY, boolean commit) {
         int thumbHeight = draggingTimeline && scrubThumbHeight > 0 ? scrubThumbHeight : thumbHeight();
-        LocalDateTime time;
+        double progress;
         if (thumbHeight <= 0 || thumbHeight >= height) {
             scrubY = Math.clamp(localY, 0, Math.max(0, height - 1));
             dragThumbTop = Double.NaN;
-            time = timeAtLocalY(scrubY);
+            progress = scrubY / Math.max(1, height - 1);
         } else {
             double top = Math.clamp(localY - thumbGrabOffset, 0, height - thumbHeight);
             dragThumbTop = top;
             scrubY = Double.NaN;
-            double progress = TimelineLayout.progressFromThumb((int) Math.round(top), height, thumbHeight);
-            time = TimelineLayout.timeFromOldest(progress, scrubOldest(), scrubNewest(), matchDays);
+            progress = TimelineLayout.progressFromThumb((int) Math.round(top), height, thumbHeight);
         }
-        applyScrub(time, commit);
+        applyScrub(progress, commit);
     }
 
     private void continueScrub() {
         if (!Double.isNaN(dragThumbTop) && scrubThumbHeight > 0 && scrubThumbHeight < height) {
             double progress = TimelineLayout.progressFromThumb((int) Math.round(dragThumbTop), height, scrubThumbHeight);
-            applyScrub(TimelineLayout.timeFromOldest(progress, scrubOldest(), scrubNewest(), matchDays), false);
+            applyScrub(progress, false);
             return;
         }
         if (!Double.isNaN(scrubY)) {
-            applyScrub(timeAtLocalY(scrubY), false);
+            applyScrub(scrubY / Math.max(1, height - 1), false);
         }
     }
 
-    private void applyScrub(LocalDateTime time, boolean commit) {
-        if (time == null) return;
-        if (window.showsDate(time)) {
-            scrollToTime(time);
+    private void applyScrub(double progress, boolean commit) {
+        double clamped = Math.clamp(progress, 0, 1);
+        if (clamped <= 0) {
+            setScrollY(0);
+            if (window.hasBefore()) {
+                jump(new ScrubJump(scrubOldest(), 0, 0), commit);
+                return;
+            }
+            if (commit) finishScrub();
+            return;
+        }
+        if (clamped >= 1) {
+            if (window.hasAfter()) {
+                jump(new ScrubJump(scrubNewest(), skipAtEnd(), 1), commit);
+                return;
+            }
+            scrollToEnd();
+            if (commit) finishScrub();
+            return;
+        }
+        LocalDateTime time = timeAtProgress(clamped);
+        long skip = matchDayStats.isEmpty() ? -1 : TimelineLayout.skipFromProgress(clamped, matchDayStats);
+        if (scrollLocally(clamped, time, skip)) {
             if (!draggingTimeline) maybeRequestMore();
             if (commit) finishScrub();
             return;
         }
+        jump(new ScrubJump(time, skip, clamped), commit);
+    }
+
+    private long skipAtEnd() {
+        if (matchDayStats.isEmpty()) return -1;
+        return TimelineLayout.skipFromProgress(1, matchDayStats);
+    }
+
+    private boolean scrollLocally(double progress, LocalDateTime time, long skip) {
+        MatchDay day = TimelineLayout.dayAtProgress(progress, matchDayStats);
+        if (day != null) {
+            MessageListLayout.DateBand band = layout.dateBand(day.date());
+            if (band != null && !(day.collapsed() && skip >= 0 && day.matches() > window.matchCount())) {
+                double fraction = TimelineLayout.fractionInDay(progress, matchDayStats);
+                setScrollY(TimelineLayout.scrollForDateFraction(band.y(), layout.dateEndY(band), height, fraction));
+                return true;
+            }
+        }
+        if (time != null && window.showsDate(time)) {
+            scrollToTime(time);
+            return true;
+        }
+        return false;
+    }
+
+    private void jump(ScrubJump jump, boolean commit) {
+        if (jump.time() == null && jump.skip() < 0) return;
         if (!commit) {
             long now = System.currentTimeMillis();
-            if (now - lastScrubQueryMs < SCRUB_THROTTLE_MS) return;
+            if (!shouldSendPreviewScrubQuery(scrubQueryInFlight, now, lastScrubQueryMs,
+                SCRUB_THROTTLE_MS, jump, lastSentScrubJump)) {
+                return;
+            }
             lastScrubQueryMs = now;
+            lastSentScrubJump = jump;
+            scrubQueryInFlight = true;
+        } else {
+            lastSentScrubJump = jump;
         }
-        onJump.accept(time, !commit);
+        onJump.accept(jump, !commit);
     }
 
     private void maybeRequestMore() {
@@ -857,6 +1028,26 @@ public final class MessageTimeline extends BaseUIComponent {
         } else if (window.hasAfter() && lastVisible >= window.rows().size() - 3) {
             onApproachEdge.accept(Edge.AFTER);
         }
+    }
+
+    /**
+     * Top half of a row expands toward the top of the list ({@link Edge#BEFORE}).
+     */
+    static boolean clickInTopHalf(double contentY, int rowTop, int rowHeight) {
+        return contentY < rowTop + rowHeight / 2.0;
+    }
+
+    static int highlightLeft(int textX) {
+        return textX - HIGHLIGHT_PAD_LEFT;
+    }
+
+    static int highlightHeight() {
+        return ROW_HEIGHT - HIGHLIGHT_TRIM_BOTTOM;
+    }
+
+    private Edge expandSide(int row, double localY) {
+        int contentY = (int) Math.round(localY + scrollY - contentOrigin());
+        return clickInTopHalf(contentY, layout.rowY(row), layout.rowHeight(row)) ? Edge.BEFORE : Edge.AFTER;
     }
 
     private int rowAtLocalY(double localY) {
@@ -947,5 +1138,8 @@ public final class MessageTimeline extends BaseUIComponent {
 
     public enum Edge {
         BEFORE, AFTER
+    }
+
+    public record ScrubJump(LocalDateTime time, long skip, double progress) {
     }
 }
