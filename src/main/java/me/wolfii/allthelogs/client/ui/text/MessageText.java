@@ -58,21 +58,49 @@ public final class MessageText {
     }
 
     /**
-     * Text for the list's status chip: a persistent overlay, then loading, then the match count and search time.
+     * Usage lines for the browser "?" tooltip, shown above database statistics.
      */
-    public static Component listStatus(Component overlay, boolean loading, boolean showMatches, long matchCount,
-                                       boolean exactCount, long elapsedMs) {
+    public static List<Component> listHelpLines() {
+        return List.of(
+            Component.translatable("allthelogs.help.select"),
+            Component.translatable("allthelogs.help.select_all"),
+            Component.translatable("allthelogs.help.copy"),
+            Component.translatable("allthelogs.help.expand"),
+            Component.translatable("allthelogs.help.scroll"));
+    }
+
+    /**
+     * "?" tooltip: how to use the message list, then the existing statistics title and {@code statsLines}.
+     */
+    public static List<Component> helpAndStatsTooltip(List<Component> statsLines) {
+        List<Component> lines = new ArrayList<>(listHelpLines());
+        lines.add(Component.translatable("allthelogs.meta.hint"));
+        if (statsLines != null) lines.addAll(statsLines);
+        return lines;
+    }
+
+    /**
+     * Text for the list's status chip: a persistent overlay, then loading, then the count and search time.
+     * Unfiltered lists use "message(s)"; a search or version/date filter uses "match(es)".
+     */
+    public static Component listStatus(Component overlay, boolean loading, boolean showCount, long matchCount,
+                                       boolean exactCount, long elapsedMs, boolean narrowed) {
         if (overlay != null && !overlay.getString().isEmpty()) return overlay;
         if (loading) return Component.translatable("allthelogs.status.loading");
-        if (!showMatches) return Component.empty();
+        if (!showCount) return Component.empty();
         String duration = searchDurationText(elapsedMs);
         String count = matchCountText(matchCount, exactCount);
         boolean singular = singularMatch(matchCount, exactCount);
-        if (duration.isEmpty()) {
-            return Component.translatable(singular ? "allthelogs.status.match" : "allthelogs.status.matches", count);
-        }
-        return Component.translatable(
-            singular ? "allthelogs.status.match.timed" : "allthelogs.status.matches.timed", count, duration);
+        String key = statusCountKey(narrowed, singular, !duration.isEmpty());
+        if (duration.isEmpty()) return Component.translatable(key, count);
+        return Component.translatable(key, count, duration);
+    }
+
+    static String statusCountKey(boolean narrowed, boolean singular, boolean timed) {
+        String kind = narrowed
+            ? (singular ? "match" : "matches")
+            : (singular ? "message" : "messages");
+        return timed ? "allthelogs.status." + kind + ".timed" : "allthelogs.status." + kind;
     }
 
     public static Component timestamp(DisplayRow row) {
