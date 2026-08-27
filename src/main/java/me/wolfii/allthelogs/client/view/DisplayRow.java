@@ -53,8 +53,9 @@ public record DisplayRow(
         }
 
         return entries.stream().map(entry -> {
-            boolean match = matches.test(entry.message());
-            Duration distance = match ? Duration.ZERO : distanceToNearestHit(entry, hitsByLog.get(entry.chatLog()));
+            List<ChatEntry> hits = hitsByLog.get(entry.chatLog());
+            boolean match = hits != null && hits.contains(entry);
+            Duration distance = match ? Duration.ZERO : distanceToNearestHit(entry, hits);
             List<HighlightSpan> highlights = match ? MatchHighlighter.spans(entry.message(), filter) : List.of();
             return new DisplayRow(entry, match, distance, highlights);
         }).toList();
