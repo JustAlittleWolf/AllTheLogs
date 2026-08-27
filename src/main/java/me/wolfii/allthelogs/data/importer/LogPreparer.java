@@ -1,14 +1,13 @@
 package me.wolfii.allthelogs.data.importer;
 
 import me.wolfii.allthelogs.data.importer.discover.LogCandidate;
+import me.wolfii.allthelogs.data.parse.LogCharset;
 import me.wolfii.allthelogs.data.parse.LogDates;
 import me.wolfii.allthelogs.data.parse.LogParser;
 import me.wolfii.allthelogs.data.parse.ParsedLog;
 import me.wolfii.allthelogs.data.store.PreparedLog;
 
 import java.io.*;
-import java.nio.ByteBuffer;
-import java.nio.charset.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -21,11 +20,6 @@ import java.util.zip.GZIPInputStream;
  * Turns a discovered log file into a {@link PreparedLog} ready to write.
  */
 public final class LogPreparer {
-    /**
-     * Legacy Windows code page that old Minecraft launchers wrote logs in, before UTF-8 became the norm.
-     */
-    private static final Charset WINDOWS_1252 = Charset.forName("windows-1252");
-
     private LogPreparer() {
     }
 
@@ -50,7 +44,7 @@ public final class LogPreparer {
         return new PreparedLog(candidate.fileName(), candidate.sourceKind(), candidate.sourcePath(),
             candidate.entryPath(), date, parsed.minecraftVersion(),
             times, messages, parsed.resourceManagerReloaded(),
-            firstLineTime, lastLineTime, parsed.sessionId());
+            firstLineTime, lastLineTime, parsed.sessionId(), parsed.minecraftUser());
     }
 
     private static BufferedReader open(LogCandidate candidate) throws IOException {
@@ -59,22 +53,6 @@ public final class LogPreparer {
             stream = new GZIPInputStream(stream);
         }
         byte[] bytes = stream.readAllBytes();
-        return new BufferedReader(new StringReader(decode(bytes)), 1 << 16);
-    }
-
-    /**
-     * Decodes as UTF-8 when the bytes are valid UTF-8, otherwise Windows-1252.
-     * Older Windows clients wrote logs in the system code page; treating those bytes as UTF-8 would
-     * replace the section sign used for formatting codes.
-     */
-    private static String decode(byte[] bytes) {
-        CharsetDecoder strictUtf8 = StandardCharsets.UTF_8.newDecoder()
-            .onMalformedInput(CodingErrorAction.REPORT)
-            .onUnmappableCharacter(CodingErrorAction.REPORT);
-        try {
-            return strictUtf8.decode(ByteBuffer.wrap(bytes)).toString();
-        } catch (CharacterCodingException e) {
-            return new String(bytes, WINDOWS_1252);
-        }
+        return new BufferedReader(new StringReader(LogCharset.decode(bytes)), 1 << 16);
     }
 }

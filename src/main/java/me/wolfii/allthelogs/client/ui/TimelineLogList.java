@@ -11,6 +11,7 @@ import me.wolfii.allthelogs.client.view.MessageSelection;
 import me.wolfii.allthelogs.client.view.MessageWrap;
 import me.wolfii.allthelogs.client.view.ResultWindow;
 import me.wolfii.allthelogs.client.view.TimelineLayout;
+import me.wolfii.allthelogs.client.view.ContextColors;
 import me.wolfii.allthelogs.data.MatchBounds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -191,6 +192,7 @@ public final class TimelineLogList extends BaseUIComponent {
         }
         graphics.fill(x, y, x + listWidth, y + height, LIST_BG);
         drawRows(graphics, listWidth);
+        drawMessageInfo(graphics, mouseX, mouseY, listWidth);
         drawBanner(graphics, listWidth, mouseX, mouseY);
         drawTimeline(graphics, mouseX, mouseY);
         updateCursor(mouseX, mouseY, listWidth);
@@ -283,15 +285,13 @@ public final class TimelineLogList extends BaseUIComponent {
                 DisplayRow row = rows.get(i);
                 int rowY = screenY(layout.rowY(i));
                 int msgX = x + LIST_PAD + timestampWidth;
-                List<String> lines = MessageWrap.lines(row.message(), messageWidth, font::width);
+                List<MessageWrap.Line> lines = MessageWrap.wrap(row.message(), messageWidth, font::width);
                 drawSelection(graphics, font, i, lines, msgX, rowY);
                 graphics.drawText(MessageComponents.timestamp(row), x + LIST_PAD, rowY + 1, 1, MUTED);
-                int offset = 0;
                 int lineY = rowY;
-                for (String line : lines) {
-                    graphics.drawText(MessageComponents.messageRange(row, offset, offset + line.length()),
+                for (MessageWrap.Line line : lines) {
+                    graphics.drawText(MessageComponents.messageRange(row, line.start(), line.start() + line.text().length()),
                         msgX, lineY + 1, 1, TEXT);
-                    offset += line.length();
                     lineY += ROW_HEIGHT;
                 }
             }
@@ -301,24 +301,53 @@ public final class TimelineLogList extends BaseUIComponent {
         }
     }
 
-    private void drawSelection(OwoUIGraphics graphics, Font font, int row, List<String> lines, int msgX, int rowY) {
+    private void drawSelection(OwoUIGraphics graphics, Font font, int row, List<MessageWrap.Line> lines, int msgX, int rowY) {
         if (selection.isEmpty()) return;
-        int offset = 0;
         int lineY = rowY;
-        for (String line : lines) {
+        for (MessageWrap.Line line : lines) {
+            String text = line.text();
             int start = -1;
-            for (int i = 0; i <= line.length(); i++) {
-                boolean covered = i < line.length() && selection.covers(row, offset + i);
+            for (int i = 0; i <= text.length(); i++) {
+                boolean covered = i < text.length() && selection.covers(row, line.start() + i);
                 if (covered && start < 0) start = i;
                 if (!covered && start >= 0) {
-                    int left = msgX + font.width(line.substring(0, start));
-                    int right = msgX + font.width(line.substring(0, i));
+                    int left = msgX + font.width(text.substring(0, start));
+                    int right = msgX + font.width(text.substring(0, i));
                     graphics.fill(left, lineY, right, lineY + ROW_HEIGHT, SELECTION);
                     start = -1;
                 }
             }
-            offset += line.length();
             lineY += ROW_HEIGHT;
+        }
+    }
+
+    private void drawMessageInfo(OwoUIGraphics graphics, int mouseX, int mouseY, int listWidth) {
+        if (draggingSelection || draggingTimeline) return;
+        if (mouseX < x + LIST_PAD || mouseX >= messageX() || mouseY < y || mouseY >= y + height) return;
+        int row = rowAtLocalY(mouseY - y);
+        if (row < 0) return;
+        List<Component> lines = MessageComponents.messageInfo(window.rows().get(row));
+        Font font = font();
+        int lineHeight = 10;
+        int pad = 5;
+        int textWidth = 0;
+        for (Component line : lines) {
+            textWidth = Math.max(textWidth, (int) (font.width(line) * 0.85f));
+        }
+        int boxWidth = textWidth + pad * 2;
+        int boxHeight = pad * 2 + lines.size() * lineHeight - 2;
+        int rowScreenY = screenY(layout.rowY(row));
+        int boxX = Math.clamp(x + LIST_PAD, x, Math.max(x, x + listWidth - boxWidth));
+        int boxY = rowScreenY + ROW_HEIGHT + 2;
+        if (boxY + boxHeight > y + height) {
+            boxY = Math.max(y, rowScreenY - boxHeight - 2);
+        }
+        fillChip(graphics, boxX, boxY, boxWidth, boxHeight, HOVER_BG);
+        int[] colors = {ContextColors.INFO_DATE, ContextColors.INFO_VERSION, ContextColors.INFO_FILE};
+        int textY = boxY + pad;
+        for (int i = 0; i < lines.size(); i++) {
+            graphics.drawText(lines.get(i), boxX + pad, textY, 0.85f, colors[Math.min(i, colors.length - 1)]);
+            textY += lineHeight;
         }
     }
 

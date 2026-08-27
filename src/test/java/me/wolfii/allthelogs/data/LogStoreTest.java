@@ -135,6 +135,17 @@ class LogStoreTest {
     }
 
     @Test
+    void storesTheMinecraftUserFromTheLog() throws IOException {
+        LogFixtures.writePlain(tempDir.resolve("logs"), "debug.log", """
+            [11:21:53] [Render thread/INFO]: Setting user: JustAlittleWolf
+            [11:21:54] [Render thread/INFO]: [CHAT] hi from wolf
+            """);
+        store.importDirectory(tempDir);
+        ChatEntry entry = store.query(ChatQuery.all().withSubstring("hi from wolf")).getFirst();
+        assertEquals("JustAlittleWolf", entry.chatLog().minecraftUser());
+    }
+
+    @Test
     void reusesTheSameChatLogInstanceForEntriesFromTheSameFile() throws IOException {
         store.importDirectory(logsDirectory());
 

@@ -14,6 +14,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -71,7 +72,7 @@ class SchemaMigrationTest {
                 INSERT INTO log_file VALUES (
                     1, '2026-08-24-1.log.gz', 'FILE', '/tmp/legacy.log', '/tmp/legacy.log',
                     DATE '2026-08-24', '26.2',
-                    TIMESTAMP '2026-08-24 10:00:00', TIMESTAMP '2026-08-24 10:00:10', 1)""");
+                    TIMESTAMP '2026-08-24 10:00:00', TIMESTAMP '2026-08-24 10:00:10', 1, NULL)""");
             statement.execute("""
                 INSERT INTO chat_entry VALUES (
                     1, 0, TIMESTAMP '2026-08-24 10:00:10', 'hello from legacy')""");
@@ -86,6 +87,61 @@ class SchemaMigrationTest {
         try (var connection = StoreConnections.openFile(database);
              Statement statement = connection.createStatement()) {
             assertEquals(SchemaMigration.CURRENT_VERSION, SchemaMigration.readVersion(statement));
+        }
+    }
+
+    @Test
+    void existingVersion1DatabaseGainsMinecraftUserWithoutAVersionBump() throws SQLException {
+        Path database = tempDir.resolve("v1.duckdb");
+        try (var connection = StoreConnections.openFile(database);
+             Statement statement = connection.createStatement()) {
+            statement.execute("DROP TABLE IF EXISTS log_file");
+            statement.execute("DROP TABLE IF EXISTS chat_entry");
+            statement.execute("""
+                CREATE TABLE log_file (
+                    id BIGINT PRIMARY KEY,
+                    file_name VARCHAR NOT NULL,
+                    source_kind VARCHAR NOT NULL,
+                    source_path VARCHAR NOT NULL,
+                    entry_path VARCHAR NOT NULL,
+                    log_date DATE NOT NULL,
+                    minecraft_version VARCHAR NOT NULL,
+                    start_time TIMESTAMP NOT NULL,
+                    end_time TIMESTAMP NOT NULL,
+                    entry_count BIGINT NOT NULL
+                )""");
+            statement.execute("""
+                CREATE TABLE chat_entry (
+                    file_id BIGINT NOT NULL,
+                    line_index INTEGER NOT NULL,
+                    entry_time TIMESTAMP NOT NULL,
+                    message VARCHAR NOT NULL
+                )""");
+            statement.execute("""
+                INSERT INTO log_file VALUES (
+                    1, 'old.log', 'FILE', '/tmp/old.log', '',
+                    DATE '2026-08-24', '1.8.9',
+                    TIMESTAMP '2026-08-24 10:00:00', TIMESTAMP '2026-08-24 10:00:10', 1)""");
+            statement.execute("""
+                INSERT INTO chat_entry VALUES (
+                    1, 0, TIMESTAMP '2026-08-24 10:00:10', 'legacy row')""");
+        }
+
+        try (LogStore store = LogStore.open(database)) {
+            assertEquals(List.of("legacy row"), store.chatEntries().stream().map(ChatEntry::message).toList());
+            assertNull(store.chatLogs().getFirst().minecraftUser());
+        }
+
+        try (var connection = StoreConnections.openFile(database);
+             Statement statement = connection.createStatement()) {
+            assertEquals(1, SchemaMigration.readVersion(statement));
+            try (ResultSet result = statement.executeQuery("""
+                SELECT count(*) FROM information_schema.columns
+                WHERE table_name = 'log_file' AND column_name = 'minecraft_user'
+                """)) {
+                result.next();
+                assertEquals(1, result.getLong(1));
+            }
         }
     }
 

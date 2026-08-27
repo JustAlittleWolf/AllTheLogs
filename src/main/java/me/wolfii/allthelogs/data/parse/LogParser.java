@@ -26,9 +26,16 @@ public final class LogParser {
     private static final Pattern LINE_START = Pattern.compile(
         "^\\[(?:\\d{4}-\\d{2}-\\d{2}[ T])?(\\d{1,2}):(\\d{2}):(\\d{2})(?:[.,]\\d+)?] ");
 
+    private static final Pattern USER = Pattern.compile("Setting user: (\\S+)");
+
+    /**
+     * Lower index wins when several version lines appear in one file.
+     */
     private static final Pattern[] VERSION_PATTERNS = {
         Pattern.compile("Loading Minecraft (\\S+) with (?:Fabric|Quilt) Loader"),
         Pattern.compile("for Minecraft (\\S+) loading"),
+        Pattern.compile("OptiFine[_ ](\\d+\\.\\d+(?:\\.\\d+)?)"),
+        Pattern.compile("(?i)^\\s*-\\s*minecraft\\s+(\\S+)"),
         Pattern.compile("Starting integrated minecraft server version (\\S+)"),
         Pattern.compile("Minecraft Version: (\\S+)"),
         Pattern.compile("--version,? (\\S+)")
@@ -46,6 +53,7 @@ public final class LogParser {
         LocalTime pendingTime = null;
         String version = null;
         int versionPriority = Integer.MAX_VALUE;
+        String minecraftUser = null;
         boolean resourceManagerReloaded = false;
         LocalTime firstLineTime = null;
         LocalTime lastLineTime = null;
@@ -55,7 +63,15 @@ public final class LogParser {
         while ((line = reader.readLine()) != null) {
             Matcher start = LINE_START.matcher(line);
             if (!start.find()) {
-                if (pending != null) pending.append('\n').append(line);
+                if (pending != null) {
+                    pending.append('\n').append(line);
+                } else {
+                    VersionHit hit = findVersion(line, versionPriority);
+                    if (hit != null) {
+                        version = hit.value;
+                        versionPriority = hit.priority;
+                    }
+                }
                 continue;
             }
 
@@ -75,19 +91,19 @@ public final class LogParser {
                 sessionId = SessionMarker.find(line).orElse(null);
             }
 
+            if (minecraftUser == null) {
+                Matcher user = USER.matcher(line);
+                if (user.find()) minecraftUser = user.group(1);
+            }
+
             if (!resourceManagerReloaded && line.contains(RESOURCE_MANAGER_RELOAD_MARKER)) {
                 resourceManagerReloaded = true;
             }
 
-            if (versionPriority > 0) {
-                for (int i = 0; i < VERSION_PATTERNS.length && i < versionPriority; i++) {
-                    Matcher versionMatcher = VERSION_PATTERNS[i].matcher(line);
-                    if (versionMatcher.find()) {
-                        version = versionMatcher.group(1);
-                        versionPriority = i;
-                        break;
-                    }
-                }
+            VersionHit hit = findVersion(line, versionPriority);
+            if (hit != null) {
+                version = hit.value;
+                versionPriority = hit.priority;
             }
 
             int chat = line.indexOf(CHAT_MARKER, start.end());
@@ -102,8 +118,19 @@ public final class LogParser {
         if (pending != null) entries.add(new ParsedLog.Entry(pendingTime, pending.toString()));
 
         entries.replaceAll(entry -> new ParsedLog.Entry(entry.time(), FormattingCodes.strip(entry.message())));
-        return new ParsedLog(version == null ? ChatLog.UNKNOWN_VERSION : version, entries,
+        return new ParsedLog(version == null ? ChatLog.UNKNOWN_VERSION : version, minecraftUser, entries,
             resourceManagerReloaded, firstLineTime, lastLineTime, sessionId);
+    }
+
+    private static VersionHit findVersion(String line, int currentPriority) {
+        if (currentPriority <= 0) return null;
+        for (int i = 0; i < VERSION_PATTERNS.length && i < currentPriority; i++) {
+            Matcher versionMatcher = VERSION_PATTERNS[i].matcher(line);
+            if (versionMatcher.find()) {
+                return new VersionHit(versionMatcher.group(1), i);
+            }
+        }
+        return null;
     }
 
     private static LocalTime parseTime(Matcher start) {
@@ -112,5 +139,8 @@ public final class LogParser {
         int second = Integer.parseInt(start.group(3));
         if (hour > 23 || minute > 59 || second > 59) return null;
         return LocalTime.of(hour, minute, second);
+    }
+
+    private record VersionHit(String value, int priority) {
     }
 }

@@ -28,7 +28,8 @@ public final class ChatQueries {
             result.getDate(offset + 4).toLocalDate(),
             result.getString(offset + 5),
             result.getTimestamp(offset + 6).toLocalDateTime(),
-            result.getTimestamp(offset + 7).toLocalDateTime());
+            result.getTimestamp(offset + 7).toLocalDateTime(),
+            result.getString(offset + 8));
     }
 
     private static LogSource readLogSource(ResultSet result, int offset) throws SQLException {
@@ -168,7 +169,7 @@ public final class ChatQueries {
         List<ChatLog> logs = new ArrayList<>();
         String sql = """
             SELECT file_name, source_kind, source_path, entry_path, log_date, minecraft_version,
-                   start_time, end_time
+                   start_time, end_time, minecraft_user
             FROM log_file ORDER BY log_date, entry_path""";
         try (Statement statement = connection.createStatement();
              ResultSet result = statement.executeQuery(sql)) {
@@ -248,7 +249,7 @@ public final class ChatQueries {
         String placeholders = "?,".repeat(ids.size());
         String sql = """
             SELECT id, file_name, source_kind, source_path, entry_path, log_date, minecraft_version,
-                   start_time, end_time
+                   start_time, end_time, minecraft_user
             FROM log_file WHERE id IN (""" + placeholders.substring(0, placeholders.length() - 1) + ")";
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             int index = 1;

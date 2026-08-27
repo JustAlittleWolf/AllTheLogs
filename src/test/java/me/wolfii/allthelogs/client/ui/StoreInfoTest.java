@@ -39,6 +39,21 @@ class StoreInfoTest {
         assertEquals("allthelogs.meta.empty", key(StoreInfo.tooltip(metadata).getFirst()));
     }
 
+    @Test
+    void tooltipValuesAreColoured() {
+        LogStoreMetadata metadata = new LogStoreMetadata(
+            List.of("1.8.9"),
+            LocalDate.of(2020, 1, 1),
+            LocalDate.of(2026, 8, 1),
+            3, 40, 2048);
+        List<Component> lines = StoreInfo.tooltip(metadata);
+        Object[] rangeArgs = ((TranslatableContents) lines.getFirst().getContents()).getArgs();
+        assertEquals("2020-01-01", ((Component) rangeArgs[0]).getString());
+        assertTrue(((Component) rangeArgs[0]).getStyle().getColor().getValue() != 0);
+        Object[] sizeArgs = ((TranslatableContents) lines.getLast().getContents()).getArgs();
+        assertEquals("2.0 KB", ((Component) sizeArgs[0]).getString());
+    }
+
     private static String key(Component component) {
         return ((TranslatableContents) component.getContents()).getKey();
     }

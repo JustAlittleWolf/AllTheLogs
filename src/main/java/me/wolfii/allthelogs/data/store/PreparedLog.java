@@ -13,6 +13,7 @@ import java.util.List;
  * @param firstLineTime            timestamp of the first logged line of the file, not just chat entries
  * @param lastLineTime             timestamp of the last logged line of the file, not just chat entries
  * @param sessionId                id from an AllTheLogs session marker in the file, or {@code null}
+ * @param minecraftUser            the player from a {@code Setting user:} line, or {@code null}
  */
 public record PreparedLog(
     String fileName,
@@ -26,6 +27,7 @@ public record PreparedLog(
     boolean resourceManagerReloaded,
     LocalDateTime firstLineTime,
     LocalDateTime lastLineTime,
-    String sessionId
+    String sessionId,
+    String minecraftUser
 ) {
 }

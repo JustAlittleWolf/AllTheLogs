@@ -51,6 +51,8 @@ dependencies {
     include(libs.commons.compress)
     runtimeOnly(libs.xz)
     include(libs.xz)
+    implementation(libs.juniversalchardet)
+    include(libs.juniversalchardet)
 
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)

@@ -24,7 +24,8 @@ public final class Schema {
                 minecraft_version VARCHAR NOT NULL,
                 start_time TIMESTAMP NOT NULL,
                 end_time TIMESTAMP NOT NULL,
-                entry_count BIGINT NOT NULL
+                entry_count BIGINT NOT NULL,
+                minecraft_user VARCHAR
             )""");
         statement.execute("""
             CREATE TABLE IF NOT EXISTS chat_entry (
@@ -34,6 +35,15 @@ public final class Schema {
                 message VARCHAR NOT NULL
             )""");
         statement.execute("CREATE UNIQUE INDEX IF NOT EXISTS log_file_location ON log_file (source_path, entry_path)");
+        ensureOptionalColumns(statement);
+    }
+
+    /**
+     * Adds columns introduced after the original layout without bumping {@link SchemaMigration#CURRENT_VERSION}.
+     * Safe on current databases: {@code IF NOT EXISTS} is a no-op when {@link #create} already defined the column.
+     */
+    public static void ensureOptionalColumns(Statement statement) throws SQLException {
+        statement.execute("ALTER TABLE log_file ADD COLUMN IF NOT EXISTS minecraft_user VARCHAR");
     }
 
     /**

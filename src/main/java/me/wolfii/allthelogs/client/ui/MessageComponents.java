@@ -9,6 +9,7 @@ import net.minecraft.network.chat.Style;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -22,6 +23,7 @@ public final class MessageComponents {
 
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss");
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("EEE, MMM d, yyyy", Locale.US);
+    private static final DateTimeFormatter FULL_DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private MessageComponents() {
     }
@@ -42,6 +44,18 @@ public final class MessageComponents {
 
     public static Component timestamp(DisplayRow row) {
         return colored(row.entry().timestamp().toLocalTime().withNano(0).format(TIME), ContextColors.TIMESTAMP);
+    }
+
+    /**
+     * Compact hover card for a message timestamp: full date, Minecraft version, source file.
+     */
+    public static List<Component> messageInfo(DisplayRow row) {
+        String date = row.entry().timestamp().withNano(0).format(FULL_DATE);
+        return List.of(
+            colored(date, ContextColors.INFO_DATE),
+            colored(row.chatLog().minecraftVersion(), ContextColors.INFO_VERSION),
+            colored(row.chatLog().source().label(), ContextColors.INFO_FILE)
+        );
     }
 
     public static Component dateHeader(LocalDate date) {
