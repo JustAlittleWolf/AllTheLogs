@@ -2,6 +2,7 @@ package me.wolfii.allthelogs.client.ui.widget;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -20,5 +21,11 @@ class MessageTimelineTest {
         assertTrue(MessageTimeline.clickInTopHalf(5, 0, 12));
         assertFalse(MessageTimeline.clickInTopHalf(6, 0, 12));
         assertFalse(MessageTimeline.clickInTopHalf(11, 0, 12));
+    }
+
+    @Test
+    void highlightMarkerExtendsOnePixelLeftAndStopsTwoPixelsEarly() {
+        assertEquals(7, MessageTimeline.highlightLeft(8));
+        assertEquals(MessageTimeline.ROW_HEIGHT - 2, MessageTimeline.highlightHeight());
     }
 }
