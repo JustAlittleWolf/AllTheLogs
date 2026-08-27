@@ -9,7 +9,7 @@ import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.ui.text.StoreSummary;
 import me.wolfii.allthelogs.client.ui.widget.MessageTimeline;
 import me.wolfii.allthelogs.data.ChatQuery;
-import me.wolfii.allthelogs.data.MatchBounds;
+import me.wolfii.allthelogs.data.MatchSummary;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
@@ -27,13 +27,12 @@ import java.util.function.BiConsumer;
  * Runs log-store queries for the browser and applies the pages to {@link MessageTimeline}.
  */
 final class LogBrowserQueries {
-    static final int COUNT_DEBOUNCE_MS = 500;
     private final AtomicInteger generation = new AtomicInteger();
     private SearchFilter filter = SearchFilter.defaults();
     private MessageTimeline list;
     private ButtonComponent info;
     private List<String> versions = List.of();
-    private MatchBounds matchBounds = MatchBounds.empty();
+    private MatchSummary matchSummary = MatchSummary.empty();
     private boolean reloadPending = true;
     private List<DisplayRow> restoredRows = List.of();
     private boolean restoredHasBefore;
@@ -53,23 +52,23 @@ final class LogBrowserQueries {
         return time.minusNanos(1);
     }
 
-    static boolean pageHasBefore(ChatQuery.Sort sort, List<DisplayRow> rows, MatchBounds bounds) {
+    static boolean pageHasBefore(ChatQuery.Sort sort, List<DisplayRow> rows, MatchSummary summary) {
         LocalDateTime first = firstMatchTime(rows);
-        if (first == null || bounds == null) return false;
+        if (first == null || summary == null) return false;
         if (sort == ChatQuery.Sort.ASCENDING) {
-            return bounds.oldest() != null && bounds.oldest().isBefore(first);
+            return summary.oldest() != null && summary.oldest().isBefore(first);
         }
-        return bounds.newest() != null && bounds.newest().isAfter(first);
+        return summary.newest() != null && summary.newest().isAfter(first);
     }
 
-    static boolean pageHasAfter(ChatQuery.Sort sort, boolean full, List<DisplayRow> rows, MatchBounds bounds) {
+    static boolean pageHasAfter(ChatQuery.Sort sort, boolean full, List<DisplayRow> rows, MatchSummary summary) {
         if (full) return true;
         LocalDateTime last = lastMatchTime(rows);
-        if (last == null || bounds == null) return false;
+        if (last == null || summary == null) return false;
         if (sort == ChatQuery.Sort.ASCENDING) {
-            return bounds.newest() != null && bounds.newest().isAfter(last);
+            return summary.newest() != null && summary.newest().isAfter(last);
         }
-        return bounds.oldest() != null && bounds.oldest().isBefore(last);
+        return summary.oldest() != null && summary.oldest().isBefore(last);
     }
 
     static LocalDateTime firstMatchTime(List<DisplayRow> rows) {
@@ -139,7 +138,7 @@ final class LogBrowserQueries {
         list.onScrubBegin(this::beginScrub);
         if (!reloadPending && !restoredRows.isEmpty()) {
             list.restore(restoredRows, restoredHasBefore, restoredHasAfter, restoredScrollY);
-            list.setMatchBounds(matchBounds);
+            list.setMatchSummary(matchSummary);
             list.showMatchCount(restoredMatchCount, restoredElapsedMs);
             if (restoredExactMatchCount) {
                 list.setTotalMatchCount(restoredMatchCount);
@@ -198,24 +197,14 @@ final class LogBrowserQueries {
             snapshotCurrentList();
         });
         if (resetTimeline) {
-            onClient(AllTheLogsClient.worker().matchBounds(page.toTimelineQuery()), (bounds, error) -> {
-                if (error != null || list == null) return;
-                matchBounds = bounds == null ? MatchBounds.empty() : bounds;
-                list.setMatchBounds(matchBounds);
-            });
-        }
-        scheduleMatchCount(gen);
-    }
-
-    private void scheduleMatchCount(int gen) {
-        CompletableFuture.delayedExecutor(COUNT_DEBOUNCE_MS, TimeUnit.MILLISECONDS).execute(() -> {
-            if (gen != generation.get()) return;
-            onClient(AllTheLogsClient.worker().matches(filter.toTimelineQuery()), (count, error) -> {
-                if (gen != generation.get() || error != null || count == null || list == null) return;
-                list.setTotalMatchCount(count);
+            onClient(AllTheLogsClient.worker().summarize(page.toSummaryQuery()), (summary, error) -> {
+                if (gen != generation.get() || error != null || list == null) return;
+                matchSummary = summary == null ? MatchSummary.empty() : summary;
+                list.setMatchSummary(matchSummary);
+                list.setTotalMatchCount(matchSummary.matches());
                 snapshotCurrentList();
             });
-        });
+        }
     }
 
     void refreshStats() {
@@ -303,22 +292,28 @@ final class LogBrowserQueries {
         list.setLoading(false);
     }
 
-    private void jumpTo(LocalDateTime time, boolean preview) {
-        LocalDateTime target = clampToBounds(time);
-        if (target == null) {
+    private void jumpTo(MessageTimeline.ScrubJump jump, boolean preview) {
+        LocalDateTime target = clampToBounds(jump == null ? null : jump.time());
+        if (target == null && (jump == null || jump.skip() < 0)) {
             if (!preview) list.finishScrub();
             return;
         }
-        SearchFilter page = filter.withOffset(exclusiveOffset(target, filter.sort()));
+        SearchFilter page = filter.withoutOffset();
+        ChatQuery query;
+        if (jump != null && jump.skip() >= 0) {
+            query = page.toQuery().withSkip(jump.skip());
+        } else {
+            query = page.withOffset(exclusiveOffset(target, filter.sort())).toQuery();
+        }
         if (preview) {
             long cap = filter.limit() < 0 ? MessageTimeline.SCRUB_PAGE_SIZE
                 : Math.min(MessageTimeline.SCRUB_PAGE_SIZE, filter.limit());
-            page = page.withLimit(Math.max(8, cap));
+            query = query.withLimit(Math.max(8, cap));
         }
-        SearchFilter query = page;
+        ChatQuery requested = query;
         int gen = generation.incrementAndGet();
         if (!preview) list.setLoading(true);
-        onClient(AllTheLogsClient.worker().query(query.toQuery()), (entries, error) -> {
+        onClient(AllTheLogsClient.worker().query(requested), (entries, error) -> {
             if (gen != generation.get()) return;
             list.setLoading(false);
             if (error != null) {
@@ -330,9 +325,10 @@ final class LogBrowserQueries {
                 if (!preview) list.finishScrub();
                 return;
             }
-            boolean full = pageIsFull(rows, query);
-            list.showAt(target, rows, pageHasBefore(filter.sort(), rows, matchBounds),
-                pageHasAfter(filter.sort(), full, rows, matchBounds));
+            boolean full = requested.limit() > 0 && ResultWindow.matchCount(rows) >= requested.limit();
+            double progress = jump == null ? Double.NaN : jump.progress();
+            list.showAt(target, rows, pageHasBefore(filter.sort(), rows, matchSummary),
+                pageHasAfter(filter.sort(), full, rows, matchSummary), progress);
             if (!preview) list.finishScrub();
             snapshotCurrentList();
         });
@@ -340,8 +336,8 @@ final class LogBrowserQueries {
 
     private LocalDateTime clampToBounds(LocalDateTime time) {
         if (time == null) return null;
-        LocalDateTime oldest = matchBounds.oldest();
-        LocalDateTime newest = matchBounds.newest();
+        LocalDateTime oldest = matchSummary.oldest();
+        LocalDateTime newest = matchSummary.newest();
         if (oldest == null || newest == null) return time;
         if (time.isBefore(oldest)) return oldest;
         if (time.isAfter(newest)) return newest;

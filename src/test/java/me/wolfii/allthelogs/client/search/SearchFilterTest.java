@@ -44,14 +44,14 @@ class SearchFilterTest {
     }
 
     @Test
-    void timelineQueryDropsContextLimitAndOffset() {
+    void summaryQueryDropsContextLimitAndOffset() {
         LocalDateTime offset = LocalDateTime.of(2026, 1, 2, 3, 4);
         ChatQuery query = SearchFilter.defaults()
             .withText("hi")
             .withContextLines(8)
             .withLimit(50)
             .withOffset(offset)
-            .toTimelineQuery();
+            .toSummaryQuery();
         assertEquals(0, query.contextLines());
         assertEquals(-1, query.limit());
         assertNull(query.offset());

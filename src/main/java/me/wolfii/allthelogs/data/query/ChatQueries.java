@@ -109,24 +109,11 @@ public final class ChatQueries {
     }
 
     /**
-     * Oldest and newest match times for {@code query}, ignoring paging and context.
+     * Unpaged match metadata: total count, first/last times, and per-day counts. One {@code GROUP BY} date
+     * scan, not a fetch of every matching row.
      */
-    public MatchBounds bounds(ChatQuery query) {
-        QueryBuilder builder = QueryBuilder.bounds(query);
-        try (PreparedStatement prepared = connection.prepareStatement(builder.sql())) {
-            builder.bind(prepared);
-            try (ResultSet result = prepared.executeQuery()) {
-                if (!result.next()) return MatchBounds.empty();
-                Timestamp oldest = result.getTimestamp(1);
-                Timestamp newest = result.getTimestamp(2);
-                int uniqueDates = result.getInt(3);
-                if (oldest == null || newest == null) return MatchBounds.empty();
-                return new MatchBounds(oldest.toLocalDateTime(), newest.toLocalDateTime(), uniqueDates,
-                    matchDates(query));
-            }
-        } catch (SQLException | RuntimeException e) {
-            throw new LogDataException("could not read match bounds for " + query, e);
-        }
+    public MatchSummary summarize(ChatQuery query) {
+        return MatchSummary.of(matchDays(query));
     }
 
     /**
@@ -145,23 +132,26 @@ public final class ChatQueries {
         }
     }
 
-    private List<LocalDate> matchDates(ChatQuery query) {
-        QueryBuilder builder = QueryBuilder.dates(query);
-        List<LocalDate> dates = new ArrayList<>();
+    private List<MatchDay> matchDays(ChatQuery query) {
+        QueryBuilder builder = QueryBuilder.summary(query);
+        List<MatchDay> days = new ArrayList<>();
         try (PreparedStatement prepared = connection.prepareStatement(builder.sql())) {
             builder.bind(prepared);
             try (ResultSet result = prepared.executeQuery()) {
                 while (result.next()) {
                     Date date = result.getDate(1);
-                    if (date != null) {
-                        dates.add(date.toLocalDate());
-                    }
+                    Timestamp oldest = result.getTimestamp(2);
+                    Timestamp newest = result.getTimestamp(3);
+                    long matches = result.getLong(4);
+                    if (date == null || oldest == null || newest == null) continue;
+                    days.add(new MatchDay(date.toLocalDate(), oldest.toLocalDateTime(), newest.toLocalDateTime(),
+                        matches));
                 }
             }
         } catch (SQLException | RuntimeException e) {
             throw new LogDataException("could not read match dates for " + query, e);
         }
-        return dates;
+        return days;
     }
 
     /**

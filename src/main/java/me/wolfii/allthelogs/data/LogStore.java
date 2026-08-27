@@ -301,11 +301,12 @@ public final class LogStore implements AutoCloseable {
     }
 
     /**
-     * Oldest and newest match timestamps for {@code query}, ignoring paging and context lines.
+     * Unpaged match count, first/last timestamps, and per-day counts for {@code query}. Ignores paging
+     * and context. One date aggregation, not a load of every matching row.
      */
-    public MatchBounds matchBounds(ChatQuery query) {
+    public MatchSummary summarize(ChatQuery query) {
         Objects.requireNonNull(query, "query");
-        return queries.bounds(query);
+        return queries.summarize(query);
     }
 
     /**

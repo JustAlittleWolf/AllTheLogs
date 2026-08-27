@@ -28,11 +28,13 @@ public record ChatQuery(
     int contextLines,
     long limit,
     Sort sort,
-    LocalDateTime offset
+    LocalDateTime offset,
+    long skip
 ) {
     public ChatQuery {
         Objects.requireNonNull(sort, "sort");
         if (contextLines < 0) throw new IllegalArgumentException("contextLines must not be negative");
+        if (skip < 0) throw new IllegalArgumentException("skip must not be negative");
         requireOrderedBounds(startingAt, upUntil);
     }
 
@@ -40,7 +42,7 @@ public record ChatQuery(
      * A query matching every stored entry, ordered by timestamp ascending.
      */
     public static ChatQuery all() {
-        return new ChatQuery(null, false, null, null, null, null, 0, -1, Sort.ASCENDING, null);
+        return new ChatQuery(null, false, null, null, null, null, 0, -1, Sort.ASCENDING, null, 0);
     }
 
     private static void requireOrderedBounds(LocalDateTime startingAt, LocalDateTime upUntil) {
@@ -55,7 +57,8 @@ public record ChatQuery(
      */
     public ChatQuery withSubstring(String substring) {
         Objects.requireNonNull(substring, "substring");
-        return new ChatQuery(substring, false, regex, version, startingAt, upUntil, contextLines, limit, sort, offset);
+        return new ChatQuery(substring, false, regex, version, startingAt, upUntil, contextLines, limit, sort, offset,
+            skip);
     }
 
     /**
@@ -63,7 +66,8 @@ public record ChatQuery(
      */
     public ChatQuery withSubstringCaseSensitive(String substring) {
         Objects.requireNonNull(substring, "substring");
-        return new ChatQuery(substring, true, regex, version, startingAt, upUntil, contextLines, limit, sort, offset);
+        return new ChatQuery(substring, true, regex, version, startingAt, upUntil, contextLines, limit, sort, offset,
+            skip);
     }
 
     /**
@@ -73,7 +77,7 @@ public record ChatQuery(
     public ChatQuery withRegex(String regex) {
         Objects.requireNonNull(regex, "regex");
         return new ChatQuery(substring, caseSensitive, regex, version, startingAt, upUntil, contextLines, limit, sort,
-            offset);
+            offset, skip);
     }
 
     /**
@@ -83,7 +87,7 @@ public record ChatQuery(
     public ChatQuery withVersion(String version) {
         Objects.requireNonNull(version, "version");
         return new ChatQuery(substring, caseSensitive, regex, version, startingAt, upUntil, contextLines, limit, sort,
-            offset);
+            offset, skip);
     }
 
     /**
@@ -93,7 +97,7 @@ public record ChatQuery(
     public ChatQuery startingAt(LocalDateTime startingAt) {
         Objects.requireNonNull(startingAt, "startingAt");
         return new ChatQuery(substring, caseSensitive, regex, version, startingAt, upUntil, contextLines, limit, sort,
-            offset);
+            offset, skip);
     }
 
     /**
@@ -103,7 +107,7 @@ public record ChatQuery(
     public ChatQuery upUntil(LocalDateTime upUntil) {
         Objects.requireNonNull(upUntil, "upUntil");
         return new ChatQuery(substring, caseSensitive, regex, version, startingAt, upUntil, contextLines, limit, sort,
-            offset);
+            offset, skip);
     }
 
     /**
@@ -112,7 +116,7 @@ public record ChatQuery(
      */
     public ChatQuery withContextLines(int contextLines) {
         return new ChatQuery(substring, caseSensitive, regex, version, startingAt, upUntil, contextLines, limit, sort,
-            offset);
+            offset, skip);
     }
 
     /**
@@ -121,7 +125,7 @@ public record ChatQuery(
      */
     public ChatQuery withLimit(long limit) {
         return new ChatQuery(substring, caseSensitive, regex, version, startingAt, upUntil, contextLines, limit, sort,
-            offset);
+            offset, skip);
     }
 
     /**
@@ -129,7 +133,7 @@ public record ChatQuery(
      */
     public ChatQuery withSort(Sort sort) {
         return new ChatQuery(substring, caseSensitive, regex, version, startingAt, upUntil, contextLines, limit, sort,
-            offset);
+            offset, skip);
     }
 
     /**
@@ -143,7 +147,16 @@ public record ChatQuery(
     public ChatQuery withOffset(LocalDateTime offset) {
         Objects.requireNonNull(offset, "offset");
         return new ChatQuery(substring, caseSensitive, regex, version, startingAt, upUntil, contextLines, limit, sort,
-            offset);
+            offset, skip);
+    }
+
+    /**
+     * Skips the first {@code skip} matches after filtering and ordering. Used by the timeline to land inside
+     * a cluster of messages that share a timestamp. {@code 0} means no skip.
+     */
+    public ChatQuery withSkip(long skip) {
+        return new ChatQuery(substring, caseSensitive, regex, version, startingAt, upUntil, contextLines, limit, sort,
+            offset, skip);
     }
 
     /**

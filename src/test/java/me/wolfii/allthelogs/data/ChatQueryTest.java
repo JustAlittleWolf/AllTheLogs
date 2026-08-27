@@ -36,6 +36,7 @@ class ChatQueryTest {
         assertThrows(NullPointerException.class, () -> ChatQuery.all().withOffset(null));
         LocalDateTime offset = LocalDateTime.of(2026, 1, 1, 0, 0);
         assertEquals(offset, ChatQuery.all().withOffset(offset).offset());
+        assertEquals(12, ChatQuery.all().withSkip(12).skip());
     }
 
     @Test

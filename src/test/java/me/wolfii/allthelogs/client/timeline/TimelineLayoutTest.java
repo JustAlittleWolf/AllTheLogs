@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.client.timeline;
 
+import me.wolfii.allthelogs.data.MatchDay;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
@@ -74,6 +75,27 @@ class TimelineLayoutTest {
         assertTrue(mid.getDayOfMonth() == 1 || mid.getDayOfMonth() == 31);
         assertEquals(0, TimelineLayout.yFromOldest(first.toLocalDate().atStartOfDay(), first, last, days, 0, 100));
         assertTrue(TimelineLayout.yFromOldest(last, first, last, days, 0, 100) > 50);
+    }
+
+    @Test
+    void matchDaysUseRealFirstAndLastTimesInsteadOfTheWholeClock() {
+        LocalDateTime fiveAm = LocalDateTime.of(2026, 1, 1, 5, 0);
+        LocalDateTime sixAm = LocalDateTime.of(2026, 1, 1, 6, 0);
+        LocalDateTime nextDay = LocalDateTime.of(2026, 1, 2, 5, 0);
+        List<MatchDay> days = List.of(
+            new MatchDay(fiveAm.toLocalDate(), fiveAm, sixAm, 10),
+            new MatchDay(nextDay.toLocalDate(), nextDay, nextDay, 4));
+        assertEquals(0, TimelineLayout.matchDayProgress(fiveAm, days, 0), 0.0001);
+        assertEquals(0.5 / 2, TimelineLayout.matchDayProgress(fiveAm.plusMinutes(30), days, 0), 0.0001);
+        assertEquals(-1, TimelineLayout.skipFromProgress(0.1, days));
+        assertEquals(-1, TimelineLayout.skipFromProgress(0.1, days.subList(0, 1)));
+        assertEquals(10, TimelineLayout.skipFromProgress(0.5, days));
+        assertEquals(13, TimelineLayout.skipFromProgress(1, days));
+        assertEquals(fiveAm, TimelineLayout.timeFromMatchDays(0, days));
+        assertEquals(nextDay, TimelineLayout.timeFromMatchDays(1, days));
+        assertEquals(0, TimelineLayout.scrollForDateFraction(0, 400, 200, 0), 0.0001);
+        assertEquals(200, TimelineLayout.scrollForDateFraction(0, 400, 200, 1), 0.0001);
+        assertEquals(0, TimelineLayout.scrollToRow(0, 800, 200), 0.0001);
     }
 
     @Test
