@@ -58,7 +58,7 @@ class DuckDbJdbcTest {
 
     @Test
     void cacheLivesUnderSharedDuckDbHome() {
-        assertTrue(DuckDbJdbc.cacheDirectory().endsWith(Path.of(".duckdb", "jdbc", DuckDbJdbc.VERSION)));
+        assertTrue(DuckDbJdbc.cacheDirectory().endsWith(Path.of("duckdb", "jdbc", DuckDbJdbc.VERSION)));
     }
 
     @Test

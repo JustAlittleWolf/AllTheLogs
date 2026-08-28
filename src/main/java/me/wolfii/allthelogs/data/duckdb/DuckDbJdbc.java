@@ -20,7 +20,24 @@ public final class DuckDbJdbc {
     }
 
     public static Path cacheDirectory() {
-        return Path.of(System.getProperty("user.home"), ".duckdb", "jdbc", VERSION);
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        Path baseCacheDir;
+
+        if (os.contains("win")) {
+            String localAppData = System.getenv("LOCALAPPDATA");
+            baseCacheDir = localAppData != null && !localAppData.isBlank()
+                ? Path.of(localAppData)
+                : Path.of(System.getProperty("user.home"), "AppData", "Local");
+        } else if (os.contains("mac")) {
+            baseCacheDir = Path.of(System.getProperty("user.home"), "Library", "Caches");
+        } else {
+            String xdgCache = System.getenv("XDG_CACHE_HOME");
+            baseCacheDir = xdgCache != null && !xdgCache.isBlank()
+                ? Path.of(xdgCache)
+                : Path.of(System.getProperty("user.home"), ".cache");
+        }
+
+        return baseCacheDir.resolve("duckdb").resolve("jdbc").resolve(VERSION);
     }
 
     public static String classifier() {
