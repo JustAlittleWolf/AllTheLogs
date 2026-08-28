@@ -104,6 +104,8 @@ public final class ImportProgressScreen extends BaseOwoScreen<FlowLayout> {
     }
 
     private void start() {
+        AllTheLogsClient.LOGGER.info("Starting user import from {} ({})",
+            path, archive ? "archive" : "directory");
         Consumer<ImportProgress> progress = snapshot ->
             Minecraft.getInstance().execute(() -> applyProgress(snapshot));
         CompletableFuture<ImportResult> future = archive
@@ -114,13 +116,14 @@ public final class ImportProgressScreen extends BaseOwoScreen<FlowLayout> {
             done.active(true);
             cancel.active(false);
             if (error != null) {
-                AllTheLogsClient.LOGGER.warn("Import failed", error);
+                AllTheLogsClient.LOGGER.warn("User import from {} failed", path, error);
                 heading.text(Component.translatable("allthelogs.status.import.failed"));
                 counts.text(Component.translatable("allthelogs.import.progress.failed",
                     ImportProgressText.failureReason(error)));
                 current.text(Component.empty());
                 return;
             }
+            logImportSummary(imported);
             if (cancelled) {
                 heading.text(Component.translatable("allthelogs.import.progress.cancelled",
                     Long.toString(imported.importedFiles()), Long.toString(imported.importedEntries())));
@@ -135,6 +138,20 @@ public final class ImportProgressScreen extends BaseOwoScreen<FlowLayout> {
             current.text(Component.empty());
             fill.horizontalSizing(Sizing.fill(100));
         }));
+    }
+
+    private void logImportSummary(ImportResult imported) {
+        if (cancelled) {
+            AllTheLogsClient.LOGGER.info(
+                "User import from {} cancelled: {} files, {} entries ({} skipped, {} failures)",
+                path, imported.importedFiles(), imported.importedEntries(),
+                imported.skippedFiles(), imported.failures().size());
+            return;
+        }
+        AllTheLogsClient.LOGGER.info(
+            "User import from {} completed: {} files, {} entries ({} skipped, {} failures)",
+            path, imported.importedFiles(), imported.importedEntries(),
+            imported.skippedFiles(), imported.failures().size());
     }
 
     private void cancelImport() {
