@@ -5,12 +5,7 @@ import io.wispforest.owo.ui.core.CursorStyle;
 import io.wispforest.owo.ui.core.OwoUIGraphics;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.UIComponent;
-import me.wolfii.allthelogs.client.list.DisplayRow;
-import me.wolfii.allthelogs.client.list.DisplayRows;
-import me.wolfii.allthelogs.client.list.MessageListLayout;
-import me.wolfii.allthelogs.client.list.MessageSelection;
-import me.wolfii.allthelogs.client.list.MessageWrap;
-import me.wolfii.allthelogs.client.list.ResultWindow;
+import me.wolfii.allthelogs.client.list.*;
 import me.wolfii.allthelogs.client.timeline.ScrubJump;
 import me.wolfii.allthelogs.client.timeline.ScrubberGeometry;
 import me.wolfii.allthelogs.client.timeline.TimelineEdge;
@@ -91,6 +86,16 @@ public final class MessageTimeline extends BaseUIComponent {
     public MessageTimeline() {
         this.sizing(Sizing.fill(), Sizing.fill());
         this.cursorStyle(CursorStyle.POINTER);
+    }
+
+    private static boolean middleMousePressed() {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.getWindow() == null) return false;
+        return GLFW.glfwGetMouseButton(client.getWindow().handle(), GLFW.GLFW_MOUSE_BUTTON_MIDDLE) == GLFW.GLFW_PRESS;
+    }
+
+    private static Font font() {
+        return Minecraft.getInstance().font;
     }
 
     /**
@@ -501,12 +506,6 @@ public final class MessageTimeline extends BaseUIComponent {
         maybeRequestMore();
     }
 
-    private static boolean middleMousePressed() {
-        Minecraft client = Minecraft.getInstance();
-        if (client == null || client.getWindow() == null) return false;
-        return GLFW.glfwGetMouseButton(client.getWindow().handle(), GLFW.GLFW_MOUSE_BUTTON_MIDDLE) == GLFW.GLFW_PRESS;
-    }
-
     private int updateClickCount(double mouseX, double mouseY) {
         long now = System.currentTimeMillis();
         double dx = mouseX - clickX;
@@ -772,9 +771,5 @@ public final class MessageTimeline extends BaseUIComponent {
         if (value < 0) return 0;
         if (value > max) return max;
         return value;
-    }
-
-    private static Font font() {
-        return Minecraft.getInstance().font;
     }
 }

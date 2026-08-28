@@ -1,11 +1,7 @@
 package me.wolfii.allthelogs.client.ui.widget;
 
 import io.wispforest.owo.ui.core.OwoUIGraphics;
-import me.wolfii.allthelogs.client.list.DisplayRow;
-import me.wolfii.allthelogs.client.list.HighlightSpan;
-import me.wolfii.allthelogs.client.list.MessageListLayout;
-import me.wolfii.allthelogs.client.list.MessageSelection;
-import me.wolfii.allthelogs.client.list.MessageWrap;
+import me.wolfii.allthelogs.client.list.*;
 import me.wolfii.allthelogs.client.ui.text.MessageText;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
 import net.minecraft.client.gui.Font;
@@ -38,6 +34,12 @@ final class MessageListPainter {
 
     static int highlightHeight() {
         return ROW_HEIGHT - HIGHLIGHT_TRIM_BOTTOM;
+    }
+
+    static MessageListLayout.ExpandDirection expandAt(ListView view, double localX, double localY) {
+        MessageListLayout.Separator separator = view.layout().separatorAt(view.contentY(localY));
+        if (separator == null) return null;
+        return MessageListLayout.expandAtLocalX(separator, view.messageLocalX(), localX);
     }
 
     void drawRows(OwoUIGraphics graphics, ListView view, MessageSelection selection, boolean showingLoading) {
@@ -98,12 +100,6 @@ final class MessageListPainter {
         List<Component> lines = MessageText.messageInfo(view.rows().get(row), maxTextWidth,
             text -> (int) Math.ceil(font.width(text) * MessageText.INFO_SCALE));
         drawChip(graphics, view, mouseX, mouseY, lines);
-    }
-
-    static MessageListLayout.ExpandDirection expandAt(ListView view, double localX, double localY) {
-        MessageListLayout.Separator separator = view.layout().separatorAt(view.contentY(localY));
-        if (separator == null) return null;
-        return MessageListLayout.expandAtLocalX(separator, view.messageLocalX(), localX);
     }
 
     private void drawChip(OwoUIGraphics graphics, ListView view, int mouseX, int mouseY, List<Component> lines) {

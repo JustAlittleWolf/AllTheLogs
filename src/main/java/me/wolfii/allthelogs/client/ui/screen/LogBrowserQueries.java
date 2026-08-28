@@ -1,18 +1,14 @@
 package me.wolfii.allthelogs.client.ui.screen;
 
 import io.wispforest.owo.ui.component.ButtonComponent;
+import me.wolfii.allthelogs.api.ChatQuery;
 import me.wolfii.allthelogs.client.AllTheLogsClient;
-import me.wolfii.allthelogs.client.list.ContextPeeks;
-import me.wolfii.allthelogs.client.list.DisplayRow;
-import me.wolfii.allthelogs.client.list.DisplayRows;
-import me.wolfii.allthelogs.client.list.MessageListLayout;
-import me.wolfii.allthelogs.client.list.PageBounds;
+import me.wolfii.allthelogs.client.list.*;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.timeline.ScrubJump;
 import me.wolfii.allthelogs.client.timeline.TimelineEdge;
 import me.wolfii.allthelogs.client.ui.text.StoreSummary;
 import me.wolfii.allthelogs.client.ui.widget.MessageTimeline;
-import me.wolfii.allthelogs.api.ChatQuery;
 import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.MatchSummary;
 import net.minecraft.client.Minecraft;

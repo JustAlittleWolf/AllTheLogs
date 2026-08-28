@@ -45,23 +45,16 @@ import java.util.function.Function;
  * Other mods should use {@link me.wolfii.allthelogs.api.AllTheLogs}, not this type.
  */
 public final class LogStore implements AutoCloseable {
-    private DuckDBConnection connection;
     private final Path databasePath;
-    private LogImporter importer;
     private final SessionCapture sessions;
+    private DuckDBConnection connection;
+    private LogImporter importer;
     private ChatQueries queries;
 
     private LogStore(DuckDBConnection connection, Path databasePath) {
         this.databasePath = databasePath;
         this.sessions = new SessionCapture(connection);
         bind(connection);
-    }
-
-    private void bind(DuckDBConnection connection) {
-        this.connection = connection;
-        this.importer = new LogImporter(connection);
-        this.sessions.attach(connection);
-        this.queries = new ChatQueries(connection);
     }
 
     /**
@@ -108,6 +101,13 @@ public final class LogStore implements AutoCloseable {
         } catch (IOException e) {
             throw new LogDataException("could not read size of " + path, e);
         }
+    }
+
+    private void bind(DuckDBConnection connection) {
+        this.connection = connection;
+        this.importer = new LogImporter(connection);
+        this.sessions.attach(connection);
+        this.queries = new ChatQueries(connection);
     }
 
     /**

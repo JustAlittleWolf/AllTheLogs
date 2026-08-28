@@ -274,6 +274,13 @@ public final class MessageListLayout {
         return dates.get(index + 1);
     }
 
+    /**
+     * Direction of a separator expand caret relative to the list, not the log file.
+     */
+    public enum ExpandDirection {
+        UP, DOWN
+    }
+
     @FunctionalInterface
     public interface RowRangeWidth {
         int width(DisplayRow row, int from, int to);
@@ -291,12 +298,5 @@ public final class MessageListLayout {
      * {@link #expandDown()} loads more toward the bottom from the row above.
      */
     public record Separator(int y, int afterRow, boolean expandUp, boolean expandDown) {
-    }
-
-    /**
-     * Direction of a separator expand caret relative to the list, not the log file.
-     */
-    public enum ExpandDirection {
-        UP, DOWN
     }
 }

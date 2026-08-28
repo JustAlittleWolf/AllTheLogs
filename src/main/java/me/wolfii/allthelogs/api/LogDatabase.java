@@ -42,6 +42,21 @@ public final class LogDatabase {
         return new LogDatabase(new WorkerQueries(worker));
     }
 
+    private static me.wolfii.allthelogs.data.ChatLog asStoreLog(ChatLog log) {
+        if (log instanceof me.wolfii.allthelogs.data.ChatLog storeLog) {
+            return storeLog;
+        }
+        throw new IllegalArgumentException("chat log must be returned by AllTheLogs");
+    }
+
+    private static List<ChatEntry> entries(List<? extends ChatEntry> entries) {
+        return List.copyOf(entries);
+    }
+
+    private static List<ChatLog> logs(List<? extends ChatLog> logs) {
+        return List.copyOf(logs);
+    }
+
     /**
      * Whether the live store has been opened and not yet closed.
      * <p>
@@ -120,21 +135,6 @@ public final class LogDatabase {
      */
     public CompletableFuture<Optional<Path>> databasePath() {
         return queries.databasePath();
-    }
-
-    private static me.wolfii.allthelogs.data.ChatLog asStoreLog(ChatLog log) {
-        if (log instanceof me.wolfii.allthelogs.data.ChatLog storeLog) {
-            return storeLog;
-        }
-        throw new IllegalArgumentException("chat log must be returned by AllTheLogs");
-    }
-
-    private static List<ChatEntry> entries(List<? extends ChatEntry> entries) {
-        return List.copyOf(entries);
-    }
-
-    private static List<ChatLog> logs(List<? extends ChatLog> logs) {
-        return List.copyOf(logs);
     }
 
     private interface Queries {
@@ -217,6 +217,14 @@ public final class LogDatabase {
             this.store = store;
         }
 
+        private static <T> CompletableFuture<T> complete(Callable<T> task) {
+            try {
+                return CompletableFuture.completedFuture(task.call());
+            } catch (Exception e) {
+                return CompletableFuture.failedFuture(e);
+            }
+        }
+
         @Override
         public boolean isOpen() {
             return true;
@@ -261,18 +269,14 @@ public final class LogDatabase {
         public CompletableFuture<Optional<Path>> databasePath() {
             return complete(store::databasePath);
         }
-
-        private static <T> CompletableFuture<T> complete(Callable<T> task) {
-            try {
-                return CompletableFuture.completedFuture(task.call());
-            } catch (Exception e) {
-                return CompletableFuture.failedFuture(e);
-            }
-        }
     }
 
     private static final class NotOpenQueries implements Queries {
         private static final NotOpenQueries INSTANCE = new NotOpenQueries();
+
+        private static <T> CompletableFuture<T> notOpen() {
+            return CompletableFuture.failedFuture(new IllegalStateException(NOT_OPEN));
+        }
 
         @Override
         public boolean isOpen() {
@@ -317,10 +321,6 @@ public final class LogDatabase {
         @Override
         public CompletableFuture<Optional<Path>> databasePath() {
             return notOpen();
-        }
-
-        private static <T> CompletableFuture<T> notOpen() {
-            return CompletableFuture.failedFuture(new IllegalStateException(NOT_OPEN));
         }
     }
 }

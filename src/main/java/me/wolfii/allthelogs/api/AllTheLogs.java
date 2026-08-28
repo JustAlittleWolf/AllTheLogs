@@ -11,7 +11,7 @@ import me.wolfii.allthelogs.client.AllTheLogsClient;
  * AllTheLogs.database().findEntries(ChatQuery.all().withSubstring("welcome"))
  *         .thenAccept(hits -> hits.forEach(entry ->
  *                 System.out.println(entry.timestamp() + " " + entry.message())));
- * }
+ *}
  * <p>
  * The database is opened asynchronously during client startup. {@link LogDatabase#isOpen()} is
  * {@code false} until that finishes (and after the client shuts down). Queries issued while the

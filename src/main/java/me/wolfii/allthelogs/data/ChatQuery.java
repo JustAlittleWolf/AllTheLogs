@@ -1,7 +1,5 @@
 package me.wolfii.allthelogs.data;
 
-import me.wolfii.allthelogs.api.ChatQuery.Sort;
-
 import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.function.Consumer;

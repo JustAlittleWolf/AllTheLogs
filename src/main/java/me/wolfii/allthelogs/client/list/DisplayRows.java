@@ -3,12 +3,7 @@ package me.wolfii.allthelogs.client.list;
 import me.wolfii.allthelogs.api.ChatQuery;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Operations on a page of display rows: counting hits, finding rows again after a reload, and stitching a

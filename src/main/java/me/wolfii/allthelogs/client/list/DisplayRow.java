@@ -44,15 +44,6 @@ public record DisplayRow(
     }
 
     /**
-     * List-direction expand carets for this row's cluster edge. {@code expandUp} loads more toward the top
-     * of the list; {@code expandDown} toward the bottom.
-     */
-    public DisplayRow withExpand(boolean expandUp, boolean expandDown) {
-        if (this.expandUp == expandUp && this.expandDown == expandDown) return this;
-        return new DisplayRow(entry, match, highlights, message, visualFormatting, expandUp, expandDown);
-    }
-
-    /**
      * Marks query results as search hits or context lines, and highlights where the query matched.
      * <p>
      * The store already applied the filter, but a page also carries the context lines around each hit, so the
@@ -71,6 +62,15 @@ public record DisplayRow(
             }
             return new DisplayRow(entry, true, MatchSpans.spans(prepared.text(), filter), prepared);
         }).toList();
+    }
+
+    /**
+     * List-direction expand carets for this row's cluster edge. {@code expandUp} loads more toward the top
+     * of the list; {@code expandDown} toward the bottom.
+     */
+    public DisplayRow withExpand(boolean expandUp, boolean expandDown) {
+        if (this.expandUp == expandUp && this.expandDown == expandDown) return this;
+        return new DisplayRow(entry, match, highlights, message, visualFormatting, expandUp, expandDown);
     }
 
     public ChatLog chatLog() {
