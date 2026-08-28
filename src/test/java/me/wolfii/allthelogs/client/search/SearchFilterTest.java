@@ -59,6 +59,13 @@ class SearchFilterTest {
     }
 
     @Test
+    void textSearchFetchesOneExtraContextLine() {
+        assertEquals(1, SearchFilter.defaults().withText("hi").withContextLines(0).toQuery().contextLines());
+        assertEquals(5, SearchFilter.defaults().withText("hi").toQuery().contextLines());
+        assertEquals(SearchFilter.DEFAULT_CONTEXT_LINES, SearchFilter.defaults().toQuery().contextLines());
+    }
+
+    @Test
     void versionFilterIsOmittedByDefaultAndAppliedWhenSet() {
         assertNull(SearchFilter.defaults().toQuery().version());
         assertEquals("26.2", SearchFilter.defaults().withVersion("26.2").toQuery().version());

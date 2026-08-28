@@ -82,19 +82,12 @@ final class MessageListPainter {
     }
 
     /**
-     * Hover card for an expand caret, or for the row whose timestamp gutter the pointer is over.
+     * Hover card for the row whose timestamp gutter the pointer is over.
      */
     void drawMessageInfo(OwoUIGraphics graphics, ListView view, int mouseX, int mouseY) {
         if (mouseY < view.y() || mouseY >= view.y() + view.height()) return;
         if (mouseX < view.x() || mouseX >= view.x() + view.listWidth()) return;
-        MessageListLayout.ExpandDirection expand = expandAt(view, mouseX - view.x(), mouseY - view.y());
-        if (expand != null) {
-            Component hint = expand == MessageListLayout.ExpandDirection.UP
-                ? MessageText.expandUpHint()
-                : MessageText.expandDownHint();
-            drawChip(graphics, view, mouseX, mouseY, List.of(hint));
-            return;
-        }
+        if (expandAt(view, mouseX - view.x(), mouseY - view.y()) != null) return;
         if (mouseX < view.x() + ListView.PAD || mouseX >= view.messageX()) return;
         int row = view.rowAt(mouseY - view.y());
         if (row < 0) return;
@@ -110,7 +103,7 @@ final class MessageListPainter {
     static MessageListLayout.ExpandDirection expandAt(ListView view, double localX, double localY) {
         MessageListLayout.Separator separator = view.layout().separatorAt(view.contentY(localY));
         if (separator == null) return null;
-        return MessageListLayout.expandAtLocalX(separator, ListView.PAD, localX);
+        return MessageListLayout.expandAtLocalX(separator, view.messageLocalX(), localX);
     }
 
     private void drawChip(OwoUIGraphics graphics, ListView view, int mouseX, int mouseY, List<Component> lines) {
@@ -149,16 +142,18 @@ final class MessageListPainter {
             int bottom = top + MessageListLayout.SEPARATOR_HEIGHT;
             if (bottom < viewTop || top > viewBottom) continue;
             int midY = top + MessageListLayout.SEPARATOR_HEIGHT / 2;
-            int caretX = listLeft + ListView.PAD;
+            int caretX = listLeft + view.messageLocalX();
             int caretY = midY - 4;
             if (separator.expandUp()) {
-                graphics.drawText(Component.literal("^"), caretX, caretY, 1, Colors.SEPARATOR_CARET);
+                graphics.drawText(Component.literal(MessageListLayout.CARET_UP), caretX, caretY, 1,
+                    Colors.SEPARATOR_CARET);
                 caretX += MessageListLayout.CARET_WIDTH + MessageListLayout.CARET_GAP;
             }
             if (separator.expandDown()) {
-                graphics.drawText(Component.literal("v"), caretX, caretY, 1, Colors.SEPARATOR_CARET);
+                graphics.drawText(Component.literal(MessageListLayout.CARET_DOWN), caretX, caretY, 1,
+                    Colors.SEPARATOR_CARET);
             }
-            int lineLeft = listLeft + MessageListLayout.separatorLineLocalX(separator, ListView.PAD);
+            int lineLeft = listLeft + MessageListLayout.separatorLineLocalX(separator, view.messageLocalX());
             int lineRight = listRight - ListView.PAD;
             if (lineRight > lineLeft) {
                 graphics.fill(lineLeft, midY, lineRight, midY + 1, Colors.SEPARATOR);

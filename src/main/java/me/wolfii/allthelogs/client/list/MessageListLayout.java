@@ -13,11 +13,15 @@ public final class MessageListLayout {
     public static final int ROW_HEIGHT = 12;
     public static final int DATE_HEIGHT = 16;
     public static final int DATE_GAP = 6;
-    /** Space reserved for the gray rule (and optional ^/v carets) between clusters. */
+    /** Space reserved for the gray rule (and optional expand carets) between clusters. */
     public static final int SEPARATOR_HEIGHT = 12;
     /** Extra log lines loaded when an expand caret is clicked. */
     public static final int EXPAND_LINES = 10;
-    public static final int CARET_WIDTH = 7;
+    /** Up-pointing triangle, without a tail. */
+    public static final String CARET_UP = "\u25B2";
+    /** Down-pointing triangle, without a tail. */
+    public static final String CARET_DOWN = "\u25BC";
+    public static final int CARET_WIDTH = 8;
     public static final int CARET_GAP = 3;
     public static final int CARET_LINE_GAP = 4;
 
@@ -68,23 +72,35 @@ public final class MessageListLayout {
             boolean newDate = !date.equals(previousDate);
             if (newDate) {
                 if (previousDate != null) {
+                    if (rows.get(i - 1).expandDown()) {
+                        separators.add(new Separator(y, i, false, true));
+                        y += SEPARATOR_HEIGHT;
+                    }
                     y += DATE_GAP;
                 }
-            }
-            if (i > 0 && needsSeparator(rows.get(i - 1), row)) {
-                separators.add(separatorAt(y, i, rows.get(i - 1), row));
-                y += SEPARATOR_HEIGHT;
-            }
-            if (newDate) {
                 dates.add(new DateBand(date, y));
                 y += DATE_HEIGHT;
+                if (row.expandUp()) {
+                    separators.add(new Separator(y, i, true, false));
+                    y += SEPARATOR_HEIGHT;
+                }
                 previousDate = date;
+            } else if (i > 0) {
+                Separator separator = separatorBetween(y, i, rows.get(i - 1), row);
+                if (separator != null) {
+                    separators.add(separator);
+                    y += SEPARATOR_HEIGHT;
+                }
             }
             int lines = Math.max(1, MessageWrap.lineCount(row.message(), messageWidth,
                 (from, to) -> widthOf.width(row, from, to)));
             rowY[i] = y;
             rowHeight[i] = lines * ROW_HEIGHT;
             y += rowHeight[i];
+        }
+        if (rows.getLast().expandDown()) {
+            separators.add(new Separator(y, rows.size(), false, true));
+            y += SEPARATOR_HEIGHT;
         }
         return new MessageListLayout(rowY, rowHeight, List.copyOf(dates), List.copyOf(separators), y);
     }
@@ -105,7 +121,8 @@ public final class MessageListLayout {
     }
 
     /**
-     * Local-x where the gray rule starts, after any expand carets.
+     * Local-x where the gray rule starts, after any expand carets. {@code originX} is where the carets (and
+     * the rule when there are none) begin, typically the message column.
      */
     public static int separatorLineLocalX(Separator separator, int pad) {
         int carets = 0;
@@ -117,6 +134,7 @@ public final class MessageListLayout {
 
     /**
      * Which expand caret {@code localX} is over, or {@code null} when the pointer is on the rule itself.
+     * {@code originX} is the same origin passed to {@link #separatorLineLocalX}.
      */
     public static ExpandDirection expandAtLocalX(Separator separator, int pad, double localX) {
         int x = pad;
@@ -143,11 +161,12 @@ public final class MessageListLayout {
         return Math.abs(current.lineIndex() - previous.lineIndex()) > 1;
     }
 
-    private static Separator separatorAt(int y, int afterRow, DisplayRow previous, DisplayRow current) {
+    private static Separator separatorBetween(int y, int afterRow, DisplayRow previous, DisplayRow current) {
         boolean sameLog = previous.chatLog().equals(current.chatLog());
         boolean missingLines = sameLog && Math.abs(current.lineIndex() - previous.lineIndex()) > 1;
-        boolean expandUp = !sameLog || missingLines;
-        boolean expandDown = !sameLog || missingLines;
+        if (!missingLines && sameLog) return null;
+        boolean expandUp = current.expandUp() || missingLines;
+        boolean expandDown = previous.expandDown() || missingLines;
         return new Separator(y, afterRow, expandUp, expandDown);
     }
 

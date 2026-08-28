@@ -9,7 +9,6 @@ import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.*;
 import me.wolfii.allthelogs.client.search.SearchFilter;
-import me.wolfii.allthelogs.client.ui.text.MessageText;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
 import me.wolfii.allthelogs.client.ui.widget.MessageTimeline;
@@ -91,10 +90,15 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
-        if (event.isSelectAll() && list != null && !searchHasFocus()) {
+        if (event.isSelectAll() && list != null && !searchHasFocus() && !filterOwnsFocus()) {
             return list.selectAllOnVisibleDate();
         }
         return super.keyPressed(event);
+    }
+
+    private boolean filterOwnsFocus() {
+        if (filters == null || search == null || search.focusHandler() == null) return false;
+        return filters.owns(search.focusHandler().focused());
     }
 
     private boolean searchHasFocus() {
@@ -123,8 +127,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
 
         infoButton = UIComponents.button(Component.translatable("allthelogs.meta.marker"), button -> {
         });
-        infoButton.tooltip(MessageText.helpAndStatsTooltip(
-            List.of(Component.translatable("allthelogs.meta.unavailable"))));
+        infoButton.tooltip(List.of(Component.translatable("allthelogs.meta.unavailable")));
         infoButton.horizontalSizing(Sizing.fixed(20));
         bar.child(infoButton);
         return bar;

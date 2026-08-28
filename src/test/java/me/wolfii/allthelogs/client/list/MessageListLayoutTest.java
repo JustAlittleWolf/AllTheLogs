@@ -106,10 +106,43 @@ class MessageListLayoutTest {
         MessageListLayout layout = MessageListLayout.of(List.of(day1, day2), 5);
         assertEquals(LocalDate.of(2026, 8, 26), layout.stickyAt(0).date());
         assertEquals(LocalDate.of(2026, 8, 27), layout.stickyAt(layout.dates().get(1).y()).date());
-        assertEquals(MessageListLayout.DATE_HEIGHT + MessageListLayout.ROW_HEIGHT + MessageListLayout.DATE_GAP
-                + MessageListLayout.SEPARATOR_HEIGHT,
+        assertEquals(MessageListLayout.DATE_HEIGHT + MessageListLayout.ROW_HEIGHT + MessageListLayout.DATE_GAP,
             layout.dates().get(1).y());
+        assertEquals(0, layout.separators().size());
+    }
+
+    @Test
+    void keepsASessionRuleOnTheSameDayWithoutCaretsUntilAnEdgeCanGrow() {
+        DisplayRow first = row("a.log", 0, LocalDateTime.of(2026, 8, 26, 10, 0));
+        DisplayRow second = row("b.log", 0, LocalDateTime.of(2026, 8, 26, 11, 0));
+        MessageListLayout layout = MessageListLayout.of(List.of(first, second), 5);
         assertEquals(1, layout.separators().size());
+        MessageListLayout.Separator separator = layout.separators().getFirst();
+        assertFalse(separator.expandUp());
+        assertFalse(separator.expandDown());
+    }
+
+    @Test
+    void showsCaretsOnlyWhereAClusterCanGrowAndKeepsThemOffDateHeadingsOtherwise() {
+        LocalDateTime morning = LocalDateTime.of(2026, 8, 26, 10, 0);
+        LocalDateTime nextDay = LocalDateTime.of(2026, 8, 27, 10, 0);
+        ChatLog sameLog = new ChatLog(new LogSource.File(Path.of("a.log")), morning.toLocalDate(), "26.2",
+            morning, morning);
+        DisplayRow start = new DisplayRow(new ChatEntry(sameLog, morning, 5, "start"), true, List.of())
+            .withExpand(true, false);
+        DisplayRow end = new DisplayRow(new ChatEntry(sameLog, morning.plusMinutes(1), 6, "end"), true, List.of())
+            .withExpand(false, true);
+        DisplayRow later = row("b.log", 0, nextDay);
+        MessageListLayout layout = MessageListLayout.of(List.of(start, end, later), 5);
+        assertEquals(2, layout.separators().size());
+        MessageListLayout.Separator afterHeader = layout.separators().getFirst();
+        assertTrue(afterHeader.expandUp());
+        assertFalse(afterHeader.expandDown());
+        assertEquals(0, afterHeader.afterRow());
+        MessageListLayout.Separator beforeNextDate = layout.separators().get(1);
+        assertFalse(beforeNextDate.expandUp());
+        assertTrue(beforeNextDate.expandDown());
+        assertEquals(2, beforeNextDate.afterRow());
     }
 
     private static MessageListLayout.RowRangeWidth charWidths() {
