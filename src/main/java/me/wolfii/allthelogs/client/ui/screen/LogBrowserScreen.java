@@ -13,6 +13,7 @@ import me.wolfii.allthelogs.client.ui.theme.Colors;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
 import me.wolfii.allthelogs.client.ui.widget.MessageTimeline;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
@@ -81,6 +82,14 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         if (list != null && queries.consumeReload()) {
             queries.reload();
         }
+    }
+
+    @Override
+    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+        if (this.minecraft == null || this.minecraft.level != null) {
+            return;
+        }
+        this.extractPanorama(graphics, delta);
     }
 
     @Override
