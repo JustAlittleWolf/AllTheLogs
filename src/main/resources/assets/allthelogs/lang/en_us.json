@@ -17,7 +17,7 @@
 	"allthelogs.import.from_folder": "From Folder",
 	"allthelogs.import.from_archive": "From Archive (zip)",
 	"allthelogs.import.drop_hint": "Or drop a folder or zip onto this window",
-	"allthelogs.import.common": "Common log directories",
+	"allthelogs.import.common": "Presets",
 	"allthelogs.import.common.custom": "Custom path…",
 	"allthelogs.import.dialog.folder": "Choose a log folder",
 	"allthelogs.import.dialog.archive": "Choose a log archive",

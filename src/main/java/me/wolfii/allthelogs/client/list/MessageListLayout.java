@@ -23,6 +23,8 @@ public final class MessageListLayout {
     public static final String CARET_DOWN = "\u25BC";
     public static final int CARET_WIDTH = 8;
     public static final int CARET_GAP = 3;
+    /** Extra space so the gray rule does not run through a caret glyph. */
+    public static final int CARET_LINE_INSET = 2;
 
     private final int[] rowY;
     private final int[] rowHeight;
@@ -120,11 +122,20 @@ public final class MessageListLayout {
     }
 
     /**
-     * Local-x where the gray rule starts. The rule runs from the left inset across the list; expand
-     * carets are drawn later, aligned with the message column.
+     * Local-x where the gray rule starts. The rule runs from the left inset across the list, with a
+     * gap around the expand carets so it does not sit behind the triangles.
      */
     public static int separatorLineLocalX(Separator separator, int pad) {
         return pad;
+    }
+
+    /**
+     * Width of the expand caret cluster, or {@code 0} when this rule has no carets.
+     */
+    public static int caretBandWidth(Separator separator) {
+        int count = (separator.expandUp() ? 1 : 0) + (separator.expandDown() ? 1 : 0);
+        if (count == 0) return 0;
+        return count * CARET_WIDTH + (count - 1) * CARET_GAP;
     }
 
     /**
@@ -152,12 +163,15 @@ public final class MessageListLayout {
     }
 
     static boolean needsSeparator(DisplayRow previous, DisplayRow current) {
-        if (!previous.chatLog().equals(current.chatLog())) return true;
+        if (!previous.sameLog(current)) return true;
         return Math.abs(current.lineIndex() - previous.lineIndex()) > 1;
     }
 
     private static Separator separatorBetween(int y, int afterRow, DisplayRow previous, DisplayRow current) {
-        boolean sameLog = previous.chatLog().equals(current.chatLog());
+        boolean sameLog = previous.sameLog(current);
+        if (sameLog && Math.abs(current.lineIndex() - previous.lineIndex()) <= 1) {
+            return null;
+        }
         if (sameLog && !previous.expandDown() && !current.expandUp()) {
             return null;
         }

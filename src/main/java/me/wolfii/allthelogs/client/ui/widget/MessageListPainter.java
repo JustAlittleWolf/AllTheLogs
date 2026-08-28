@@ -146,8 +146,20 @@ final class MessageListPainter {
             int caretY = midY - 4;
             int lineLeft = listLeft + ListView.PAD;
             int lineRight = listRight - ListView.PAD;
-            if (lineRight > lineLeft) {
-                graphics.fill(lineLeft, midY, lineRight, midY + 1, Colors.SEPARATOR);
+            int band = MessageListLayout.caretBandWidth(separator);
+            int holeLeft = caretX - MessageListLayout.CARET_LINE_INSET;
+            int holeRight = caretX + band + MessageListLayout.CARET_LINE_INSET;
+            if (band == 0) {
+                if (lineRight > lineLeft) {
+                    graphics.fill(lineLeft, midY, lineRight, midY + 1, Colors.SEPARATOR);
+                }
+            } else {
+                if (holeLeft > lineLeft) {
+                    graphics.fill(lineLeft, midY, holeLeft, midY + 1, Colors.SEPARATOR);
+                }
+                if (lineRight > holeRight) {
+                    graphics.fill(holeRight, midY, lineRight, midY + 1, Colors.SEPARATOR);
+                }
             }
             if (separator.expandUp()) {
                 graphics.drawText(Component.literal(MessageListLayout.CARET_UP), caretX, caretY, 1,

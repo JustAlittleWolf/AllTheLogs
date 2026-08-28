@@ -105,9 +105,14 @@ public final class QueryBuilder {
         addMatchConditions(query, true, conditions, parameters);
         String where = conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions);
         String from = " FROM chat_entry e" + where;
-        String sql = query.limit() < 0
-            ? "SELECT COUNT(*)" + from
-            : "SELECT COUNT(*) FROM (SELECT 1" + from + " LIMIT " + query.limit() + ")";
+        String sql;
+        if (query.limit() < 0 && query.skip() <= 0) {
+            sql = "SELECT COUNT(*)" + from;
+        } else {
+            String order = orderBy(query, "e.entry_time", "e.file_id", "e.line_index");
+            String cap = query.limit() < 0 ? "" : " LIMIT " + query.limit();
+            sql = "SELECT COUNT(*) FROM (SELECT 1" + from + " " + order + cap + offsetSql(query) + ")";
+        }
         return new QueryBuilder(sql, parameters);
     }
 

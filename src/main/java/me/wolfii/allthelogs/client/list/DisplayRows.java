@@ -30,6 +30,19 @@ public final class DisplayRows {
     }
 
     /**
+     * How many search hits in {@code rows} share {@code time}. Used as {@link ChatQuery#withSkip(long)}
+     * when paging from a timestamp that several matches occupy.
+     */
+    public static int matchCountAt(List<DisplayRow> rows, LocalDateTime time) {
+        if (rows == null || time == null) return 0;
+        int count = 0;
+        for (DisplayRow row : rows) {
+            if (row.match() && time.equals(row.entry().timestamp())) count++;
+        }
+        return count;
+    }
+
+    /**
      * Position of {@code key} in {@code rows}, or {@code -1} when it is not loaded.
      */
     public static int indexOf(List<DisplayRow> rows, DisplayRow.RowKey key) {
@@ -113,8 +126,8 @@ public final class DisplayRows {
         List<DisplayRow> merged = new ArrayList<>(mergeUnique(existing, extra));
         Comparator<DisplayRow> order = Comparator
             .comparing((DisplayRow row) -> row.entry().timestamp())
-            .thenComparingInt(DisplayRow::lineIndex)
-            .thenComparing(row -> String.valueOf(row.chatLog().source()));
+            .thenComparing(row -> String.valueOf(row.chatLog().source()))
+            .thenComparingInt(DisplayRow::lineIndex);
         if (sort == ChatQuery.Sort.DESCENDING) {
             order = order.reversed();
         }
