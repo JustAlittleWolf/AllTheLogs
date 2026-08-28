@@ -13,7 +13,7 @@
   "allthelogs.filter.until": "No later than",
   "allthelogs.filter.date_hint": "YYYY-MM-DD or YYYY-MM-DD HH:MM",
   "allthelogs.import.button": "Import",
-  "allthelogs.import.description": "Load chat from a Minecraft instance folder or a zip archive into the database. Files that were already imported are skipped by default.",
+  "allthelogs.import.description": "Import messages from a Minecraft instance folder or a zip archive. Files that were already imported are skipped by default.",
   "allthelogs.import.source_path": "Source path",
   "allthelogs.import.from_folder": "From Folder",
   "allthelogs.import.from_archive": "From Archive (zip)",
