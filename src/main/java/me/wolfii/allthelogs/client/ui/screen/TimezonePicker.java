@@ -10,6 +10,8 @@ import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.ParentUIComponent;
 import io.wispforest.owo.ui.core.Positioning;
 import io.wispforest.owo.ui.core.Sizing;
+import io.wispforest.owo.ui.core.UIComponent;
+import io.wispforest.owo.ui.core.VerticalAlignment;
 import me.wolfii.allthelogs.client.files.ImportTimezones;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
@@ -43,16 +45,25 @@ final class TimezonePicker {
         this.onSelect = onSelect;
     }
 
-    FlowLayout row(ZoneId initial) {
-        FlowLayout row = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
-        row.gap(2);
-        row.child(UIComponents.label(Component.translatable("allthelogs.import.timezone")));
+    /**
+     * Label, autocomplete field, and an optional control on the same row (summer time).
+     */
+    FlowLayout row(ZoneId initial, UIComponent beside) {
+        FlowLayout column = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
+        column.gap(2);
+        column.child(UIComponents.label(Component.translatable("allthelogs.import.timezone")));
         ImportTimezones.Choice current = choiceFor(initial);
-        box = UIComponents.textBox(Sizing.fill(), current.label());
+        box = UIComponents.textBox(Sizing.expand(), current.label());
         box.setMaxLength(64);
         box.onChanged().subscribe(this::onTyped);
-        row.child(box);
-        return row;
+        FlowLayout line = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
+        line.gap(8).verticalAlignment(VerticalAlignment.CENTER);
+        line.child(box);
+        if (beside != null) {
+            line.child(beside);
+        }
+        column.child(line);
+        return column;
     }
 
     String text() {

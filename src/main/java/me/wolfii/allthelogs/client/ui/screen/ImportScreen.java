@@ -13,6 +13,7 @@ import me.wolfii.allthelogs.client.files.ImportPaths;
 import me.wolfii.allthelogs.client.files.ImportTimezones;
 import me.wolfii.allthelogs.client.files.NativeFilePicker;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
+import me.wolfii.allthelogs.client.ui.text.WrappedTooltip;
 import me.wolfii.allthelogs.data.ImportOptions;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -132,63 +133,58 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
         FlowLayout advanced = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
         advanced.gap(4).padding(Insets.of(4));
 
-        recursiveBox = UIComponents.checkbox(Component.translatable("allthelogs.import.recursive"));
-        recursiveBox.checked(recursive);
-        recursiveBox.onChanged(value -> recursive = value);
+        recursiveBox = optionCheckbox("allthelogs.import.recursive", recursive, value -> recursive = value);
         advanced.child(recursiveBox);
 
-        nestedBox = UIComponents.checkbox(Component.translatable("allthelogs.import.nested_archives"));
-        nestedBox.checked(nestedArchives);
-        nestedBox.onChanged(value -> nestedArchives = value);
+        nestedBox = optionCheckbox("allthelogs.import.nested_archives", nestedArchives, value -> nestedArchives = value);
         advanced.child(nestedBox);
 
-        skipBox = UIComponents.checkbox(Component.translatable("allthelogs.import.skip_imported"));
-        skipBox.checked(skipAlreadyImported);
-        skipBox.onChanged(value -> skipAlreadyImported = value);
+        skipBox = optionCheckbox("allthelogs.import.skip_imported", skipAlreadyImported,
+            value -> skipAlreadyImported = value);
         advanced.child(skipBox);
 
         advanced.child(pathMatcherField());
 
+        summerTimeBox = optionCheckbox("allthelogs.import.summer_time", summerTime, value -> summerTime = value);
         timezones = new TimezonePicker(overlays, () -> this.width, () -> this.height, this::selectTimezone);
-        advanced.child(timezones.row(timezone));
+        advanced.child(timezones.row(timezone, summerTimeBox));
 
-        summerTimeBox = UIComponents.checkbox(Component.translatable("allthelogs.import.summer_time"));
-        summerTimeBox.checked(summerTime);
-        summerTimeBox.onChanged(value -> summerTime = value);
-        summerTimeBox.tooltip(Component.translatable("allthelogs.import.summer_time.hint"));
-        advanced.child(summerTimeBox);
-
-        advanced.child(parallelismSlider());
+        advanced.child(threadsSlider());
         return advanced;
+    }
+
+    private CheckboxComponent optionCheckbox(String key, boolean checked, Consumer<Boolean> onChanged) {
+        CheckboxComponent box = UIComponents.checkbox(Component.translatable(key));
+        box.checked(checked);
+        box.onChanged(onChanged::accept);
+        box.tooltip(WrappedTooltip.of(Component.translatable(key + ".hint")));
+        return box;
     }
 
     private FlowLayout pathMatcherField() {
         FlowLayout row = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
         row.gap(2);
         LabelComponent label = UIComponents.label(Component.translatable("allthelogs.import.path_matcher"));
-        label.tooltip(Component.translatable("allthelogs.import.path_matcher.hint"));
+        label.tooltip(WrappedTooltip.of(Component.translatable("allthelogs.import.path_matcher.hint")));
         row.child(label);
         pathMatcherBox = UIComponents.textBox(Sizing.fill(), pathMatcher);
         pathMatcherBox.setMaxLength(128);
         pathMatcherBox.onChanged().subscribe(value -> pathMatcher = value);
+        pathMatcherBox.tooltip(WrappedTooltip.of(Component.translatable("allthelogs.import.path_matcher.hint")));
         row.child(pathMatcherBox);
-        LabelComponent hint = UIComponents.label(Component.translatable("allthelogs.import.path_matcher.hint"));
-        hint.color(Color.ofRgb(0xA0A0A0));
-        hint.maxWidth(Math.max(160, this.width - 80));
-        row.child(hint);
         return row;
     }
 
-    private FlowLayout parallelismSlider() {
+    private FlowLayout threadsSlider() {
         FlowLayout row = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
         row.gap(2);
-        row.child(UIComponents.label(Component.translatable("allthelogs.import.parallelism")));
+        row.child(UIComponents.label(Component.translatable("allthelogs.import.threads")));
         int max = Math.max(16, Runtime.getRuntime().availableProcessors() * 2);
         parallelismSlider = UIComponents.discreteSlider(Sizing.fill(), MIN_PARALLELISM, max);
         parallelismSlider.decimalPlaces(0);
         parallelismSlider.snap(true);
         parallelismSlider.setFromDiscreteValue(Math.min(max, Math.max(MIN_PARALLELISM, parallelism)));
-        parallelismSlider.message(value -> Component.translatable("allthelogs.import.parallelism.value", value));
+        parallelismSlider.message(value -> Component.translatable("allthelogs.import.threads.value", value));
         parallelismSlider.onChanged().subscribe(value -> parallelism = Math.max(MIN_PARALLELISM, (int) Math.round(value)));
         row.child(parallelismSlider);
         return row;
