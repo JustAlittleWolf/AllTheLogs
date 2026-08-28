@@ -1,6 +1,6 @@
 package me.wolfii.allthelogs.client.list;
 
-import me.wolfii.allthelogs.data.ChatQuery;
+import me.wolfii.allthelogs.api.ChatQuery;
 import me.wolfii.allthelogs.data.MatchSummary;
 
 import java.time.LocalDateTime;
@@ -26,6 +26,16 @@ public final class PageBounds {
             return time.plusNanos(1);
         }
         return time.minusNanos(1);
+    }
+
+    /**
+     * Continues a paged query from {@code cursor} without dropping other matches that share that
+     * second. The store cursor is exclusive on timestamp only, so the edge second is included with
+     * {@link #exclusiveOffset} and already-buffered hits at that time are skipped.
+     */
+    public static ChatQuery continueFrom(ChatQuery page, LocalDateTime cursor, int alreadyAtCursor) {
+        return page.withOffset(exclusiveOffset(cursor, page.sort()))
+            .withSkip(Math.max(0, alreadyAtCursor));
     }
 
     /**

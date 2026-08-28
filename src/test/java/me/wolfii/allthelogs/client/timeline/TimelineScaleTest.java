@@ -11,6 +11,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TimelineScaleTest {
+    private static List<MatchDay> matchDays(List<LocalDate> dates) {
+        return dates.stream()
+            .map(date -> new MatchDay(date, date.atStartOfDay(), date.atStartOfDay().plusHours(12), 1))
+            .toList();
+    }
+
     @Test
     void linearProgressKeepsTheEdgesInEitherBoundOrder() {
         LocalDateTime first = LocalDateTime.of(2026, 1, 1, 0, 0);
@@ -75,11 +81,5 @@ class TimelineScaleTest {
         assertEquals(fiveAm, TimelineScale.timeAtProgress(0, days));
         assertEquals(nextDay, TimelineScale.timeAtProgress(1, days));
         assertEquals(days.get(1), TimelineScale.dayAtProgress(0.75, days));
-    }
-
-    private static List<MatchDay> matchDays(List<LocalDate> dates) {
-        return dates.stream()
-            .map(date -> new MatchDay(date, date.atStartOfDay(), date.atStartOfDay().plusHours(12), 1))
-            .toList();
     }
 }

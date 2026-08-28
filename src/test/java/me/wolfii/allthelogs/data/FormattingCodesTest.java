@@ -4,18 +4,15 @@ import me.wolfii.allthelogs.data.parse.FormattingCodes;
 import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.*;
 
 class FormattingCodesTest {
     @Test
     void removesColourAndStyleCodes() {
         assertEquals("[Click Here] to watch a short ad",
-                FormattingCodes.strip("\u00a7r\u00a7a[Click Here\u00a7a] \u00a77to watch a short ad"));
+            FormattingCodes.strip("\u00a7r\u00a7a[Click Here\u00a7a] \u00a77to watch a short ad"));
         assertEquals("bold and obfuscated",
-                FormattingCodes.strip("\u00a7lbold\u00a7r and \u00a7kobfuscated\u00a7r"));
+            FormattingCodes.strip("\u00a7lbold\u00a7r and \u00a7kobfuscated\u00a7r"));
     }
 
     @Test

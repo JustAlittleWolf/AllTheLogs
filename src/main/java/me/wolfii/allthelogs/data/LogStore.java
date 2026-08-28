@@ -26,39 +26,35 @@ import java.util.function.Function;
  * <p>
  * The store is backed by an embedded DuckDB database, which needs no server, works on every major operating system
  * and keeps everything in the one file passed to {@link #open(Path)}. Callers never see the schema: imports take
- * file system paths, queries take a {@link ChatQuery} and return {@link ChatEntry} records with their {@link ChatLog}
- * already resolved.
+ * file system paths, queries take a {@link me.wolfii.allthelogs.api.ChatQuery} and return {@link ChatEntry} records
+ * with their {@link ChatLog} already resolved.
  * {@snippet :
  * try (LogStore store = LogStore.open(Path.of("logs.duckdb"))) {
  *     store.importDirectory(Path.of("C:/Users/me/AppData/Roaming/.minecraft"),
  *             ImportOptions.defaults().withPathMatcher("**" + "/logs/**"),
  *             progress -> System.out.println(progress.completedFiles() + "/" + progress.discoveredFiles()
- *                     + " " + progress.current()));
- *     List<ChatEntry> hits = store.findEntries(ChatQuery.all().withSubstring("welcome").withContextLines(2));
+ *                     + " " + progress.current()),
+ *             () -> false);
+ *     List<ChatEntry> hits = store.findEntries(me.wolfii.allthelogs.api.ChatQuery.all()
+ *             .withSubstring("welcome").withContextLines(2));
  * }
  *}
  * <p>
  * A store is not safe for use from several threads at once; imports parallelise internally. Session capture
- * ({@link #startSession(String)}, {@link #importSessionMessage(String)}) does not report progress.
+ * ({@link #startSession(String, String)}, {@link #importSessionMessage(String, long[])}) does not report progress.
+ * Other mods should use {@link me.wolfii.allthelogs.api.AllTheLogs}, not this type.
  */
 public final class LogStore implements AutoCloseable {
-    private DuckDBConnection connection;
     private final Path databasePath;
-    private LogImporter importer;
     private final SessionCapture sessions;
+    private DuckDBConnection connection;
+    private LogImporter importer;
     private ChatQueries queries;
 
     private LogStore(DuckDBConnection connection, Path databasePath) {
         this.databasePath = databasePath;
         this.sessions = new SessionCapture(connection);
         bind(connection);
-    }
-
-    private void bind(DuckDBConnection connection) {
-        this.connection = connection;
-        this.importer = new LogImporter(connection);
-        this.sessions.attach(connection);
-        this.queries = new ChatQueries(connection);
     }
 
     /**
@@ -107,6 +103,13 @@ public final class LogStore implements AutoCloseable {
         }
     }
 
+    private void bind(DuckDBConnection connection) {
+        this.connection = connection;
+        this.importer = new LogImporter(connection);
+        this.sessions.attach(connection);
+        this.queries = new ChatQueries(connection);
+    }
+
     /**
      * The file this store is backed by, or empty for an in-memory store.
      */
@@ -114,48 +117,31 @@ public final class LogStore implements AutoCloseable {
         return Optional.ofNullable(databasePath);
     }
 
-    /**
-     * Imports every log file found below {@code directory} with {@link ImportOptions#defaults()}.
-     */
-    public ImportResult importDirectory(Path directory) {
-        return importDirectory(directory, ImportOptions.defaults(), null);
+    ImportResult importDirectory(Path directory) {
+        return importDirectory(directory, ImportOptions.defaults(), null, () -> false);
     }
 
-    /**
-     * Imports every log file found below {@code directory} with {@link ImportOptions#defaults()}, reporting progress
-     * to {@code progress}.
-     */
-    public ImportResult importDirectory(Path directory, Consumer<ImportProgress> progress) {
-        return importDirectory(directory, ImportOptions.defaults(), progress);
+    ImportResult importDirectory(Path directory, Consumer<ImportProgress> progress) {
+        return importDirectory(directory, ImportOptions.defaults(), progress, () -> false);
     }
 
-    /**
-     * Imports every log file found below {@code directory}.
-     *
-     * @param directory the directory to walk; {@link ImportOptions#pathMatcher()} is relative to this directory. Each
-     *                  imported log is recorded as a {@link LogSource.File} pointing at the file itself
-     * @throws LogDataException if {@code directory} is not a directory, or the database rejects the writes
-     */
-    public ImportResult importDirectory(Path directory, ImportOptions options) {
-        return importDirectory(directory, options, null);
+    ImportResult importDirectory(Path directory, ImportOptions options) {
+        return importDirectory(directory, options, null, () -> false);
     }
 
-    /**
-     * Imports every log file found below {@code directory}.
-     *
-     * @param directory the directory to walk; {@link ImportOptions#pathMatcher()} is relative to this directory. Each
-     *                  imported log is recorded as a {@link LogSource.File} pointing at the file itself
-     * @param progress  called as files are found and processed, with the current log file or archive; {@code null} to
-     *                  ignore progress. Session capture does not report progress
-     * @throws LogDataException if {@code directory} is not a directory, or the database rejects the writes
-     */
-    public ImportResult importDirectory(Path directory, ImportOptions options, Consumer<ImportProgress> progress) {
+    ImportResult importDirectory(Path directory, ImportOptions options, Consumer<ImportProgress> progress) {
         return importDirectory(directory, options, progress, () -> false);
     }
 
     /**
      * Imports every log file found below {@code directory}. {@code cancelled} is polled during discovery and
      * writing; a {@code true} result stops the run and returns whatever was stored so far.
+     *
+     * @param directory the directory to walk; {@link ImportOptions#pathMatcher()} is relative to this directory. Each
+     *                  imported log is recorded as a {@link LogSource.File} pointing at the file itself
+     * @param progress  called as files are found and processed, with the current log file or archive; {@code null} to
+     *                  ignore progress. Session capture does not report progress
+     * @throws LogDataException if {@code directory} is not a directory, or the database rejects the writes
      */
     public ImportResult importDirectory(Path directory, ImportOptions options, Consumer<ImportProgress> progress,
                                         BooleanSupplier cancelled) {
@@ -165,48 +151,28 @@ public final class LogStore implements AutoCloseable {
             sink -> importer.importDirectory(directory, options, sink, cancelled), progress, options);
     }
 
-    /**
-     * Imports every log file inside {@code archive} with {@link ImportOptions#defaults()}.
-     */
-    public ImportResult importArchive(Path archive) {
-        return importArchive(archive, ImportOptions.defaults(), null);
+    ImportResult importArchive(Path archive) {
+        return importArchive(archive, ImportOptions.defaults(), null, () -> false);
     }
 
-    /**
-     * Imports every log file inside {@code archive} with {@link ImportOptions#defaults()}, reporting progress to
-     * {@code progress}.
-     */
-    public ImportResult importArchive(Path archive, Consumer<ImportProgress> progress) {
-        return importArchive(archive, ImportOptions.defaults(), progress);
+    ImportResult importArchive(Path archive, Consumer<ImportProgress> progress) {
+        return importArchive(archive, ImportOptions.defaults(), progress, () -> false);
     }
 
-    /**
-     * Imports every log file inside {@code archive}. Zip, 7z, tar and tar.gz archives are supported.
-     *
-     * @param archive the archive to read; each result is a {@link LogSource.Archive} with that file and the path of the
-     *                log inside it
-     * @throws LogDataException if {@code archive} is not a file, or the database rejects the writes
-     */
-    public ImportResult importArchive(Path archive, ImportOptions options) {
-        return importArchive(archive, options, null);
+    ImportResult importArchive(Path archive, ImportOptions options) {
+        return importArchive(archive, options, null, () -> false);
     }
 
     /**
      * Imports every log file inside {@code archive}. Zip, 7z, tar and tar.gz archives are supported.
+     * {@code cancelled} is polled during discovery and writing; a {@code true} result stops the run and returns
+     * whatever was stored so far.
      *
      * @param archive  the archive to read; each result is a {@link LogSource.Archive} with that file and the path of the
      *                 log inside it
      * @param progress called as files are found and processed, with the current log file or archive; {@code null} to
      *                 ignore progress. Session capture does not report progress
      * @throws LogDataException if {@code archive} is not a file, or the database rejects the writes
-     */
-    public ImportResult importArchive(Path archive, ImportOptions options, Consumer<ImportProgress> progress) {
-        return importArchive(archive, options, progress, () -> false);
-    }
-
-    /**
-     * Imports every log file inside {@code archive}. {@code cancelled} is polled during discovery and writing;
-     * a {@code true} result stops the run and returns whatever was stored so far.
      */
     public ImportResult importArchive(Path archive, ImportOptions options, Consumer<ImportProgress> progress,
                                       BooleanSupplier cancelled) {
@@ -256,8 +222,8 @@ public final class LogStore implements AutoCloseable {
     /**
      * Starts a capture session for a running Minecraft client and creates a {@link ChatLog} for it.
      * <p>
-     * Chat lines imported with {@link #importSessionMessage(String)} are stored against this log. Its
-     * {@link ChatLog#startTime()} is the session start; {@link #importSessionMessage(String, LocalDateTime)} and
+     * Chat lines imported with {@link #importSessionMessage(String, long[])} are stored against this log. Its
+     * {@link ChatLog#startTime()} is the session start; {@link #importSessionMessage(String, long[])} and
      * {@link #updateSessionEndTime(LocalDateTime)} update {@link ChatLog#endTime()} as the session continues.
      * Starting another session leaves the previous log in place and switches subsequent imports to the new one.
      * <p>
@@ -266,86 +232,58 @@ public final class LogStore implements AutoCloseable {
      * import of that file is skipped when this session is already stored.
      *
      * @param minecraftVersion the version of the running game
+     * @param minecraftUser    the player name when known, or {@code null}
      * @return the created chat log, with no entries yet
      * @throws LogDataException if the session cannot be written
-     */
-    public ChatLog startSession(String minecraftVersion) {
-        return startSession(minecraftVersion, LocalDateTime.now());
-    }
-
-    /**
-     * Starts a capture session at an explicit time.
-     *
-     * @see #startSession(String)
-     */
-    public ChatLog startSession(String minecraftVersion, LocalDateTime startedAt) {
-        return startSession(minecraftVersion, startedAt, null);
-    }
-
-    /**
-     * Starts a capture session for the running game, recording {@code minecraftUser} when known.
-     *
-     * @see #startSession(String)
      */
     public ChatLog startSession(String minecraftVersion, String minecraftUser) {
         return startSession(minecraftVersion, LocalDateTime.now(), minecraftUser);
     }
 
-    /**
-     * Starts a capture session at an explicit time, recording {@code minecraftUser} when known.
-     *
-     * @see #startSession(String)
-     */
-    public ChatLog startSession(String minecraftVersion, LocalDateTime startedAt, String minecraftUser) {
+    ChatLog startSession(String minecraftVersion) {
+        return startSession(minecraftVersion, LocalDateTime.now(), null);
+    }
+
+    ChatLog startSession(String minecraftVersion, LocalDateTime startedAt) {
+        return startSession(minecraftVersion, startedAt, null);
+    }
+
+    ChatLog startSession(String minecraftVersion, LocalDateTime startedAt, String minecraftUser) {
         return sessions.start(minecraftVersion, startedAt, minecraftUser);
     }
 
     /**
-     * Imports a single chat line from the running client into the current session, stamped with the current time.
+     * Imports an already-stripped live chat line with flattened packed formatting, stamped with the current time.
      * <p>
      * A line that repeats the timestamp and text of an entry already stored is dropped. Live capture of a play
      * session is not duplicated on a later file import when that log contains this session's
      * {@link me.wolfii.allthelogs.data.store.SessionMarker}.
      *
-     * @param message the chat line as the game rendered it; formatting codes are stripped like on import
+     * @param message    the chat line as the game rendered it, already stripped of legacy {@code §} codes
+     * @param formatting packed runs into {@code message}, or {@code null} to parse formatting from the message
      * @return {@code true} if the entry was stored, {@code false} if it was dropped as a duplicate
      * @throws LogDataException if no session is active, or the entry cannot be written
-     */
-    public boolean importSessionMessage(String message) {
-        return importSessionMessage(message, LocalDateTime.now());
-    }
-
-    /**
-     * Imports a single chat line from the running client into the current session at an explicit time.
-     *
-     * @see #importSessionMessage(String)
-     */
-    public boolean importSessionMessage(String message, LocalDateTime timestamp) {
-        return sessions.importMessage(message, timestamp);
-    }
-
-    /**
-     * Imports an already-stripped live chat line with flattened packed formatting.
-     *
-     * @see #importSessionMessage(String)
      */
     public boolean importSessionMessage(String message, long[] formatting) {
         return importSessionMessage(message, formatting, LocalDateTime.now());
     }
 
-    /**
-     * Imports an already-stripped live chat line with flattened packed formatting at an explicit time.
-     *
-     * @see #importSessionMessage(String)
-     */
-    public boolean importSessionMessage(String message, long[] formatting, LocalDateTime timestamp) {
+    boolean importSessionMessage(String message) {
+        return importSessionMessage(message, null, LocalDateTime.now());
+    }
+
+    boolean importSessionMessage(String message, LocalDateTime timestamp) {
+        return importSessionMessage(message, null, timestamp);
+    }
+
+    boolean importSessionMessage(String message, long[] formatting, LocalDateTime timestamp) {
         return sessions.importMessage(message, formatting, timestamp);
     }
 
     /**
      * Updates {@link ChatLog#endTime()} of the current session, without storing a chat line.
      * <p>
-     * Whole seconds only, matching {@link #importSessionMessage(String, LocalDateTime)}. If {@code timestamp} is
+     * Whole seconds only, matching {@link #importSessionMessage(String, long[])}. If {@code timestamp} is
      * earlier than the time already stored, the existing end time is kept.
      *
      * @throws LogDataException if no session is active, or the update cannot be written
@@ -361,7 +299,7 @@ public final class LogStore implements AutoCloseable {
      *
      * @throws LogDataException if the query is rejected, e.g. because its regex is malformed
      */
-    public List<ChatEntry> findEntries(ChatQuery query) {
+    public List<ChatEntry> findEntries(me.wolfii.allthelogs.api.ChatQuery query) {
         Objects.requireNonNull(query, "query");
         return queries.findEntries(query);
     }
@@ -370,7 +308,7 @@ public final class LogStore implements AutoCloseable {
      * Unpaged match count, first/last timestamps, and per-day counts for {@code query}. Ignores paging
      * and context. One date aggregation, not a load of every matching row.
      */
-    public MatchSummary summarizeMatches(ChatQuery query) {
+    public MatchSummary summarizeMatches(me.wolfii.allthelogs.api.ChatQuery query) {
         Objects.requireNonNull(query, "query");
         return queries.summarizeMatches(query);
     }
@@ -379,7 +317,7 @@ public final class LogStore implements AutoCloseable {
      * Number of matching entries for {@code query}. Honours offset and limit; ignores context lines.
      * Callers that want every match for a filter should drop the page offset and pass a negative limit.
      */
-    public long countMatches(ChatQuery query) {
+    public long countMatches(me.wolfii.allthelogs.api.ChatQuery query) {
         Objects.requireNonNull(query, "query");
         return queries.countMatches(query);
     }
@@ -403,7 +341,7 @@ public final class LogStore implements AutoCloseable {
      * Returns every stored entry, oldest first. Convenience for {@code findEntries(ChatQuery.all())}.
      */
     public List<ChatEntry> allEntries() {
-        return findEntries(ChatQuery.all());
+        return findEntries(me.wolfii.allthelogs.api.ChatQuery.all());
     }
 
     /**

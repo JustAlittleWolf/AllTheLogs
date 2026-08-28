@@ -30,9 +30,8 @@ final class FilterOverlay {
     private final IntSupplier screenHeight;
     private final Supplier<SearchFilter> filter;
     private final Consumer<SearchFilter> onChange;
-
-    private ParentUIComponent filterPanel;
     private final VersionMenu versionsMenu;
+    private ParentUIComponent filterPanel;
     private boolean open;
 
     FilterOverlay(StackLayout overlays, IntSupplier screenWidth, IntSupplier screenHeight,

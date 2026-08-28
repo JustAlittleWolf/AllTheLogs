@@ -14,6 +14,19 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MessageSelectionTest {
+    private static DisplayRow row(String message) {
+        return rowOn(LocalDateTime.of(2026, 8, 26, 10, 0), 0, message);
+    }
+
+    private static DisplayRow rowOn(LocalDateTime time, String message) {
+        return rowOn(time, 0, message);
+    }
+
+    private static DisplayRow rowOn(LocalDateTime time, int line, String message) {
+        ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), time.toLocalDate(), "26.2", time, time);
+        return new DisplayRow(new ChatEntry(log, time, line, message), true, List.of());
+    }
+
     @Test
     void copiesMessageTextWithoutCrossingRowsWhenTheRangeIsOnOneLine() {
         MessageSelection selection = new MessageSelection();
@@ -86,18 +99,5 @@ class MessageSelectionTest {
         assertEquals("wo", selection.copy(List.of(second, third)));
         selection.retainIn(List.of(second, third), List.of(third));
         assertTrue(selection.isEmpty());
-    }
-
-    private static DisplayRow row(String message) {
-        return rowOn(LocalDateTime.of(2026, 8, 26, 10, 0), 0, message);
-    }
-
-    private static DisplayRow rowOn(LocalDateTime time, String message) {
-        return rowOn(time, 0, message);
-    }
-
-    private static DisplayRow rowOn(LocalDateTime time, int line, String message) {
-        ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), time.toLocalDate(), "26.2", time, time);
-        return new DisplayRow(new ChatEntry(log, time, line, message), true, List.of());
     }
 }

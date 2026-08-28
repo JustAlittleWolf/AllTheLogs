@@ -1,14 +1,11 @@
 package me.wolfii.allthelogs.client.search;
 
-import me.wolfii.allthelogs.data.ChatQuery;
+import me.wolfii.allthelogs.api.ChatQuery;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class SearchFilterTest {
     @Test

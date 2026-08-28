@@ -5,12 +5,7 @@ import io.wispforest.owo.ui.core.CursorStyle;
 import io.wispforest.owo.ui.core.OwoUIGraphics;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.UIComponent;
-import me.wolfii.allthelogs.client.list.DisplayRow;
-import me.wolfii.allthelogs.client.list.DisplayRows;
-import me.wolfii.allthelogs.client.list.MessageListLayout;
-import me.wolfii.allthelogs.client.list.MessageSelection;
-import me.wolfii.allthelogs.client.list.MessageWrap;
-import me.wolfii.allthelogs.client.list.ResultWindow;
+import me.wolfii.allthelogs.client.list.*;
 import me.wolfii.allthelogs.client.timeline.ScrubJump;
 import me.wolfii.allthelogs.client.timeline.ScrubberGeometry;
 import me.wolfii.allthelogs.client.timeline.TimelineEdge;
@@ -36,7 +31,7 @@ import java.util.function.Consumer;
  * than the viewport sits on its bottom edge.
  * <p>
  * Double-click selects a word and triple-click selects the line. Expand carets on cluster
- * separators load more context through {@link #onExpand}.
+ * separators load more context through {@link #onExpand}; shift-click fetches a larger chunk.
  * its owner to fetch more through {@link #onApproachEdge}, {@link #onJump} and {@link #onExpand} rather than
  * touching the store itself. Drawing lives in {@link MessageListPainter} and {@link TimelineTrackPainter},
  * scrubber state in {@link ScrubDrag}, and the status chip in {@link ListStatusChip}.
@@ -83,7 +78,7 @@ public final class MessageTimeline extends BaseUIComponent {
     };
     private BiConsumer<ScrubJump, Boolean> onJump = (jump, preview) -> {
     };
-    private BiConsumer<DisplayRow, TimelineEdge> onExpand = (row, side) -> {
+    private ExpandHandler onExpand = (row, side, extraLines) -> {
     };
     private Runnable onScrubBegin = () -> {
     };
@@ -91,6 +86,16 @@ public final class MessageTimeline extends BaseUIComponent {
     public MessageTimeline() {
         this.sizing(Sizing.fill(), Sizing.fill());
         this.cursorStyle(CursorStyle.POINTER);
+    }
+
+    private static boolean middleMousePressed() {
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.getWindow() == null) return false;
+        return GLFW.glfwGetMouseButton(client.getWindow().handle(), GLFW.GLFW_MOUSE_BUTTON_MIDDLE) == GLFW.GLFW_PRESS;
+    }
+
+    private static Font font() {
+        return Minecraft.getInstance().font;
     }
 
     /**
@@ -108,8 +113,17 @@ public final class MessageTimeline extends BaseUIComponent {
         this.onJump = onJump;
     }
 
-    public void onExpand(BiConsumer<DisplayRow, TimelineEdge> onExpand) {
+    public void onExpand(ExpandHandler onExpand) {
         this.onExpand = onExpand;
+    }
+
+    /**
+     * Loads more context from a separator caret. {@code extraLines} is how many neighbouring
+     * log lines to fetch on that side.
+     */
+    @FunctionalInterface
+    public interface ExpandHandler {
+        void expand(DisplayRow row, TimelineEdge side, int extraLines);
     }
 
     public void onScrubBegin(Runnable onScrubBegin) {
@@ -342,7 +356,7 @@ public final class MessageTimeline extends BaseUIComponent {
         if (expand != null) {
             pendingClear = false;
             draggingSelection = false;
-            expandFromSeparator(expand, click.y());
+            expandFromSeparator(expand, click.y(), click.hasShiftDown());
             return true;
         }
         int row = view().rowAt(click.y());
@@ -501,12 +515,6 @@ public final class MessageTimeline extends BaseUIComponent {
         maybeRequestMore();
     }
 
-    private static boolean middleMousePressed() {
-        Minecraft client = Minecraft.getInstance();
-        if (client == null || client.getWindow() == null) return false;
-        return GLFW.glfwGetMouseButton(client.getWindow().handle(), GLFW.GLFW_MOUSE_BUTTON_MIDDLE) == GLFW.GLFW_PRESS;
-    }
-
     private int updateClickCount(double mouseX, double mouseY) {
         long now = System.currentTimeMillis();
         double dx = mouseX - clickX;
@@ -521,19 +529,20 @@ public final class MessageTimeline extends BaseUIComponent {
         return clickCount;
     }
 
-    private void expandFromSeparator(MessageListLayout.ExpandDirection direction, double localY) {
+    private void expandFromSeparator(MessageListLayout.ExpandDirection direction, double localY, boolean shift) {
         MessageListLayout.Separator separator = layout.separatorAt(view().contentY(localY));
         if (separator == null) return;
         List<DisplayRow> rows = window.rows();
+        int extra = MessageListLayout.extraContextLines(shift);
         if (direction == MessageListLayout.ExpandDirection.UP) {
             if (separator.afterRow() >= 0 && separator.afterRow() < rows.size()) {
-                onExpand.accept(rows.get(separator.afterRow()), TimelineEdge.BEFORE);
+                onExpand.expand(rows.get(separator.afterRow()), TimelineEdge.BEFORE, extra);
             }
             return;
         }
         int previous = separator.afterRow() - 1;
         if (previous >= 0 && previous < rows.size()) {
-            onExpand.accept(rows.get(previous), TimelineEdge.AFTER);
+            onExpand.expand(rows.get(previous), TimelineEdge.AFTER, extra);
         }
     }
 
@@ -772,9 +781,5 @@ public final class MessageTimeline extends BaseUIComponent {
         if (value < 0) return 0;
         if (value > max) return max;
         return value;
-    }
-
-    private static Font font() {
-        return Minecraft.getInstance().font;
     }
 }

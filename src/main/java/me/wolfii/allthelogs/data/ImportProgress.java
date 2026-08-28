@@ -2,8 +2,8 @@ package me.wolfii.allthelogs.data;
 
 /**
  * Live snapshot of an import run, delivered to the callback passed to
- * {@link LogStore#importDirectory(java.nio.file.Path, ImportOptions, java.util.function.Consumer)} and
- * {@link LogStore#importArchive(java.nio.file.Path, ImportOptions, java.util.function.Consumer)}.
+ * {@link LogStore#importDirectory(java.nio.file.Path, ImportOptions, java.util.function.Consumer, java.util.function.BooleanSupplier)} and
+ * {@link LogStore#importArchive(java.nio.file.Path, ImportOptions, java.util.function.Consumer, java.util.function.BooleanSupplier)}.
  * <p>
  * Until {@link #discoveryComplete} is true, {@link #discoveredFiles} is still growing. {@link #estimatedFiles} is a
  * first-pass guess of how many files the run will find, so {@link #fraction()} can move before discovery finishes.
@@ -11,7 +11,7 @@ package me.wolfii.allthelogs.data;
  * {@code chat_entry} into time-ordered row groups) and {@link ImportPhase#OPTIMIZING} (analyze, checkpoint,
  * compact the on-disk file). Those two phases together occupy 40% of the bar, with file import occupying 60%.
  * The callback may be invoked from worker threads; calls are never concurrent. It should return quickly. Session
- * capture ({@link LogStore#startSession(String)}, {@link LogStore#importSessionMessage(String)}) does not report
+ * capture ({@link LogStore#startSession(String, String)}, {@link LogStore#importSessionMessage(String, long[])}) does not report
  * progress.
  *
  * @param completedFiles     log files already imported (including empty), skipped, or failed

@@ -1,11 +1,7 @@
 package me.wolfii.allthelogs.client.ui.widget;
 
 import io.wispforest.owo.ui.core.OwoUIGraphics;
-import me.wolfii.allthelogs.client.list.DisplayRow;
-import me.wolfii.allthelogs.client.list.HighlightSpan;
-import me.wolfii.allthelogs.client.list.MessageListLayout;
-import me.wolfii.allthelogs.client.list.MessageSelection;
-import me.wolfii.allthelogs.client.list.MessageWrap;
+import me.wolfii.allthelogs.client.list.*;
 import me.wolfii.allthelogs.client.ui.text.MessageText;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
 import net.minecraft.client.gui.Font;
@@ -38,6 +34,12 @@ final class MessageListPainter {
 
     static int highlightHeight() {
         return ROW_HEIGHT - HIGHLIGHT_TRIM_BOTTOM;
+    }
+
+    static MessageListLayout.ExpandDirection expandAt(ListView view, double localX, double localY) {
+        MessageListLayout.Separator separator = view.layout().separatorAt(view.contentY(localY));
+        if (separator == null) return null;
+        return MessageListLayout.expandAtLocalX(separator, view.messageLocalX(), localX);
     }
 
     void drawRows(OwoUIGraphics graphics, ListView view, MessageSelection selection, boolean showingLoading) {
@@ -100,12 +102,6 @@ final class MessageListPainter {
         drawChip(graphics, view, mouseX, mouseY, lines);
     }
 
-    static MessageListLayout.ExpandDirection expandAt(ListView view, double localX, double localY) {
-        MessageListLayout.Separator separator = view.layout().separatorAt(view.contentY(localY));
-        if (separator == null) return null;
-        return MessageListLayout.expandAtLocalX(separator, view.messageLocalX(), localX);
-    }
-
     private void drawChip(OwoUIGraphics graphics, ListView view, int mouseX, int mouseY, List<Component> lines) {
         Font font = view.font();
         int listWidth = view.listWidth();
@@ -146,8 +142,20 @@ final class MessageListPainter {
             int caretY = midY - 4;
             int lineLeft = listLeft + ListView.PAD;
             int lineRight = listRight - ListView.PAD;
-            if (lineRight > lineLeft) {
-                graphics.fill(lineLeft, midY, lineRight, midY + 1, Colors.SEPARATOR);
+            int band = MessageListLayout.caretBandWidth(separator);
+            int holeLeft = caretX - MessageListLayout.CARET_LINE_INSET;
+            int holeRight = caretX + band + MessageListLayout.CARET_LINE_INSET;
+            if (band == 0) {
+                if (lineRight > lineLeft) {
+                    graphics.fill(lineLeft, midY, lineRight, midY + 1, Colors.SEPARATOR);
+                }
+            } else {
+                if (holeLeft > lineLeft) {
+                    graphics.fill(lineLeft, midY, holeLeft, midY + 1, Colors.SEPARATOR);
+                }
+                if (lineRight > holeRight) {
+                    graphics.fill(holeRight, midY, lineRight, midY + 1, Colors.SEPARATOR);
+                }
             }
             if (separator.expandUp()) {
                 graphics.drawText(Component.literal(MessageListLayout.CARET_UP), caretX, caretY, 1,

@@ -31,22 +31,21 @@ public record ImportOptions(
     boolean optimize,
     ZoneId timezone
 ) {
-    public ImportOptions {
-        if (parallelism < 1) throw new IllegalArgumentException("parallelism must be at least 1, was " + parallelism);
-        Objects.requireNonNull(timezone, "timezone");
-    }
-
     /**
      * Glob relative to a {@code logs} directory. Matches rotated and debug logs in that folder and any
      * subdirectory; {@code latest.log} is still skipped by discovery because it is the live Minecraft log.
      */
     public static final String LOGS_DIRECTORY_MATCHER = "**/*.{log,log.gz}";
-
     /**
      * Glob relative to a Minecraft instance / game directory. Restricts discovery to {@code logs} folders so
      * resource packs, worlds, and other zips are not opened as archives.
      */
     public static final String GAME_DIRECTORY_MATCHER = "**/logs/**";
+
+    public ImportOptions {
+        if (parallelism < 1) throw new IllegalArgumentException("parallelism must be at least 1, was " + parallelism);
+        Objects.requireNonNull(timezone, "timezone");
+    }
 
     /**
      * Defaults to a recursive import of nested archives, one parser per CPU, replacing already imported files,

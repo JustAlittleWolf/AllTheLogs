@@ -39,14 +39,9 @@ final class CommonLocationMenu {
         this.onSelect = onSelect;
     }
 
-    FlowLayout row() {
-        FlowLayout row = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
-        row.gap(2);
-        row.child(UIComponents.label(Component.translatable("allthelogs.import.common")));
+    ButtonComponent button() {
         button = UIComponents.button(label(), this::toggle);
-        button.horizontalSizing(Sizing.fill());
-        row.child(button);
-        return row;
+        return button;
     }
 
     void close() {
@@ -57,10 +52,7 @@ final class CommonLocationMenu {
     }
 
     private Component label() {
-        if (selected == null) {
-            return Component.translatable("allthelogs.import.common.custom");
-        }
-        return Component.literal(selected.displayName());
+        return Component.translatable("allthelogs.import.common");
     }
 
     private void syncButton() {
@@ -89,7 +81,7 @@ final class CommonLocationMenu {
         for (CommonLogLocations.Location location : locations) {
             items.child(choice(Component.literal(location.displayName()), location));
         }
-        int width = Math.max(160, button.width());
+        int width = Math.max(220, button.width());
         int maxHeight = Math.max(48, Math.min(220, screenHeight.getAsInt() - button.y() - button.height() - 12));
         ScrollContainer<FlowLayout> panel = UIContainers.verticalScroll(
             Sizing.fixed(width), Sizing.fixed(maxHeight), items);

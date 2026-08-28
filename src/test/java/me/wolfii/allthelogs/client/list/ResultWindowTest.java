@@ -9,11 +9,23 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class ResultWindowTest {
+    private static DisplayRow row(String file, int line) {
+        return rowAt(LocalDateTime.of(2026, 8, 26, 10, 0).plusSeconds(line), line, file);
+    }
+
+    private static DisplayRow rowAt(LocalDateTime time, int line) {
+        return rowAt(time, line, "a.log");
+    }
+
+    private static DisplayRow rowAt(LocalDateTime time, int line, String file) {
+        ChatLog log = new ChatLog(new LogSource.File(Path.of(file)), time.toLocalDate(), "26.2", time, time);
+        ChatEntry entry = new ChatEntry(log, time, line, "msg-" + line);
+        return new DisplayRow(entry, true, List.of());
+    }
+
     @Test
     void replacingThePageKeepsTheAnchorRowAtTheSameScreenPosition() {
         double scrollY = 10;
@@ -39,6 +51,27 @@ class ResultWindowTest {
         }
         assertTrue(DisplayRows.trimmedHead(merged, trimmed));
         assertTrue(DisplayRows.trimmedTail(merged, trimmed));
+    }
+
+    @Test
+    void matchCountAtCountsHitsThatShareATimestamp() {
+        LocalDateTime time = LocalDateTime.of(2026, 8, 26, 10, 0);
+        List<DisplayRow> rows = List.of(rowAt(time, 0), rowAt(time, 1), rowAt(time.plusSeconds(1), 2));
+        assertEquals(2, DisplayRows.matchCountAt(rows, time));
+        assertEquals(0, DisplayRows.matchCountAt(rows, time.plusHours(1)));
+    }
+
+    @Test
+    void rowKeyIgnoresSessionEndTimeSoLaterCapturesDoNotLookNew() {
+        LocalDateTime start = LocalDateTime.of(2026, 8, 26, 10, 0);
+        ChatLog first = new ChatLog(new LogSource.Session("live"), start.toLocalDate(), "26.2", start, start);
+        ChatLog later = new ChatLog(new LogSource.Session("live"), start.toLocalDate(), "26.2", start,
+            start.plusMinutes(5));
+        DisplayRow before = new DisplayRow(new ChatEntry(first, start, 0, "a"), true, List.of());
+        DisplayRow after = new DisplayRow(new ChatEntry(later, start, 0, "a"), true, List.of());
+        assertEquals(before.key(), after.key());
+        assertEquals(0, DisplayRows.countNewKeys(List.of(after), DisplayRows.keysOf(List.of(before))));
+        assertEquals(1, DisplayRows.mergeUnique(List.of(before), List.of(after)).size());
     }
 
     @Test
@@ -88,21 +121,7 @@ class ResultWindowTest {
         DisplayRow first = rowAt(time, 1);
         DisplayRow second = rowAt(time, 4);
         List<DisplayRow> merged = DisplayRows.mergeSorted(List.of(second), List.of(first),
-            me.wolfii.allthelogs.data.ChatQuery.Sort.ASCENDING);
+            me.wolfii.allthelogs.api.ChatQuery.Sort.ASCENDING);
         assertEquals(List.of(1, 4), merged.stream().map(DisplayRow::lineIndex).toList());
-    }
-
-    private static DisplayRow row(String file, int line) {
-        return rowAt(LocalDateTime.of(2026, 8, 26, 10, 0).plusSeconds(line), line, file);
-    }
-
-    private static DisplayRow rowAt(LocalDateTime time, int line) {
-        return rowAt(time, line, "a.log");
-    }
-
-    private static DisplayRow rowAt(LocalDateTime time, int line, String file) {
-        ChatLog log = new ChatLog(new LogSource.File(Path.of(file)), time.toLocalDate(), "26.2", time, time);
-        ChatEntry entry = new ChatEntry(log, time, line, "msg-" + line);
-        return new DisplayRow(entry, true, List.of());
     }
 }

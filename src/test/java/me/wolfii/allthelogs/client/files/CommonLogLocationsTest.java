@@ -4,16 +4,10 @@ import me.wolfii.allthelogs.data.ImportOptions;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class CommonLogLocationsTest {
     private static final Map<String, String> VARS = Map.of(
@@ -23,6 +17,20 @@ class CommonLogLocationsTest {
         "XDG_DATA_HOME", "/home/me/.local/share",
         "USERPROFILE", "C:/Users/me"
     );
+
+    private static void assertResolvedContains(String id, String expected) {
+        List<String> resolved = byId(id).resolveAll(VARS).stream()
+            .map(path -> path.toString().replace('\\', '/'))
+            .collect(Collectors.toList());
+        assertTrue(resolved.contains(expected), id + " templates " + resolved + " missing " + expected);
+    }
+
+    private static CommonLogLocations.Location byId(String id) {
+        return CommonLogLocations.defaults().stream()
+            .filter(location -> id.equals(location.id()))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("missing location id " + id));
+    }
 
     @Test
     void expandsOsPlaceholders() {
@@ -97,19 +105,5 @@ class CommonLogLocationsTest {
         CommonLogLocations.Location vanilla = byId("vanilla");
         Path preferred = vanilla.preferredPath(VARS, path -> false);
         assertEquals(Path.of("C:/Users/me/AppData/Roaming/.minecraft/logs"), preferred);
-    }
-
-    private static void assertResolvedContains(String id, String expected) {
-        List<String> resolved = byId(id).resolveAll(VARS).stream()
-            .map(path -> path.toString().replace('\\', '/'))
-            .collect(Collectors.toList());
-        assertTrue(resolved.contains(expected), id + " templates " + resolved + " missing " + expected);
-    }
-
-    private static CommonLogLocations.Location byId(String id) {
-        return CommonLogLocations.defaults().stream()
-            .filter(location -> id.equals(location.id()))
-            .findFirst()
-            .orElseThrow(() -> new AssertionError("missing location id " + id));
     }
 }

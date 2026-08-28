@@ -1,9 +1,6 @@
 package me.wolfii.allthelogs.api;
 
 import me.wolfii.allthelogs.client.LogStoreWorker;
-import me.wolfii.allthelogs.data.ChatEntry;
-import me.wolfii.allthelogs.data.ChatLog;
-import me.wolfii.allthelogs.data.ChatQuery;
 import me.wolfii.allthelogs.data.LogStore;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -11,16 +8,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class LogDatabaseTest {
     @TempDir
@@ -32,11 +24,10 @@ class LogDatabaseTest {
     @BeforeEach
     void setUp() {
         store = LogStore.open(tempDir.resolve("logs.duckdb"));
-        LocalDateTime at = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
-        store.startSession("26.2", at);
-        store.importSessionMessage("alpha", at);
-        store.importSessionMessage("welcome beta", at.plusSeconds(1));
-        store.importSessionMessage("gamma", at.plusSeconds(2));
+        store.startSession("26.2", null);
+        store.importSessionMessage("alpha", null);
+        store.importSessionMessage("welcome beta", null);
+        store.importSessionMessage("gamma", null);
         database = new LogDatabase(store);
     }
 
@@ -90,7 +81,7 @@ class LogDatabaseTest {
 
             Path database = tempDir.resolve("worker.duckdb");
             worker.open(database).join();
-            worker.startSession("26.2").join();
+            worker.startSession("26.2", null).join();
             LogDatabase open = LogDatabase.forWorker(worker);
             assertTrue(open.isOpen());
             assertEquals(database.toAbsolutePath().normalize(), open.databasePath().join().orElseThrow());

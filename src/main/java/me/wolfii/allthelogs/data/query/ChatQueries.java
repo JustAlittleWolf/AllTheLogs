@@ -1,27 +1,15 @@
 package me.wolfii.allthelogs.data.query;
 
-import me.wolfii.allthelogs.data.ChatEntry;
-import me.wolfii.allthelogs.data.ChatLog;
-import me.wolfii.allthelogs.data.ChatQuery;
-import me.wolfii.allthelogs.data.LogDataException;
-import me.wolfii.allthelogs.data.LogStoreMetadata;
-import me.wolfii.allthelogs.data.MatchDay;
-import me.wolfii.allthelogs.data.MatchSummary;
+import me.wolfii.allthelogs.api.ChatQuery;
+import me.wolfii.allthelogs.data.*;
 import me.wolfii.allthelogs.data.store.StoredSources;
 import org.duckdb.DuckDBChunkedResult;
 import org.duckdb.DuckDBConnection;
 import org.duckdb.DuckDBPreparedStatement;
 
+import java.sql.*;
 import java.sql.Date;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Timestamp;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Runs {@link ChatQuery} against an open store and maps rows to {@link ChatEntry} / {@link ChatLog}.
