@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Adds the AllTheLogs icon to the pause-menu icon row, the same way ScreenshotViewer does.
+ * Adds the AllTheLogs icon to the pause-menu icon row.
  */
 @Mixin(PauseScreen.class)
 public class PauseScreenMixin {
