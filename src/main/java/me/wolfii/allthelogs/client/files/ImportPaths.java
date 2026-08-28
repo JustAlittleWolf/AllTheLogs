@@ -77,6 +77,15 @@ public final class ImportPaths {
     }
 
     /**
+     * Starting knobs on the import form: recursive nested-archive import that skips files already
+     * stored. Restored when the user chooses Custom path, and when they pick a folder or archive
+     * while Advanced is collapsed.
+     */
+    public static ImportOptions formDefaults() {
+        return ImportOptions.defaults().withSkipAlreadyImported(true);
+    }
+
+    /**
      * Import knobs for a folder chosen in the import form. A Minecraft instance directory (one that contains
      * a {@code logs} folder) is walked for {@code **&#47;logs&#47;**} without opening resource-pack zips. Other
      * folders keep the recursive nested-archive defaults.
@@ -85,6 +94,6 @@ public final class ImportPaths {
         if (folder != null && Files.isDirectory(folder.resolve("logs"))) {
             return ImportOptions.currentGameDirectory();
         }
-        return ImportOptions.defaults().withSkipAlreadyImported(true);
+        return formDefaults();
     }
 }

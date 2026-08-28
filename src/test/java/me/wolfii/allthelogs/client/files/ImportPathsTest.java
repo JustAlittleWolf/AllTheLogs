@@ -75,5 +75,17 @@ class ImportPathsTest {
         assertTrue(options.nestedArchives());
         assertTrue(options.recursive());
         assertTrue(options.skipAlreadyImported());
+        assertEquals(ImportPaths.formDefaults(), options);
+    }
+
+    @Test
+    void formDefaultsSkipAlreadyImportedAndAcceptEveryPath() {
+        var options = ImportPaths.formDefaults();
+        assertTrue(options.recursive());
+        assertTrue(options.nestedArchives());
+        assertTrue(options.skipAlreadyImported());
+        assertNull(options.pathMatcher());
+        assertEquals(ImportOptions.defaults().timezone(), options.timezone());
+        assertEquals(ImportOptions.defaults().parallelism(), options.parallelism());
     }
 }

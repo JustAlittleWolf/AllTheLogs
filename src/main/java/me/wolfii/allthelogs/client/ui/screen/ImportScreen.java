@@ -2,6 +2,7 @@ package me.wolfii.allthelogs.client.ui.screen;
 
 import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.*;
+import io.wispforest.owo.ui.container.CollapsibleContainer;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.ScrollContainer;
 import io.wispforest.owo.ui.container.StackLayout;
@@ -29,7 +30,9 @@ import java.util.function.Consumer;
 /**
  * Import a folder or archive into the log store. Launcher directory shortcuts from
  * {@link CommonLogLocations#defaults()} fill both the path and advanced options when chosen.
- * Folder and archive pickers only set the path; advanced options stay as the user left them.
+ * Folder and archive pickers only set the path while Advanced is expanded; if it is collapsed
+ * they restore {@link ImportPaths#formDefaults()}. Choosing Custom path always restores those
+ * defaults.
  */
 public final class ImportScreen extends BaseOwoScreen<StackLayout> {
     private static final int MIN_PARALLELISM = 1;
@@ -52,6 +55,7 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
     private CheckboxComponent summerTimeBox;
     private TextBoxComponent pathMatcherBox;
     private DiscreteSliderComponent parallelismSlider;
+    private CollapsibleContainer advanced;
 
     public ImportScreen(Screen parent) {
         super(Component.translatable("allthelogs.screen.import"));
@@ -91,9 +95,9 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
         FlowLayout pathRow = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
         pathRow.gap(8).verticalAlignment(VerticalAlignment.CENTER);
         pathRow.child(UIComponents.button(Component.translatable("allthelogs.import.from_folder"),
-            button -> NativeFilePicker.pickFolder(currentPath(), this::setPath)));
+            button -> NativeFilePicker.pickFolder(currentPath(), this::setPickedPath)));
         pathRow.child(UIComponents.button(Component.translatable("allthelogs.import.from_archive"),
-            button -> NativeFilePicker.pickArchive(currentPath(), this::setPath)));
+            button -> NativeFilePicker.pickArchive(currentPath(), this::setPickedPath)));
         commonLocations = new CommonLocationMenu(root, () -> this.width, () -> this.height, this::applyLocation);
         pathRow.child(commonLocations.button());
         form.child(pathRow);
@@ -102,9 +106,10 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
         dropHint.color(Color.ofRgb(0xA0A0A0));
         form.child(dropHint);
 
-        form.child(UIContainers.collapsible(Sizing.fill(), Sizing.content(),
-                Component.translatable("allthelogs.import.advanced"), false)
-            .child(buildAdvanced(root)));
+        advanced = UIContainers.collapsible(Sizing.fill(), Sizing.content(),
+            Component.translatable("allthelogs.import.advanced"), false);
+        advanced.child(buildAdvanced(root));
+        form.child(advanced);
 
         ScrollContainer<FlowLayout> scroll = UIContainers.verticalScroll(
             Sizing.fill(), Sizing.expand(), form);
@@ -201,6 +206,7 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
 
     private void applyLocation(CommonLogLocations.Location location) {
         if (location == null) {
+            applyOptions(ImportPaths.formDefaults());
             return;
         }
         setPath(location.preferredPath());
@@ -221,6 +227,13 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
         if (nestedBox != null) nestedBox.checked(nestedArchives);
         if (skipBox != null) skipBox.checked(skipAlreadyImported);
         if (pathMatcherBox != null) pathMatcherBox.text(pathMatcher);
+    }
+
+    private void setPickedPath(Path path) {
+        setPath(path);
+        if (advanced == null || !advanced.expanded()) {
+            applyOptions(ImportPaths.formDefaults());
+        }
     }
 
     private void setPath(Path path) {
