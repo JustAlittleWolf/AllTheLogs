@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.BiPredicate;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
@@ -21,6 +22,8 @@ import java.util.regex.Pattern;
 /**
  * Walks directories and archives and hands every log file that passes the filters to a consumer.
  * Discovery is single-threaded: it is dominated by sequential IO, and formats such as 7z cannot be read concurrently.
+ * Already imported files are skipped by stored source path before their bytes are read, so a startup re-import
+ * does not open logs that are already in the database.
  */
 public final class LogDiscovery {
     /** Separates the archive path from the path inside it, matching the convention of JAR URLs. */
@@ -33,18 +36,22 @@ public final class LogDiscovery {
     private final Consumer<LogCandidate> consumer;
     private final ImportObserver observer;
     private final BooleanSupplier cancelled;
+    private final BiPredicate<String, String> skipUnopened;
+    private final Runnable onSkipped;
     private final List<ImportResult.Failure> failures = new ArrayList<>();
     private final ArchiveWalker archives;
 
     public LogDiscovery(ImportOptions options, Consumer<LogCandidate> consumer, ImportObserver observer,
-                        BooleanSupplier cancelled) {
+                        BooleanSupplier cancelled, BiPredicate<String, String> skipUnopened, Runnable onSkipped) {
         this.options = options;
         this.pathMatcher = options.pathMatcher() == null ? null : Globs.compile(options.pathMatcher());
         this.consumer = consumer;
         this.observer = observer;
         this.cancelled = cancelled == null ? () -> false : cancelled;
+        this.skipUnopened = skipUnopened == null ? (source, entry) -> false : skipUnopened;
+        this.onSkipped = onSkipped == null ? () -> {} : onSkipped;
         this.archives = new ArchiveWalker(this.options, this.pathMatcher, this.consumer, this.observer,
-            this.cancelled, this.failures);
+            this.cancelled, this.failures, this.skipUnopened, this.onSkipped);
     }
 
     static boolean isLogFile(String name) {
@@ -108,6 +115,11 @@ public final class LogDiscovery {
                 if (!matches(entryPath)) continue;
                 Path absoluteFile = child.toAbsolutePath().normalize();
                 observer.fileStarted(new LogSource.File(absoluteFile));
+                if (skipUnopened.test(absoluteFile.toString(), "")) {
+                    onSkipped.run();
+                    observer.fileCompleted();
+                    continue;
+                }
                 byte[] content;
                 try {
                     content = Files.readAllBytes(child);

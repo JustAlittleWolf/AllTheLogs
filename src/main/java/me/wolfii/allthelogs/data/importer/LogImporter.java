@@ -106,11 +106,6 @@ public final class LogImporter {
                 new ThreadPoolExecutor.CallerRunsPolicy());
             LogDiscovery discovery = new LogDiscovery(options, candidate -> {
                 if (stop.getAsBoolean()) return;
-                if (options.skipAlreadyImported() && writer.isAlreadyImported(candidate.sourcePath(), candidate.entryPath())) {
-                    skipped.incrementAndGet();
-                    observer.fileCompleted();
-                    return;
-                }
                 try {
                     parsers.execute(() -> {
                         if (stop.getAsBoolean()) {
@@ -148,7 +143,9 @@ public final class LogImporter {
                 } catch (RejectedExecutionException e) {
                     observer.fileCompleted();
                 }
-            }, observer, stop);
+            }, observer, stop,
+                (sourcePath, entryPath) -> options.skipAlreadyImported() && writer.isAlreadyImported(sourcePath, entryPath),
+                skipped::incrementAndGet);
 
             Thread discoverer = new Thread(() -> {
                 try {

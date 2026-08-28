@@ -15,7 +15,6 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
-import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.*;
 

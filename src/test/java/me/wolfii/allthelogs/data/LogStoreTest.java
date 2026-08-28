@@ -83,6 +83,25 @@ class LogStoreTest {
         return tempDir.resolve("instance");
     }
 
+    private static void replaceLogFilesWithBrokenSymlinks(Path directory) throws IOException {
+        List<Path> logs;
+        try (var stream = Files.list(directory)) {
+            logs = stream.filter(Files::isRegularFile).toList();
+        }
+        for (Path log : logs) {
+            Files.delete(log);
+            Files.createSymbolicLink(log, Path.of("allthelogs-missing-" + log.getFileName()));
+        }
+    }
+
+    private static void writeCorruptGzipZip(Path archive, String entryPath) throws IOException {
+        try (var zip = new java.util.zip.ZipOutputStream(Files.newOutputStream(archive))) {
+            zip.putNextEntry(new java.util.zip.ZipEntry(entryPath));
+            zip.write(new byte[]{0, 1, 2, 3, 4, 5, 6, 7});
+            zip.closeEntry();
+        }
+    }
+
     @Test
     void doesNotImportLatestLog() throws IOException {
         LogFixtures.writePlain(tempDir.resolve("logs"), "latest.log", LogFixtures.legacyLog("live"));
@@ -394,6 +413,35 @@ class LogStoreTest {
         assertEquals(0, second.importedFiles());
         assertEquals(3, second.skippedFiles());
         assertEquals(3, store.chatLogs().size());
+    }
+
+    @Test
+    void alreadyImportedFilesAreSkippedWithoutOpeningThem() throws IOException {
+        Path root = logsDirectory();
+        store.importDirectory(root);
+        replaceLogFilesWithBrokenSymlinks(root.resolve("logs"));
+
+        ImportResult second = store.importDirectory(root.resolve("logs"), ImportOptions.currentLogsDirectory());
+
+        assertEquals(0, second.importedFiles(), () -> "failures=" + second.failures());
+        assertEquals(3, second.skippedFiles());
+        assertTrue(second.failures().isEmpty(), () -> "unexpected failures: " + second.failures());
+        assertEquals(8, store.allEntries().size());
+    }
+
+    @Test
+    void alreadyImportedArchiveEntriesAreSkippedWithoutReadingThem() throws IOException {
+        Path archive = LogFixtures.writeZip(tempDir.resolve("backup.zip"), new LinkedHashMap<>(Map.of(
+            "logs/2026-01-02-1.log.gz", LogFixtures.modernLog("26.2", "in archive"))));
+        store.importArchive(archive);
+        writeCorruptGzipZip(archive, "logs/2026-01-02-1.log.gz");
+
+        ImportResult second = store.importArchive(archive, ImportOptions.defaults().withSkipAlreadyImported(true));
+
+        assertEquals(0, second.importedFiles(), () -> "failures=" + second.failures());
+        assertEquals(1, second.skippedFiles());
+        assertTrue(second.failures().isEmpty(), () -> "unexpected failures: " + second.failures());
+        assertEquals(List.of("in archive"), store.allEntries().stream().map(ChatEntry::message).toList());
     }
 
     @Test
