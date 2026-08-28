@@ -1,19 +1,15 @@
 package me.wolfii.allthelogs.client.ui.screen;
 
 import io.wispforest.owo.ui.component.ButtonComponent;
+import me.wolfii.allthelogs.api.ChatQuery;
 import me.wolfii.allthelogs.client.AllTheLogsClient;
-import me.wolfii.allthelogs.client.list.ContextPeeks;
-import me.wolfii.allthelogs.client.list.DisplayRow;
-import me.wolfii.allthelogs.client.list.DisplayRows;
-import me.wolfii.allthelogs.client.list.MessageListLayout;
-import me.wolfii.allthelogs.client.list.PageBounds;
+import me.wolfii.allthelogs.client.list.*;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.timeline.ScrubJump;
 import me.wolfii.allthelogs.client.timeline.TimelineEdge;
 import me.wolfii.allthelogs.client.ui.text.StoreSummary;
 import me.wolfii.allthelogs.client.ui.widget.MessageTimeline;
 import me.wolfii.allthelogs.data.ChatEntry;
-import me.wolfii.allthelogs.data.ChatQuery;
 import me.wolfii.allthelogs.data.MatchSummary;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -193,15 +189,18 @@ final class LogBrowserQueries {
         LocalDateTime cursor = towardStart ? list.window().firstMatchTime() : list.window().lastMatchTime();
         if (cursor == null) return;
         list.setLoading(true);
+        List<DisplayRow> buffered = list.window().rows();
         SearchFilter page = towardStart
-            ? filter.withOffset(cursor).withSort(filter.sort().opposite())
-            : filter.withOffset(cursor);
+            ? filter.withoutOffset().withSort(filter.sort().opposite())
+            : filter.withoutOffset();
+        ChatQuery query = PageBounds.continueFrom(page.toQuery(), cursor,
+            DisplayRows.matchCountAt(buffered, cursor));
         DisplayRow.RowKey anchor = list.visibleAnchor();
         int firstVisible = list.firstVisibleIndex();
         int lastVisible = list.lastVisibleIndex();
-        Set<DisplayRow.RowKey> bufferedKeys = DisplayRows.keysOf(list.window().rows());
+        Set<DisplayRow.RowKey> bufferedKeys = DisplayRows.keysOf(buffered);
         int gen = generation.get();
-        onClient(AllTheLogsClient.worker().findEntries(page.toQuery()), (entries, error) -> {
+        onClient(AllTheLogsClient.worker().findEntries(query), (entries, error) -> {
             if (gen != generation.get()) return;
             list.setLoading(false);
             if (error != null) {
@@ -213,10 +212,10 @@ final class LogBrowserQueries {
             int added = DisplayRows.countNewKeys(incoming, bufferedKeys);
             boolean more = added > 0 && PageBounds.isFull(incoming, filter.limit());
 
-            List<DisplayRow> buffered = list.window().rows();
+            List<DisplayRow> current = list.window().rows();
             List<DisplayRow> merged = towardStart
-                ? DisplayRows.mergeUnique(incoming, buffered)
-                : DisplayRows.mergeUnique(buffered, incoming);
+                ? DisplayRows.mergeUnique(incoming, current)
+                : DisplayRows.mergeUnique(current, incoming);
             int shift = towardStart ? added : 0;
             List<DisplayRow> trimmed = DisplayRows.trimToMatchLimit(
                 merged, (int) Math.max(1, filter.limit()), firstVisible + shift, lastVisible + shift);
@@ -333,10 +332,12 @@ final class LogBrowserQueries {
             applyJump(target, preview, rows, true, hasAfter, progress);
             return;
         }
-        SearchFilter extra = filter.withOffset(cursor).withSort(filter.sort().opposite())
+        SearchFilter extra = filter.withoutOffset().withSort(filter.sort().opposite())
             .withLimit(PageBounds.extraFillLimit(list.viewHeight(), pageLimit));
+        ChatQuery extraQuery = PageBounds.continueFrom(extra.toQuery(), cursor,
+            DisplayRows.matchCountAt(rows, cursor));
         Set<DisplayRow.RowKey> alreadyLoaded = DisplayRows.keysOf(rows);
-        onClient(AllTheLogsClient.worker().findEntries(extra.toQuery()), (entries, error) -> {
+        onClient(AllTheLogsClient.worker().findEntries(extraQuery), (entries, error) -> {
             if (gen != generation.get()) return;
             if (error != null) {
                 applyJump(target, preview, rows, true, hasAfter, progress);

@@ -1,9 +1,9 @@
 package me.wolfii.allthelogs.client.list;
 
+import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.LogSource;
-import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import org.junit.jupiter.api.Test;
 
@@ -12,12 +12,18 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class DisplayRowTest {
+    private static ChatLog log(String name) {
+        LocalDateTime start = LocalDateTime.of(2026, 8, 26, 10, 0);
+        return new ChatLog(new LogSource.File(Path.of(name)), LocalDate.of(2026, 8, 26), "26.2", start, start);
+    }
+
+    private static ChatEntry entry(ChatLog log, int line, String message) {
+        return new ChatEntry(log, log.startTime().plusSeconds(line), line, message);
+    }
+
     @Test
     void withoutASearchEveryRowIsAMatch() {
         ChatLog log = log("a.log");
@@ -58,14 +64,5 @@ class DisplayRowTest {
         assertSame(row.message(), row.message());
         assertEquals(red, PackedFormatting.at(row.visualFormatting(), 0));
         assertEquals(red, PackedFormatting.at(row.visualFormatting(), 4));
-    }
-
-    private static ChatLog log(String name) {
-        LocalDateTime start = LocalDateTime.of(2026, 8, 26, 10, 0);
-        return new ChatLog(new LogSource.File(Path.of(name)), LocalDate.of(2026, 8, 26), "26.2", start, start);
-    }
-
-    private static ChatEntry entry(ChatLog log, int line, String message) {
-        return new ChatEntry(log, log.startTime().plusSeconds(line), line, message);
     }
 }

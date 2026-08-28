@@ -3,6 +3,7 @@ package me.wolfii.allthelogs.client.list;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.ChatLog;
+import me.wolfii.allthelogs.data.LogSource;
 
 import java.util.List;
 import java.util.Objects;
@@ -43,15 +44,6 @@ public record DisplayRow(
     }
 
     /**
-     * List-direction expand carets for this row's cluster edge. {@code expandUp} loads more toward the top
-     * of the list; {@code expandDown} toward the bottom.
-     */
-    public DisplayRow withExpand(boolean expandUp, boolean expandDown) {
-        if (this.expandUp == expandUp && this.expandDown == expandDown) return this;
-        return new DisplayRow(entry, match, highlights, message, visualFormatting, expandUp, expandDown);
-    }
-
-    /**
      * Marks query results as search hits or context lines, and highlights where the query matched.
      * <p>
      * The store already applied the filter, but a page also carries the context lines around each hit, so the
@@ -72,8 +64,25 @@ public record DisplayRow(
         }).toList();
     }
 
+    /**
+     * List-direction expand carets for this row's cluster edge. {@code expandUp} loads more toward the top
+     * of the list; {@code expandDown} toward the bottom.
+     */
+    public DisplayRow withExpand(boolean expandUp, boolean expandDown) {
+        if (this.expandUp == expandUp && this.expandDown == expandDown) return this;
+        return new DisplayRow(entry, match, highlights, message, visualFormatting, expandUp, expandDown);
+    }
+
     public ChatLog chatLog() {
         return entry.chatLog();
+    }
+
+    /**
+     * Whether {@code other} is another line from the same imported file or session, ignoring metadata
+     * that can change while a session is live (such as {@link ChatLog#endTime()}).
+     */
+    public boolean sameLog(DisplayRow other) {
+        return other != null && chatLog().source().equals(other.chatLog().source());
     }
 
     public int lineIndex() {
@@ -81,15 +90,17 @@ public record DisplayRow(
     }
 
     public RowKey key() {
-        return new RowKey(chatLog(), lineIndex());
+        return new RowKey(chatLog().source(), lineIndex());
     }
 
     /**
      * Identifies a row across page reloads, so scroll anchors and selections survive them.
+     * Keyed by source and line, not the whole {@link ChatLog}, because session capture updates
+     * {@code endTime} without changing the identity of earlier lines.
      */
-    public record RowKey(ChatLog chatLog, int lineIndex) {
+    public record RowKey(LogSource source, int lineIndex) {
         public RowKey {
-            Objects.requireNonNull(chatLog, "chatLog");
+            Objects.requireNonNull(source, "source");
         }
     }
 }

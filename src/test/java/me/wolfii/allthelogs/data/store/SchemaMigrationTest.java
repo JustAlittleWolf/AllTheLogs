@@ -12,14 +12,29 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class SchemaMigrationTest {
     @TempDir
     Path tempDir;
+
+    private static String meta(Statement statement, String key) throws SQLException {
+        try (ResultSet result = statement.executeQuery(
+            "SELECT v FROM " + SchemaMigration.META_TABLE + " WHERE k = '" + key + "'")) {
+            assertTrue(result.next());
+            return result.getString(1);
+        }
+    }
+
+    private static boolean tableExists(Statement statement, String tableName) throws SQLException {
+        try (var result = statement.executeQuery("""
+            SELECT count(*)
+            FROM information_schema.tables
+            WHERE table_schema = 'main' AND table_name = '""" + tableName + "'")) {
+            result.next();
+            return result.getLong(1) > 0;
+        }
+    }
 
     @Test
     void freshDatabaseIsInitializedAtCurrentVersion() throws SQLException {
@@ -142,24 +157,6 @@ class SchemaMigrationTest {
                 }));
             assertEquals("boom", error.getMessage());
             assertEquals(1, SchemaMigration.readVersion(statement));
-        }
-    }
-
-    private static String meta(Statement statement, String key) throws SQLException {
-        try (ResultSet result = statement.executeQuery(
-            "SELECT v FROM " + SchemaMigration.META_TABLE + " WHERE k = '" + key + "'")) {
-            assertTrue(result.next());
-            return result.getString(1);
-        }
-    }
-
-    private static boolean tableExists(Statement statement, String tableName) throws SQLException {
-        try (var result = statement.executeQuery("""
-            SELECT count(*)
-            FROM information_schema.tables
-            WHERE table_schema = 'main' AND table_name = '""" + tableName + "'")) {
-            result.next();
-            return result.getLong(1) > 0;
         }
     }
 }

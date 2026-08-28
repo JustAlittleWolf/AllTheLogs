@@ -1,7 +1,7 @@
 package me.wolfii.allthelogs.client.list;
 
+import me.wolfii.allthelogs.api.ChatQuery;
 import me.wolfii.allthelogs.data.ChatLog;
-import me.wolfii.allthelogs.data.ChatQuery;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -49,7 +49,7 @@ public final class ContextPeeks {
             LocalDate peekDay = peek.entry().timestamp().toLocalDate();
             for (int i = 0; i < visible.size(); i++) {
                 DisplayRow row = visible.get(i);
-                if (!row.chatLog().equals(peek.chatLog())) continue;
+                if (!row.sameLog(peek)) continue;
                 if (!row.entry().timestamp().toLocalDate().equals(peekDay)) continue;
                 if (row.lineIndex() == peek.lineIndex() + 1) {
                     visible.set(i, addFileExpand(row, true, false, oldestFirst));
@@ -74,7 +74,7 @@ public final class ContextPeeks {
         for (int i = 1; i < out.length; i++) {
             DisplayRow previous = out[i - 1];
             DisplayRow current = out[i];
-            if (!previous.chatLog().equals(current.chatLog())) continue;
+            if (!previous.sameLog(current)) continue;
             if (!previous.entry().timestamp().toLocalDate().equals(current.entry().timestamp().toLocalDate())) {
                 continue;
             }
@@ -98,7 +98,7 @@ public final class ContextPeeks {
         List<DisplayRow> kept = new ArrayList<>();
         for (DisplayRow row : fetched) {
             if (!row.entry().timestamp().toLocalDate().equals(day)) continue;
-            if (row.chatLog().equals(anchor.chatLog()) && row.lineIndex() == peekLine) {
+            if (row.sameLog(anchor) && row.lineIndex() == peekLine) {
                 sawPeek = true;
                 continue;
             }
@@ -107,13 +107,13 @@ public final class ContextPeeks {
         if (!sawPeek) return List.copyOf(kept);
         int farLine = olderInFile ? Integer.MAX_VALUE : Integer.MIN_VALUE;
         for (DisplayRow row : kept) {
-            if (!row.chatLog().equals(anchor.chatLog())) continue;
+            if (!row.sameLog(anchor)) continue;
             farLine = olderInFile ? Math.min(farLine, row.lineIndex()) : Math.max(farLine, row.lineIndex());
         }
         if (farLine == Integer.MAX_VALUE || farLine == Integer.MIN_VALUE) return List.copyOf(kept);
         for (int i = 0; i < kept.size(); i++) {
             DisplayRow row = kept.get(i);
-            if (row.chatLog().equals(anchor.chatLog()) && row.lineIndex() == farLine) {
+            if (row.sameLog(anchor) && row.lineIndex() == farLine) {
                 kept.set(i, addFileExpand(row, olderInFile, !olderInFile, oldestFirst));
             }
         }
@@ -134,7 +134,31 @@ public final class ContextPeeks {
                 cleared.add(row);
             }
         }
-        return DisplayRows.mergeSorted(cleared, expanded, sort);
+        return clearClosedGaps(DisplayRows.mergeSorted(cleared, expanded, sort));
+    }
+
+    /**
+     * After an expand fetch, neighbouring clusters that now touch must lose the facing carets: expanding
+     * up re-checks whether the cluster above can still grow down, and expanding down re-checks the cluster
+     * below. Adjacent same-log, same-day lines have no remaining gap.
+     */
+    static List<DisplayRow> clearClosedGaps(List<DisplayRow> rows) {
+        if (rows == null || rows.size() < 2) {
+            return rows == null ? List.of() : List.copyOf(rows);
+        }
+        DisplayRow[] out = rows.toArray(DisplayRow[]::new);
+        for (int i = 1; i < out.length; i++) {
+            DisplayRow previous = out[i - 1];
+            DisplayRow current = out[i];
+            if (!previous.sameLog(current)) continue;
+            if (!previous.entry().timestamp().toLocalDate().equals(current.entry().timestamp().toLocalDate())) {
+                continue;
+            }
+            if (Math.abs(current.lineIndex() - previous.lineIndex()) > 1) continue;
+            out[i - 1] = previous.withExpand(previous.expandUp(), false);
+            out[i] = current.withExpand(false, current.expandDown());
+        }
+        return List.of(out);
     }
 
     static DisplayRow addFileExpand(DisplayRow row, boolean moreBefore, boolean moreAfter, boolean oldestFirst) {

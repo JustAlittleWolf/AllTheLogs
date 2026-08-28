@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.data;
 
+import me.wolfii.allthelogs.api.ChatQuery.Sort;
 import me.wolfii.allthelogs.data.parse.LogDates;
 import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import me.wolfii.allthelogs.data.store.SessionMarker;
@@ -12,31 +13,55 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
+import java.time.*;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class LogStoreTest {
     @TempDir
     Path tempDir;
 
     private LogStore store;
+
+    private static long onDiskSize(Path database) throws IOException {
+        long size = Files.size(database);
+        Path wal = database.resolveSibling(database.getFileName().toString() + ".wal");
+        return Files.isRegularFile(wal) ? size + Files.size(wal) : size;
+    }
+
+    private static String taggedLog(String sessionId, String chatTime, String... messages) {
+        StringBuilder log = new StringBuilder();
+        log.append("[10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3\n");
+        log.append("[10:00:02] [allthelogs-store/INFO]: ").append(SessionMarker.message(sessionId)).append('\n');
+        for (String message : messages) {
+            log.append(String.format("[%s] [Render thread/INFO]: [CHAT] %s%n", chatTime, message));
+        }
+        return log.toString();
+    }
+
+    private static String chatLog(String version, String[] times, String[] messages) {
+        StringBuilder log = new StringBuilder();
+        log.append("[10:00:00] [main/INFO]: Loading Minecraft ").append(version)
+            .append(" with Fabric Loader 0.19.3\n");
+        for (int i = 0; i < messages.length; i++) {
+            log.append(String.format("[%s] [Render thread/INFO]: [CHAT] %s%n", times[i], messages[i]));
+        }
+        return log.toString();
+    }
+
+    private static String fileName(ChatLog log) {
+        return switch (log.source()) {
+            case LogSource.File file -> file.path().getFileName().toString();
+            case LogSource.Archive archive -> {
+                String entry = archive.entryPath();
+                yield entry.substring(entry.lastIndexOf('/') + 1);
+            }
+            case LogSource.Session session -> throw new AssertionError("session has no file name");
+        };
+    }
 
     @BeforeEach
     void setUp() {
@@ -51,9 +76,9 @@ class LogStoreTest {
     private Path logsDirectory() throws IOException {
         Path logs = tempDir.resolve("instance/logs");
         LogFixtures.writeGzipped(logs, "2026-08-24-1.log.gz",
-                LogFixtures.modernLog("26.2", "alpha", "beta", "gamma"));
+            LogFixtures.modernLog("26.2", "alpha", "beta", "gamma"));
         LogFixtures.writeGzipped(logs, "2026-08-25-1.log.gz",
-                LogFixtures.modernLog("26.2", "delta", "needle in here", "epsilon"));
+            LogFixtures.modernLog("26.2", "delta", "needle in here", "epsilon"));
         LogFixtures.writePlain(logs, "debug.log", LogFixtures.legacyLog("zeta", "another needle"));
         return tempDir.resolve("instance");
     }
@@ -223,7 +248,7 @@ class LogStoreTest {
         store.importDirectory(root);
 
         ChatLog undated = store.chatLogs().stream()
-                .filter(file -> fileName(file).equals("debug.log")).findFirst().orElseThrow();
+            .filter(file -> fileName(file).equals("debug.log")).findFirst().orElseThrow();
         assertEquals(modified.atZone(ZoneId.systemDefault()).toLocalDate(), undated.date());
         assertEquals("1.8.9", undated.minecraftVersion());
     }
@@ -233,7 +258,7 @@ class LogStoreTest {
         store.importDirectory(logsDirectory());
 
         ChatLog file = store.chatLogs().stream()
-                .filter(f -> fileName(f).equals("2026-08-24-1.log.gz")).findFirst().orElseThrow();
+            .filter(f -> fileName(f).equals("2026-08-24-1.log.gz")).findFirst().orElseThrow();
         // Bounds cover every logged line of the file, not just its chat entries, so they start at the very first
         // line ("Loading Minecraft...") rather than the first [CHAT] line.
         assertEquals(LocalDateTime.of(2026, 8, 24, 10, 0, 0), file.startTime());
@@ -243,7 +268,7 @@ class LogStoreTest {
     @Test
     void nonRecursiveImportIgnoresSubdirectories() throws IOException {
         ImportResult result = store.importDirectory(logsDirectory(),
-                ImportOptions.defaults().withRecursive(false));
+            ImportOptions.defaults().withRecursive(false));
 
         assertEquals(0, result.importedFiles());
         assertTrue(store.allEntries().isEmpty());
@@ -253,7 +278,7 @@ class LogStoreTest {
     void pathMatcherRestrictsWhichFilesAreImported() throws IOException {
         Path root = logsDirectory();
         LogFixtures.writePlain(root.resolve("crash-reports"), "crash.log",
-                LogFixtures.modernLog("26.2", "should not be imported"));
+            LogFixtures.modernLog("26.2", "should not be imported"));
 
         store.importDirectory(root, ImportOptions.defaults().withPathMatcher("**/logs/**"));
 
@@ -264,7 +289,7 @@ class LogStoreTest {
     @Test
     void importsLogsFromAnArchive() throws IOException {
         Path archive = LogFixtures.writeZip(tempDir.resolve("backup.zip"), new LinkedHashMap<>(Map.of(
-                "logs/2026-01-02-1.log.gz", LogFixtures.modernLog("1.21.8", "in archive"))));
+            "logs/2026-01-02-1.log.gz", LogFixtures.modernLog("1.21.8", "in archive"))));
 
         ImportResult result = store.importArchive(archive);
 
@@ -279,7 +304,7 @@ class LogStoreTest {
     @Test
     void importingAnArchiveHonoursTheTimezone() throws IOException {
         Path archive = LogFixtures.writeZip(tempDir.resolve("backup.zip"), new LinkedHashMap<>(Map.of(
-                "logs/2026-01-02-1.log.gz", LogFixtures.modernLog("1.21.8", "in archive"))));
+            "logs/2026-01-02-1.log.gz", LogFixtures.modernLog("1.21.8", "in archive"))));
         ZoneOffset offset = ZoneOffset.ofHours(4);
 
         store.importArchive(archive, ImportOptions.defaults().withTimezone(offset));
@@ -326,7 +351,7 @@ class LogStoreTest {
     @Test
     void directoryImportRecordsArchivesAgainstTheArchiveFile() throws IOException {
         Path archive = LogFixtures.writeZip(tempDir.resolve("instance/backup.zip"), new LinkedHashMap<>(Map.of(
-                "logs/2026-01-02-1.log.gz", LogFixtures.modernLog("1.21.8", "from nested zip"))));
+            "logs/2026-01-02-1.log.gz", LogFixtures.modernLog("1.21.8", "from nested zip"))));
 
         store.importDirectory(tempDir);
 
@@ -364,7 +389,7 @@ class LogStoreTest {
         store.importDirectory(root);
 
         ImportResult second = store.importDirectory(root.resolve("logs"),
-                ImportOptions.defaults().withSkipAlreadyImported(true));
+            ImportOptions.defaults().withSkipAlreadyImported(true));
 
         assertEquals(0, second.importedFiles());
         assertEquals(3, second.skippedFiles());
@@ -392,8 +417,8 @@ class LogStoreTest {
         store.importDirectory(logsDirectory());
 
         List<ChatEntry> hits = store.findEntries(ChatQuery.all()
-                .startingAt(LocalDateTime.of(2026, 8, 25, 0, 0))
-                .upUntil(LocalDateTime.of(2026, 8, 26, 0, 0)));
+            .startingAt(LocalDateTime.of(2026, 8, 25, 0, 0))
+            .upUntil(LocalDateTime.of(2026, 8, 26, 0, 0)));
         assertEquals(List.of("delta", "needle in here", "epsilon"), hits.stream().map(ChatEntry::message).toList());
     }
 
@@ -402,9 +427,9 @@ class LogStoreTest {
         store.importDirectory(logsDirectory());
 
         List<ChatEntry> hits = store.findEntries(ChatQuery.all()
-                .withSubstring("needle")
-                .startingAt(LocalDateTime.of(2026, 8, 25, 0, 0))
-                .upUntil(LocalDateTime.of(2026, 8, 26, 0, 0)));
+            .withSubstring("needle")
+            .startingAt(LocalDateTime.of(2026, 8, 25, 0, 0))
+            .upUntil(LocalDateTime.of(2026, 8, 26, 0, 0)));
         assertEquals(List.of("needle in here"), hits.stream().map(ChatEntry::message).toList());
     }
 
@@ -537,7 +562,7 @@ class LogStoreTest {
     @Test
     void overlappingContextWindowsDoNotProduceDuplicates() throws IOException {
         LogFixtures.writeGzipped(tempDir.resolve("logs"), "2026-03-01-1.log.gz",
-                LogFixtures.modernLog("26.2", "a", "hit one", "b", "hit two", "c"));
+            LogFixtures.modernLog("26.2", "a", "hit one", "b", "hit two", "c"));
 
         store.importDirectory(tempDir);
         List<ChatEntry> hits = store.findEntries(ChatQuery.all().withSubstring("hit").withContextLines(2));
@@ -550,10 +575,10 @@ class LogStoreTest {
         store.importDirectory(logsDirectory());
 
         List<ChatEntry> hits = store.findEntries(ChatQuery.all()
-                .withSubstring("delta")
-                .withContextLines(5)
-                .startingAt(LocalDateTime.of(2026, 8, 25, 10, 0, 10))
-                .upUntil(LocalDateTime.of(2026, 8, 25, 10, 0, 12)));
+            .withSubstring("delta")
+            .withContextLines(5)
+            .startingAt(LocalDateTime.of(2026, 8, 25, 10, 0, 10))
+            .upUntil(LocalDateTime.of(2026, 8, 25, 10, 0, 12)));
         assertEquals(List.of("delta", "needle in here"), hits.stream().map(ChatEntry::message).toList());
     }
 
@@ -562,7 +587,7 @@ class LogStoreTest {
         store.importDirectory(logsDirectory());
 
         List<ChatEntry> ascending = store.allEntries();
-        List<ChatEntry> descending = store.findEntries(ChatQuery.all().withSort(ChatQuery.Sort.DESCENDING));
+        List<ChatEntry> descending = store.findEntries(ChatQuery.all().withSort(Sort.DESCENDING));
 
         assertEquals(ascending.getFirst().message(), descending.getLast().message());
         assertEquals(ascending.getLast().message(), descending.getFirst().message());
@@ -580,7 +605,7 @@ class LogStoreTest {
     void sortsDescendingWithTheSortOption() throws IOException {
         store.importDirectory(logsDirectory());
 
-        List<ChatEntry> bySort = store.findEntries(ChatQuery.all().withSort(ChatQuery.Sort.DESCENDING));
+        List<ChatEntry> bySort = store.findEntries(ChatQuery.all().withSort(Sort.DESCENDING));
 
         assertTrue(bySort.getFirst().timestamp().isAfter(bySort.getLast().timestamp()));
     }
@@ -595,7 +620,7 @@ class LogStoreTest {
         assertEquals(List.of("hit", "four", "five"), forward);
 
         List<String> backward = store.findEntries(ChatQuery.all()
-                .withSort(ChatQuery.Sort.DESCENDING)
+                .withSort(Sort.DESCENDING)
                 .withOffset(LocalDateTime.of(2026, 6, 1, 10, 0, 13)))
             .stream().map(ChatEntry::message).toList();
         assertEquals(List.of("hit", "two", "one"), backward);
@@ -624,12 +649,12 @@ class LogStoreTest {
         importOffsetLog();
 
         List<ChatEntry> page1 = store.findEntries(ChatQuery.all()
-            .withSort(ChatQuery.Sort.DESCENDING)
+            .withSort(Sort.DESCENDING)
             .withLimit(2));
         assertEquals(List.of("five", "four"), page1.stream().map(ChatEntry::message).toList());
 
         List<ChatEntry> page2 = store.findEntries(ChatQuery.all()
-            .withSort(ChatQuery.Sort.DESCENDING)
+            .withSort(Sort.DESCENDING)
             .withOffset(page1.getLast().timestamp())
             .withLimit(2));
         assertEquals(List.of("hit", "two"), page2.stream().map(ChatEntry::message).toList());
@@ -649,7 +674,7 @@ class LogStoreTest {
         List<String> before = store.findEntries(ChatQuery.all()
                 .withSubstring("hit")
                 .withContextLines(2)
-                .withSort(ChatQuery.Sort.DESCENDING)
+                .withSort(Sort.DESCENDING)
                 .withOffset(LocalDateTime.of(2026, 6, 1, 10, 0, 13)))
             .stream().map(ChatEntry::message).toList();
         assertEquals(List.of("five", "four", "hit", "two", "one"), before);
@@ -813,7 +838,7 @@ class LogStoreTest {
     @Test
     void skipsLogsWithoutTimestamps() throws IOException {
         LogFixtures.writePlain(tempDir.resolve("logs"), "broken.log",
-                "this is not a minecraft log\nReloading ResourceManager: vanilla\n");
+            "this is not a minecraft log\nReloading ResourceManager: vanilla\n");
 
         ImportResult result = store.importDirectory(tempDir);
 
@@ -826,7 +851,7 @@ class LogStoreTest {
     @Test
     void skipsLogsWithoutAnyChatEntries() throws IOException {
         LogFixtures.writePlain(tempDir.resolve("logs"), "2026-04-01-1.log",
-                "[10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3\n");
+            "[10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3\n");
 
         ImportResult result = store.importDirectory(tempDir);
 
@@ -839,9 +864,9 @@ class LogStoreTest {
     @Test
     void logsWithResourceManagerReloadAreKeptEvenWithoutChatEntries() throws IOException {
         LogFixtures.writePlain(tempDir.resolve("logs"), "2026-04-02-1.log",
-                "[10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3\n"
-                    + "[10:00:05] [Render thread/INFO]: Reloading ResourceManager: vanilla, fabric\n"
-                    + "[10:00:10] [Render thread/INFO]: done\n");
+            "[10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3\n"
+                + "[10:00:05] [Render thread/INFO]: Reloading ResourceManager: vanilla, fabric\n"
+                + "[10:00:10] [Render thread/INFO]: done\n");
 
         ImportResult result = store.importDirectory(tempDir);
 
@@ -849,7 +874,7 @@ class LogStoreTest {
         assertEquals(0, result.skippedFiles());
         assertEquals(1, result.emptyFiles());
         ChatLog file = store.chatLogs().stream()
-                .filter(f -> fileName(f).equals("2026-04-02-1.log")).findFirst().orElseThrow();
+            .filter(f -> fileName(f).equals("2026-04-02-1.log")).findFirst().orElseThrow();
         assertEquals(LocalDate.of(2026, 4, 2), file.date());
         assertEquals(LocalDateTime.of(2026, 4, 2, 10, 0, 0), file.startTime());
         assertEquals(LocalDateTime.of(2026, 4, 2, 10, 0, 10), file.endTime());
@@ -859,14 +884,14 @@ class LogStoreTest {
     @Test
     void fileEntryTimeBoundsCoverAllLoggedLinesNotJustChatEntries() throws IOException {
         LogFixtures.writePlain(tempDir.resolve("logs"), "2026-04-03-1.log",
-                "[09:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3\n"
-                    + "[09:00:05] [Render thread/INFO]: [CHAT] hello\n"
-                    + "[09:00:10] [Render thread/INFO]: done\n");
+            "[09:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3\n"
+                + "[09:00:05] [Render thread/INFO]: [CHAT] hello\n"
+                + "[09:00:10] [Render thread/INFO]: done\n");
 
         store.importDirectory(tempDir);
 
         ChatLog file = store.chatLogs().stream()
-                .filter(f -> fileName(f).equals("2026-04-03-1.log")).findFirst().orElseThrow();
+            .filter(f -> fileName(f).equals("2026-04-03-1.log")).findFirst().orElseThrow();
         assertEquals(LocalDateTime.of(2026, 4, 3, 9, 0, 0), file.startTime());
         assertEquals(LocalDateTime.of(2026, 4, 3, 9, 0, 10), file.endTime());
     }
@@ -1071,8 +1096,39 @@ class LogStoreTest {
         List<ChatEntry> entries = store.findEntries(ChatQuery.all());
         assertEquals(List.of("first", "second", "third"), entries.stream().map(ChatEntry::message).toList());
         assertEquals(List.of(0, 1, 2), entries.stream().map(ChatEntry::lineIndex).toList());
-        List<ChatEntry> newestFirst = store.findEntries(ChatQuery.all().withSort(ChatQuery.Sort.DESCENDING));
+        List<ChatEntry> newestFirst = store.findEntries(ChatQuery.all().withSort(Sort.DESCENDING));
         assertEquals(List.of("third", "second", "first"), newestFirst.stream().map(ChatEntry::message).toList());
+    }
+
+    @Test
+    void skipPagesThroughMatchesThatShareATimestamp() {
+        LocalDateTime at = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+        store.startSession("26.2", at);
+        store.importSessionMessage("one", at);
+        store.importSessionMessage("two", at);
+        store.importSessionMessage("three", at);
+        store.importSessionMessage("four", at);
+        store.importSessionMessage("five", at);
+
+        List<ChatEntry> page1 = store.findEntries(ChatQuery.all().withLimit(2));
+        assertEquals(List.of("one", "two"), page1.stream().map(ChatEntry::message).toList());
+
+        List<ChatEntry> page2 = store.findEntries(ChatQuery.all()
+            .withOffset(page1.getLast().timestamp().minusNanos(1))
+            .withSkip(page1.size())
+            .withLimit(2));
+        assertEquals(List.of("three", "four"), page2.stream().map(ChatEntry::message).toList());
+
+        List<ChatEntry> page3 = store.findEntries(ChatQuery.all()
+            .withOffset(page2.getLast().timestamp().minusNanos(1))
+            .withSkip(page1.size() + page2.size())
+            .withLimit(2));
+        assertEquals(List.of("five"), page3.stream().map(ChatEntry::message).toList());
+
+        List<ChatEntry> dropped = store.findEntries(ChatQuery.all()
+            .withOffset(page1.getLast().timestamp())
+            .withLimit(2));
+        assertTrue(dropped.isEmpty());
     }
 
     @Test
@@ -1134,7 +1190,7 @@ class LogStoreTest {
         String log = LogFixtures.modernLog("26.2", "shared line", "unique to first");
         LogFixtures.writeGzipped(tempDir.resolve("logs"), "2026-06-01-1.log.gz", log);
         LogFixtures.writeGzipped(tempDir.resolve("other"), "2026-06-01-1.log.gz",
-                LogFixtures.modernLog("26.2", "shared line", "unique to second"));
+            LogFixtures.modernLog("26.2", "shared line", "unique to second"));
 
         store.importDirectory(tempDir);
 
@@ -1145,9 +1201,9 @@ class LogStoreTest {
     @Test
     void duplicatesAreAlsoRemovedAcrossSeparateImports() throws IOException {
         LogFixtures.writeGzipped(tempDir.resolve("a/logs"), "2026-06-01-1.log.gz",
-                LogFixtures.modernLog("26.2", "shared line"));
+            LogFixtures.modernLog("26.2", "shared line"));
         LogFixtures.writeGzipped(tempDir.resolve("b/logs"), "2026-06-01-1.log.gz",
-                LogFixtures.modernLog("26.2", "shared line"));
+            LogFixtures.modernLog("26.2", "shared line"));
 
         store.importDirectory(tempDir.resolve("a"));
         store.importDirectory(tempDir.resolve("b"));
@@ -1282,9 +1338,9 @@ class LogStoreTest {
     @Test
     void importedFileMetadataStaysConsistentAfterDeduplication() throws IOException {
         LogFixtures.writeGzipped(tempDir.resolve("a/logs"), "2026-06-01-1.log.gz",
-                LogFixtures.modernLog("26.2", "shared", "only in a"));
+            LogFixtures.modernLog("26.2", "shared", "only in a"));
         LogFixtures.writeGzipped(tempDir.resolve("b/logs"), "2026-06-01-1.log.gz",
-                LogFixtures.modernLog("26.2", "shared", "only in b"));
+            LogFixtures.modernLog("26.2", "shared", "only in b"));
 
         store.importDirectory(tempDir);
 
@@ -1297,7 +1353,7 @@ class LogStoreTest {
         Path logs = tempDir.resolve("logs");
         for (int day = 1; day <= 28; day++) {
             LogFixtures.writeGzipped(logs, String.format("2026-05-%02d-1.log.gz", day),
-                    LogFixtures.modernLog("26.2", "day " + day + " message", "filler"));
+                LogFixtures.modernLog("26.2", "day " + day + " message", "filler"));
         }
 
         ImportResult result = store.importDirectory(tempDir, ImportOptions.defaults().withParallelism(8));
@@ -1314,7 +1370,7 @@ class LogStoreTest {
         ChatEntry entry = store.findEntries(ChatQuery.all().withSubstring("needle in here")).getFirst();
         assertEquals(LocalDateTime.of(2026, 8, 25, 10, 0, 11), entry.timestamp());
         assertEquals(LocalDateTime.of(2026, 8, 25, 10, 0, 0),
-                entry.chatLog().startTime());
+            entry.chatLog().startTime());
     }
 
     @Test
@@ -1336,11 +1392,11 @@ class LogStoreTest {
         // 10:00 in UTC+3 is six hours earlier than 10:00 in UTC-3, after both are converted to local time.
         assertEquals(Duration.ofHours(6), Duration.between(plus.timestamp(), minus.timestamp()));
         assertEquals(plus.timestamp(), LogDates.toSystemLocal(
-                LocalDateTime.of(2026, 8, 25, 10, 0, 11), plusThree));
+            LocalDateTime.of(2026, 8, 25, 10, 0, 11), plusThree));
         assertEquals(minus.timestamp(), LogDates.toSystemLocal(
-                LocalDateTime.of(2026, 8, 25, 10, 0, 11), minusThree));
+            LocalDateTime.of(2026, 8, 25, 10, 0, 11), minusThree));
         assertEquals(LogDates.toSystemLocal(LocalDateTime.of(2026, 8, 25, 10, 0, 0), minusThree),
-                minus.chatLog().startTime());
+            minus.chatLog().startTime());
     }
 
     @Test
@@ -1367,42 +1423,5 @@ class LogStoreTest {
         store.importDirectory(tempDir, ImportOptions.defaults().withTimezone(ZoneOffset.ofHours(14)));
         ChatLog plusFourteen = store.chatLogs().getFirst();
         assertEquals(LocalDate.of(2026, 8, 26), plusFourteen.date());
-    }
-
-    private static long onDiskSize(Path database) throws IOException {
-        long size = Files.size(database);
-        Path wal = database.resolveSibling(database.getFileName().toString() + ".wal");
-        return Files.isRegularFile(wal) ? size + Files.size(wal) : size;
-    }
-
-    private static String taggedLog(String sessionId, String chatTime, String... messages) {
-        StringBuilder log = new StringBuilder();
-        log.append("[10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3\n");
-        log.append("[10:00:02] [allthelogs-store/INFO]: ").append(SessionMarker.message(sessionId)).append('\n');
-        for (String message : messages) {
-            log.append(String.format("[%s] [Render thread/INFO]: [CHAT] %s%n", chatTime, message));
-        }
-        return log.toString();
-    }
-
-    private static String chatLog(String version, String[] times, String[] messages) {
-        StringBuilder log = new StringBuilder();
-        log.append("[10:00:00] [main/INFO]: Loading Minecraft ").append(version)
-            .append(" with Fabric Loader 0.19.3\n");
-        for (int i = 0; i < messages.length; i++) {
-            log.append(String.format("[%s] [Render thread/INFO]: [CHAT] %s%n", times[i], messages[i]));
-        }
-        return log.toString();
-    }
-
-    private static String fileName(ChatLog log) {
-        return switch (log.source()) {
-            case LogSource.File file -> file.path().getFileName().toString();
-            case LogSource.Archive archive -> {
-                String entry = archive.entryPath();
-                yield entry.substring(entry.lastIndexOf('/') + 1);
-            }
-            case LogSource.Session session -> throw new AssertionError("session has no file name");
-        };
     }
 }

@@ -1,10 +1,10 @@
 package me.wolfii.allthelogs.client.ui.screen;
 
+import me.wolfii.allthelogs.api.ChatQuery;
 import me.wolfii.allthelogs.client.list.DisplayRow;
 import me.wolfii.allthelogs.client.list.PageBounds;
 import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.ChatLog;
-import me.wolfii.allthelogs.data.ChatQuery;
 import me.wolfii.allthelogs.data.LogSource;
 import me.wolfii.allthelogs.data.MatchSummary;
 import org.junit.jupiter.api.Test;
@@ -13,11 +13,26 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class LogBrowserQueriesTest {
+    private static DisplayRow row(LocalDateTime time, int line) {
+        ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), time.toLocalDate(), "26.2", time, time);
+        return new DisplayRow(new ChatEntry(log, time, line, "msg"), true, List.of());
+    }
+
+    @Test
+    void continueFromIncludesTheCursorSecondAndSkipsAlreadyBufferedHits() {
+        LocalDateTime time = LocalDateTime.of(2026, 8, 27, 10, 0, 0);
+        ChatQuery next = PageBounds.continueFrom(ChatQuery.all().withLimit(100), time, 40);
+        assertEquals(time.minusNanos(1), next.offset());
+        assertEquals(40, next.skip());
+        ChatQuery previous = PageBounds.continueFrom(
+            ChatQuery.all().withSort(ChatQuery.Sort.DESCENDING).withLimit(100), time, 40);
+        assertEquals(time.plusNanos(1), previous.offset());
+        assertEquals(40, previous.skip());
+    }
+
     @Test
     void exclusiveOffsetIncludesTheTargetTimestamp() {
         LocalDateTime time = LocalDateTime.of(2026, 8, 27, 10, 0, 0);
@@ -62,10 +77,5 @@ class LogBrowserQueriesTest {
         assertFalse(PageBounds.needsMoreToFill(many, 0, 200, true));
         assertEquals(24, PageBounds.extraFillLimit(200, 8));
         assertEquals(32, PageBounds.extraFillLimit(200, 32));
-    }
-
-    private static DisplayRow row(LocalDateTime time, int line) {
-        ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), time.toLocalDate(), "26.2", time, time);
-        return new DisplayRow(new ChatEntry(log, time, line, "msg"), true, List.of());
     }
 }

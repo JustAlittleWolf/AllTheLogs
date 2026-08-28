@@ -3,16 +3,9 @@ package me.wolfii.allthelogs.data;
 import me.wolfii.allthelogs.data.parse.LogDates;
 import org.junit.jupiter.api.Test;
 
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
+import java.time.*;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.*;
 
 class LogDatesTest {
     @Test
@@ -39,7 +32,7 @@ class LogDatesTest {
         LocalDateTime naive = LocalDateTime.of(2026, 8, 25, 10, 0, 11);
         assertSame(naive, LogDates.toSystemLocal(naive, ZoneId.systemDefault()));
         assertEquals(naive, LogDates.toSystemLocal(LocalDate.of(2026, 8, 25), LocalTime.of(10, 0, 11),
-                ZoneId.systemDefault()));
+            ZoneId.systemDefault()));
     }
 
     @Test
@@ -47,8 +40,8 @@ class LogDatesTest {
         LocalDateTime naive = LocalDateTime.of(2026, 8, 25, 10, 0, 11);
         ZoneOffset source = ZoneOffset.ofHours(-5);
         LocalDateTime expected = naive.atZone(source)
-                .withZoneSameInstant(ZoneId.systemDefault())
-                .toLocalDateTime();
+            .withZoneSameInstant(ZoneId.systemDefault())
+            .toLocalDateTime();
 
         assertEquals(expected, LogDates.toSystemLocal(naive, source));
         assertEquals(expected, LogDates.toSystemLocal(naive.toLocalDate(), naive.toLocalTime(), source));

@@ -20,7 +20,7 @@ final class LogFixtures {
     static String modernLog(String version, String... chatMessages) {
         StringBuilder log = new StringBuilder();
         log.append("[10:00:00] [main/INFO]: Loading Minecraft ").append(version)
-                .append(" with Fabric Loader 0.19.3\n");
+            .append(" with Fabric Loader 0.19.3\n");
         log.append("[10:00:01] [main/INFO]: Loading 65 mods:\n");
         log.append("\t- fabric-api 0.152.1\n");
         int second = 10;

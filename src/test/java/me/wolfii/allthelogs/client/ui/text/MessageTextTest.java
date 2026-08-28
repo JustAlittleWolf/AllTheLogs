@@ -1,8 +1,8 @@
 package me.wolfii.allthelogs.client.ui.text;
 
-import me.wolfii.allthelogs.client.ui.theme.Colors;
 import me.wolfii.allthelogs.client.list.DisplayRow;
 import me.wolfii.allthelogs.client.list.HighlightSpan;
+import me.wolfii.allthelogs.client.ui.theme.Colors;
 import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.LogSource;
@@ -16,11 +16,21 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class MessageTextTest {
+    private static Component drawn(DisplayRow row) {
+        return MessageText.messageRange(row, 0, row.message().length());
+    }
+
+    private static String key(Component component) {
+        return ((TranslatableContents) component.getContents()).getKey();
+    }
+
+    private static Object[] args(Component component) {
+        return ((TranslatableContents) component.getContents()).getArgs();
+    }
+
     @Test
     void matchCountTextCapsUntilTheExactTotalIsKnown() {
         assertEquals("0", MessageText.matchCountText(0, true));
@@ -172,17 +182,5 @@ class MessageTextTest {
         assertEquals(Colors.TIMESTAMP & 0xFFFFFF, MessageText.timestamp(match).getStyle().getColor().getValue());
         assertEquals(Colors.CONTEXT_TIMESTAMP & 0xFFFFFF,
             MessageText.timestamp(context).getStyle().getColor().getValue());
-    }
-
-    private static Component drawn(DisplayRow row) {
-        return MessageText.messageRange(row, 0, row.message().length());
-    }
-
-    private static String key(Component component) {
-        return ((TranslatableContents) component.getContents()).getKey();
-    }
-
-    private static Object[] args(Component component) {
-        return ((TranslatableContents) component.getContents()).getArgs();
     }
 }

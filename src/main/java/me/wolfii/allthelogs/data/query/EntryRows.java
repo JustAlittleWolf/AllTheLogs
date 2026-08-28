@@ -8,12 +8,7 @@ import org.duckdb.DuckDBDataChunkReader;
 import org.duckdb.DuckDBReadableVector;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Columnar buffer for the rows of one entry query, filled chunk by chunk as DuckDB streams them.

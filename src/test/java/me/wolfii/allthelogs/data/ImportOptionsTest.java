@@ -6,11 +6,7 @@ import java.time.DateTimeException;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class ImportOptionsTest {
     @Test
@@ -21,11 +17,11 @@ class ImportOptionsTest {
     @Test
     void withTimezoneReplacesOnlyTheTimezone() {
         ImportOptions original = ImportOptions.defaults()
-                .withRecursive(false)
-                .withNestedArchives(false)
-                .withPathMatcher("**/logs/**")
-                .withParallelism(2)
-                .withSkipAlreadyImported(true);
+            .withRecursive(false)
+            .withNestedArchives(false)
+            .withPathMatcher("**/logs/**")
+            .withParallelism(2)
+            .withSkipAlreadyImported(true);
 
         ImportOptions updated = original.withTimezone(ZoneOffset.UTC);
 
@@ -52,7 +48,7 @@ class ImportOptionsTest {
     @Test
     void withTimezoneRejectsAnUnknownIanaName() {
         assertThrows(DateTimeException.class,
-                () -> ImportOptions.defaults().withTimezone("Not/AZone"));
+            () -> ImportOptions.defaults().withTimezone("Not/AZone"));
     }
 
     @Test

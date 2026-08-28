@@ -10,11 +10,19 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class MessageListLayoutTest {
+    private static MessageListLayout.RowRangeWidth charWidths() {
+        return (row, from, to) -> to - from;
+    }
+
+    private static DisplayRow row(String file, int line, LocalDateTime time) {
+        ChatLog log = new ChatLog(new LogSource.File(Path.of(file)), time.toLocalDate(), "26.2", time, time);
+        ChatEntry entry = new ChatEntry(log, time, line, "msg-" + line);
+        return new DisplayRow(entry, true, List.of());
+    }
+
     @Test
     void extraContextIsTenLines() {
         assertEquals(10, MessageListLayout.EXPAND_LINES);
@@ -68,6 +76,8 @@ class MessageListLayoutTest {
         assertEquals(MessageListLayout.ExpandDirection.DOWN,
             MessageListLayout.expandAtLocalX(separator, 4, 4 + MessageListLayout.CARET_WIDTH + MessageListLayout.CARET_GAP));
         assertEquals(null, MessageListLayout.expandAtLocalX(separator, 4, 40));
+        assertEquals(MessageListLayout.CARET_WIDTH * 2 + MessageListLayout.CARET_GAP,
+            MessageListLayout.caretBandWidth(separator));
     }
 
     @Test
@@ -165,13 +175,16 @@ class MessageListLayoutTest {
         assertEquals(2, beforeNextDate.afterRow());
     }
 
-    private static MessageListLayout.RowRangeWidth charWidths() {
-        return (row, from, to) -> to - from;
-    }
-
-    private static DisplayRow row(String file, int line, LocalDateTime time) {
-        ChatLog log = new ChatLog(new LogSource.File(Path.of(file)), time.toLocalDate(), "26.2", time, time);
-        ChatEntry entry = new ChatEntry(log, time, line, "msg-" + line);
-        return new DisplayRow(entry, true, List.of());
+    @Test
+    void adjacentLinesDoNotKeepASeparatorWhenExpandFlagsAreStale() {
+        LocalDateTime time = LocalDateTime.of(2026, 8, 26, 10, 0);
+        ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), time.toLocalDate(), "26.2", time, time);
+        DisplayRow first = new DisplayRow(new ChatEntry(log, time, 10, "a"), true, List.of())
+            .withExpand(false, true);
+        DisplayRow next = new DisplayRow(new ChatEntry(log, time.plusSeconds(1), 11, "b"), true, List.of())
+            .withExpand(true, false);
+        MessageListLayout layout = MessageListLayout.of(List.of(first, next), 5);
+        assertEquals(0, layout.separators().size());
+        assertEquals(layout.rowY(0) + MessageListLayout.ROW_HEIGHT, layout.rowY(1));
     }
 }

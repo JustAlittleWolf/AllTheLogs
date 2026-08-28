@@ -8,18 +8,11 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class ImportProgressTest {
     @TempDir
@@ -40,9 +33,9 @@ class ImportProgressTest {
     private Path logsDirectory() throws IOException {
         Path logs = tempDir.resolve("instance/logs");
         LogFixtures.writeGzipped(logs, "2026-08-24-1.log.gz",
-                LogFixtures.modernLog("26.2", "alpha", "beta", "gamma"));
+            LogFixtures.modernLog("26.2", "alpha", "beta", "gamma"));
         LogFixtures.writeGzipped(logs, "2026-08-25-1.log.gz",
-                LogFixtures.modernLog("26.2", "delta", "needle in here", "epsilon"));
+            LogFixtures.modernLog("26.2", "delta", "needle in here", "epsilon"));
         LogFixtures.writePlain(logs, "debug.log", LogFixtures.legacyLog("zeta", "another needle"));
         return tempDir.resolve("instance");
     }
@@ -64,37 +57,37 @@ class ImportProgressTest {
         assertNull(last.current());
 
         Set<Path> seenFiles = updates.stream()
-                .map(ImportProgress::current)
-                .filter(LogSource.File.class::isInstance)
-                .map(source -> ((LogSource.File) source).path())
-                .collect(Collectors.toSet());
+            .map(ImportProgress::current)
+            .filter(LogSource.File.class::isInstance)
+            .map(source -> ((LogSource.File) source).path())
+            .collect(Collectors.toSet());
         assertEquals(Set.of(
-                root.resolve("logs/2026-08-24-1.log.gz").toAbsolutePath().normalize(),
-                root.resolve("logs/2026-08-25-1.log.gz").toAbsolutePath().normalize(),
-                root.resolve("logs/debug.log").toAbsolutePath().normalize()), seenFiles);
+            root.resolve("logs/2026-08-24-1.log.gz").toAbsolutePath().normalize(),
+            root.resolve("logs/2026-08-25-1.log.gz").toAbsolutePath().normalize(),
+            root.resolve("logs/debug.log").toAbsolutePath().normalize()), seenFiles);
 
         assertTrue(updates.stream().map(ImportProgress::current).filter(Objects::nonNull)
-                .noneMatch(LogSource.Archive.class::isInstance));
+            .noneMatch(LogSource.Archive.class::isInstance));
         assertTrue(updates.stream().allMatch(progress -> progress.completedFiles() <= progress.discoveredFiles()));
     }
 
     @Test
     void reportsTheArchiveBeingReadAndTheLogInsideIt() throws IOException {
         Path archive = LogFixtures.writeZip(tempDir.resolve("backup.zip"), new LinkedHashMap<>(Map.of(
-                "logs/2026-01-02-1.log.gz", LogFixtures.modernLog("1.21.8", "in archive"))));
+            "logs/2026-01-02-1.log.gz", LogFixtures.modernLog("1.21.8", "in archive"))));
         Path absoluteArchive = archive.toAbsolutePath().normalize();
         List<ImportProgress> updates = new CopyOnWriteArrayList<>();
 
         store.importArchive(archive, updates::add);
 
         assertTrue(updates.stream().map(ImportProgress::current)
-                .anyMatch(source -> source instanceof LogSource.Archive a
-                        && a.path().equals(absoluteArchive)
-                        && a.entryPath().isEmpty()));
+            .anyMatch(source -> source instanceof LogSource.Archive a
+                && a.path().equals(absoluteArchive)
+                && a.entryPath().isEmpty()));
         assertTrue(updates.stream().map(ImportProgress::current)
-                .anyMatch(source -> source instanceof LogSource.Archive a
-                        && a.path().equals(absoluteArchive)
-                        && a.entryPath().equals("logs/2026-01-02-1.log.gz")));
+            .anyMatch(source -> source instanceof LogSource.Archive a
+                && a.path().equals(absoluteArchive)
+                && a.entryPath().equals("logs/2026-01-02-1.log.gz")));
 
         ImportProgress last = updates.getLast();
         assertTrue(last.discoveryComplete());
@@ -118,32 +111,32 @@ class ImportProgressTest {
         store.importArchive(outer, updates::add);
 
         assertTrue(updates.stream().map(ImportProgress::current)
-                .anyMatch(source -> source instanceof LogSource.Archive a
-                        && a.path().equals(absoluteOuter)
-                        && a.entryPath().equals("instances/inner.zip")));
+            .anyMatch(source -> source instanceof LogSource.Archive a
+                && a.path().equals(absoluteOuter)
+                && a.entryPath().equals("instances/inner.zip")));
         assertTrue(updates.stream().map(ImportProgress::current)
-                .anyMatch(source -> source instanceof LogSource.Archive a
-                        && a.path().equals(absoluteOuter)
-                        && a.entryPath().equals("instances/inner.zip!/logs/2026-02-03-1.log")));
+            .anyMatch(source -> source instanceof LogSource.Archive a
+                && a.path().equals(absoluteOuter)
+                && a.entryPath().equals("instances/inner.zip!/logs/2026-02-03-1.log")));
     }
 
     @Test
     void directoryImportReportsArchivesFoundOnTheWay() throws IOException {
         Path archive = LogFixtures.writeZip(tempDir.resolve("instance/backup.zip"), new LinkedHashMap<>(Map.of(
-                "logs/2026-01-02-1.log.gz", LogFixtures.modernLog("1.21.8", "from nested zip"))));
+            "logs/2026-01-02-1.log.gz", LogFixtures.modernLog("1.21.8", "from nested zip"))));
         Path absoluteArchive = archive.toAbsolutePath().normalize();
         List<ImportProgress> updates = new CopyOnWriteArrayList<>();
 
         store.importDirectory(tempDir, updates::add);
 
         assertTrue(updates.stream().map(ImportProgress::current)
-                .anyMatch(source -> source instanceof LogSource.Archive a
-                        && a.path().equals(absoluteArchive)
-                        && a.entryPath().isEmpty()));
+            .anyMatch(source -> source instanceof LogSource.Archive a
+                && a.path().equals(absoluteArchive)
+                && a.entryPath().isEmpty()));
         assertTrue(updates.stream().map(ImportProgress::current)
-                .anyMatch(source -> source instanceof LogSource.Archive a
-                        && a.path().equals(absoluteArchive)
-                        && a.entryPath().equals("logs/2026-01-02-1.log.gz")));
+            .anyMatch(source -> source instanceof LogSource.Archive a
+                && a.path().equals(absoluteArchive)
+                && a.entryPath().equals("logs/2026-01-02-1.log.gz")));
     }
 
     @Test
@@ -153,7 +146,7 @@ class ImportProgressTest {
         List<ImportProgress> updates = new CopyOnWriteArrayList<>();
 
         ImportResult result = store.importDirectory(root,
-                ImportOptions.defaults().withSkipAlreadyImported(true), updates::add);
+            ImportOptions.defaults().withSkipAlreadyImported(true), updates::add);
 
         assertEquals(3, result.skippedFiles());
         ImportProgress last = updates.getLast();
@@ -165,9 +158,9 @@ class ImportProgressTest {
     @Test
     void emptyFilesCountAsCompletedProgress() throws IOException {
         LogFixtures.writePlain(tempDir.resolve("logs"), "2026-04-02-1.log",
-                "[10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3\n"
-                    + "[10:00:05] [Render thread/INFO]: Reloading ResourceManager: vanilla, fabric\n"
-                    + "[10:00:10] [Render thread/INFO]: done\n");
+            "[10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3\n"
+                + "[10:00:05] [Render thread/INFO]: Reloading ResourceManager: vanilla, fabric\n"
+                + "[10:00:10] [Render thread/INFO]: done\n");
         List<ImportProgress> updates = new CopyOnWriteArrayList<>();
 
         ImportResult result = store.importDirectory(tempDir, updates::add);
@@ -191,9 +184,9 @@ class ImportProgressTest {
         store.importArchive(broken, updates::add);
 
         assertTrue(updates.stream().map(ImportProgress::current)
-                .anyMatch(source -> source instanceof LogSource.Archive a
-                        && a.path().equals(absolute)
-                        && a.entryPath().isEmpty()));
+            .anyMatch(source -> source instanceof LogSource.Archive a
+                && a.path().equals(absolute)
+                && a.entryPath().isEmpty()));
         ImportProgress last = updates.getLast();
         assertTrue(last.discoveryComplete());
         assertEquals(0, last.discoveredFiles());
@@ -205,12 +198,12 @@ class ImportProgressTest {
         Path logs = tempDir.resolve("logs");
         for (int day = 1; day <= 28; day++) {
             LogFixtures.writeGzipped(logs, String.format("2026-05-%02d-1.log.gz", day),
-                    LogFixtures.modernLog("26.2", "day " + day + " message", "filler"));
+                LogFixtures.modernLog("26.2", "day " + day + " message", "filler"));
         }
         List<ImportProgress> updates = new CopyOnWriteArrayList<>();
 
         ImportResult result = store.importDirectory(tempDir, ImportOptions.defaults().withParallelism(8),
-                updates::add);
+            updates::add);
 
         assertEquals(28, result.importedFiles());
         for (ImportProgress progress : updates) {

@@ -1,10 +1,7 @@
 package me.wolfii.allthelogs.client.ui.screen;
 
 import io.wispforest.owo.ui.base.BaseOwoScreen;
-import io.wispforest.owo.ui.component.CheckboxComponent;
-import io.wispforest.owo.ui.component.LabelComponent;
-import io.wispforest.owo.ui.component.TextBoxComponent;
-import io.wispforest.owo.ui.component.UIComponents;
+import io.wispforest.owo.ui.component.*;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.ScrollContainer;
 import io.wispforest.owo.ui.container.StackLayout;
@@ -82,16 +79,15 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
         pathBox.setMaxLength(1024);
         form.child(pathBox);
 
-        FlowLayout pathRow = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
+        FlowLayout pathRow = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
         pathRow.gap(8).verticalAlignment(VerticalAlignment.CENTER);
         pathRow.child(UIComponents.button(Component.translatable("allthelogs.import.from_folder"),
             button -> NativeFilePicker.pickFolder(currentPath(), this::setFolder)));
         pathRow.child(UIComponents.button(Component.translatable("allthelogs.import.from_archive"),
             button -> NativeFilePicker.pickArchive(currentPath(), this::setPath)));
-        form.child(pathRow);
-
         commonLocations = new CommonLocationMenu(root, () -> this.width, () -> this.height, this::applyLocation);
-        form.child(commonLocations.row());
+        pathRow.child(commonLocations.button());
+        form.child(pathRow);
 
         LabelComponent dropHint = UIComponents.label(Component.translatable("allthelogs.import.drop_hint"));
         dropHint.color(Color.ofRgb(0xA0A0A0));
@@ -110,12 +106,18 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
         status = UIComponents.label(Component.empty());
         FlowLayout actions = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
         actions.gap(8).verticalAlignment(VerticalAlignment.CENTER);
-        actions.child(UIComponents.button(Component.translatable("allthelogs.import.start"), button -> startImport()));
+        actions.child(paddedButton(Component.translatable("allthelogs.import.start"), button -> startImport()));
         actions.child(status.horizontalSizing(Sizing.expand()));
-        actions.child(UIComponents.button(Component.translatable("allthelogs.done"),
+        actions.child(paddedButton(Component.translatable("allthelogs.done"),
             button -> Minecraft.getInstance().gui.setScreen(parent)));
         content.child(actions);
         root.child(content);
+    }
+
+    private ButtonComponent paddedButton(Component label, Consumer<ButtonComponent> onPress) {
+        ButtonComponent button = UIComponents.button(label, onPress);
+        button.horizontalSizing(Sizing.fixed(Math.max(40, this.font.width(label) + 32)));
+        return button;
     }
 
     private FlowLayout buildAdvanced() {

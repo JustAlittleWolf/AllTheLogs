@@ -12,7 +12,6 @@ import me.wolfii.allthelogs.client.AllTheLogsClient;
 import me.wolfii.allthelogs.client.ui.text.ImportProgressText;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
 import me.wolfii.allthelogs.data.ImportOptions;
-import me.wolfii.allthelogs.data.ImportPhase;
 import me.wolfii.allthelogs.data.ImportProgress;
 import me.wolfii.allthelogs.data.ImportResult;
 import net.minecraft.client.Minecraft;

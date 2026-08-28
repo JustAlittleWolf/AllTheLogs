@@ -1,14 +1,9 @@
 package me.wolfii.allthelogs.client.list;
 
-import me.wolfii.allthelogs.data.ChatQuery;
+import me.wolfii.allthelogs.api.ChatQuery;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Operations on a page of display rows: counting hits, finding rows again after a reload, and stitching a
@@ -25,6 +20,19 @@ public final class DisplayRows {
         int count = 0;
         for (DisplayRow row : rows) {
             if (row.match()) count++;
+        }
+        return count;
+    }
+
+    /**
+     * How many search hits in {@code rows} share {@code time}. Used as {@link ChatQuery#withSkip(long)}
+     * when paging from a timestamp that several matches occupy.
+     */
+    public static int matchCountAt(List<DisplayRow> rows, LocalDateTime time) {
+        if (rows == null || time == null) return 0;
+        int count = 0;
+        for (DisplayRow row : rows) {
+            if (row.match() && time.equals(row.entry().timestamp())) count++;
         }
         return count;
     }
@@ -113,8 +121,8 @@ public final class DisplayRows {
         List<DisplayRow> merged = new ArrayList<>(mergeUnique(existing, extra));
         Comparator<DisplayRow> order = Comparator
             .comparing((DisplayRow row) -> row.entry().timestamp())
-            .thenComparingInt(DisplayRow::lineIndex)
-            .thenComparing(row -> String.valueOf(row.chatLog().source()));
+            .thenComparing(row -> String.valueOf(row.chatLog().source()))
+            .thenComparingInt(DisplayRow::lineIndex);
         if (sort == ChatQuery.Sort.DESCENDING) {
             order = order.reversed();
         }

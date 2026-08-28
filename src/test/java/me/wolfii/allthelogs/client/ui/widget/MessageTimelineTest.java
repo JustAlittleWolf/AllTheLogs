@@ -1,14 +1,12 @@
 package me.wolfii.allthelogs.client.ui.widget;
 
-import me.wolfii.allthelogs.client.timeline.ScrubJump;
 import me.wolfii.allthelogs.client.list.MessageListLayout;
+import me.wolfii.allthelogs.client.timeline.ScrubJump;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class MessageTimelineTest {
     @Test
