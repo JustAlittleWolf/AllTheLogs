@@ -63,6 +63,12 @@ tasks.processResources {
     }
 }
 
+tasks.withType<Jar>().configureEach {
+    from(rootDir) {
+        include("LICENSE")
+    }
+}
+
 tasks.withType<JavaCompile>().configureEach {
     options.release = 25
     options.encoding = "UTF-8"
