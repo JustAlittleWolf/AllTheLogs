@@ -27,6 +27,13 @@ class MessageListLayoutTest {
     void extraContextIsTenLines() {
         assertEquals(10, MessageListLayout.EXPAND_LINES);
         assertEquals(10, MessageListLayout.extraContextLines());
+        assertEquals(10, MessageListLayout.extraContextLines(false));
+    }
+
+    @Test
+    void shiftClickLoadsAHundredLines() {
+        assertEquals(100, MessageListLayout.SHIFT_EXPAND_LINES);
+        assertEquals(100, MessageListLayout.extraContextLines(true));
     }
 
     @Test

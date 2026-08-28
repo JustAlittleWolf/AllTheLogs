@@ -231,9 +231,8 @@ final class LogBrowserQueries {
     /**
      * Loads more context from a separator caret, on the side that was clicked.
      */
-    private void expandAround(DisplayRow row, TimelineEdge side) {
+    private void expandAround(DisplayRow row, TimelineEdge side, int extra) {
         if (list == null) return;
-        int extra = MessageListLayout.extraContextLines();
         boolean older = MessageListLayout.expandOlderMessages(
             side == TimelineEdge.BEFORE, filter.sort() == ChatQuery.Sort.ASCENDING);
         int before = older ? extra + 1 : 0;
