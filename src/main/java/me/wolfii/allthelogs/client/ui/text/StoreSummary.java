@@ -20,6 +20,7 @@ public final class StoreSummary {
             return List.of(muted(Component.translatable("allthelogs.meta.empty")));
         }
         List<Component> lines = new ArrayList<>();
+        lines.add(labeled("allthelogs.meta.hint"));
         if (metadata.firstLogDate() != null && metadata.lastLogDate() != null) {
             lines.add(labeled("allthelogs.meta.range",
                 value(metadata.firstLogDate().toString()),
