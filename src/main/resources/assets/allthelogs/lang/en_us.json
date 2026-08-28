@@ -74,8 +74,8 @@
   "allthelogs.import.progress.cancelling": "Cancelling...",
   "allthelogs.import.progress.cancelled": "Cancelled after %s files, %s entries",
   "allthelogs.screen.duckdb": "DuckDB driver",
-  "allthelogs.duckdb.failed": "Couldn't load DuckDB",
-  "allthelogs.duckdb.failed.detail": "AllTheLogs needs the DuckDB driver for this computer. %s",
+  "allthelogs.duckdb.failed": "Failed to load DuckDB",
+  "allthelogs.duckdb.failed.detail": "AllTheLogs needs to download a database driver, make sure you are connected to the internet.\nError: %s",
   "allthelogs.duckdb.retry": "Try again",
   "allthelogs.duckdb.quit": "Close game"
 }

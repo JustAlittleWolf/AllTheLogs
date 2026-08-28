@@ -6,13 +6,7 @@ import io.wispforest.owo.ui.component.LabelComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
-import io.wispforest.owo.ui.core.Color;
-import io.wispforest.owo.ui.core.HorizontalAlignment;
-import io.wispforest.owo.ui.core.Insets;
-import io.wispforest.owo.ui.core.OwoUIAdapter;
-import io.wispforest.owo.ui.core.Sizing;
-import io.wispforest.owo.ui.core.Surface;
-import io.wispforest.owo.ui.core.VerticalAlignment;
+import io.wispforest.owo.ui.core.*;
 import me.wolfii.allthelogs.client.AllTheLogsClient;
 import me.wolfii.allthelogs.client.DuckDbRuntime;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
@@ -25,8 +19,11 @@ import org.jetbrains.annotations.NotNull;
  * Shown instead of the title screen only when the DuckDB native library could not be loaded.
  */
 public final class DuckDbSetupScreen extends BaseOwoScreen<FlowLayout> {
+    private static final int RETRY_THROTTLE_MS = 1000;
+
     private LabelComponent details;
     private ButtonComponent retry;
+    private long retryLockoutUntilMs;
 
     public DuckDbSetupScreen() {
         super(Component.translatable("allthelogs.screen.duckdb"));
@@ -55,12 +52,13 @@ public final class DuckDbSetupScreen extends BaseOwoScreen<FlowLayout> {
 
         details = UIComponents.label(failureDetail());
         details.color(Color.ofRgb(0xA0A0A0));
-        details.maxWidth(Math.max(160, this.width - 96));
+        details.sizing(Sizing.fill(100), Sizing.content());
         card.child(details);
 
         FlowLayout actions = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
         actions.gap(8).verticalAlignment(VerticalAlignment.CENTER);
         retry = UIComponents.button(Component.translatable("allthelogs.duckdb.retry"), button -> retry());
+        retry.active(DuckDbRuntime.hasFailed() && System.currentTimeMillis() >= retryLockoutUntilMs);
         actions.child(retry);
         actions.child(UIContainers.horizontalFlow(Sizing.expand(), Sizing.content()));
         actions.child(UIComponents.button(Component.translatable("allthelogs.duckdb.quit"),
@@ -68,6 +66,12 @@ public final class DuckDbSetupScreen extends BaseOwoScreen<FlowLayout> {
         card.child(actions);
 
         root.child(card);
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        refresh();
     }
 
     public void refresh() {
@@ -80,12 +84,16 @@ public final class DuckDbSetupScreen extends BaseOwoScreen<FlowLayout> {
             details.text(failureDetail());
         }
         if (retry != null) {
-            retry.active(DuckDbRuntime.hasFailed());
+            boolean isLockedOut = System.currentTimeMillis() < retryLockoutUntilMs;
+            retry.active(DuckDbRuntime.hasFailed() && !isLockedOut);
         }
     }
 
     private void retry() {
-        retry.active(false);
+        retryLockoutUntilMs = System.currentTimeMillis() + DuckDbSetupScreen.RETRY_THROTTLE_MS;
+        if (retry != null) {
+            retry.active(false);
+        }
         DuckDbRuntime.ensure();
     }
 
