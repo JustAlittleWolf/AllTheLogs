@@ -16,21 +16,17 @@ import io.wispforest.owo.ui.core.VerticalAlignment;
 import me.wolfii.allthelogs.client.AllTheLogsClient;
 import me.wolfii.allthelogs.client.DuckDbRuntime;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
-import me.wolfii.allthelogs.data.duckdb.DuckDbJdbcInstaller.Progress;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Shown instead of the title screen until the DuckDB native library is available.
- * On failure the user can retry the download or quit.
+ * Shown instead of the title screen only when the DuckDB native library could not be loaded.
  */
 public final class DuckDbSetupScreen extends BaseOwoScreen<FlowLayout> {
-    private LabelComponent heading;
     private LabelComponent details;
     private ButtonComponent retry;
-    private Progress lastRendered;
 
     public DuckDbSetupScreen() {
         super(Component.translatable("allthelogs.screen.duckdb"));
@@ -55,10 +51,9 @@ public final class DuckDbSetupScreen extends BaseOwoScreen<FlowLayout> {
             .surface(PanelSurfaces.card())
             .horizontalAlignment(HorizontalAlignment.LEFT);
 
-        heading = UIComponents.label(Component.translatable("allthelogs.duckdb.loading"));
-        card.child(heading);
+        card.child(UIComponents.label(Component.translatable("allthelogs.duckdb.failed")));
 
-        details = UIComponents.label(Component.empty());
+        details = UIComponents.label(failureDetail());
         details.color(Color.ofRgb(0xA0A0A0));
         details.maxWidth(Math.max(160, this.width - 96));
         card.child(details);
@@ -66,7 +61,6 @@ public final class DuckDbSetupScreen extends BaseOwoScreen<FlowLayout> {
         FlowLayout actions = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
         actions.gap(8).verticalAlignment(VerticalAlignment.CENTER);
         retry = UIComponents.button(Component.translatable("allthelogs.duckdb.retry"), button -> retry());
-        retry.active(false);
         actions.child(retry);
         actions.child(UIContainers.horizontalFlow(Sizing.expand(), Sizing.content()));
         actions.child(UIComponents.button(Component.translatable("allthelogs.duckdb.quit"),
@@ -74,60 +68,30 @@ public final class DuckDbSetupScreen extends BaseOwoScreen<FlowLayout> {
         card.child(actions);
 
         root.child(card);
-        apply(DuckDbRuntime.progress());
-        DuckDbRuntime.ensure().whenComplete((ignored, error) ->
-            Minecraft.getInstance().execute(() -> apply(DuckDbRuntime.progress())));
-    }
-
-    @Override
-    protected void init() {
-        super.init();
-        apply(DuckDbRuntime.progress());
     }
 
     public void refresh() {
-        apply(DuckDbRuntime.progress());
+        if (DuckDbRuntime.isReady()) {
+            AllTheLogsClient.onDriverReady();
+            Minecraft.getInstance().gui.setScreen(new TitleScreen());
+            return;
+        }
+        if (details != null) {
+            details.text(failureDetail());
+        }
+        if (retry != null) {
+            retry.active(DuckDbRuntime.hasFailed());
+        }
     }
 
     private void retry() {
         retry.active(false);
-        DuckDbRuntime.ensure().whenComplete((ignored, error) ->
-            Minecraft.getInstance().execute(() -> apply(DuckDbRuntime.progress())));
+        DuckDbRuntime.ensure();
     }
 
-    private void apply(Progress snapshot) {
-        if (heading == null || snapshot.equals(lastRendered)) return;
-        lastRendered = snapshot;
-        switch (snapshot.stage()) {
-            case READY -> {
-                AllTheLogsClient.onDriverReady();
-                Minecraft.getInstance().gui.setScreen(new TitleScreen());
-            }
-            case FAILED -> {
-                heading.text(Component.translatable("allthelogs.duckdb.failed"));
-                details.text(Component.translatable("allthelogs.duckdb.failed.detail",
-                    snapshot.error() == null ? "" : snapshot.error()));
-                retry.active(true);
-            }
-            case DOWNLOADING -> {
-                heading.text(Component.translatable("allthelogs.duckdb.downloading"));
-                details.text(Component.translatable("allthelogs.duckdb.downloading.detail",
-                    snapshot.classifier(), Integer.toString(snapshot.percent())));
-                retry.active(false);
-            }
-            case VERIFYING -> {
-                heading.text(Component.translatable("allthelogs.duckdb.verifying"));
-                details.text(Component.translatable("allthelogs.duckdb.verifying.detail",
-                    snapshot.classifier()));
-                retry.active(false);
-            }
-            case LOADING -> {
-                heading.text(Component.translatable("allthelogs.duckdb.loading"));
-                details.text(Component.translatable("allthelogs.duckdb.loading.detail",
-                    snapshot.classifier()));
-                retry.active(false);
-            }
-        }
+    private static Component failureDetail() {
+        String error = DuckDbRuntime.progress().error();
+        return Component.translatable("allthelogs.duckdb.failed.detail", error == null ? "" : error);
     }
 
     @Override

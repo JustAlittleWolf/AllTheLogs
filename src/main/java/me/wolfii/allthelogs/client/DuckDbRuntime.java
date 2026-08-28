@@ -31,6 +31,10 @@ public final class DuckDbRuntime {
         return PROGRESS.get().stage() == Progress.Stage.FAILED;
     }
 
+    public static boolean isSettled() {
+        return isReady() || hasFailed();
+    }
+
     public static Progress progress() {
         return PROGRESS.get();
     }
@@ -67,11 +71,18 @@ public final class DuckDbRuntime {
 
     private static void setProgress(Progress snapshot) {
         PROGRESS.set(snapshot);
+        if (snapshot.stage() != Progress.Stage.READY && snapshot.stage() != Progress.Stage.FAILED) {
+            return;
+        }
         Minecraft client = Minecraft.getInstance();
         if (client == null) return;
         client.execute(() -> {
             if (client.gui.screen() instanceof DuckDbSetupScreen screen) {
                 screen.refresh();
+            } else if (snapshot.stage() == Progress.Stage.FAILED
+                && client.gui.overlay() == null
+                && !(client.gui.screen() instanceof DuckDbSetupScreen)) {
+                client.gui.setScreen(new DuckDbSetupScreen());
             }
         });
     }

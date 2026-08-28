@@ -22,7 +22,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Blocks the title screen until DuckDB is available, then adds the AllTheLogs icon to the icon row.
+ * Holds the title menu until DuckDB is ready. On failure the warning screen replaces it.
  */
 @Mixin(TitleScreen.class)
 public abstract class TitleScreenMixin {
@@ -32,17 +32,16 @@ public abstract class TitleScreenMixin {
     @Inject(method = "init", at = @At("HEAD"), cancellable = true)
     private void allthelogs$requireDuckDb(CallbackInfo ci) {
         if (DuckDbRuntime.isReady()) return;
+        ci.cancel();
+        if (!DuckDbRuntime.hasFailed()) return;
         Minecraft client = Minecraft.getInstance();
         client.execute(() -> {
             if (DuckDbRuntime.isReady()) {
                 client.gui.setScreen(new TitleScreen());
-                return;
-            }
-            if (!(client.gui.screen() instanceof DuckDbSetupScreen)) {
+            } else if (DuckDbRuntime.hasFailed() && !(client.gui.screen() instanceof DuckDbSetupScreen)) {
                 client.gui.setScreen(new DuckDbSetupScreen());
             }
         });
-        ci.cancel();
     }
 
     @Definition(id = "numberOfButtons", local = @Local(type = int.class, name = "numberOfButtons"))
