@@ -61,6 +61,8 @@ class MessageListLayoutTest {
         assertEquals(MessageListLayout.ExpandDirection.DOWN,
             MessageListLayout.expandAtLocalX(separator, 4, 4 + MessageListLayout.CARET_WIDTH + MessageListLayout.CARET_GAP));
         assertEquals(null, MessageListLayout.expandAtLocalX(separator, 4, 40));
+        assertEquals(MessageListLayout.CARET_WIDTH * 2 + MessageListLayout.CARET_GAP,
+            MessageListLayout.caretBandWidth(separator));
     }
 
     @Test
@@ -156,6 +158,19 @@ class MessageListLayoutTest {
         assertFalse(beforeNextDate.expandUp());
         assertTrue(beforeNextDate.expandDown());
         assertEquals(2, beforeNextDate.afterRow());
+    }
+
+    @Test
+    void adjacentLinesDoNotKeepASeparatorWhenExpandFlagsAreStale() {
+        LocalDateTime time = LocalDateTime.of(2026, 8, 26, 10, 0);
+        ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), time.toLocalDate(), "26.2", time, time);
+        DisplayRow first = new DisplayRow(new ChatEntry(log, time, 10, "a"), true, List.of())
+            .withExpand(false, true);
+        DisplayRow next = new DisplayRow(new ChatEntry(log, time.plusSeconds(1), 11, "b"), true, List.of())
+            .withExpand(true, false);
+        MessageListLayout layout = MessageListLayout.of(List.of(first, next), 5);
+        assertEquals(0, layout.separators().size());
+        assertEquals(layout.rowY(0) + MessageListLayout.ROW_HEIGHT, layout.rowY(1));
     }
 
     private static MessageListLayout.RowRangeWidth charWidths() {

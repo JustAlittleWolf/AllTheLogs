@@ -65,6 +65,36 @@ class ContextPeeksTest {
     }
 
     @Test
+    void mergeAfterExpandClearsTheFacingCaretOnTheNeighborWhenTheGapCloses() {
+        ChatLog log = log("a.log");
+        DisplayRow above = row(log, 0, "above", true).withExpand(false, true);
+        DisplayRow below = row(log, 12, "below", true).withExpand(true, false);
+        List<DisplayRow> filled = new ArrayList<>();
+        for (int line = 0; line <= 12; line++) {
+            filled.add(row(log, line, "m" + line, line == 0 || line == 12));
+        }
+        List<DisplayRow> merged = ContextPeeks.mergeAfterExpand(List.of(above, below), filled, below, true,
+            ChatQuery.Sort.ASCENDING);
+        assertEquals(13, merged.size());
+        assertFalse(merged.getFirst().expandDown());
+        assertFalse(merged.getLast().expandUp());
+        assertEquals(0, MessageListLayout.of(merged, 4).separators().size());
+    }
+
+    @Test
+    void mergeAfterExpandKeepsFacingCaretsWhenAGapRemains() {
+        ChatLog log = log("a.log");
+        DisplayRow above = row(log, 0, "above", true).withExpand(false, true);
+        DisplayRow below = row(log, 20, "below", true).withExpand(true, false);
+        DisplayRow extra = row(log, 19, "near-below", false).withExpand(true, false);
+        List<DisplayRow> merged = ContextPeeks.mergeAfterExpand(List.of(above, below),
+            List.of(extra, below), below, true, ChatQuery.Sort.ASCENDING);
+        assertEquals(3, merged.size());
+        assertTrue(merged.getFirst().expandDown());
+        assertTrue(merged.get(1).expandUp());
+    }
+
+    @Test
     void mergeAfterExpandClearsTheUsedCaretOnTheAnchor() {
         ChatLog log = log("a.log");
         DisplayRow anchor = row(log, 10, "hit", true).withExpand(false, true);
