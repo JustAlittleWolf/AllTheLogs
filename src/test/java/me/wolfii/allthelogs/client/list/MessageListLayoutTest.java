@@ -10,11 +10,19 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class MessageListLayoutTest {
+    private static MessageListLayout.RowRangeWidth charWidths() {
+        return (row, from, to) -> to - from;
+    }
+
+    private static DisplayRow row(String file, int line, LocalDateTime time) {
+        ChatLog log = new ChatLog(new LogSource.File(Path.of(file)), time.toLocalDate(), "26.2", time, time);
+        ChatEntry entry = new ChatEntry(log, time, line, "msg-" + line);
+        return new DisplayRow(entry, true, List.of());
+    }
+
     @Test
     void extraContextIsTenLines() {
         assertEquals(10, MessageListLayout.EXPAND_LINES);
@@ -171,15 +179,5 @@ class MessageListLayoutTest {
         MessageListLayout layout = MessageListLayout.of(List.of(first, next), 5);
         assertEquals(0, layout.separators().size());
         assertEquals(layout.rowY(0) + MessageListLayout.ROW_HEIGHT, layout.rowY(1));
-    }
-
-    private static MessageListLayout.RowRangeWidth charWidths() {
-        return (row, from, to) -> to - from;
-    }
-
-    private static DisplayRow row(String file, int line, LocalDateTime time) {
-        ChatLog log = new ChatLog(new LogSource.File(Path.of(file)), time.toLocalDate(), "26.2", time, time);
-        ChatEntry entry = new ChatEntry(log, time, line, "msg-" + line);
-        return new DisplayRow(entry, true, List.of());
     }
 }

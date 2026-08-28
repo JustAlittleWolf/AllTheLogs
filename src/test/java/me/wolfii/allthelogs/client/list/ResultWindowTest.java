@@ -9,11 +9,23 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class ResultWindowTest {
+    private static DisplayRow row(String file, int line) {
+        return rowAt(LocalDateTime.of(2026, 8, 26, 10, 0).plusSeconds(line), line, file);
+    }
+
+    private static DisplayRow rowAt(LocalDateTime time, int line) {
+        return rowAt(time, line, "a.log");
+    }
+
+    private static DisplayRow rowAt(LocalDateTime time, int line, String file) {
+        ChatLog log = new ChatLog(new LogSource.File(Path.of(file)), time.toLocalDate(), "26.2", time, time);
+        ChatEntry entry = new ChatEntry(log, time, line, "msg-" + line);
+        return new DisplayRow(entry, true, List.of());
+    }
+
     @Test
     void replacingThePageKeepsTheAnchorRowAtTheSameScreenPosition() {
         double scrollY = 10;
@@ -111,19 +123,5 @@ class ResultWindowTest {
         List<DisplayRow> merged = DisplayRows.mergeSorted(List.of(second), List.of(first),
             me.wolfii.allthelogs.api.ChatQuery.Sort.ASCENDING);
         assertEquals(List.of(1, 4), merged.stream().map(DisplayRow::lineIndex).toList());
-    }
-
-    private static DisplayRow row(String file, int line) {
-        return rowAt(LocalDateTime.of(2026, 8, 26, 10, 0).plusSeconds(line), line, file);
-    }
-
-    private static DisplayRow rowAt(LocalDateTime time, int line) {
-        return rowAt(time, line, "a.log");
-    }
-
-    private static DisplayRow rowAt(LocalDateTime time, int line, String file) {
-        ChatLog log = new ChatLog(new LogSource.File(Path.of(file)), time.toLocalDate(), "26.2", time, time);
-        ChatEntry entry = new ChatEntry(log, time, line, "msg-" + line);
-        return new DisplayRow(entry, true, List.of());
     }
 }

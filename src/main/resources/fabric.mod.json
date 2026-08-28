@@ -1,37 +1,37 @@
 {
-	"schemaVersion": 1,
-	"id": "allthelogs",
-	"version": "${version}",
-	"name": "AllTheLogs",
-	"description": "Search, import, and browse Minecraft chat logs from this instance and elsewhere.",
-	"authors": [
-		"JustAlittleWolf"
-	],
-	"contact": {
-		"sources": "https://github.com/JustAlittleWolf/AllTheLogs"
-	},
-	"license": "MIT",
-    "icon": "assets/allthelogs/icon.png",
-	"environment": "client",
-	"mixins": [
-		"allthelogs.mixins.json"
-	],
-	"entrypoints": {
-		"client": [
-			"me.wolfii.allthelogs.client.AllTheLogsClient"
-		],
-		"modmenu": [
-			"me.wolfii.allthelogs.client.AllTheLogsModMenu"
-		]
-	},
-	"depends": {
-		"fabricloader": ">=0.19.3",
-		"minecraft": "~26.2",
-		"java": ">=25",
-		"fabric-api": "*",
-		"owo": "*"
-	},
-	"suggests": {
-		"modmenu": "*"
-	}
+  "schemaVersion": 1,
+  "id": "allthelogs",
+  "version": "${version}",
+  "name": "AllTheLogs",
+  "description": "Search, import, and browse Minecraft chat logs from this instance and elsewhere.",
+  "authors": [
+    "JustAlittleWolf"
+  ],
+  "contact": {
+    "sources": "https://github.com/JustAlittleWolf/AllTheLogs"
+  },
+  "license": "MIT",
+  "icon": "assets/allthelogs/icon.png",
+  "environment": "client",
+  "mixins": [
+    "allthelogs.mixins.json"
+  ],
+  "entrypoints": {
+    "client": [
+      "me.wolfii.allthelogs.client.AllTheLogsClient"
+    ],
+    "modmenu": [
+      "me.wolfii.allthelogs.client.AllTheLogsModMenu"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "~26.2",
+    "java": ">=25",
+    "fabric-api": "*",
+    "owo": "*"
+  },
+  "suggests": {
+    "modmenu": "*"
+  }
 }

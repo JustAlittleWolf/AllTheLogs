@@ -3,9 +3,7 @@ package me.wolfii.allthelogs.data;
 import me.wolfii.allthelogs.data.importer.discover.Globs;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class GlobsTest {
     private static boolean matches(String glob, String path) {

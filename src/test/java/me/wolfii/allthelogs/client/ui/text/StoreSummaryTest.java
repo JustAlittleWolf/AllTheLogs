@@ -12,6 +12,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class StoreSummaryTest {
+    private static String key(Component component) {
+        return ((TranslatableContents) component.getContents()).getKey();
+    }
+
     @Test
     void formatBytesPicksTheSmallestFittingUnit() {
         assertEquals("512 B", StoreSummary.formatBytes(512));
@@ -52,9 +56,5 @@ class StoreSummaryTest {
         assertTrue(((Component) rangeArgs[0]).getStyle().getColor().getValue() != 0);
         Object[] sizeArgs = ((TranslatableContents) lines.getLast().getContents()).getArgs();
         assertEquals("2.0 KB", ((Component) sizeArgs[0]).getString());
-    }
-
-    private static String key(Component component) {
-        return ((TranslatableContents) component.getContents()).getKey();
     }
 }

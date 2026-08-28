@@ -13,10 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * End to end coverage of the advertised portable file: write a database, close it, open it again, and query.
@@ -32,9 +29,9 @@ class LogStorePersistenceTest {
     private Path instanceLogs() throws IOException {
         Path logs = tempDir.resolve("instance/logs");
         LogFixtures.writeGzipped(logs, "2026-08-24-1.log.gz",
-                LogFixtures.modernLog("26.2", "alpha", "beta", "gamma"));
+            LogFixtures.modernLog("26.2", "alpha", "beta", "gamma"));
         LogFixtures.writeGzipped(logs, "2026-08-25-1.log.gz",
-                LogFixtures.modernLog("26.2", "delta", "needle in here", "epsilon"));
+            LogFixtures.modernLog("26.2", "delta", "needle in here", "epsilon"));
         LogFixtures.writePlain(logs, "debug.log", LogFixtures.legacyLog("zeta", "another needle"));
         return tempDir.resolve("instance");
     }
@@ -64,22 +61,22 @@ class LogStorePersistenceTest {
             assertEquals(List.of("alpha", "gamma"), regex.stream().map(ChatEntry::message).toList());
 
             List<ChatEntry> range = store.findEntries(ChatQuery.all()
-                    .startingAt(LocalDateTime.of(2026, 8, 25, 0, 0))
-                    .upUntil(LocalDateTime.of(2026, 8, 26, 0, 0)));
+                .startingAt(LocalDateTime.of(2026, 8, 25, 0, 0))
+                .upUntil(LocalDateTime.of(2026, 8, 26, 0, 0)));
             assertEquals(List.of("delta", "needle in here", "epsilon"),
-                    range.stream().map(ChatEntry::message).toList());
+                range.stream().map(ChatEntry::message).toList());
 
             List<ChatEntry> combined = store.findEntries(ChatQuery.all()
-                    .withSubstring("needle")
-                    .startingAt(LocalDateTime.of(2026, 8, 25, 0, 0))
-                    .upUntil(LocalDateTime.of(2026, 8, 26, 0, 0)));
+                .withSubstring("needle")
+                .startingAt(LocalDateTime.of(2026, 8, 25, 0, 0))
+                .upUntil(LocalDateTime.of(2026, 8, 26, 0, 0)));
             assertEquals(List.of("needle in here"), combined.stream().map(ChatEntry::message).toList());
 
             List<ChatEntry> withContext = store.findEntries(ChatQuery.all()
-                    .withSubstring("needle in here")
-                    .withContextLines(1));
+                .withSubstring("needle in here")
+                .withContextLines(1));
             assertEquals(List.of("delta", "needle in here", "epsilon"),
-                    withContext.stream().map(ChatEntry::message).toList());
+                withContext.stream().map(ChatEntry::message).toList());
 
             ChatEntry needle = store.findEntries(ChatQuery.all().withSubstring("needle in here")).getFirst();
             LogSource.File source = assertInstanceOf(LogSource.File.class, needle.chatLog().source());
@@ -95,7 +92,7 @@ class LogStorePersistenceTest {
         Path database = database();
         Path first = tempDir.resolve("first");
         LogFixtures.writeGzipped(first.resolve("logs"), "2026-08-24-1.log.gz",
-                LogFixtures.modernLog("26.2", "first session", "shared later"));
+            LogFixtures.modernLog("26.2", "first session", "shared later"));
 
         try (LogStore store = LogStore.open(database)) {
             store.importDirectory(first);
@@ -103,7 +100,7 @@ class LogStorePersistenceTest {
 
         Path second = tempDir.resolve("second");
         LogFixtures.writeGzipped(second.resolve("logs"), "2026-08-25-1.log.gz",
-                LogFixtures.modernLog("26.2", "second session"));
+            LogFixtures.modernLog("26.2", "second session"));
 
         try (LogStore store = LogStore.open(database)) {
             ImportResult skipped = store.importDirectory(first, ImportOptions.defaults().withSkipAlreadyImported(true));
@@ -117,13 +114,13 @@ class LogStorePersistenceTest {
             assertEquals(3, store.allEntries().size());
             assertEquals(2, store.chatLogs().size());
             assertEquals(List.of("first session"),
-                    store.findEntries(ChatQuery.all().withSubstring("first session"))
-                            .stream().map(ChatEntry::message).toList());
+                store.findEntries(ChatQuery.all().withSubstring("first session"))
+                    .stream().map(ChatEntry::message).toList());
             assertEquals(List.of("second session"),
-                    store.findEntries(ChatQuery.all().withSubstring("second session"))
-                            .stream().map(ChatEntry::message).toList());
+                store.findEntries(ChatQuery.all().withSubstring("second session"))
+                    .stream().map(ChatEntry::message).toList());
             assertEquals(List.of("first session", "shared later", "second session"),
-                    store.allEntries().stream().map(ChatEntry::message).toList());
+                store.allEntries().stream().map(ChatEntry::message).toList());
         }
     }
 
@@ -150,10 +147,10 @@ class LogStorePersistenceTest {
             assertEquals(startedAt.plusSeconds(2), log.endTime());
 
             List<ChatEntry> withContext = store.findEntries(ChatQuery.all()
-                    .withSubstring("needle")
-                    .withContextLines(1));
+                .withSubstring("needle")
+                .withContextLines(1));
             assertEquals(List.of("before", "the needle", "after"),
-                    withContext.stream().map(ChatEntry::message).toList());
+                withContext.stream().map(ChatEntry::message).toList());
 
             // The previous session is stored, but it is not still active on a freshly opened store.
             assertThrows(LogDataException.class, () -> store.importSessionMessage("more"));
@@ -230,7 +227,7 @@ class LogStorePersistenceTest {
     void archiveImportsSurviveReopenAndRemainQueryable() throws IOException {
         Path database = database();
         Path archive = LogFixtures.writeZip(tempDir.resolve("backup.zip"), new LinkedHashMap<>(Map.of(
-                "logs/2026-01-02-1.log.gz", LogFixtures.modernLog("1.21.8", "in archive", "archive needle"))));
+            "logs/2026-01-02-1.log.gz", LogFixtures.modernLog("1.21.8", "in archive", "archive needle"))));
 
         try (LogStore store = LogStore.open(database)) {
             ImportResult result = store.importArchive(archive);
@@ -247,10 +244,10 @@ class LogStorePersistenceTest {
             assertEquals(LocalDate.of(2026, 1, 2), entry.chatLog().date());
 
             List<ChatEntry> withContext = store.findEntries(ChatQuery.all()
-                    .withSubstring("archive needle")
-                    .withContextLines(1));
+                .withSubstring("archive needle")
+                .withContextLines(1));
             assertEquals(List.of("in archive", "archive needle"),
-                    withContext.stream().map(ChatEntry::message).toList());
+                withContext.stream().map(ChatEntry::message).toList());
         }
     }
 
@@ -267,7 +264,7 @@ class LogStorePersistenceTest {
     void unicodeMessagesSurviveReopen() throws IOException {
         Path database = database();
         LogFixtures.writeGzipped(tempDir.resolve("logs"), "2026-08-24-1.log.gz",
-                LogFixtures.modernLog("26.2", "hello 世界", "café", "emoji \uD83C\uDFAE"));
+            LogFixtures.modernLog("26.2", "hello 世界", "café", "emoji \uD83C\uDFAE"));
 
         try (LogStore store = LogStore.open(database)) {
             store.importDirectory(tempDir);
@@ -277,7 +274,7 @@ class LogStorePersistenceTest {
             assertEquals("hello 世界", store.findEntries(ChatQuery.all().withSubstring("世界")).getFirst().message());
             assertEquals("café", store.findEntries(ChatQuery.all().withSubstring("café")).getFirst().message());
             assertEquals("emoji \uD83C\uDFAE",
-                    store.findEntries(ChatQuery.all().withSubstring("\uD83C\uDFAE")).getFirst().message());
+                store.findEntries(ChatQuery.all().withSubstring("\uD83C\uDFAE")).getFirst().message());
         }
     }
 

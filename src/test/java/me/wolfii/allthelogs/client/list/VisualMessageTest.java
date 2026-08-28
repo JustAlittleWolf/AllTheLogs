@@ -10,11 +10,13 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class VisualMessageTest {
+    private static String visual(String message, boolean interpretEscapes) {
+        return VisualMessage.prepare(message, null, interpretEscapes).text();
+    }
+
     @Test
     void trimsEachLineAndTurnsLiteralEscapesIntoBreaks() {
         assertEquals("hello\\n\nworld", visual("  hello \\n world  ", true));
@@ -67,9 +69,5 @@ class VisualMessageTest {
     void trimsLeadingAndTrailingNewlinesForDisplay() {
         assertEquals("hello", visual("\nhello\n", false));
         assertEquals("hello\\n\nworld", visual("\nhello\\nworld\n", true));
-    }
-
-    private static String visual(String message, boolean interpretEscapes) {
-        return VisualMessage.prepare(message, null, interpretEscapes).text();
     }
 }

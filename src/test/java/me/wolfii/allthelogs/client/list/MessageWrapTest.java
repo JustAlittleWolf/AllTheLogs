@@ -8,6 +8,22 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MessageWrapTest {
+    private static MessageWrap.RangeWidth chars(String text) {
+        return MessageWrap.substringWidths(text, String::length);
+    }
+
+    private static List<String> lines(String text, int maxWidth) {
+        return lines(text, maxWidth, chars(text));
+    }
+
+    private static List<String> lines(String text, int maxWidth, MessageWrap.RangeWidth widthOf) {
+        return MessageWrap.wrap(text, maxWidth, widthOf).stream().map(MessageWrap.Line::text).toList();
+    }
+
+    private static int lineCount(String text, int maxWidth) {
+        return MessageWrap.lineCount(text, maxWidth, chars(text));
+    }
+
     @Test
     void wrapsOnSpacesThenHardBreaksOversizedTokens() {
         assertEquals(List.of("hello world"), lines("hello world", 20));
@@ -89,21 +105,5 @@ class MessageWrapTest {
         assertEquals(text.length(), visits[0]);
         assertTrue(naiveVisits > visits[0] * 5,
             "naive glyph visits " + naiveVisits + " should dwarf cached " + visits[0]);
-    }
-
-    private static MessageWrap.RangeWidth chars(String text) {
-        return MessageWrap.substringWidths(text, String::length);
-    }
-
-    private static List<String> lines(String text, int maxWidth) {
-        return lines(text, maxWidth, chars(text));
-    }
-
-    private static List<String> lines(String text, int maxWidth, MessageWrap.RangeWidth widthOf) {
-        return MessageWrap.wrap(text, maxWidth, widthOf).stream().map(MessageWrap.Line::text).toList();
-    }
-
-    private static int lineCount(String text, int maxWidth) {
-        return MessageWrap.lineCount(text, maxWidth, chars(text));
     }
 }

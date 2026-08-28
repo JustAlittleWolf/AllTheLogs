@@ -10,10 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Runs the importer against a real collection of Minecraft logs.
@@ -30,6 +28,14 @@ class RealDatasetTest {
         return configured == null ? null : Path.of(configured);
     }
 
+    private static String entryPath(LogSource source) {
+        return switch (source) {
+            case LogSource.File file -> file.path().toString();
+            case LogSource.Archive archive -> archive.path() + "!" + archive.entryPath();
+            case LogSource.Session session -> "session";
+        };
+    }
+
     @Test
     void importsRealInstanceDirectories() {
         Path dataset = dataset();
@@ -37,7 +43,7 @@ class RealDatasetTest {
 
         try (LogStore store = LogStore.open(tempDir.resolve("dataset.duckdb"))) {
             ImportResult result = store.importDirectory(dataset,
-                    ImportOptions.defaults().withPathMatcher("**/logs/**"));
+                ImportOptions.defaults().withPathMatcher("**/logs/**"));
 
             assertTrue(result.importedFiles() > 0, "expected to import at least one log file");
             assertTrue(result.importedEntries() > 0, "expected to import at least one chat entry");
@@ -48,7 +54,7 @@ class RealDatasetTest {
 
             // Every log in the dataset comes from a launcher that writes a recognisable version line.
             Map<String, Long> versions = files.stream().collect(
-                    Collectors.groupingBy(ChatLog::minecraftVersion, Collectors.counting()));
+                Collectors.groupingBy(ChatLog::minecraftVersion, Collectors.counting()));
             assertTrue(versions.size() > 1, () -> "expected several Minecraft versions, got " + versions);
 
             assertEquals(result.importedEntries(), store.allEntries().size());
@@ -96,24 +102,16 @@ class RealDatasetTest {
             assertEquals(store.allEntries().size(), store.findEntries(ChatQuery.all().startingAt(from).upUntil(to)).size());
 
             List<ChatEntry> withContext = store.findEntries(ChatQuery.all()
-                    .withRegex("(?i)joined the game|left the game|<")
-                    .withContextLines(2)
-                    .withLimit(500));
+                .withRegex("(?i)joined the game|left the game|<")
+                .withContextLines(2)
+                .withLimit(500));
             assertFalse(withContext.isEmpty(), "expected chat-like lines in real logs");
 
             // Context lines must never duplicate an entry, no matter how densely the matches cluster.
             long distinct = withContext.stream()
-                    .map(entry -> entryPath(entry.chatLog().source()) + "#" + entry.lineIndex())
-                    .distinct().count();
+                .map(entry -> entryPath(entry.chatLog().source()) + "#" + entry.lineIndex())
+                .distinct().count();
             assertEquals(withContext.size(), distinct);
         }
-    }
-
-    private static String entryPath(LogSource source) {
-        return switch (source) {
-            case LogSource.File file -> file.path().toString();
-            case LogSource.Archive archive -> archive.path() + "!" + archive.entryPath();
-            case LogSource.Session session -> "session";
-        };
     }
 }
