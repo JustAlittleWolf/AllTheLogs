@@ -32,9 +32,10 @@ class StoreSummaryTest {
             LocalDate.of(2026, 8, 1),
             3, 40, 2048);
         List<Component> lines = StoreSummary.tooltip(metadata);
-        assertEquals("allthelogs.meta.range", key(lines.getFirst()));
+        assertEquals("allthelogs.meta.hint", key(lines.getFirst()));
+        assertEquals("allthelogs.meta.range", key(lines.get(1)));
         assertTrue(lines.stream().noneMatch(line -> "allthelogs.meta.versions".equals(key(line))));
-        assertEquals(4, lines.size());
+        assertEquals(5, lines.size());
     }
 
     @Test
@@ -51,7 +52,7 @@ class StoreSummaryTest {
             LocalDate.of(2026, 8, 1),
             3, 40, 2048);
         List<Component> lines = StoreSummary.tooltip(metadata);
-        Object[] rangeArgs = ((TranslatableContents) lines.getFirst().getContents()).getArgs();
+        Object[] rangeArgs = ((TranslatableContents) lines.get(1).getContents()).getArgs();
         assertEquals("2020-01-01", ((Component) rangeArgs[0]).getString());
         assertTrue(((Component) rangeArgs[0]).getStyle().getColor().getValue() != 0);
         Object[] sizeArgs = ((TranslatableContents) lines.getLast().getContents()).getArgs();
