@@ -57,6 +57,24 @@ class MessageSelectionTest {
     }
 
     @Test
+    void wordRangeSelectsLettersThenPunctuationThenWhitespace() {
+        assertEquals(0, MessageSelection.wordRange("hello-world", 1)[0]);
+        assertEquals(5, MessageSelection.wordRange("hello-world", 1)[1]);
+        assertEquals(5, MessageSelection.wordRange("hello-world", 5)[0]);
+        assertEquals(6, MessageSelection.wordRange("hello-world", 5)[1]);
+        assertEquals(6, MessageSelection.wordRange("hello-world", 8)[0]);
+        assertEquals(11, MessageSelection.wordRange("hello-world", 8)[1]);
+        assertEquals(2, MessageSelection.wordRange("ab  cd", 3)[0]);
+        assertEquals(4, MessageSelection.wordRange("ab  cd", 3)[1]);
+        DisplayRow row = row("hello world");
+        MessageSelection selection = new MessageSelection();
+        selection.selectWord(0, row.message(), 1);
+        assertEquals("hello", selection.copy(List.of(row)));
+        selection.selectWord(0, row.message(), 8);
+        assertEquals("world", selection.copy(List.of(row)));
+    }
+
+    @Test
     void retainInRemapsIndexesAndClearsWhenASelectedRowUnloads() {
         DisplayRow first = rowOn(LocalDateTime.of(2026, 8, 26, 10, 0), 0, "one");
         DisplayRow second = rowOn(LocalDateTime.of(2026, 8, 26, 11, 0), 1, "two");

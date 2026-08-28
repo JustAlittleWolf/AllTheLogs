@@ -35,7 +35,8 @@ import java.util.function.Consumer;
  * Virtualised log list with a timeline scrubber on its right edge. Newest is at the bottom, and a page shorter
  * than the viewport sits on its bottom edge.
  * <p>
- * The widget owns the loaded page ({@link ResultWindow}), the scroll offset, and the text selection; it asks
+ * Double-click selects a word and triple-click selects the line. Expand carets on cluster
+ * separators load more context through {@link #onExpand}.
  * its owner to fetch more through {@link #onApproachEdge}, {@link #onJump} and {@link #onExpand} rather than
  * touching the store itself. Drawing lives in {@link MessageListPainter} and {@link TimelineTrackPainter},
  * scrubber state in {@link ScrubDrag}, and the status chip in {@link ListStatusChip}.
@@ -49,6 +50,8 @@ public final class MessageTimeline extends BaseUIComponent {
     public static final int SCRUB_PAGE_SIZE = 32;
     private static final int ROW_HEIGHT = MessageListLayout.ROW_HEIGHT;
     private static final int SELECT_DRAG_SLOP = 3;
+    private static final int MULTI_CLICK_MS = 400;
+    private static final int MULTI_CLICK_SLOP = 4;
     /** Rows from either end of the buffer at which the next page is requested. */
     private static final int EDGE_ROWS = 3;
 
@@ -67,7 +70,9 @@ public final class MessageTimeline extends BaseUIComponent {
     private int laidOutWidth = -1;
 
     private boolean draggingSelection;
-    private boolean clickSelectsRow;
+    private boolean pendingClear;
+    private int clickCount;
+    private long lastClickTime;
     private int clickRow = -1;
     private DisplayRow.RowKey clickKey;
     private int clickChar;
@@ -89,12 +94,8 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     /**
-     * Top half of a row expands toward the top of the list ({@link TimelineEdge#BEFORE}).
+     * Expanding toward the top of the list uses {@link TimelineEdge#BEFORE}.
      */
-    static boolean clickInTopHalf(double contentY, int rowTop, int rowHeight) {
-        return contentY < rowTop + rowHeight / 2.0;
-    }
-
     public ResultWindow window() {
         return window;
     }
@@ -325,34 +326,50 @@ public final class MessageTimeline extends BaseUIComponent {
         if (click.button() == GLFW.GLFW_MOUSE_BUTTON_MIDDLE) {
             autoScroll.start(click.y());
             draggingSelection = false;
-            clickSelectsRow = false;
+            pendingClear = false;
             return true;
         }
         if (click.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
             selection.clear();
-            clickSelectsRow = false;
+            pendingClear = false;
             draggingSelection = false;
             return true;
         }
         if (click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
             return super.onMouseDown(click, doubled);
         }
-        int row = view().rowAt(click.y());
-        if (row < 0) return super.onMouseDown(click, doubled);
-        if (doubled) {
-            clickSelectsRow = false;
+        MessageListLayout.ExpandDirection expand = MessageListPainter.expandAt(view(), click.x(), click.y());
+        if (expand != null) {
+            pendingClear = false;
             draggingSelection = false;
-            selection.clear();
-            onExpand.accept(window.rows().get(row), expandSide(row, click.y()));
+            expandFromSeparator(expand, click.y());
             return true;
         }
-        clickSelectsRow = true;
+        int row = view().rowAt(click.y());
+        if (row < 0) {
+            pendingClear = false;
+            draggingSelection = false;
+            return super.onMouseDown(click, doubled);
+        }
+        int clicks = updateClickCount(click.x(), click.y());
         clickRow = row;
         clickKey = window.rows().get(row).key();
         clickChar = charAt(row, click.x(), click.y());
         clickX = click.x();
         clickY = click.y();
         draggingSelection = false;
+        if (clicks == 2) {
+            pendingClear = false;
+            selection.selectWord(row, window.rows().get(row).message(), clickChar);
+            return true;
+        }
+        if (clicks >= 3) {
+            pendingClear = false;
+            clickCount = 0;
+            selection.selectRow(row, window.rows().get(row).message().length());
+            return true;
+        }
+        pendingClear = true;
         return true;
     }
 
@@ -365,8 +382,8 @@ public final class MessageTimeline extends BaseUIComponent {
         if (autoScroll.active()) {
             return true;
         }
-        if (clickSelectsRow && movedPastSelectSlop(click.x(), click.y())) {
-            clickSelectsRow = false;
+        if (pendingClear && movedPastSelectSlop(click.x(), click.y())) {
+            pendingClear = false;
             draggingSelection = true;
             selection.start(clickRow, clickChar);
         }
@@ -387,12 +404,11 @@ public final class MessageTimeline extends BaseUIComponent {
         if (click.button() == GLFW.GLFW_MOUSE_BUTTON_MIDDLE) {
             return true;
         }
-        if (click.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT && clickSelectsRow
-            && clickRow >= 0 && clickRow < window.rows().size()) {
-            selection.selectRow(clickRow, window.rows().get(clickRow).message().length());
+        if (click.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT && pendingClear) {
+            selection.clear();
         }
         draggingSelection = false;
-        clickSelectsRow = false;
+        pendingClear = false;
         return super.onMouseUp(click);
     }
 
@@ -449,7 +465,7 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     private void clearClick() {
-        clickSelectsRow = false;
+        pendingClear = false;
         draggingSelection = false;
         clickRow = -1;
         clickKey = null;
@@ -466,8 +482,11 @@ public final class MessageTimeline extends BaseUIComponent {
         boolean nearTrack = mouseX >= x + view.listWidth() - TimelineTrackPainter.HOVER_SLOP
             && mouseX < x + width && inRows;
         boolean overMessage = mouseX >= view.messageX() && mouseX < x + view.listWidth() && inRows;
+        boolean overExpand = MessageListPainter.expandAt(view, mouseX - x, mouseY - y) != null;
         if (nearTrack || scrub.dragging() || autoScroll.active()) {
             this.cursorStyle(CursorStyle.MOVE);
+        } else if (overExpand) {
+            this.cursorStyle(CursorStyle.HAND);
         } else if (overMessage) {
             this.cursorStyle(CursorStyle.TEXT);
         } else {
@@ -486,6 +505,36 @@ public final class MessageTimeline extends BaseUIComponent {
         Minecraft client = Minecraft.getInstance();
         if (client == null || client.getWindow() == null) return false;
         return GLFW.glfwGetMouseButton(client.getWindow().handle(), GLFW.GLFW_MOUSE_BUTTON_MIDDLE) == GLFW.GLFW_PRESS;
+    }
+
+    private int updateClickCount(double mouseX, double mouseY) {
+        long now = System.currentTimeMillis();
+        double dx = mouseX - clickX;
+        double dy = mouseY - clickY;
+        boolean nearby = dx * dx + dy * dy <= MULTI_CLICK_SLOP * MULTI_CLICK_SLOP;
+        if (nearby && now - lastClickTime <= MULTI_CLICK_MS) {
+            clickCount++;
+        } else {
+            clickCount = 1;
+        }
+        lastClickTime = now;
+        return clickCount;
+    }
+
+    private void expandFromSeparator(MessageListLayout.ExpandDirection direction, double localY) {
+        MessageListLayout.Separator separator = layout.separatorAt(view().contentY(localY));
+        if (separator == null) return;
+        List<DisplayRow> rows = window.rows();
+        if (direction == MessageListLayout.ExpandDirection.UP) {
+            if (separator.afterRow() >= 0 && separator.afterRow() < rows.size()) {
+                onExpand.accept(rows.get(separator.afterRow()), TimelineEdge.BEFORE);
+            }
+            return;
+        }
+        int previous = separator.afterRow() - 1;
+        if (previous >= 0 && previous < rows.size()) {
+            onExpand.accept(rows.get(previous), TimelineEdge.AFTER);
+        }
     }
 
     private boolean movedPastSelectSlop(double mouseX, double mouseY) {
@@ -696,11 +745,6 @@ public final class MessageTimeline extends BaseUIComponent {
         } else if (window.hasAfter() && lastVisibleIndex() >= window.rows().size() - EDGE_ROWS) {
             onApproachEdge.accept(TimelineEdge.AFTER);
         }
-    }
-
-    private TimelineEdge expandSide(int row, double localY) {
-        int contentY = view().contentY(localY);
-        return clickInTopHalf(contentY, layout.rowY(row), layout.rowHeight(row)) ? TimelineEdge.BEFORE : TimelineEdge.AFTER;
     }
 
     private int charAt(int row, double localX, double localY) {

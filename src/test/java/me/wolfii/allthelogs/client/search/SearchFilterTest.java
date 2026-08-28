@@ -78,6 +78,11 @@ class SearchFilterTest {
         var matches = SearchFilter.defaults().withText("(").withRegex(true).messagePredicate();
         assertFalse(matches.test("hello"));
         assertTrue(SearchFilter.compiledRegex("(", false).isEmpty());
+        SearchFilter incomplete = SearchFilter.defaults().withText("(?i)(HoneY_D").withRegex(true);
+        assertTrue(incomplete.invalidRegex());
+        assertFalse(incomplete.canQuery());
+        assertTrue(SearchFilter.defaults().withText("HoneY_D").withRegex(true).canQuery());
+        assertTrue(SearchFilter.defaults().withText("(").canQuery());
     }
 
     @Test

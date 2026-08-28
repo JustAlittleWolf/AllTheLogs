@@ -30,13 +30,61 @@ public final class MessageSelection {
     }
 
     /**
-     * Selects every character of {@code row}. Used for a single click on a message.
+     * Selects {@code [start, end)} of {@code row}.
      */
-    public void selectRow(int row, int length) {
+    public void selectRange(int row, int start, int end) {
         empty = false;
         startRow = endRow = Math.max(0, row);
-        startChar = 0;
-        endChar = Math.max(0, length);
+        startChar = Math.max(0, Math.min(start, end));
+        endChar = Math.max(0, Math.max(start, end));
+        if (startChar == endChar) {
+            clear();
+        }
+    }
+
+    /**
+     * Selects every character of {@code row}. Used for a triple click on a message.
+     */
+    public void selectRow(int row, int length) {
+        selectRange(row, 0, length);
+    }
+
+    /**
+     * Selects the word, whitespace run, or punctuation run at {@code character} in {@code message}.
+     */
+    public void selectWord(int row, String message, int character) {
+        int[] range = wordRange(message, character);
+        selectRange(row, range[0], range[1]);
+    }
+
+    /**
+     * Inclusive-start exclusive-end range of the token at {@code character}.
+     */
+    public static int[] wordRange(String message, int character) {
+        if (message == null || message.isEmpty()) return new int[]{0, 0};
+        int index = Math.clamp(character, 0, message.length());
+        if (index == message.length()) index = message.length() - 1;
+        char c = message.charAt(index);
+        int start = index;
+        int end = index + 1;
+        if (Character.isWhitespace(c)) {
+            while (start > 0 && Character.isWhitespace(message.charAt(start - 1))) start--;
+            while (end < message.length() && Character.isWhitespace(message.charAt(end))) end++;
+            return new int[]{start, end};
+        }
+        boolean word = isWordChar(c);
+        while (start > 0 && sameToken(message.charAt(start - 1), word)) start--;
+        while (end < message.length() && sameToken(message.charAt(end), word)) end++;
+        return new int[]{start, end};
+    }
+
+    private static boolean isWordChar(char c) {
+        return Character.isLetterOrDigit(c) || c == '_';
+    }
+
+    private static boolean sameToken(char c, boolean word) {
+        if (Character.isWhitespace(c)) return false;
+        return isWordChar(c) == word;
     }
 
     public void extend(int row, int character) {

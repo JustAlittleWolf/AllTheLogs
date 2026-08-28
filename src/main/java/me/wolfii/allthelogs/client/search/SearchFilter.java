@@ -133,6 +133,20 @@ public record SearchFilter(
         return !text.isEmpty();
     }
 
+    /**
+     * Whether this filter can be sent to the store. Incomplete regex is rejected so DuckDB is not queried.
+     */
+    public boolean canQuery() {
+        return !invalidRegex();
+    }
+
+    /**
+     * Regex mode with a pattern that does not compile, including while the user is still typing it.
+     */
+    public boolean invalidRegex() {
+        return regex && hasText() && compiledRegex(text, caseSensitive).isEmpty();
+    }
+
     public boolean hasVersion() {
         return version != null && !version.isEmpty();
     }
