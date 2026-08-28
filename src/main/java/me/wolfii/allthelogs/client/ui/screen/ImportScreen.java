@@ -10,6 +10,7 @@ import io.wispforest.owo.ui.core.*;
 import me.wolfii.allthelogs.client.AllTheLogsPaths;
 import me.wolfii.allthelogs.client.files.CommonLogLocations;
 import me.wolfii.allthelogs.client.files.ImportPaths;
+import me.wolfii.allthelogs.client.files.ImportTimezones;
 import me.wolfii.allthelogs.client.files.NativeFilePicker;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
 import me.wolfii.allthelogs.data.ImportOptions;
@@ -27,22 +28,29 @@ import java.util.function.Consumer;
 /**
  * Import a folder or archive into the log store. Launcher directory shortcuts from
  * {@link CommonLogLocations#defaults()} fill both the path and advanced options when chosen.
+ * Folder and archive pickers only set the path; advanced options stay as the user left them.
  */
 public final class ImportScreen extends BaseOwoScreen<StackLayout> {
+    private static final int MIN_PARALLELISM = 1;
+
     private final Screen parent;
     private CommonLocationMenu commonLocations;
+    private TimezonePicker timezones;
     private TextBoxComponent pathBox;
     private LabelComponent status;
     private boolean recursive = true;
     private boolean nestedArchives = true;
     private boolean skipAlreadyImported = true;
     private String pathMatcher = "";
-    private String timezone = ZoneId.systemDefault().getId();
-    private int parallelism = Math.max(1, Runtime.getRuntime().availableProcessors());
+    private ZoneId timezone = ZoneId.systemDefault();
+    private boolean summerTime = ImportTimezones.observesDaylightSaving(timezone);
+    private int parallelism = Math.max(MIN_PARALLELISM, Runtime.getRuntime().availableProcessors());
     private CheckboxComponent recursiveBox;
     private CheckboxComponent nestedBox;
     private CheckboxComponent skipBox;
+    private CheckboxComponent summerTimeBox;
     private TextBoxComponent pathMatcherBox;
+    private DiscreteSliderComponent parallelismSlider;
 
     public ImportScreen(Screen parent) {
         super(Component.translatable("allthelogs.screen.import"));
@@ -82,7 +90,7 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
         FlowLayout pathRow = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
         pathRow.gap(8).verticalAlignment(VerticalAlignment.CENTER);
         pathRow.child(UIComponents.button(Component.translatable("allthelogs.import.from_folder"),
-            button -> NativeFilePicker.pickFolder(currentPath(), this::setFolder)));
+            button -> NativeFilePicker.pickFolder(currentPath(), this::setPath)));
         pathRow.child(UIComponents.button(Component.translatable("allthelogs.import.from_archive"),
             button -> NativeFilePicker.pickArchive(currentPath(), this::setPath)));
         commonLocations = new CommonLocationMenu(root, () -> this.width, () -> this.height, this::applyLocation);
@@ -95,7 +103,7 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
 
         form.child(UIContainers.collapsible(Sizing.fill(), Sizing.content(),
                 Component.translatable("allthelogs.import.advanced"), false)
-            .child(buildAdvanced()));
+            .child(buildAdvanced(root)));
 
         ScrollContainer<FlowLayout> scroll = UIContainers.verticalScroll(
             Sizing.fill(), Sizing.expand(), form);
@@ -120,7 +128,7 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
         return button;
     }
 
-    private FlowLayout buildAdvanced() {
+    private FlowLayout buildAdvanced(StackLayout overlays) {
         FlowLayout advanced = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
         advanced.gap(4).padding(Insets.of(4));
 
@@ -139,27 +147,60 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
         skipBox.onChanged(value -> skipAlreadyImported = value);
         advanced.child(skipBox);
 
-        advanced.child(field("allthelogs.import.path_matcher", pathMatcher, value -> pathMatcher = value, box -> pathMatcherBox = box));
-        advanced.child(field("allthelogs.import.timezone", timezone, value -> timezone = value, null));
-        advanced.child(field("allthelogs.import.parallelism", String.valueOf(parallelism), value -> {
-            try {
-                parallelism = Math.max(1, Integer.parseInt(value.trim()));
-            } catch (NumberFormatException ignored) {
-            }
-        }, null));
+        advanced.child(pathMatcherField());
+
+        timezones = new TimezonePicker(overlays, () -> this.width, () -> this.height, this::selectTimezone);
+        advanced.child(timezones.row(timezone));
+
+        summerTimeBox = UIComponents.checkbox(Component.translatable("allthelogs.import.summer_time"));
+        summerTimeBox.checked(summerTime);
+        summerTimeBox.onChanged(value -> summerTime = value);
+        summerTimeBox.tooltip(Component.translatable("allthelogs.import.summer_time.hint"));
+        advanced.child(summerTimeBox);
+
+        advanced.child(parallelismSlider());
         return advanced;
     }
 
-    private FlowLayout field(String key, String value, Consumer<String> onChange, Consumer<TextBoxComponent> bind) {
+    private FlowLayout pathMatcherField() {
         FlowLayout row = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
         row.gap(2);
-        row.child(UIComponents.label(Component.translatable(key)));
-        TextBoxComponent box = UIComponents.textBox(Sizing.fill(), value);
-        box.setMaxLength(128);
-        box.onChanged().subscribe(onChange::accept);
-        if (bind != null) bind.accept(box);
-        row.child(box);
+        LabelComponent label = UIComponents.label(Component.translatable("allthelogs.import.path_matcher"));
+        label.tooltip(Component.translatable("allthelogs.import.path_matcher.hint"));
+        row.child(label);
+        pathMatcherBox = UIComponents.textBox(Sizing.fill(), pathMatcher);
+        pathMatcherBox.setMaxLength(128);
+        pathMatcherBox.onChanged().subscribe(value -> pathMatcher = value);
+        row.child(pathMatcherBox);
+        LabelComponent hint = UIComponents.label(Component.translatable("allthelogs.import.path_matcher.hint"));
+        hint.color(Color.ofRgb(0xA0A0A0));
+        hint.maxWidth(Math.max(160, this.width - 80));
+        row.child(hint);
         return row;
+    }
+
+    private FlowLayout parallelismSlider() {
+        FlowLayout row = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
+        row.gap(2);
+        row.child(UIComponents.label(Component.translatable("allthelogs.import.parallelism")));
+        int max = Math.max(16, Runtime.getRuntime().availableProcessors() * 2);
+        parallelismSlider = UIComponents.discreteSlider(Sizing.fill(), MIN_PARALLELISM, max);
+        parallelismSlider.decimalPlaces(0);
+        parallelismSlider.snap(true);
+        parallelismSlider.setFromDiscreteValue(Math.min(max, Math.max(MIN_PARALLELISM, parallelism)));
+        parallelismSlider.message(value -> Component.translatable("allthelogs.import.parallelism.value", value));
+        parallelismSlider.onChanged().subscribe(value -> parallelism = Math.max(MIN_PARALLELISM, (int) Math.round(value)));
+        row.child(parallelismSlider);
+        return row;
+    }
+
+    private void selectTimezone(ImportTimezones.Choice choice) {
+        boolean zoneChanged = !choice.zone().equals(timezone);
+        timezone = choice.zone();
+        if (zoneChanged) {
+            summerTime = ImportTimezones.observesDaylightSaving(timezone);
+            if (summerTimeBox != null) summerTimeBox.checked(summerTime);
+        }
     }
 
     private void applyLocation(CommonLogLocations.Location location) {
@@ -172,18 +213,7 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
 
     @Override
     public void onFilesDrop(List<Path> paths) {
-        ImportPaths.fromDropped(paths).ifPresent(path -> {
-            if (Files.isDirectory(path)) {
-                setFolder(path);
-            } else {
-                setPath(path);
-            }
-        });
-    }
-
-    private void setFolder(Path path) {
-        applyOptions(ImportPaths.optionsForFolder(path));
-        setPath(path);
+        ImportPaths.fromDropped(paths).ifPresent(this::setPath);
     }
 
     private void applyOptions(ImportOptions options) {
@@ -210,12 +240,13 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
     }
 
     private ImportOptions options() {
+        ZoneId zone = ImportTimezones.parse(timezones == null ? "" : timezones.text()).orElse(timezone);
         ImportOptions options = ImportOptions.defaults()
             .withRecursive(recursive)
             .withNestedArchives(nestedArchives)
             .withSkipAlreadyImported(skipAlreadyImported)
             .withParallelism(parallelism)
-            .withTimezone(timezone.isBlank() ? ZoneId.systemDefault() : ZoneId.of(timezone));
+            .withTimezone(ImportTimezones.forImport(zone, summerTime));
         if (!pathMatcher.isBlank()) {
             options = options.withPathMatcher(pathMatcher);
         }
@@ -229,12 +260,17 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
             status.text(Component.translatable("allthelogs.import.missing_path"));
             return;
         }
+        if (timezones != null && ImportTimezones.parse(timezones.text()).isEmpty()) {
+            status.text(Component.translatable("allthelogs.import.invalid_timezone"));
+            return;
+        }
         Minecraft.getInstance().gui.setScreen(new ImportProgressScreen(this, path, options(), Files.isRegularFile(path)));
     }
 
     @Override
     public void onClose() {
         if (commonLocations != null) commonLocations.close();
+        if (timezones != null) timezones.close();
         Minecraft.getInstance().gui.setScreen(parent);
     }
 }
