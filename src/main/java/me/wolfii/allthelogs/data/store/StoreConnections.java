@@ -4,7 +4,7 @@ import org.duckdb.DuckDBConnection;
 import org.duckdb.DuckDBDriver;
 
 import java.nio.file.Path;
-import java.sql.DriverManager;
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Properties;
@@ -16,6 +16,8 @@ import java.util.Properties;
  * whole result first.
  */
 public final class StoreConnections {
+    private static final DuckDBDriver DRIVER = new DuckDBDriver();
+
     private StoreConnections() {
     }
 
@@ -33,8 +35,17 @@ public final class StoreConnections {
         return open("jdbc:duckdb:");
     }
 
+    /**
+     * Connects through {@link DuckDBDriver} instead of {@code DriverManager}. Fabric's Knot
+     * classloader is a named module; {@code DriverManager.getConnection} then rejects the
+     * already-registered DuckDB driver ({@code No suitable driver found for jdbc:duckdb:}).
+     */
     private static DuckDBConnection open(String url) throws SQLException {
-        DuckDBConnection connection = (DuckDBConnection) DriverManager.getConnection(url, settings());
+        Connection raw = DRIVER.connect(url, settings());
+        if (raw == null) {
+            throw new SQLException("DuckDB driver rejected URL: " + url);
+        }
+        DuckDBConnection connection = (DuckDBConnection) raw;
         try (Statement statement = connection.createStatement()) {
             SchemaMigration.migrate(statement);
         } catch (SQLException e) {
