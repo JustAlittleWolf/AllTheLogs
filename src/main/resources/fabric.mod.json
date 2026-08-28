@@ -11,6 +11,7 @@
 		"sources": "https://github.com/JustAlittleWolf/AllTheLogs"
 	},
 	"license": "MIT",
+    "icon": "assets/allthelogs/icon.png",
 	"environment": "client",
 	"entrypoints": {
 		"client": [
