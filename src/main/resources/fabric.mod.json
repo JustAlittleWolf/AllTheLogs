@@ -13,6 +13,9 @@
 	"license": "MIT",
     "icon": "assets/allthelogs/icon.png",
 	"environment": "client",
+	"mixins": [
+		"allthelogs.mixins.json"
+	],
 	"entrypoints": {
 		"client": [
 			"me.wolfii.allthelogs.client.AllTheLogsClient"
