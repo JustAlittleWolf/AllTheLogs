@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.BiPredicate;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
@@ -35,15 +36,20 @@ final class ArchiveWalker {
     private final ImportObserver observer;
     private final BooleanSupplier cancelled;
     private final List<ImportResult.Failure> failures;
+    private final BiPredicate<String, String> skipUnopened;
+    private final Runnable onSkipped;
 
     ArchiveWalker(ImportOptions options, Pattern pathMatcher, Consumer<LogCandidate> consumer,
-                  ImportObserver observer, BooleanSupplier cancelled, List<ImportResult.Failure> failures) {
+                  ImportObserver observer, BooleanSupplier cancelled, List<ImportResult.Failure> failures,
+                  BiPredicate<String, String> skipUnopened, Runnable onSkipped) {
         this.options = options;
         this.pathMatcher = pathMatcher;
         this.consumer = consumer;
         this.observer = observer;
         this.cancelled = cancelled;
         this.failures = failures;
+        this.skipUnopened = skipUnopened;
+        this.onSkipped = onSkipped;
     }
 
     private static byte[] readFully(InputStream stream, long expectedSize) throws IOException {
@@ -146,6 +152,11 @@ final class ArchiveWalker {
         if (LogDiscovery.isLogFile(name)) {
             if (!matches(globPrefix + normalized)) return;
             observer.fileStarted(new LogSource.Archive(Path.of(sourcePath), entryPath));
+            if (skipUnopened.test(sourcePath, entryPath)) {
+                onSkipped.run();
+                observer.fileCompleted();
+                return;
+            }
             byte[] bytes;
             try (InputStream stream = content.open()) {
                 bytes = readFully(stream, size);
