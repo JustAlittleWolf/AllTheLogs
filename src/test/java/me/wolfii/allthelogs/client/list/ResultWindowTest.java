@@ -88,7 +88,7 @@ class ResultWindowTest {
         DisplayRow first = rowAt(time, 1);
         DisplayRow second = rowAt(time, 4);
         List<DisplayRow> merged = DisplayRows.mergeSorted(List.of(second), List.of(first),
-            me.wolfii.allthelogs.data.ChatQuery.Sort.ASCENDING);
+            me.wolfii.allthelogs.api.ChatQuery.Sort.ASCENDING);
         assertEquals(List.of(1, 4), merged.stream().map(DisplayRow::lineIndex).toList());
     }
 

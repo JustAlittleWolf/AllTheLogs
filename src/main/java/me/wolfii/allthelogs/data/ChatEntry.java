@@ -19,7 +19,7 @@ public record ChatEntry(
     int lineIndex,
     String message,
     long[] formatting
-) {
+) implements me.wolfii.allthelogs.api.ChatEntry {
     public ChatEntry(ChatLog chatLog, LocalDateTime timestamp, int lineIndex, String message) {
         this(chatLog, timestamp, lineIndex, message, null);
     }

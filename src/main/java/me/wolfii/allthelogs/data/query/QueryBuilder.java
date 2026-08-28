@@ -1,6 +1,6 @@
 package me.wolfii.allthelogs.data.query;
 
-import me.wolfii.allthelogs.data.ChatQuery;
+import me.wolfii.allthelogs.api.ChatQuery;
 
 import java.sql.PreparedStatement;
 import java.sql.SQLException;

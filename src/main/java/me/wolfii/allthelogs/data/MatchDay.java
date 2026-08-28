@@ -8,16 +8,10 @@ import java.time.LocalDateTime;
  * that day, and how many matches it holds. The timeline uses this so a day is not stretched across
  * empty hours, and a cluster at one timestamp can still be addressed by match rank.
  */
-public record MatchDay(LocalDate date, LocalDateTime oldest, LocalDateTime newest, long matches) {
+public record MatchDay(LocalDate date, LocalDateTime oldest, LocalDateTime newest, long matches)
+    implements me.wolfii.allthelogs.api.MatchDay {
     public MatchDay {
         if (date == null) throw new IllegalArgumentException("date");
         if (matches < 0) throw new IllegalArgumentException("matches must not be negative");
-    }
-
-    /**
-     * Whether every match on this day shares the same timestamp, so clock-time cannot distinguish them.
-     */
-    public boolean collapsed() {
-        return oldest == null || newest == null || !newest.isAfter(oldest);
     }
 }

@@ -4,7 +4,7 @@ import me.wolfii.allthelogs.client.list.DisplayRow;
 import me.wolfii.allthelogs.client.list.PageBounds;
 import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.ChatLog;
-import me.wolfii.allthelogs.data.ChatQuery;
+import me.wolfii.allthelogs.api.ChatQuery;
 import me.wolfii.allthelogs.data.LogSource;
 import me.wolfii.allthelogs.data.MatchSummary;
 import org.junit.jupiter.api.Test;

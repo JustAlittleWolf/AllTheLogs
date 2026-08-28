@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.data;
 
+import me.wolfii.allthelogs.api.ChatQuery.Sort;
 import me.wolfii.allthelogs.data.parse.LogDates;
 import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import me.wolfii.allthelogs.data.store.SessionMarker;
@@ -562,7 +563,7 @@ class LogStoreTest {
         store.importDirectory(logsDirectory());
 
         List<ChatEntry> ascending = store.allEntries();
-        List<ChatEntry> descending = store.findEntries(ChatQuery.all().withSort(ChatQuery.Sort.DESCENDING));
+        List<ChatEntry> descending = store.findEntries(ChatQuery.all().withSort(Sort.DESCENDING));
 
         assertEquals(ascending.getFirst().message(), descending.getLast().message());
         assertEquals(ascending.getLast().message(), descending.getFirst().message());
@@ -580,7 +581,7 @@ class LogStoreTest {
     void sortsDescendingWithTheSortOption() throws IOException {
         store.importDirectory(logsDirectory());
 
-        List<ChatEntry> bySort = store.findEntries(ChatQuery.all().withSort(ChatQuery.Sort.DESCENDING));
+        List<ChatEntry> bySort = store.findEntries(ChatQuery.all().withSort(Sort.DESCENDING));
 
         assertTrue(bySort.getFirst().timestamp().isAfter(bySort.getLast().timestamp()));
     }
@@ -595,7 +596,7 @@ class LogStoreTest {
         assertEquals(List.of("hit", "four", "five"), forward);
 
         List<String> backward = store.findEntries(ChatQuery.all()
-                .withSort(ChatQuery.Sort.DESCENDING)
+                .withSort(Sort.DESCENDING)
                 .withOffset(LocalDateTime.of(2026, 6, 1, 10, 0, 13)))
             .stream().map(ChatEntry::message).toList();
         assertEquals(List.of("hit", "two", "one"), backward);
@@ -624,12 +625,12 @@ class LogStoreTest {
         importOffsetLog();
 
         List<ChatEntry> page1 = store.findEntries(ChatQuery.all()
-            .withSort(ChatQuery.Sort.DESCENDING)
+            .withSort(Sort.DESCENDING)
             .withLimit(2));
         assertEquals(List.of("five", "four"), page1.stream().map(ChatEntry::message).toList());
 
         List<ChatEntry> page2 = store.findEntries(ChatQuery.all()
-            .withSort(ChatQuery.Sort.DESCENDING)
+            .withSort(Sort.DESCENDING)
             .withOffset(page1.getLast().timestamp())
             .withLimit(2));
         assertEquals(List.of("hit", "two"), page2.stream().map(ChatEntry::message).toList());
@@ -649,7 +650,7 @@ class LogStoreTest {
         List<String> before = store.findEntries(ChatQuery.all()
                 .withSubstring("hit")
                 .withContextLines(2)
-                .withSort(ChatQuery.Sort.DESCENDING)
+                .withSort(Sort.DESCENDING)
                 .withOffset(LocalDateTime.of(2026, 6, 1, 10, 0, 13)))
             .stream().map(ChatEntry::message).toList();
         assertEquals(List.of("five", "four", "hit", "two", "one"), before);
@@ -1071,7 +1072,7 @@ class LogStoreTest {
         List<ChatEntry> entries = store.findEntries(ChatQuery.all());
         assertEquals(List.of("first", "second", "third"), entries.stream().map(ChatEntry::message).toList());
         assertEquals(List.of(0, 1, 2), entries.stream().map(ChatEntry::lineIndex).toList());
-        List<ChatEntry> newestFirst = store.findEntries(ChatQuery.all().withSort(ChatQuery.Sort.DESCENDING));
+        List<ChatEntry> newestFirst = store.findEntries(ChatQuery.all().withSort(Sort.DESCENDING));
         assertEquals(List.of("third", "second", "first"), newestFirst.stream().map(ChatEntry::message).toList());
     }
 

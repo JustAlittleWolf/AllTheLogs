@@ -1,12 +1,7 @@
 package me.wolfii.allthelogs.api;
 
 import me.wolfii.allthelogs.client.LogStoreWorker;
-import me.wolfii.allthelogs.data.ChatEntry;
-import me.wolfii.allthelogs.data.ChatLog;
-import me.wolfii.allthelogs.data.ChatQuery;
 import me.wolfii.allthelogs.data.LogStore;
-import me.wolfii.allthelogs.data.LogStoreMetadata;
-import me.wolfii.allthelogs.data.MatchSummary;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -29,7 +24,7 @@ public final class LogDatabase {
     private final Queries queries;
 
     /**
-     * Wraps an already-open {@link LogStore} and runs queries on the calling thread.
+     * Wraps an already-open store and runs queries on the calling thread.
      * Intended for tests; other mods should use {@link AllTheLogs#database()}.
      */
     LogDatabase(LogStore store) {
@@ -127,6 +122,21 @@ public final class LogDatabase {
         return queries.databasePath();
     }
 
+    private static me.wolfii.allthelogs.data.ChatLog asStoreLog(ChatLog log) {
+        if (log instanceof me.wolfii.allthelogs.data.ChatLog storeLog) {
+            return storeLog;
+        }
+        throw new IllegalArgumentException("chat log must be returned by AllTheLogs");
+    }
+
+    private static List<ChatEntry> entries(List<? extends ChatEntry> entries) {
+        return List.copyOf(entries);
+    }
+
+    private static List<ChatLog> logs(List<? extends ChatLog> logs) {
+        return List.copyOf(logs);
+    }
+
     private interface Queries {
         boolean isOpen();
 
@@ -161,12 +171,12 @@ public final class LogDatabase {
 
         @Override
         public CompletableFuture<List<ChatEntry>> findEntries(ChatQuery query) {
-            return worker.findEntries(query);
+            return worker.findEntries(query).thenApply(LogDatabase::entries);
         }
 
         @Override
         public CompletableFuture<MatchSummary> summarizeMatches(ChatQuery query) {
-            return worker.summarizeMatches(query);
+            return worker.summarizeMatches(query).thenApply(summary -> (MatchSummary) summary);
         }
 
         @Override
@@ -176,22 +186,22 @@ public final class LogDatabase {
 
         @Override
         public CompletableFuture<List<ChatEntry>> entriesAround(ChatLog log, int lineIndex, int before, int after) {
-            return worker.entriesAround(log, lineIndex, before, after);
+            return worker.entriesAround(asStoreLog(log), lineIndex, before, after).thenApply(LogDatabase::entries);
         }
 
         @Override
         public CompletableFuture<List<ChatEntry>> allEntries() {
-            return worker.allEntries();
+            return worker.allEntries().thenApply(LogDatabase::entries);
         }
 
         @Override
         public CompletableFuture<List<ChatLog>> chatLogs() {
-            return worker.chatLogs();
+            return worker.chatLogs().thenApply(LogDatabase::logs);
         }
 
         @Override
         public CompletableFuture<LogStoreMetadata> metadata() {
-            return worker.metadata();
+            return worker.metadata().thenApply(metadata -> (LogStoreMetadata) metadata);
         }
 
         @Override
@@ -214,7 +224,7 @@ public final class LogDatabase {
 
         @Override
         public CompletableFuture<List<ChatEntry>> findEntries(ChatQuery query) {
-            return complete(() -> store.findEntries(query));
+            return complete(() -> entries(store.findEntries(query)));
         }
 
         @Override
@@ -229,17 +239,17 @@ public final class LogDatabase {
 
         @Override
         public CompletableFuture<List<ChatEntry>> entriesAround(ChatLog log, int lineIndex, int before, int after) {
-            return complete(() -> store.entriesAround(log, lineIndex, before, after));
+            return complete(() -> entries(store.entriesAround(asStoreLog(log), lineIndex, before, after)));
         }
 
         @Override
         public CompletableFuture<List<ChatEntry>> allEntries() {
-            return complete(store::allEntries);
+            return complete(() -> entries(store.allEntries()));
         }
 
         @Override
         public CompletableFuture<List<ChatLog>> chatLogs() {
-            return complete(store::chatLogs);
+            return complete(() -> logs(store.chatLogs()));
         }
 
         @Override

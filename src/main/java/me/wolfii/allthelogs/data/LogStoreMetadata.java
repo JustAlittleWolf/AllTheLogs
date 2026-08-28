@@ -24,7 +24,7 @@ public record LogStoreMetadata(
     long chatLogCount,
     long chatEntryCount,
     long databaseSizeBytes
-) {
+) implements me.wolfii.allthelogs.api.LogStoreMetadata {
     public LogStoreMetadata {
         Objects.requireNonNull(minecraftVersions, "minecraftVersions");
         minecraftVersions = List.copyOf(minecraftVersions);

@@ -1,6 +1,6 @@
 package me.wolfii.allthelogs.client.list;
 
-import me.wolfii.allthelogs.data.ChatQuery;
+import me.wolfii.allthelogs.api.ChatQuery;
 import me.wolfii.allthelogs.data.MatchSummary;
 
 import java.time.LocalDateTime;

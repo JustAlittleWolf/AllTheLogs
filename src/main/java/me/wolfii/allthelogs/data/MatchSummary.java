@@ -1,8 +1,6 @@
 package me.wolfii.allthelogs.data;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -15,7 +13,8 @@ import java.util.List;
  * @param matches total matching entries; the sum of {@link MatchDay#matches()}
  * @param days    occupied days, oldest first
  */
-public record MatchSummary(LocalDateTime oldest, LocalDateTime newest, long matches, List<MatchDay> days) {
+public record MatchSummary(LocalDateTime oldest, LocalDateTime newest, long matches, List<MatchDay> days)
+    implements me.wolfii.allthelogs.api.MatchSummary {
     public MatchSummary {
         days = days == null ? List.of() : List.copyOf(days);
         if (matches < 0) throw new IllegalArgumentException("matches must not be negative");
@@ -44,18 +43,5 @@ public record MatchSummary(LocalDateTime oldest, LocalDateTime newest, long matc
             total += day.matches();
         }
         return new MatchSummary(oldest, newest, total, copy);
-    }
-
-    public int uniqueDates() {
-        return days.size();
-    }
-
-    public List<LocalDate> dates() {
-        if (days.isEmpty()) return List.of();
-        List<LocalDate> dates = new ArrayList<>(days.size());
-        for (MatchDay day : days) {
-            dates.add(day.date());
-        }
-        return List.copyOf(dates);
     }
 }

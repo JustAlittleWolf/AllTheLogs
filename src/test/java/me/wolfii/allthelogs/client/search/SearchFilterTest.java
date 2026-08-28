@@ -1,6 +1,6 @@
 package me.wolfii.allthelogs.client.search;
 
-import me.wolfii.allthelogs.data.ChatQuery;
+import me.wolfii.allthelogs.api.ChatQuery;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
