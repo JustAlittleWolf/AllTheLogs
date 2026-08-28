@@ -43,6 +43,7 @@ public final class ChatQueries {
      * @throws LogDataException if the query is rejected, e.g. because its regex is malformed
      */
     public List<ChatEntry> findEntries(ChatQuery query) {
+        rejectUnsupportedRegex(query);
         QueryBuilder builder = QueryBuilder.build(query);
         int expectedRows = query.limit() >= 0 ? (int) Math.min(query.limit(), 8_000_000) : 1024;
         try {
@@ -50,7 +51,7 @@ public final class ChatQueries {
         } catch (LogDataException e) {
             throw e;
         } catch (SQLException | RuntimeException e) {
-            throw new LogDataException("could not run query " + query, e);
+            throw queryFailed("could not run query", query, e);
         }
     }
 
@@ -79,6 +80,7 @@ public final class ChatQueries {
      * scan, not a fetch of every matching row.
      */
     public MatchSummary summarizeMatches(ChatQuery query) {
+        rejectUnsupportedRegex(query);
         QueryBuilder builder = QueryBuilder.summary(query);
         List<MatchDay> days = new ArrayList<>();
         try (PreparedStatement prepared = connection.prepareStatement(builder.sql())) {
@@ -94,7 +96,7 @@ public final class ChatQueries {
                 }
             }
         } catch (SQLException | RuntimeException e) {
-            throw new LogDataException("could not read match dates for " + query, e);
+            throw queryFailed("could not read match dates", query, e);
         }
         return MatchSummary.of(days);
     }
@@ -103,6 +105,7 @@ public final class ChatQueries {
      * Number of matching entries for {@code query}. Honours offset and limit; ignores context lines.
      */
     public long countMatches(ChatQuery query) {
+        rejectUnsupportedRegex(query);
         QueryBuilder builder = QueryBuilder.matches(query);
         try (PreparedStatement prepared = connection.prepareStatement(builder.sql())) {
             builder.bind(prepared);
@@ -111,7 +114,7 @@ public final class ChatQueries {
                 return result.getLong(1);
             }
         } catch (SQLException | RuntimeException e) {
-            throw new LogDataException("could not count matches for " + query, e);
+            throw queryFailed("could not count matches", query, e);
         }
     }
 
@@ -179,6 +182,41 @@ public final class ChatQueries {
                 }
             }
         }
+    }
+
+    /**
+     * DuckDB's RE2 engine rejects lookarounds and other Java-only constructs. Catching that here keeps the
+     * failure out of SQL, where the native error message is only on the cause and is easy to drop from logs.
+     */
+    private static void rejectUnsupportedRegex(ChatQuery query) {
+        if (query.regex() == null) return;
+        String feature = Re2Regex.unsupportedConstruct(query.regex());
+        if (feature != null) {
+            throw new LogDataException("unsupported regex: " + feature + " is not supported by RE2");
+        }
+    }
+
+    private static LogDataException queryFailed(String action, ChatQuery query, Exception error) {
+        String detail = innermostMessage(error);
+        if (query.regex() != null && hasText(detail)) {
+            return new LogDataException("could not run regex " + query.regex() + ": " + detail, error);
+        }
+        if (hasText(detail)) {
+            return new LogDataException(action + ": " + detail, error);
+        }
+        return new LogDataException(action + " " + query, error);
+    }
+
+    private static String innermostMessage(Throwable error) {
+        String message = null;
+        for (Throwable current = error; current != null; current = current.getCause()) {
+            if (hasText(current.getMessage())) message = current.getMessage();
+        }
+        return message;
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank() && !value.equals("null");
     }
 
     @FunctionalInterface

@@ -5,6 +5,7 @@ import me.wolfii.allthelogs.client.list.DisplayRow;
 import me.wolfii.allthelogs.client.list.PageBounds;
 import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.ChatLog;
+import me.wolfii.allthelogs.data.LogDataException;
 import me.wolfii.allthelogs.data.LogSource;
 import me.wolfii.allthelogs.data.MatchSummary;
 import org.junit.jupiter.api.Test;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.CompletionException;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -77,5 +79,13 @@ class LogBrowserQueriesTest {
         assertFalse(PageBounds.needsMoreToFill(many, 0, 200, true));
         assertEquals(24, PageBounds.extraFillLimit(200, 8));
         assertEquals(32, PageBounds.extraFillLimit(200, 32));
+    }
+
+    @Test
+    void unwrapsCompletionExceptionsForLogMessages() {
+        LogDataException storeError = new LogDataException("unsupported regex: negative lookahead is not supported by RE2");
+        Throwable wrapped = new CompletionException(storeError);
+        assertSame(storeError, LogBrowserQueries.unwrap(wrapped));
+        assertEquals(storeError.getMessage(), LogBrowserQueries.unwrap(wrapped).getMessage());
     }
 }

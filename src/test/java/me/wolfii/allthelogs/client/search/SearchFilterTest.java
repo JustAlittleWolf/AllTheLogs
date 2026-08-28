@@ -90,6 +90,10 @@ class SearchFilterTest {
         assertFalse(incomplete.canQuery());
         assertTrue(SearchFilter.defaults().withText("HoneY_D").withRegex(true).canQuery());
         assertTrue(SearchFilter.defaults().withText("(").canQuery());
+        String chatName = "(?:^|[\\]\\)\\>»\\s])([a-zA-Z0-9_]{3,16})(?:\\s*»|:)\\s+(?!(?:Offline|Online)\\b)\\S+.*";
+        SearchFilter lookaround = SearchFilter.defaults().withText(chatName).withRegex(true);
+        assertTrue(lookaround.invalidRegex());
+        assertFalse(lookaround.canQuery());
     }
 
     @Test
