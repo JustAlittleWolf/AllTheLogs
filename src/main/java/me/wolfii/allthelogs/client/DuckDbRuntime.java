@@ -15,8 +15,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * Loads the architecture-specific DuckDB native jar before the log store opens.
  */
 public final class DuckDbRuntime {
-    private static final AtomicReference<Progress> PROGRESS = new AtomicReference<>(
-        new Progress(Progress.Stage.LOADING, 0, 0, DuckDbJdbc.classifier(), null));
+    private static final AtomicReference<Progress> PROGRESS = new AtomicReference<>(new Progress(Progress.Stage.LOADING, 0, 0, DuckDbJdbc.classifier(), null));
     private static final Object LOCK = new Object();
     private static CompletableFuture<Void> inflight;
 
@@ -79,9 +78,7 @@ public final class DuckDbRuntime {
         client.execute(() -> {
             if (client.gui.screen() instanceof DuckDbSetupScreen screen) {
                 screen.refresh();
-            } else if (snapshot.stage() == Progress.Stage.FAILED
-                && client.gui.overlay() == null
-                && !(client.gui.screen() instanceof DuckDbSetupScreen)) {
+            } else if (snapshot.stage() == Progress.Stage.FAILED && client.gui.overlay() == null && !(client.gui.screen() instanceof DuckDbSetupScreen)) {
                 client.gui.setScreen(new DuckDbSetupScreen());
             }
         });

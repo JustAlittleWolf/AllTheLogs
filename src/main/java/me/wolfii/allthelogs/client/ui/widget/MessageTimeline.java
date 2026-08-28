@@ -117,15 +117,6 @@ public final class MessageTimeline extends BaseUIComponent {
         this.onExpand = onExpand;
     }
 
-    /**
-     * Loads more context from a separator caret. {@code extraLines} is how many neighbouring
-     * log lines to fetch on that side.
-     */
-    @FunctionalInterface
-    public interface ExpandHandler {
-        void expand(DisplayRow row, TimelineEdge side, int extraLines);
-    }
-
     public void onScrubBegin(Runnable onScrubBegin) {
         this.onScrubBegin = onScrubBegin;
     }
@@ -781,5 +772,14 @@ public final class MessageTimeline extends BaseUIComponent {
         if (value < 0) return 0;
         if (value > max) return max;
         return value;
+    }
+
+    /**
+     * Loads more context from a separator caret. {@code extraLines} is how many neighbouring
+     * log lines to fetch on that side.
+     */
+    @FunctionalInterface
+    public interface ExpandHandler {
+        void expand(DisplayRow row, TimelineEdge side, int extraLines);
     }
 }

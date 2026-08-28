@@ -27,9 +27,8 @@ public final class AllTheLogsClient implements ClientModInitializer {
     public static final String MOD_ID = "allthelogs";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
     private static final long SESSION_END_TOUCH_INTERVAL_MS = 60_000L;
-
-    private static LogStoreWorker worker;
     private static final AtomicBoolean storeStarted = new AtomicBoolean();
+    private static LogStoreWorker worker;
     private static long lastSessionEndTouchMs;
 
     public static LogStoreWorker worker() {
@@ -75,6 +74,25 @@ public final class AllTheLogsClient implements ClientModInitializer {
         return name == null || name.isBlank() ? null : name;
     }
 
+    /**
+     * Opens the log store after the DuckDB native library is on the classpath.
+     */
+    public static void onDriverReady() {
+        if (worker == null || !storeStarted.compareAndSet(false, true)) return;
+        worker.open(AllTheLogsPaths.database())
+            .thenCompose(ignored -> importCurrentLogs())
+            .thenCompose(ignored -> worker.startSession(minecraftVersion(), currentUsername()))
+            .whenComplete((log, error) -> {
+                if (error != null) {
+                    LOGGER.error("AllTheLogs failed to start", error);
+                    return;
+                }
+                if (log != null && log.source() instanceof LogSource.Session session && session.id() != null) {
+                    LOGGER.info(SessionMarker.message(session.id()));
+                }
+            });
+    }
+
     @Override
     public void onInitializeClient() {
         worker = new LogStoreWorker();
@@ -96,24 +114,5 @@ public final class AllTheLogsClient implements ClientModInitializer {
         });
 
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> worker.close());
-    }
-
-    /**
-     * Opens the log store after the DuckDB native library is on the classpath.
-     */
-    public static void onDriverReady() {
-        if (worker == null || !storeStarted.compareAndSet(false, true)) return;
-        worker.open(AllTheLogsPaths.database())
-            .thenCompose(ignored -> importCurrentLogs())
-            .thenCompose(ignored -> worker.startSession(minecraftVersion(), currentUsername()))
-            .whenComplete((log, error) -> {
-                if (error != null) {
-                    LOGGER.error("AllTheLogs failed to start", error);
-                    return;
-                }
-                if (log != null && log.source() instanceof LogSource.Session session && session.id() != null) {
-                    LOGGER.info(SessionMarker.message(session.id()));
-                }
-            });
     }
 }

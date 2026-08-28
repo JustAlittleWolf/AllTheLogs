@@ -49,7 +49,8 @@ public final class LogDiscovery {
         this.observer = observer;
         this.cancelled = cancelled == null ? () -> false : cancelled;
         this.skipUnopened = skipUnopened == null ? (source, entry) -> false : skipUnopened;
-        this.onSkipped = onSkipped == null ? () -> {} : onSkipped;
+        this.onSkipped = onSkipped == null ? () -> {
+        } : onSkipped;
         this.archives = new ArchiveWalker(this.options, this.pathMatcher, this.consumer, this.observer,
             this.cancelled, this.failures, this.skipUnopened, this.onSkipped);
     }

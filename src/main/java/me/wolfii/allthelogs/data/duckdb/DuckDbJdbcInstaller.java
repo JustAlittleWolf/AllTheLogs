@@ -58,6 +58,33 @@ public final class DuckDbJdbcInstaller {
         return DuckDBDriver.class.getResource("/" + DuckDbJdbc.nativeLibraryResource()) != null;
     }
 
+    private static String sha256(Path file, Consumer<Progress> progress, String classifier, long total)
+        throws Exception {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        long copied = 0;
+        try (InputStream in = Files.newInputStream(file)) {
+            byte[] buffer = new byte[64 * 1024];
+            int read;
+            while ((read = in.read(buffer)) >= 0) {
+                if (read == 0) continue;
+                digest.update(buffer, 0, read);
+                copied += read;
+                notify(progress, new Progress(Progress.Stage.VERIFYING, copied, total, classifier, null));
+            }
+        }
+        return HexFormat.of().formatHex(digest.digest());
+    }
+
+    private static Path shaPath(Path jar) {
+        return jar.resolveSibling(jar.getFileName() + ".sha256");
+    }
+
+    private static void notify(Consumer<Progress> progress, Progress snapshot) {
+        if (progress != null) {
+            progress.accept(snapshot);
+        }
+    }
+
     /**
      * Ensures the native library is on the classpath, downloading the platform jar when needed.
      */
@@ -158,33 +185,6 @@ public final class DuckDbJdbcInstaller {
             throw new IOException("unexpected SHA-256 checksum: " + body);
         }
         return hash.toLowerCase(Locale.ROOT);
-    }
-
-    private static String sha256(Path file, Consumer<Progress> progress, String classifier, long total)
-        throws Exception {
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        long copied = 0;
-        try (InputStream in = Files.newInputStream(file)) {
-            byte[] buffer = new byte[64 * 1024];
-            int read;
-            while ((read = in.read(buffer)) >= 0) {
-                if (read == 0) continue;
-                digest.update(buffer, 0, read);
-                copied += read;
-                notify(progress, new Progress(Progress.Stage.VERIFYING, copied, total, classifier, null));
-            }
-        }
-        return HexFormat.of().formatHex(digest.digest());
-    }
-
-    private static Path shaPath(Path jar) {
-        return jar.resolveSibling(jar.getFileName() + ".sha256");
-    }
-
-    private static void notify(Consumer<Progress> progress, Progress snapshot) {
-        if (progress != null) {
-            progress.accept(snapshot);
-        }
     }
 
     @FunctionalInterface

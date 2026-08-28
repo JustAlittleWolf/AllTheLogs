@@ -63,6 +63,25 @@ class LogStoreTest {
         };
     }
 
+    private static void replaceLogFilesWithBrokenSymlinks(Path directory) throws IOException {
+        List<Path> logs;
+        try (var stream = Files.list(directory)) {
+            logs = stream.filter(Files::isRegularFile).toList();
+        }
+        for (Path log : logs) {
+            Files.delete(log);
+            Files.createSymbolicLink(log, Path.of("allthelogs-missing-" + log.getFileName()));
+        }
+    }
+
+    private static void writeCorruptGzipZip(Path archive, String entryPath) throws IOException {
+        try (var zip = new java.util.zip.ZipOutputStream(Files.newOutputStream(archive))) {
+            zip.putNextEntry(new java.util.zip.ZipEntry(entryPath));
+            zip.write(new byte[]{0, 1, 2, 3, 4, 5, 6, 7});
+            zip.closeEntry();
+        }
+    }
+
     @BeforeEach
     void setUp() {
         store = LogStore.openInMemory();
@@ -81,25 +100,6 @@ class LogStoreTest {
             LogFixtures.modernLog("26.2", "delta", "needle in here", "epsilon"));
         LogFixtures.writePlain(logs, "debug.log", LogFixtures.legacyLog("zeta", "another needle"));
         return tempDir.resolve("instance");
-    }
-
-    private static void replaceLogFilesWithBrokenSymlinks(Path directory) throws IOException {
-        List<Path> logs;
-        try (var stream = Files.list(directory)) {
-            logs = stream.filter(Files::isRegularFile).toList();
-        }
-        for (Path log : logs) {
-            Files.delete(log);
-            Files.createSymbolicLink(log, Path.of("allthelogs-missing-" + log.getFileName()));
-        }
-    }
-
-    private static void writeCorruptGzipZip(Path archive, String entryPath) throws IOException {
-        try (var zip = new java.util.zip.ZipOutputStream(Files.newOutputStream(archive))) {
-            zip.putNextEntry(new java.util.zip.ZipEntry(entryPath));
-            zip.write(new byte[]{0, 1, 2, 3, 4, 5, 6, 7});
-            zip.closeEntry();
-        }
     }
 
     @Test

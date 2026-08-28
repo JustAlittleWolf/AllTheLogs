@@ -29,6 +29,11 @@ public final class DuckDbSetupScreen extends BaseOwoScreen<FlowLayout> {
         super(Component.translatable("allthelogs.screen.duckdb"));
     }
 
+    private static Component failureDetail() {
+        String error = DuckDbRuntime.progress().error();
+        return Component.translatable("allthelogs.duckdb.failed.detail", error == null ? "" : error);
+    }
+
     @Override
     protected @NotNull OwoUIAdapter<FlowLayout> createAdapter() {
         return OwoUIAdapter.create(this, UIContainers::verticalFlow);
@@ -95,11 +100,6 @@ public final class DuckDbSetupScreen extends BaseOwoScreen<FlowLayout> {
             retry.active(false);
         }
         DuckDbRuntime.ensure();
-    }
-
-    private static Component failureDetail() {
-        String error = DuckDbRuntime.progress().error();
-        return Component.translatable("allthelogs.duckdb.failed.detail", error == null ? "" : error);
     }
 
     @Override

@@ -22,6 +22,12 @@ class DuckDbJdbcTest {
     @TempDir
     Path tempDir;
 
+    private static boolean isEmpty(Path directory) throws IOException {
+        try (var stream = Files.list(directory)) {
+            return stream.findAny().isEmpty();
+        }
+    }
+
     @Test
     void mapsOsAndArchToMavenClassifier() {
         assertEquals("linux_amd64", DuckDbJdbc.classifier("Linux", "amd64"));
@@ -83,7 +89,10 @@ class DuckDbJdbcTest {
             List<Path> added = new ArrayList<>();
             AtomicBoolean present = new AtomicBoolean();
             DuckDbJdbcInstaller installer = new DuckDbJdbcInstaller(
-                cache, repo, path -> { added.add(path); present.set(true); }, present::get);
+                cache, repo, path -> {
+                added.add(path);
+                present.set(true);
+            }, present::get);
 
             installer.install(progress -> {
             });
@@ -138,12 +147,6 @@ class DuckDbJdbcTest {
             assertTrue(Files.notExists(cache.resolve(jarName + ".part")));
         } finally {
             server.stop(0);
-        }
-    }
-
-    private static boolean isEmpty(Path directory) throws IOException {
-        try (var stream = Files.list(directory)) {
-            return stream.findAny().isEmpty();
         }
     }
 }

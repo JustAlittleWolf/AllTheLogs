@@ -10,15 +10,6 @@ import java.nio.file.Path;
  * {@link URLClassLoader}.
  */
 public final class FabricClassPath implements DuckDbJdbcInstaller.ClassPathAppender {
-    @Override
-    public void add(Path jar) throws Exception {
-        URL url = jar.toUri().toURL();
-        if (addViaFabric(jar) || addViaKnot(url) || addViaUrlClassLoader(url)) {
-            return;
-        }
-        throw new IllegalStateException("could not add " + jar.getFileName() + " to the classpath");
-    }
-
     private static boolean addViaFabric(Path jar) {
         try {
             Class<?> launcherBase = Class.forName("net.fabricmc.loader.impl.launch.FabricLauncherBase");
@@ -55,5 +46,14 @@ public final class FabricClassPath implements DuckDbJdbcInstaller.ClassPathAppen
             return true;
         }
         return false;
+    }
+
+    @Override
+    public void add(Path jar) throws Exception {
+        URL url = jar.toUri().toURL();
+        if (addViaFabric(jar) || addViaKnot(url) || addViaUrlClassLoader(url)) {
+            return;
+        }
+        throw new IllegalStateException("could not add " + jar.getFileName() + " to the classpath");
     }
 }
