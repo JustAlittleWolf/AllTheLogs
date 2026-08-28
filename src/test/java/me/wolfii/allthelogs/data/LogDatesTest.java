@@ -52,4 +52,19 @@ class LogDatesTest {
         assertNull(LogDates.toSystemLocal(null, ZoneOffset.UTC));
         assertNull(LogDates.toSystemLocal(LocalDate.of(2026, 8, 25), null, ZoneOffset.UTC));
     }
+
+    @Test
+    void berlinDaylightSavingDependsOnTheLogDate() {
+        ZoneId berlin = ZoneId.of("Europe/Berlin");
+        LocalDateTime summer = LocalDateTime.of(2026, 8, 15, 12, 0);
+        LocalDateTime winter = LocalDateTime.of(2026, 1, 15, 12, 0);
+
+        Instant summerStored = LogDates.toSystemLocal(summer, berlin).atZone(ZoneId.systemDefault()).toInstant();
+        Instant winterStored = LogDates.toSystemLocal(winter, berlin).atZone(ZoneId.systemDefault()).toInstant();
+
+        assertEquals(summer.atZone(berlin).toInstant(), summerStored);
+        assertEquals(winter.atZone(berlin).toInstant(), winterStored);
+        assertEquals(ZoneOffset.ofHours(2), summer.atZone(berlin).getOffset());
+        assertEquals(ZoneOffset.ofHours(1), winter.atZone(berlin).getOffset());
+    }
 }
