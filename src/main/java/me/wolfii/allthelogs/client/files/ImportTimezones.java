@@ -4,91 +4,46 @@ import java.time.*;
 import java.util.*;
 
 /**
- * Curated import-timezone list: one well-known city per distinct offset pair (winter and summer),
- * plus parsing and daylight-saving helpers for the import form.
+ * IANA timezone list and daylight-saving helpers for the import form.
  */
 public final class ImportTimezones {
-    /**
-     * Cities preferred as the label for a zone group; earlier entries win when several IANA ids share
-     * the same winter/summer offsets.
-     */
-    private static final List<String> PREFERRED_CITIES = List.of(
-        "UTC",
-        "London", "Dublin", "Lisbon",
-        "Berlin", "Paris", "Rome", "Madrid", "Amsterdam", "Vienna", "Warsaw",
-        "Athens", "Helsinki", "Bucharest", "Cairo", "Johannesburg",
-        "Moscow", "Istanbul",
-        "Dubai",
-        "Karachi",
-        "Kolkata",
-        "Dhaka",
-        "Bangkok", "Jakarta",
-        "Shanghai", "Singapore", "Hong_Kong", "Perth",
-        "Tokyo", "Seoul",
-        "Adelaide",
-        "Sydney", "Melbourne",
-        "Auckland",
-        "Honolulu",
-        "Anchorage",
-        "Los_Angeles", "Vancouver",
-        "Denver", "Phoenix",
-        "Chicago", "Mexico_City",
-        "New_York", "Toronto",
-        "Halifax",
-        "Sao_Paulo", "Buenos_Aires",
-        "St_Johns",
-        "Azores"
-    );
+    private static List<Choice> cached;
 
     private ImportTimezones() {
     }
 
     /**
-     * One representative location per distinct winter/summer offset pair, labelled with the current
-     * UTC offset. The JVM default zone is preferred as the representative of its group.
+     * Every listed IANA zone, labelled with its id and current UTC offset. Typing filters this list;
+     * an empty query shows no suggestions.
      */
-    private static List<Choice> cached;
-
-    public static List<Choice> important() {
+    public static List<Choice> choices() {
         if (cached == null) {
-            cached = important(ZoneId.systemDefault(), Instant.now());
+            cached = buildChoices(Instant.now());
         }
         return cached;
     }
 
-    static List<Choice> important(ZoneId preferred, Instant at) {
-        Map<OffsetPair, List<ZoneId>> groups = new LinkedHashMap<>();
-        for (String id : ZoneId.getAvailableZoneIds()) {
-            if (!isRepresentativeId(id)) continue;
-            ZoneId zone = ZoneId.of(id);
-            groups.computeIfAbsent(OffsetPair.of(zone, at), ignored -> new ArrayList<>()).add(zone);
+    static List<Choice> buildChoices(Instant at) {
+        Set<String> ids = new TreeSet<>(ZoneId.getAvailableZoneIds());
+        ids.add("UTC");
+        List<Choice> choices = new ArrayList<>(ids.size());
+        for (String id : ids) {
+            if (!isListedId(id)) continue;
+            choices.add(Choice.of(ZoneId.of(id), at));
         }
-        groups.computeIfAbsent(OffsetPair.of(ZoneOffset.UTC, at), ignored -> new ArrayList<>())
-            .add(ZoneOffset.UTC);
-
-        List<Choice> choices = new ArrayList<>();
-        Set<OffsetPair> seen = new HashSet<>();
-        for (Map.Entry<OffsetPair, List<ZoneId>> entry : groups.entrySet()) {
-            if (!seen.add(entry.getKey())) continue;
-            ZoneId representative = pickRepresentative(entry.getValue(), preferred);
-            choices.add(Choice.of(representative, at, entry.getValue()));
-        }
-        choices.sort(Comparator
-            .comparingInt((Choice choice) -> choice.offset().getTotalSeconds())
-            .thenComparing(choice -> choice.city().toLowerCase(Locale.ROOT)));
+        choices.sort(Comparator.comparing(choice -> choice.zone().getId()));
         return List.copyOf(choices);
     }
 
     /**
-     * Choices whose city, IANA id, or offset label contains {@code query}. An empty query returns
-     * {@link #important()}.
+     * Choices whose id, label, city name, or offset contains {@code query}. Blank input returns none.
      */
     public static List<Choice> matching(String query) {
-        return matching(query, important());
+        return matching(query, choices());
     }
 
     static List<Choice> matching(String query, List<Choice> choices) {
-        if (query == null || query.isBlank()) return choices;
+        if (query == null || query.isBlank()) return List.of();
         String needle = normalize(query);
         return choices.stream()
             .filter(choice -> matches(choice, needle))
@@ -96,11 +51,11 @@ public final class ImportTimezones {
     }
 
     /**
-     * Resolves typed text to a zone: a listed city or label, then an IANA id, then the system default
-     * when blank.
+     * Resolves typed text to a zone: an exact listed label or id, a single autocomplete match, a valid
+     * IANA id, or the system default when blank.
      */
     public static Optional<ZoneId> parse(String text) {
-        return parse(text, important(), ZoneId.systemDefault());
+        return parse(text, choices(), ZoneId.systemDefault());
     }
 
     static Optional<ZoneId> parse(String text, List<Choice> choices, ZoneId fallback) {
@@ -188,73 +143,31 @@ public final class ImportTimezones {
         return value.toLowerCase(Locale.ROOT).replace('_', ' ').trim();
     }
 
-    private static boolean isRepresentativeId(String id) {
+    private static boolean isListedId(String id) {
         if ("UTC".equals(id) || "GMT".equals(id)) return true;
         if (!id.contains("/")) return false;
-        if (id.startsWith("Etc/") || id.startsWith("SystemV/") || id.startsWith("US/")
-            || id.startsWith("Canada/") || id.startsWith("Brazil/") || id.startsWith("Chile/")
-            || id.startsWith("Mexico/") || id.startsWith("Antarctica/") || id.startsWith("Arctic/")
-            || id.startsWith("Pacific/Johnston")) {
-            return false;
-        }
-        return true;
-    }
-
-    private static ZoneId pickRepresentative(List<ZoneId> zones, ZoneId preferred) {
-        for (ZoneId zone : zones) {
-            if (zone.getId().equals(preferred.getId())) return zone;
-        }
-        ZoneId best = zones.getFirst();
-        int bestRank = rank(best);
-        for (ZoneId zone : zones) {
-            int rank = rank(zone);
-            if (rank < bestRank || (rank == bestRank && zone.getId().length() < best.getId().length())) {
-                best = zone;
-                bestRank = rank;
-            }
-        }
-        return best;
-    }
-
-    private static int rank(ZoneId zone) {
-        String city = zone.getId();
-        int slash = city.lastIndexOf('/');
-        if (slash >= 0) city = city.substring(slash + 1);
-        if ("UTC".equals(zone.getId()) || zone instanceof ZoneOffset) {
-            return -1;
-        }
-        int index = PREFERRED_CITIES.indexOf(city);
-        return index < 0 ? PREFERRED_CITIES.size() + city.length() : index;
+        return !id.startsWith("Etc/") && !id.startsWith("SystemV/");
     }
 
     /**
-     * @param offset the zone's offset at the instant the choice was built, used in {@link #label()}
-     * @param names  city names and IANA ids in the same offset group, used for autocomplete
+     * @param label full IANA id and current UTC offset, for example {@code Europe/Vienna (UTC+02:00)}
      */
-    public record Choice(ZoneId zone, String city, ZoneOffset offset, String label, List<String> names) {
+    public record Choice(ZoneId zone, ZoneOffset offset, String label, List<String> names) {
         public Choice {
             names = List.copyOf(names);
         }
 
         public static Choice of(ZoneId zone, Instant at) {
-            return of(zone, at, List.of(zone));
-        }
-
-        public static Choice of(ZoneId zone, Instant at, List<ZoneId> group) {
             ZoneOffset offset = zone.getRules().getOffset(at);
-            String city = cityName(zone);
-            String label = city + " (" + formatOffset(offset) + ")";
+            String id = zone.getId();
+            String label = id + " (" + formatOffset(offset) + ")";
             LinkedHashSet<String> names = new LinkedHashSet<>();
-            names.add(city);
-            names.add(zone.getId());
+            names.add(id);
             names.add(label);
             names.add(formatOffset(offset));
             names.add(compactOffset(offset));
-            for (ZoneId member : group) {
-                names.add(cityName(member));
-                names.add(member.getId());
-            }
-            return new Choice(zone, city, offset, label, List.copyOf(names));
+            names.add(cityName(zone));
+            return new Choice(zone, offset, label, List.copyOf(names));
         }
     }
 
