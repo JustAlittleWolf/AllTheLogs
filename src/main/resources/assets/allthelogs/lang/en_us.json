@@ -72,5 +72,16 @@
   "allthelogs.import.progress.done": "Import finished",
   "allthelogs.import.progress.cancel": "Cancel",
   "allthelogs.import.progress.cancelling": "Cancelling...",
-  "allthelogs.import.progress.cancelled": "Cancelled after %s files, %s entries"
+  "allthelogs.import.progress.cancelled": "Cancelled after %s files, %s entries",
+  "allthelogs.screen.duckdb": "DuckDB driver",
+  "allthelogs.duckdb.loading": "Loading DuckDB driver...",
+  "allthelogs.duckdb.loading.detail": "Preparing the %s native library.",
+  "allthelogs.duckdb.downloading": "Downloading DuckDB driver...",
+  "allthelogs.duckdb.downloading.detail": "Fetching %s (%s%%). This is cached for every Minecraft instance.",
+  "allthelogs.duckdb.verifying": "Verifying DuckDB driver...",
+  "allthelogs.duckdb.verifying.detail": "Checking the %s download.",
+  "allthelogs.duckdb.failed": "Couldn't load DuckDB",
+  "allthelogs.duckdb.failed.detail": "AllTheLogs needs the DuckDB driver for this computer. %s",
+  "allthelogs.duckdb.retry": "Try again",
+  "allthelogs.duckdb.quit": "Close game"
 }

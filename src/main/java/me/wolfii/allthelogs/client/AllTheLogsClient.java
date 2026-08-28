@@ -17,6 +17,7 @@ import org.slf4j.LoggerFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Fabric client entry: opens the log store, imports this instance's {@code logs} folder, captures live chat,
@@ -28,6 +29,7 @@ public final class AllTheLogsClient implements ClientModInitializer {
     private static final long SESSION_END_TOUCH_INTERVAL_MS = 60_000L;
 
     private static LogStoreWorker worker;
+    private static final AtomicBoolean storeStarted = new AtomicBoolean();
     private static long lastSessionEndTouchMs;
 
     public static LogStoreWorker worker() {
@@ -76,19 +78,7 @@ public final class AllTheLogsClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         worker = new LogStoreWorker();
-
-        worker.open(AllTheLogsPaths.database())
-            .thenCompose(ignored -> importCurrentLogs())
-            .thenCompose(ignored -> worker.startSession(minecraftVersion(), currentUsername()))
-            .whenComplete((log, error) -> {
-                if (error != null) {
-                    LOGGER.error("AllTheLogs failed to start", error);
-                    return;
-                }
-                if (log != null && log.source() instanceof LogSource.Session session && session.id() != null) {
-                    LOGGER.info(SessionMarker.message(session.id()));
-                }
-            });
+        DuckDbRuntime.ensure().thenRun(AllTheLogsClient::onDriverReady);
 
         ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, timestamp) -> capture(message));
         ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
@@ -106,5 +96,24 @@ public final class AllTheLogsClient implements ClientModInitializer {
         });
 
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> worker.close());
+    }
+
+    /**
+     * Opens the log store after the DuckDB native library is on the classpath.
+     */
+    public static void onDriverReady() {
+        if (worker == null || !storeStarted.compareAndSet(false, true)) return;
+        worker.open(AllTheLogsPaths.database())
+            .thenCompose(ignored -> importCurrentLogs())
+            .thenCompose(ignored -> worker.startSession(minecraftVersion(), currentUsername()))
+            .whenComplete((log, error) -> {
+                if (error != null) {
+                    LOGGER.error("AllTheLogs failed to start", error);
+                    return;
+                }
+                if (log != null && log.source() instanceof LogSource.Session session && session.id() != null) {
+                    LOGGER.info(SessionMarker.message(session.id()));
+                }
+            });
     }
 }

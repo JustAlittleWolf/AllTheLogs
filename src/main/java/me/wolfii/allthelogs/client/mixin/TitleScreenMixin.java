@@ -9,7 +9,10 @@ import com.llamalad7.mixinextras.sugar.Share;
 import com.llamalad7.mixinextras.sugar.ref.LocalBooleanRef;
 import com.llamalad7.mixinextras.sugar.ref.LocalIntRef;
 import me.wolfii.allthelogs.client.AllTheLogsScreens;
+import me.wolfii.allthelogs.client.DuckDbRuntime;
+import me.wolfii.allthelogs.client.ui.screen.DuckDbSetupScreen;
 import net.fabricmc.fabric.api.client.screen.v1.Screens;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import org.spongepowered.asm.mixin.Mixin;
@@ -19,12 +22,28 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Adds the AllTheLogs icon to the title-screen icon row, the same way ScreenshotViewer does.
+ * Blocks the title screen until DuckDB is available, then adds the AllTheLogs icon to the icon row.
  */
 @Mixin(TitleScreen.class)
 public abstract class TitleScreenMixin {
     @Shadow
     protected abstract int getHorizontalPosition(int currentButton, int numberOfButtons, int buttonWidth);
+
+    @Inject(method = "init", at = @At("HEAD"), cancellable = true)
+    private void allthelogs$requireDuckDb(CallbackInfo ci) {
+        if (DuckDbRuntime.isReady()) return;
+        Minecraft client = Minecraft.getInstance();
+        client.execute(() -> {
+            if (DuckDbRuntime.isReady()) {
+                client.gui.setScreen(new TitleScreen());
+                return;
+            }
+            if (!(client.gui.screen() instanceof DuckDbSetupScreen)) {
+                client.gui.setScreen(new DuckDbSetupScreen());
+            }
+        });
+        ci.cancel();
+    }
 
     @Definition(id = "numberOfButtons", local = @Local(type = int.class, name = "numberOfButtons"))
     @Expression("numberOfButtons = ?")
