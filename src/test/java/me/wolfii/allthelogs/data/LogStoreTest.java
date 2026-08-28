@@ -1076,6 +1076,37 @@ class LogStoreTest {
     }
 
     @Test
+    void skipPagesThroughMatchesThatShareATimestamp() {
+        LocalDateTime at = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+        store.startSession("26.2", at);
+        store.importSessionMessage("one", at);
+        store.importSessionMessage("two", at);
+        store.importSessionMessage("three", at);
+        store.importSessionMessage("four", at);
+        store.importSessionMessage("five", at);
+
+        List<ChatEntry> page1 = store.findEntries(ChatQuery.all().withLimit(2));
+        assertEquals(List.of("one", "two"), page1.stream().map(ChatEntry::message).toList());
+
+        List<ChatEntry> page2 = store.findEntries(ChatQuery.all()
+            .withOffset(page1.getLast().timestamp().minusNanos(1))
+            .withSkip(page1.size())
+            .withLimit(2));
+        assertEquals(List.of("three", "four"), page2.stream().map(ChatEntry::message).toList());
+
+        List<ChatEntry> page3 = store.findEntries(ChatQuery.all()
+            .withOffset(page2.getLast().timestamp().minusNanos(1))
+            .withSkip(page1.size() + page2.size())
+            .withLimit(2));
+        assertEquals(List.of("five"), page3.stream().map(ChatEntry::message).toList());
+
+        List<ChatEntry> dropped = store.findEntries(ChatQuery.all()
+            .withOffset(page1.getLast().timestamp())
+            .withLimit(2));
+        assertTrue(dropped.isEmpty());
+    }
+
+    @Test
     void clientEntriesSupportContextLines() {
         LocalDateTime base = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
         store.startSession("26.2", base);

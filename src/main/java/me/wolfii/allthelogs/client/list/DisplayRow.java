@@ -3,6 +3,7 @@ package me.wolfii.allthelogs.client.list;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.ChatLog;
+import me.wolfii.allthelogs.data.LogSource;
 
 import java.util.List;
 import java.util.Objects;
@@ -76,20 +77,30 @@ public record DisplayRow(
         return entry.chatLog();
     }
 
+    /**
+     * Whether {@code other} is another line from the same imported file or session, ignoring metadata
+     * that can change while a session is live (such as {@link ChatLog#endTime()}).
+     */
+    public boolean sameLog(DisplayRow other) {
+        return other != null && chatLog().source().equals(other.chatLog().source());
+    }
+
     public int lineIndex() {
         return entry.lineIndex();
     }
 
     public RowKey key() {
-        return new RowKey(chatLog(), lineIndex());
+        return new RowKey(chatLog().source(), lineIndex());
     }
 
     /**
      * Identifies a row across page reloads, so scroll anchors and selections survive them.
+     * Keyed by source and line, not the whole {@link ChatLog}, because session capture updates
+     * {@code endTime} without changing the identity of earlier lines.
      */
-    public record RowKey(ChatLog chatLog, int lineIndex) {
+    public record RowKey(LogSource source, int lineIndex) {
         public RowKey {
-            Objects.requireNonNull(chatLog, "chatLog");
+            Objects.requireNonNull(source, "source");
         }
     }
 }

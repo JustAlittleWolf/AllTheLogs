@@ -29,6 +29,16 @@ public final class PageBounds {
     }
 
     /**
+     * Continues a paged query from {@code cursor} without dropping other matches that share that
+     * second. The store cursor is exclusive on timestamp only, so the edge second is included with
+     * {@link #exclusiveOffset} and already-buffered hits at that time are skipped.
+     */
+    public static ChatQuery continueFrom(ChatQuery page, LocalDateTime cursor, int alreadyAtCursor) {
+        return page.withOffset(exclusiveOffset(cursor, page.sort()))
+            .withSkip(Math.max(0, alreadyAtCursor));
+    }
+
+    /**
      * Whether matches exist before this page, judged against the whole matched range.
      */
     public static boolean hasBefore(ChatQuery.Sort sort, List<DisplayRow> rows, MatchSummary summary) {

@@ -42,6 +42,27 @@ class ResultWindowTest {
     }
 
     @Test
+    void matchCountAtCountsHitsThatShareATimestamp() {
+        LocalDateTime time = LocalDateTime.of(2026, 8, 26, 10, 0);
+        List<DisplayRow> rows = List.of(rowAt(time, 0), rowAt(time, 1), rowAt(time.plusSeconds(1), 2));
+        assertEquals(2, DisplayRows.matchCountAt(rows, time));
+        assertEquals(0, DisplayRows.matchCountAt(rows, time.plusHours(1)));
+    }
+
+    @Test
+    void rowKeyIgnoresSessionEndTimeSoLaterCapturesDoNotLookNew() {
+        LocalDateTime start = LocalDateTime.of(2026, 8, 26, 10, 0);
+        ChatLog first = new ChatLog(new LogSource.Session("live"), start.toLocalDate(), "26.2", start, start);
+        ChatLog later = new ChatLog(new LogSource.Session("live"), start.toLocalDate(), "26.2", start,
+            start.plusMinutes(5));
+        DisplayRow before = new DisplayRow(new ChatEntry(first, start, 0, "a"), true, List.of());
+        DisplayRow after = new DisplayRow(new ChatEntry(later, start, 0, "a"), true, List.of());
+        assertEquals(before.key(), after.key());
+        assertEquals(0, DisplayRows.countNewKeys(List.of(after), DisplayRows.keysOf(List.of(before))));
+        assertEquals(1, DisplayRows.mergeUnique(List.of(before), List.of(after)).size());
+    }
+
+    @Test
     void matchCountCountsOnlyHits() {
         List<DisplayRow> rows = List.of(row("a.log", 0), row("a.log", 1));
         assertEquals(2, DisplayRows.matchCount(rows));
