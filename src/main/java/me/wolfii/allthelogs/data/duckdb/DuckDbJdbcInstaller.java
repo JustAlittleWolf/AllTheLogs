@@ -1,6 +1,8 @@
 package me.wolfii.allthelogs.data.duckdb;
 
 import org.duckdb.DuckDBDriver;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -26,6 +28,7 @@ import java.util.function.Consumer;
  * so {@code DuckDBNative} can unpack the bundled library.
  */
 public final class DuckDbJdbcInstaller {
+    private static final Logger LOGGER = LoggerFactory.getLogger("allthelogs");
     private static final Duration TIMEOUT = Duration.ofMinutes(2);
 
     private final Path cacheDirectory;
@@ -74,6 +77,7 @@ public final class DuckDbJdbcInstaller {
         if (!alreadyPresent.getAsBoolean()) {
             throw new IOException("DuckDB native library was not found after adding " + jar.getFileName());
         }
+        LOGGER.info("Loaded DuckDB JDBC driver");
         notify(progress, Progress.ready());
     }
 
@@ -97,6 +101,7 @@ public final class DuckDbJdbcInstaller {
     }
 
     private void download(Path jar, String classifier, Consumer<Progress> progress) throws Exception {
+        LOGGER.info("Downloading DuckDB JDBC jar ({})", classifier);
         String jarUrl = DuckDbJdbc.mavenJarUrl(repository, classifier);
         String expectedSha = fetchSha256(jarUrl + ".sha256");
         Path part = jar.resolveSibling(jar.getFileName() + ".part");
@@ -134,6 +139,7 @@ public final class DuckDbJdbcInstaller {
         }
         Files.move(part, jar, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         Files.writeString(shaPath(jar), actual, StandardCharsets.UTF_8);
+        LOGGER.info("Downloaded DuckDB JDBC jar to {}", jar);
     }
 
     private String fetchSha256(String url) throws Exception {
