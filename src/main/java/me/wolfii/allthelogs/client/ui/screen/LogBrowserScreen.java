@@ -152,7 +152,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     private void applyFilter(SearchFilter next) {
         queries.setFilter(next);
         refreshSearchColor();
-        if (filters != null) filters.syncSortButtons();
+        if (filters != null) filters.syncVersionButton();
     }
 
     private void refreshSearchColor() {

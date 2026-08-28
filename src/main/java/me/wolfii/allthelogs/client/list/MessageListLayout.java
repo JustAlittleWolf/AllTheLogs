@@ -23,7 +23,6 @@ public final class MessageListLayout {
     public static final String CARET_DOWN = "\u25BC";
     public static final int CARET_WIDTH = 8;
     public static final int CARET_GAP = 3;
-    public static final int CARET_LINE_GAP = 4;
 
     private final int[] rowY;
     private final int[] rowHeight;
@@ -121,20 +120,16 @@ public final class MessageListLayout {
     }
 
     /**
-     * Local-x where the gray rule starts, after any expand carets. {@code originX} is where the carets (and
-     * the rule when there are none) begin, typically the message column.
+     * Local-x where the gray rule starts. The rule runs from the left inset across the list; expand
+     * carets are drawn later, aligned with the message column.
      */
     public static int separatorLineLocalX(Separator separator, int pad) {
-        int carets = 0;
-        if (separator.expandUp()) carets++;
-        if (separator.expandDown()) carets++;
-        if (carets == 0) return pad;
-        return pad + carets * CARET_WIDTH + Math.max(0, carets - 1) * CARET_GAP + CARET_LINE_GAP;
+        return pad;
     }
 
     /**
      * Which expand caret {@code localX} is over, or {@code null} when the pointer is on the rule itself.
-     * {@code originX} is the same origin passed to {@link #separatorLineLocalX}.
+     * {@code originX} is the message-column origin of the carets.
      */
     public static ExpandDirection expandAtLocalX(Separator separator, int pad, double localX) {
         int x = pad;
@@ -163,11 +158,10 @@ public final class MessageListLayout {
 
     private static Separator separatorBetween(int y, int afterRow, DisplayRow previous, DisplayRow current) {
         boolean sameLog = previous.chatLog().equals(current.chatLog());
-        boolean missingLines = sameLog && Math.abs(current.lineIndex() - previous.lineIndex()) > 1;
-        if (!missingLines && sameLog) return null;
-        boolean expandUp = current.expandUp() || missingLines;
-        boolean expandDown = previous.expandDown() || missingLines;
-        return new Separator(y, afterRow, expandUp, expandDown);
+        if (sameLog && !previous.expandDown() && !current.expandUp()) {
+            return null;
+        }
+        return new Separator(y, afterRow, current.expandUp(), previous.expandDown());
     }
 
     public int contentHeight() {
