@@ -1,6 +1,6 @@
 package me.wolfii.allthelogs.client.search;
 
-import me.wolfii.allthelogs.data.ChatQuery;
+import me.wolfii.allthelogs.api.ChatQuery;
 
 import java.time.LocalDateTime;
 import java.util.Locale;
@@ -178,7 +178,7 @@ public record SearchFilter(
 
     /**
      * Same as {@link #toQuery()} but without context lines, a page limit, or an offset, for
-     * {@link me.wolfii.allthelogs.data.LogStore#summarizeMatches(ChatQuery)}.
+     * {@link me.wolfii.allthelogs.api.LogDatabase#summarizeMatches(me.wolfii.allthelogs.api.ChatQuery)}.
      */
     public ChatQuery toSummaryQuery() {
         return toStoreQuery(0, -1, null);

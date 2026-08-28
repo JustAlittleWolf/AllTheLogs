@@ -58,10 +58,6 @@ public final class LogStoreWorker implements AutoCloseable {
         cancelImport.set(true);
     }
 
-    public CompletableFuture<ChatLog> startSession(String minecraftVersion) {
-        return startSession(minecraftVersion, null);
-    }
-
     public CompletableFuture<ChatLog> startSession(String minecraftVersion, String minecraftUser) {
         return submit(() -> requireStore().startSession(minecraftVersion, minecraftUser));
     }
@@ -91,18 +87,18 @@ public final class LogStoreWorker implements AutoCloseable {
         return store != null;
     }
 
-    public CompletableFuture<List<ChatEntry>> findEntries(ChatQuery query) {
-        ChatQuery copy = Objects.requireNonNull(query, "query");
+    public CompletableFuture<List<ChatEntry>> findEntries(me.wolfii.allthelogs.api.ChatQuery query) {
+        var copy = Objects.requireNonNull(query, "query");
         return submit(() -> requireStore().findEntries(copy));
     }
 
-    public CompletableFuture<MatchSummary> summarizeMatches(ChatQuery query) {
-        ChatQuery copy = Objects.requireNonNull(query, "query");
+    public CompletableFuture<MatchSummary> summarizeMatches(me.wolfii.allthelogs.api.ChatQuery query) {
+        var copy = Objects.requireNonNull(query, "query");
         return submit(() -> requireStore().summarizeMatches(copy));
     }
 
-    public CompletableFuture<Long> countMatches(ChatQuery query) {
-        ChatQuery copy = Objects.requireNonNull(query, "query");
+    public CompletableFuture<Long> countMatches(me.wolfii.allthelogs.api.ChatQuery query) {
+        var copy = Objects.requireNonNull(query, "query");
         return submit(() -> requireStore().countMatches(copy));
     }
 

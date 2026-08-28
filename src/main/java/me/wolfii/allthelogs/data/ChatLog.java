@@ -14,7 +14,7 @@ import java.util.Objects;
  *                         timezone like chat entries. For a client session this is when the session started
  * @param endTime          timestamp of the last logged line, not just chat entries; converted from the import
  *                         timezone like chat entries. For a client session this is updated by
- *                         {@link LogStore#importSessionMessage(String)}
+ *                         {@link LogStore#importSessionMessage(String, long[])}
  * @param minecraftUser    the player from a {@code Setting user:} line, or {@code null} if unknown
  */
 public record ChatLog(
@@ -24,11 +24,11 @@ public record ChatLog(
     LocalDateTime startTime,
     LocalDateTime endTime,
     String minecraftUser
-) {
+) implements me.wolfii.allthelogs.api.ChatLog {
     /**
      * Placeholder used when the Minecraft version could not be determined from the log contents.
      */
-    public static final String UNKNOWN_VERSION = "unknown";
+    public static final String UNKNOWN_VERSION = me.wolfii.allthelogs.api.ChatLog.UNKNOWN_VERSION;
 
     public ChatLog {
         Objects.requireNonNull(source, "source");

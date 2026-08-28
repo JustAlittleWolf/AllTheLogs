@@ -1,8 +1,8 @@
 package me.wolfii.allthelogs.data.query;
 
+import me.wolfii.allthelogs.api.ChatQuery;
 import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.ChatLog;
-import me.wolfii.allthelogs.data.ChatQuery;
 import me.wolfii.allthelogs.data.LogDataException;
 import me.wolfii.allthelogs.data.LogStoreMetadata;
 import me.wolfii.allthelogs.data.MatchDay;

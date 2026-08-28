@@ -1,5 +1,7 @@
 package me.wolfii.allthelogs.data;
 
+import me.wolfii.allthelogs.api.ChatQuery.Sort;
+
 import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -7,17 +9,6 @@ import java.util.function.Consumer;
 /**
  * Describes which chat entries to retrieve. Start from {@link #all()} and narrow it down with chained methods;
  * every method returns a new query, so instances are safe to share and reuse.
- * {@snippet :
- * ChatQuery query = ChatQuery.all()
- *         .withRegex("(?i)welcome to")
- *         .withVersion("26.2")
- *         .startingAt(from)
- *         .upUntil(to)
- *         .withSort(Sort.DESCENDING)
- *         .withOffset(lastSeen)
- *         .withLimit(100)
- *         .withContextLines(2);
- *}
  *
  * @param substring     text every matching message must contain, or {@code null} for no substring filter
  * @param caseSensitive whether {@code substring} is compared case sensitively
@@ -43,7 +34,7 @@ public record ChatQuery(
     Sort sort,
     LocalDateTime offset,
     long skip
-) {
+) implements me.wolfii.allthelogs.api.ChatQuery {
     public ChatQuery {
         Objects.requireNonNull(sort, "sort");
         if (contextLines < 0) throw new IllegalArgumentException("contextLines must not be negative");
@@ -64,6 +55,7 @@ public record ChatQuery(
      * Keeps only entries whose message contains {@code substring}, compared case insensitively.
      * Replaces any previously set substring; a substring and a regex can be combined and both must then match.
      */
+    @Override
     public ChatQuery withSubstring(String substring) {
         Objects.requireNonNull(substring, "substring");
         return with(draft -> {
@@ -75,6 +67,7 @@ public record ChatQuery(
     /**
      * Like {@link #withSubstring(String)} but comparing case sensitively.
      */
+    @Override
     public ChatQuery withSubstringCaseSensitive(String substring) {
         Objects.requireNonNull(substring, "substring");
         return with(draft -> {
@@ -87,6 +80,7 @@ public record ChatQuery(
      * Keeps only entries whose message matches the given RE2 regular expression anywhere in the message.
      * Use inline flags such as {@code (?i)} for case insensitive matching.
      */
+    @Override
     public ChatQuery withRegex(String regex) {
         Objects.requireNonNull(regex, "regex");
         return with(draft -> draft.regex = regex);
@@ -96,6 +90,7 @@ public record ChatQuery(
      * Keeps only entries from logs whose {@link ChatLog#minecraftVersion()} is {@code version}.
      * Replaces any previously set version. Context lines come from the same log, so they share this version.
      */
+    @Override
     public ChatQuery withVersion(String version) {
         Objects.requireNonNull(version, "version");
         return with(draft -> draft.version = version);
@@ -105,6 +100,7 @@ public record ChatQuery(
      * Keeps only entries whose timestamp is at or after {@code startingAt}, inclusive.
      * Unlike {@link #withOffset(LocalDateTime)}, this bound also clips context lines.
      */
+    @Override
     public ChatQuery startingAt(LocalDateTime startingAt) {
         Objects.requireNonNull(startingAt, "startingAt");
         return with(draft -> draft.startingAt = startingAt);
@@ -114,6 +110,7 @@ public record ChatQuery(
      * Keeps only entries whose timestamp is before {@code upUntil}, exclusive.
      * Unlike {@link #withOffset(LocalDateTime)}, this bound also clips context lines.
      */
+    @Override
     public ChatQuery upUntil(LocalDateTime upUntil) {
         Objects.requireNonNull(upUntil, "upUntil");
         return with(draft -> draft.upUntil = upUntil);
@@ -123,6 +120,7 @@ public record ChatQuery(
      * Also returns up to {@code contextLines} entries before and after every match, taken from the same log file.
      * Overlapping context windows are merged, so no entry is ever returned twice.
      */
+    @Override
     public ChatQuery withContextLines(int contextLines) {
         return with(draft -> draft.contextLines = contextLines);
     }
@@ -131,6 +129,7 @@ public record ChatQuery(
      * Caps the number of matching entries. Context lines are extra and do not count toward the limit.
      * A negative value means no limit.
      */
+    @Override
     public ChatQuery withLimit(long limit) {
         return with(draft -> draft.limit = limit);
     }
@@ -138,6 +137,7 @@ public record ChatQuery(
     /**
      * Sets the result order. Ascending is oldest first; descending is newest first.
      */
+    @Override
     public ChatQuery withSort(Sort sort) {
         return with(draft -> draft.sort = sort);
     }
@@ -150,6 +150,7 @@ public record ChatQuery(
      * including at the offset timestamp itself. Combine with a limit by passing the last returned match timestamp as
      * the next page's offset.
      */
+    @Override
     public ChatQuery withOffset(LocalDateTime offset) {
         Objects.requireNonNull(offset, "offset");
         return with(draft -> draft.offset = offset);
@@ -159,15 +160,9 @@ public record ChatQuery(
      * Skips the first {@code skip} matches after filtering and ordering. Used by the timeline to land inside
      * a cluster of messages that share a timestamp. {@code 0} means no skip.
      */
+    @Override
     public ChatQuery withSkip(long skip) {
         return with(draft -> draft.skip = skip);
-    }
-
-    /**
-     * Whether this query filters on the message text at all.
-     */
-    public boolean hasTextFilter() {
-        return substring != null || regex != null;
     }
 
     /**
@@ -178,24 +173,6 @@ public record ChatQuery(
         Draft draft = new Draft(this);
         change.accept(draft);
         return draft.build();
-    }
-
-    /**
-     * Result order by timestamp, then file id, then line index.
-     */
-    public enum Sort {
-        /**
-         * Oldest first; the default.
-         */
-        ASCENDING,
-        /**
-         * Newest first.
-         */
-        DESCENDING;
-
-        public Sort opposite() {
-            return this == ASCENDING ? DESCENDING : ASCENDING;
-        }
     }
 
     /**

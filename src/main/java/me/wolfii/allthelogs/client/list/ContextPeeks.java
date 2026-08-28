@@ -1,7 +1,7 @@
 package me.wolfii.allthelogs.client.list;
 
+import me.wolfii.allthelogs.api.ChatQuery;
 import me.wolfii.allthelogs.data.ChatLog;
-import me.wolfii.allthelogs.data.ChatQuery;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
