@@ -59,9 +59,15 @@ dependencies {
 }
 
 tasks.processResources {
-    val properties = mapOf("version" to version)
+    val properties = mapOf(
+        "version" to version,
+        "duckdbVersion" to libs.versions.duckdb.get()
+    )
     inputs.properties(properties)
     filesMatching("fabric.mod.json") {
+        expand(properties)
+    }
+    filesMatching("**/duckdb/jdbc.properties") {
         expand(properties)
     }
 }

@@ -1,14 +1,17 @@
 package me.wolfii.allthelogs.data.duckdb;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.Locale;
+import java.util.Properties;
 
 /**
  * Maven coordinates and cache layout for the architecture-specific DuckDB JDBC native jar.
  * Cached under {@code ~/.duckdb/jdbc/<version>} so any app on the machine can reuse it.
  */
 public final class DuckDbJdbc {
-    public static final String VERSION = "1.5.5.1";
+    public static final String VERSION = readVersion();
     public static final String GROUP = "org.duckdb";
     public static final String ARTIFACT = "duckdb_jdbc";
     public static final String MAVEN_REPO = "https://repo1.maven.org/maven2";
@@ -76,5 +79,22 @@ public final class DuckDbJdbc {
             case "aarch64", "arm64" -> "arm64";
             default -> arch.replaceAll("[^a-z0-9_\\-.]", "");
         };
+    }
+
+    private static String readVersion() {
+        try (InputStream in = DuckDbJdbc.class.getResourceAsStream("jdbc.properties")) {
+            if (in == null) {
+                throw new IllegalStateException("missing duckdb jdbc.properties");
+            }
+            Properties properties = new Properties();
+            properties.load(in);
+            String version = properties.getProperty("version");
+            if (version == null || version.isBlank()) {
+                throw new IllegalStateException("duckdb jdbc.properties has no version");
+            }
+            return version.trim();
+        } catch (IOException e) {
+            throw new ExceptionInInitializerError(e);
+        }
     }
 }
