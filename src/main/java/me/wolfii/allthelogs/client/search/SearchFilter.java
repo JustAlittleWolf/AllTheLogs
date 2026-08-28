@@ -159,11 +159,12 @@ public record SearchFilter(
     }
 
     /**
-     * Context sent to the store: one extra line around each hit so the list can tell whether a cluster
-     * can still expand, without showing that probe line.
+     * Context sent to the store. Unfiltered pages return every matching line, so they do not fetch
+     * extra context. Text search fetches one hidden extra line around each hit so cluster edges know
+     * whether they can still expand.
      */
     int queryContextLines() {
-        if (!hasText()) return contextLines;
+        if (!hasText()) return 0;
         return contextLines + 1;
     }
 

@@ -40,8 +40,10 @@ class MessageListLayoutTest {
     void insertsADateHeaderAndAClusterGapBetweenDistantMatches() {
         LocalDateTime time = LocalDateTime.of(2026, 8, 26, 10, 0);
         ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), time.toLocalDate(), "26.2", time, time);
-        DisplayRow first = new DisplayRow(new ChatEntry(log, time, 0, "a"), true, List.of());
-        DisplayRow later = new DisplayRow(new ChatEntry(log, time.plusHours(1), 20, "b"), true, List.of());
+        DisplayRow first = new DisplayRow(new ChatEntry(log, time, 0, "a"), true, List.of())
+            .withExpand(false, true);
+        DisplayRow later = new DisplayRow(new ChatEntry(log, time.plusHours(1), 20, "b"), true, List.of())
+            .withExpand(true, false);
         MessageListLayout layout = MessageListLayout.of(List.of(first, later), 5);
 
         assertEquals(1, layout.dates().size());
@@ -120,6 +122,17 @@ class MessageListLayoutTest {
         MessageListLayout.Separator separator = layout.separators().getFirst();
         assertFalse(separator.expandUp());
         assertFalse(separator.expandDown());
+    }
+
+    @Test
+    void unfilteredLineIndexGapsDoNotLookLikeHiddenChat() {
+        LocalDateTime time = LocalDateTime.of(2026, 8, 26, 10, 0);
+        ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), time.toLocalDate(), "26.2", time, time);
+        DisplayRow first = new DisplayRow(new ChatEntry(log, time, 0, "a"), true, List.of());
+        DisplayRow later = new DisplayRow(new ChatEntry(log, time.plusHours(1), 20, "b"), true, List.of());
+        MessageListLayout layout = MessageListLayout.of(List.of(first, later), 5);
+        assertEquals(0, layout.separators().size());
+        assertEquals(layout.rowY(0) + MessageListLayout.ROW_HEIGHT, layout.rowY(1));
     }
 
     @Test

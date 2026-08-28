@@ -92,6 +92,27 @@ class ContextPeeksTest {
         assertEquals(rows, ContextPeeks.strip(rows, 4, false, true));
     }
 
+    @Test
+    void dateFilteredGapsCanExpandOnTheSameDay() {
+        ChatLog log = log("a.log");
+        DisplayRow first = row(log, 0, "a", true);
+        DisplayRow later = row(log, 20, "b", true);
+        List<DisplayRow> marked = ContextPeeks.markFileGaps(List.of(first, later), true);
+        assertTrue(marked.getFirst().expandDown());
+        assertFalse(marked.getFirst().expandUp());
+        assertTrue(marked.getLast().expandUp());
+        assertFalse(marked.getLast().expandDown());
+    }
+
+    @Test
+    void unfilteredGapsAreNotMarkedForExpand() {
+        ChatLog log = log("a.log");
+        List<DisplayRow> rows = List.of(row(log, 0, "a", true), row(log, 20, "b", true));
+        assertEquals(rows, ContextPeeks.strip(rows, 4, false, true));
+        assertFalse(rows.getFirst().expandDown());
+        assertFalse(rows.getLast().expandUp());
+    }
+
     private static ChatLog log(String name) {
         LocalDateTime start = LocalDateTime.of(2026, 8, 26, 10, 0);
         return new ChatLog(new LogSource.File(Path.of(name)), start.toLocalDate(), "26.2", start, start);

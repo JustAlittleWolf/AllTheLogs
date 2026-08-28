@@ -161,7 +161,7 @@ final class LogBrowserQueries {
         onClient(AllTheLogsClient.worker().metadata(), (metadata, error) -> {
             if (info == null) return;
             if (error != null || metadata == null) {
-            info.tooltip(List.of(Component.translatable("allthelogs.meta.unavailable")));
+                info.tooltip(List.of(Component.translatable("allthelogs.meta.unavailable")));
                 return;
             }
             info.tooltip(StoreSummary.tooltip(metadata));
@@ -362,8 +362,15 @@ final class LogBrowserQueries {
     }
 
     private List<DisplayRow> displaySearchRows(List<ChatEntry> entries) {
-        return ContextPeeks.strip(displayRows(entries), filter.contextLines(), filter.hasText(),
-            filter.sort() == ChatQuery.Sort.ASCENDING);
+        List<DisplayRow> rows = displayRows(entries);
+        boolean oldestFirst = filter.sort() == ChatQuery.Sort.ASCENDING;
+        if (filter.hasText()) {
+            return ContextPeeks.strip(rows, filter.contextLines(), true, oldestFirst);
+        }
+        if (filter.hasVersion() || filter.startingAt() != null || filter.upUntil() != null) {
+            return ContextPeeks.markFileGaps(rows, oldestFirst);
+        }
+        return rows;
     }
 
     private List<DisplayRow> displayRows(List<ChatEntry> entries) {

@@ -13,7 +13,6 @@ import me.wolfii.allthelogs.client.search.DateParser;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
-import me.wolfii.allthelogs.data.ChatQuery;
 import net.minecraft.network.chat.Component;
 
 import java.time.LocalDateTime;
@@ -33,8 +32,6 @@ final class FilterOverlay {
     private final Consumer<SearchFilter> onChange;
 
     private ParentUIComponent filterPanel;
-    private ButtonComponent oldestFirst;
-    private ButtonComponent newestFirst;
     private final VersionMenu versionsMenu;
     private boolean open;
 
@@ -75,8 +72,6 @@ final class FilterOverlay {
             overlays.removeChild(filterPanel);
             filterPanel = null;
         }
-        oldestFirst = null;
-        newestFirst = null;
         versionsMenu.close();
         open = false;
     }
@@ -109,16 +104,6 @@ final class FilterOverlay {
             }
         }));
 
-        content.child(UIComponents.label(Component.translatable("allthelogs.filter.sort")));
-        FlowLayout sortRow = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
-        sortRow.gap(4);
-        oldestFirst = sortButton("allthelogs.filter.sort.ascending", ChatQuery.Sort.ASCENDING);
-        newestFirst = sortButton("allthelogs.filter.sort.descending", ChatQuery.Sort.DESCENDING);
-        sortRow.child(oldestFirst);
-        sortRow.child(newestFirst);
-        content.child(sortRow);
-        syncSortButtons();
-
         content.child(dateField("allthelogs.filter.from", current.startingAt(), parsed ->
             onChange.accept(filter.get().withStartingAt(parsed))));
         content.child(dateField("allthelogs.filter.until", current.upUntil(), parsed ->
@@ -142,18 +127,7 @@ final class FilterOverlay {
         return box;
     }
 
-    private ButtonComponent sortButton(String key, ChatQuery.Sort sort) {
-        return UIComponents.button(Component.translatable(key), button -> {
-            if (filter.get().sort() == sort) return;
-            onChange.accept(filter.get().withSort(sort));
-        });
-    }
-
-    void syncSortButtons() {
-        if (oldestFirst == null || newestFirst == null) return;
-        SearchFilter current = filter.get();
-        oldestFirst.active(current.sort() != ChatQuery.Sort.ASCENDING);
-        newestFirst.active(current.sort() != ChatQuery.Sort.DESCENDING);
+    void syncVersionButton() {
         versionsMenu.syncButton();
     }
 

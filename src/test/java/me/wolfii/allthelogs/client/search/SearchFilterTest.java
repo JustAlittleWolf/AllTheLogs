@@ -15,7 +15,7 @@ class SearchFilterTest {
     void emptyTextDoesNotAddAMessageFilter() {
         ChatQuery query = SearchFilter.defaults().toQuery();
         assertFalse(query.hasTextFilter());
-        assertEquals(SearchFilter.DEFAULT_CONTEXT_LINES, query.contextLines());
+        assertEquals(0, query.contextLines());
         assertEquals(SearchFilter.DEFAULT_LIMIT, query.limit());
         assertEquals(ChatQuery.Sort.ASCENDING, query.sort());
         assertEquals(4, SearchFilter.DEFAULT_CONTEXT_LINES);
@@ -62,7 +62,10 @@ class SearchFilterTest {
     void textSearchFetchesOneExtraContextLine() {
         assertEquals(1, SearchFilter.defaults().withText("hi").withContextLines(0).toQuery().contextLines());
         assertEquals(5, SearchFilter.defaults().withText("hi").toQuery().contextLines());
-        assertEquals(SearchFilter.DEFAULT_CONTEXT_LINES, SearchFilter.defaults().toQuery().contextLines());
+        assertEquals(0, SearchFilter.defaults().toQuery().contextLines());
+        assertEquals(0, SearchFilter.defaults().withVersion("26.2").toQuery().contextLines());
+        assertEquals(0, SearchFilter.defaults()
+            .withStartingAt(LocalDateTime.of(2026, 1, 1, 0, 0)).toQuery().contextLines());
     }
 
     @Test

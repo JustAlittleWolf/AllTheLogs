@@ -144,6 +144,11 @@ final class MessageListPainter {
             int midY = top + MessageListLayout.SEPARATOR_HEIGHT / 2;
             int caretX = listLeft + view.messageLocalX();
             int caretY = midY - 4;
+            int lineLeft = listLeft + ListView.PAD;
+            int lineRight = listRight - ListView.PAD;
+            if (lineRight > lineLeft) {
+                graphics.fill(lineLeft, midY, lineRight, midY + 1, Colors.SEPARATOR);
+            }
             if (separator.expandUp()) {
                 graphics.drawText(Component.literal(MessageListLayout.CARET_UP), caretX, caretY, 1,
                     Colors.SEPARATOR_CARET);
@@ -152,11 +157,6 @@ final class MessageListPainter {
             if (separator.expandDown()) {
                 graphics.drawText(Component.literal(MessageListLayout.CARET_DOWN), caretX, caretY, 1,
                     Colors.SEPARATOR_CARET);
-            }
-            int lineLeft = listLeft + MessageListLayout.separatorLineLocalX(separator, view.messageLocalX());
-            int lineRight = listRight - ListView.PAD;
-            if (lineRight > lineLeft) {
-                graphics.fill(lineLeft, midY, lineRight, midY + 1, Colors.SEPARATOR);
             }
         }
     }
