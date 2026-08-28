@@ -23,7 +23,7 @@ import java.util.function.Consumer;
 import java.util.function.IntSupplier;
 
 /**
- * Timezone text field with filtered suggestions of {@link ImportTimezones#important()}.
+ * Timezone text field with filtered suggestions of {@link ImportTimezones#choices()}.
  */
 final class TimezonePicker {
     private static final int MAX_SUGGESTIONS = 10;
@@ -54,7 +54,7 @@ final class TimezonePicker {
         column.child(UIComponents.label(Component.translatable("allthelogs.import.timezone")));
         ImportTimezones.Choice current = choiceFor(initial);
         box = UIComponents.textBox(Sizing.expand(), current.label());
-        box.setMaxLength(64);
+        box.setMaxLength(128);
         box.onChanged().subscribe(this::onTyped);
         FlowLayout line = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
         line.gap(8).verticalAlignment(VerticalAlignment.CENTER);
@@ -87,7 +87,7 @@ final class TimezonePicker {
     private void onTyped(String value) {
         if (updating) return;
         ImportTimezones.parse(value).ifPresent(zone ->
-            ImportTimezones.important().stream()
+            ImportTimezones.choices().stream()
                 .filter(choice -> choice.zone().equals(zone) || choice.zone().getId().equals(zone.getId()))
                 .findFirst()
                 .ifPresentOrElse(onSelect, () -> onSelect.accept(ImportTimezones.Choice.of(zone, java.time.Instant.now()))));
@@ -134,7 +134,7 @@ final class TimezonePicker {
     }
 
     private static ImportTimezones.Choice choiceFor(ZoneId zone) {
-        for (ImportTimezones.Choice choice : ImportTimezones.important()) {
+        for (ImportTimezones.Choice choice : ImportTimezones.choices()) {
             if (choice.zone().equals(zone) || choice.zone().getId().equals(zone.getId())) {
                 return choice;
             }
