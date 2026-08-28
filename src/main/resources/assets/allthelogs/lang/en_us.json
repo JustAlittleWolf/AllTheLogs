@@ -58,6 +58,8 @@
 	"allthelogs.status.optimizing": "Optimizing database...",
 	"allthelogs.status.imported": "Imported %s files, %s entries",
 	"allthelogs.status.imported.skipped": "No new files (%s already imported)",
+	"allthelogs.status.import.failed": "Import failed",
+	"allthelogs.import.progress.failed": "%s",
 	"allthelogs.screen.import.progress": "Importing logs",
 	"allthelogs.import.missing_path": "Choose a folder or archive first",
 	"allthelogs.import.progress.waiting": "Starting import...",
