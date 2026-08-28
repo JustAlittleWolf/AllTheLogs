@@ -72,6 +72,7 @@ public final class ImportProgressScreen extends BaseOwoScreen<FlowLayout> {
 
         counts = UIComponents.label(Component.translatable("allthelogs.import.progress.waiting"));
         counts.color(Color.ofRgb(0xA0A0A0));
+        counts.maxWidth(Math.max(160, this.width - 96));
         card.child(counts);
 
         current = UIComponents.label(Component.empty());
@@ -114,7 +115,9 @@ public final class ImportProgressScreen extends BaseOwoScreen<FlowLayout> {
             cancel.active(false);
             if (error != null) {
                 AllTheLogsClient.LOGGER.warn("Import failed", error);
-                heading.text(Component.translatable("allthelogs.status.error"));
+                heading.text(Component.translatable("allthelogs.status.import.failed"));
+                counts.text(Component.translatable("allthelogs.import.progress.failed",
+                    ImportProgressText.failureReason(error)));
                 current.text(Component.empty());
                 return;
             }

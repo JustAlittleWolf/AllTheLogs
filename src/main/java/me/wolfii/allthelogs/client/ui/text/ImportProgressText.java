@@ -1,15 +1,49 @@
 package me.wolfii.allthelogs.client.ui.text;
 
 import me.wolfii.allthelogs.data.ImportProgress;
+import me.wolfii.allthelogs.data.LogDataException;
 import me.wolfii.allthelogs.data.LogSource;
 
 import java.nio.file.Path;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
 
 /**
  * Text shown on the import progress screen.
  */
 public final class ImportProgressText {
     private ImportProgressText() {
+    }
+
+    /**
+     * User-facing reason for a failed import. Unwraps worker {@link CompletionException}s and prefers the
+     * {@link LogDataException} message when one is present.
+     */
+    public static String failureReason(Throwable error) {
+        if (error == null) return "";
+        Throwable current = error;
+        while (current != null) {
+            if (current instanceof LogDataException && hasText(current.getMessage())) {
+                return current.getMessage();
+            }
+            current = current.getCause();
+        }
+        current = unwrap(error);
+        if (hasText(current.getMessage())) return current.getMessage();
+        return current.getClass().getSimpleName();
+    }
+
+    private static Throwable unwrap(Throwable error) {
+        Throwable current = error;
+        while ((current instanceof CompletionException || current instanceof ExecutionException)
+            && current.getCause() != null) {
+            current = current.getCause();
+        }
+        return current;
+    }
+
+    private static boolean hasText(String message) {
+        return message != null && !message.isBlank();
     }
 
     /**
