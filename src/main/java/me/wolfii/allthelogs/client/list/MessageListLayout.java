@@ -17,6 +17,8 @@ public final class MessageListLayout {
     public static final int SEPARATOR_HEIGHT = 12;
     /** Extra log lines loaded when an expand caret is clicked. */
     public static final int EXPAND_LINES = 10;
+    /** Extra log lines loaded when an expand caret is shift-clicked. */
+    public static final int SHIFT_EXPAND_LINES = 100;
     /** Up-pointing triangle, without a tail. */
     public static final String CARET_UP = "\u25B2";
     /** Down-pointing triangle, without a tail. */
@@ -106,9 +108,14 @@ public final class MessageListLayout {
 
     /**
      * Extra lines fetched when an expand caret is clicked.
+     * Shift-click loads {@link #SHIFT_EXPAND_LINES} instead of {@link #EXPAND_LINES}.
      */
     public static int extraContextLines() {
-        return EXPAND_LINES;
+        return extraContextLines(false);
+    }
+
+    public static int extraContextLines(boolean shift) {
+        return shift ? SHIFT_EXPAND_LINES : EXPAND_LINES;
     }
 
     /**

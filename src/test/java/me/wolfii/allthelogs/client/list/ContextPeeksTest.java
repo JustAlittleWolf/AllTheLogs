@@ -65,6 +65,21 @@ class ContextPeeksTest {
     }
 
     @Test
+    void shiftExpandFetchKeepsAHundredExtraLines() {
+        ChatLog log = log("a.log");
+        DisplayRow anchor = row(log, 10, "hit", true);
+        int extra = MessageListLayout.SHIFT_EXPAND_LINES;
+        List<DisplayRow> fetched = new ArrayList<>();
+        for (int line = 10; line <= 10 + extra + 1; line++) {
+            fetched.add(row(log, line, "m" + line, line == 10));
+        }
+        List<DisplayRow> kept = ContextPeeks.forExpand(fetched, anchor, false, extra, true);
+        assertEquals(extra + 1, kept.size());
+        assertEquals(10 + extra, kept.getLast().lineIndex());
+        assertTrue(kept.getLast().expandDown());
+    }
+
+    @Test
     void mergeAfterExpandClearsTheUsedCaretOnTheAnchor() {
         ChatLog log = log("a.log");
         DisplayRow anchor = row(log, 10, "hit", true).withExpand(false, true);
