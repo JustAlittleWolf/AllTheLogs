@@ -1,6 +1,7 @@
 package me.wolfii.allthelogs.client.search;
 
 import me.wolfii.allthelogs.api.ChatQuery;
+import me.wolfii.allthelogs.data.query.Re2Regex;
 
 import java.time.LocalDateTime;
 import java.util.Locale;
@@ -134,17 +135,20 @@ public record SearchFilter(
     }
 
     /**
-     * Whether this filter can be sent to the store. Incomplete regex is rejected so DuckDB is not queried.
+     * Whether this filter can be sent to the store. Incomplete or RE2-incompatible regex is rejected
+     * so DuckDB is not queried.
      */
     public boolean canQuery() {
         return !invalidRegex();
     }
 
     /**
-     * Regex mode with a pattern that does not compile, including while the user is still typing it.
+     * Regex mode with a pattern that Java cannot compile, or that DuckDB's RE2 engine cannot run
+     * (lookarounds, backreferences, possessive quantifiers). Incomplete patterns while typing count too.
      */
     public boolean invalidRegex() {
-        return regex && hasText() && compiledRegex(text, caseSensitive).isEmpty();
+        return regex && hasText() && (compiledRegex(text, caseSensitive).isEmpty()
+            || Re2Regex.unsupportedConstruct(text) != null);
     }
 
     public boolean hasVersion() {
@@ -170,7 +174,8 @@ public record SearchFilter(
 
     /**
      * Store query for this filter. Empty text means every entry; regex uses DuckDB RE2 with an inline
-     * {@code (?i)} flag when the search is case insensitive.
+     * {@code (?i)} flag when the search is case insensitive. Lookarounds and other Java-only constructs are
+     * rejected by {@link #canQuery()} so they never reach DuckDB.
      */
     public ChatQuery toQuery() {
         return toStoreQuery(queryContextLines(), limit, offset);

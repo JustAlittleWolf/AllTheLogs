@@ -18,6 +18,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
@@ -134,7 +135,7 @@ final class LogBrowserQueries {
             if (gen != generation.get()) return;
             list.setLoading(false);
             if (error != null) {
-                AllTheLogsClient.LOGGER.warn("AllTheLogs query failed", error);
+                logQueryFailure("AllTheLogs query failed", error);
                 list.reset(List.of(), false, false);
                 list.showOverlay(Component.translatable("allthelogs.status.error"));
                 takeSnapshot();
@@ -171,7 +172,11 @@ final class LogBrowserQueries {
      */
     private void loadMatchSummary(int gen, SearchFilter page, long startedAt) {
         onClient(AllTheLogsClient.worker().summarizeMatches(page.toSummaryQuery()), (summary, error) -> {
-            if (gen != generation.get() || error != null || list == null) return;
+            if (gen != generation.get() || list == null) return;
+            if (error != null) {
+                logQueryFailure("AllTheLogs match summary failed", error);
+                return;
+            }
             matchSummary = summary == null ? MatchSummary.empty() : summary;
             list.setMatchSummary(matchSummary);
             list.setTotalMatchCount(matchSummary.matches(), elapsedMs(startedAt));
@@ -204,7 +209,7 @@ final class LogBrowserQueries {
             if (gen != generation.get()) return;
             list.setLoading(false);
             if (error != null) {
-                AllTheLogsClient.LOGGER.warn("AllTheLogs page query failed", error);
+                logQueryFailure("AllTheLogs page query failed", error);
                 return;
             }
             List<DisplayRow> incoming = displaySearchRows(entries);
@@ -242,7 +247,7 @@ final class LogBrowserQueries {
         onClient(AllTheLogsClient.worker().entriesAround(row.chatLog(), row.lineIndex(), before, after),
             (entries, error) -> {
                 if (error != null || list == null) {
-                    if (error != null) AllTheLogsClient.LOGGER.warn("AllTheLogs expand query failed", error);
+                    if (error != null) logQueryFailure("AllTheLogs expand query failed", error);
                     return;
                 }
                 List<DisplayRow> fetched = ContextPeeks.forExpand(displayRows(entries), row, older, extra,
@@ -294,6 +299,7 @@ final class LogBrowserQueries {
             if (gen != generation.get()) return;
             List<DisplayRow> rows = error == null ? displaySearchRows(entries) : List.of();
             if (error != null || rows.isEmpty()) {
+                if (error != null) logQueryFailure("AllTheLogs jump query failed", error);
                 list.setLoading(false);
                 if (!preview) list.finishScrub();
                 return;
@@ -340,6 +346,7 @@ final class LogBrowserQueries {
         onClient(AllTheLogsClient.worker().findEntries(extraQuery), (entries, error) -> {
             if (gen != generation.get()) return;
             if (error != null) {
+                logQueryFailure("AllTheLogs jump fill query failed", error);
                 applyJump(target, preview, rows, true, hasAfter, progress);
                 return;
             }
@@ -394,5 +401,28 @@ final class LogBrowserQueries {
     private void takeSnapshot() {
         if (list == null) return;
         snapshot = ListSnapshot.of(list);
+    }
+
+    /**
+     * Puts the failure text in the log line itself. Minecraft's log layout often omits the throwable,
+     * and {@link java.util.concurrent.CompletionException} wraps the store error so only the outer
+     * {@code could not run query ChatQuery[...]} would be visible.
+     */
+    static void logQueryFailure(String label, Throwable error) {
+        Throwable failure = unwrap(error);
+        String message = failure.getMessage();
+        if (message == null || message.isBlank()) {
+            AllTheLogsClient.LOGGER.warn(label, failure);
+        } else {
+            AllTheLogsClient.LOGGER.warn("{}: {}", label, message, failure);
+        }
+    }
+
+    static Throwable unwrap(Throwable error) {
+        Throwable current = error;
+        while (current instanceof CompletionException && current.getCause() != null) {
+            current = current.getCause();
+        }
+        return current;
     }
 }

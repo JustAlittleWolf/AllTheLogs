@@ -880,7 +880,24 @@ class LogStoreTest {
     @Test
     void reportsMalformedRegexAsALogDataException() throws IOException {
         store.importDirectory(logsDirectory());
-        assertThrows(LogDataException.class, () -> store.findEntries(ChatQuery.all().withRegex("(unclosed")));
+        LogDataException error = assertThrows(LogDataException.class,
+            () -> store.findEntries(ChatQuery.all().withRegex("(unclosed")));
+        assertTrue(error.getMessage().contains("could not run regex (unclosed"), error.getMessage());
+        assertTrue(error.getMessage().contains("missing )"), error.getMessage());
+        assertNotNull(error.getCause());
+        assertTrue(error.getCause().getMessage() != null && !error.getCause().getMessage().isBlank(),
+            () -> String.valueOf(error.getCause()));
+    }
+
+    @Test
+    void reportsLookaheadRegexAsAnUnsupportedRe2Feature() throws IOException {
+        store.importDirectory(logsDirectory());
+        String pattern = "(?:^|[\\]\\)\\>»\\s])([a-zA-Z0-9_]{3,16})(?:\\s*»|:)\\s+(?!(?:Offline|Online)\\b)\\S+.*";
+        LogDataException error = assertThrows(LogDataException.class,
+            () -> store.findEntries(ChatQuery.all().withRegex(pattern)));
+        assertTrue(error.getMessage().contains("negative lookahead"), error.getMessage());
+        assertTrue(error.getMessage().contains("RE2"), error.getMessage());
+        assertNull(error.getCause());
     }
 
     @Test
