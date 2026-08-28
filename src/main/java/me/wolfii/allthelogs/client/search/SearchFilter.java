@@ -159,22 +159,20 @@ public record SearchFilter(
     }
 
     /**
+     * Context sent to the store: one extra line around each hit so the list can tell whether a cluster
+     * can still expand, without showing that probe line.
+     */
+    int queryContextLines() {
+        if (!hasText()) return contextLines;
+        return contextLines + 1;
+    }
+
+    /**
      * Store query for this filter. Empty text means every entry; regex uses DuckDB RE2 with an inline
      * {@code (?i)} flag when the search is case insensitive.
      */
     public ChatQuery toQuery() {
-        ChatQuery query = ChatQuery.all()
-            .withContextLines(contextLines)
-            .withLimit(limit)
-            .withSort(sort);
-        if (startingAt != null) query = query.startingAt(startingAt);
-        if (upUntil != null) query = query.upUntil(upUntil);
-        if (offset != null) query = query.withOffset(offset);
-        if (hasVersion()) query = query.withVersion(version);
-        if (!hasText()) return query;
-        if (regex) return query.withRegex(regexPattern(text, caseSensitive));
-        if (caseSensitive) return query.withSubstringCaseSensitive(text);
-        return query.withSubstring(text);
+        return toStoreQuery(queryContextLines(), limit, offset);
     }
 
     /**
@@ -182,7 +180,22 @@ public record SearchFilter(
      * {@link me.wolfii.allthelogs.data.LogStore#summarizeMatches(ChatQuery)}.
      */
     public ChatQuery toSummaryQuery() {
-        return withoutOffset().withContextLines(0).withLimit(-1).toQuery();
+        return toStoreQuery(0, -1, null);
+    }
+
+    private ChatQuery toStoreQuery(int context, long pageLimit, LocalDateTime pageOffset) {
+        ChatQuery query = ChatQuery.all()
+            .withContextLines(context)
+            .withLimit(pageLimit)
+            .withSort(sort);
+        if (startingAt != null) query = query.startingAt(startingAt);
+        if (upUntil != null) query = query.upUntil(upUntil);
+        if (pageOffset != null) query = query.withOffset(pageOffset);
+        if (hasVersion()) query = query.withVersion(version);
+        if (!hasText()) return query;
+        if (regex) return query.withRegex(regexPattern(text, caseSensitive));
+        if (caseSensitive) return query.withSubstringCaseSensitive(text);
+        return query.withSubstring(text);
     }
 
     /**

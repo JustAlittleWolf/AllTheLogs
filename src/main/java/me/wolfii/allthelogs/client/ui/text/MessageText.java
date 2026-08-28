@@ -1,7 +1,6 @@
 package me.wolfii.allthelogs.client.ui.text;
 
 import me.wolfii.allthelogs.client.list.DisplayRow;
-import me.wolfii.allthelogs.client.list.MessageListLayout;
 import me.wolfii.allthelogs.client.list.MessageWrap;
 import me.wolfii.allthelogs.client.list.VisualMessage;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
@@ -56,36 +55,6 @@ public final class MessageText {
         double seconds = Math.round(Math.max(0, elapsedMs) / 100.0) / 10.0;
         if (seconds < 0.1) return "";
         return "%.1f".formatted(seconds);
-    }
-
-    /**
-     * Usage lines for the browser "?" tooltip, shown above database statistics.
-     */
-    public static List<Component> listHelpLines() {
-        return List.of(
-            Component.translatable("allthelogs.help.select"),
-            Component.translatable("allthelogs.help.select_all"),
-            Component.translatable("allthelogs.help.copy"),
-            Component.translatable("allthelogs.help.expand"),
-            Component.translatable("allthelogs.help.scroll"));
-    }
-
-    public static Component expandUpHint() {
-        return Component.translatable("allthelogs.expand.up", MessageListLayout.EXPAND_LINES);
-    }
-
-    public static Component expandDownHint() {
-        return Component.translatable("allthelogs.expand.down", MessageListLayout.EXPAND_LINES);
-    }
-
-    /**
-     * "?" tooltip: how to use the message list, then the existing statistics title and {@code statsLines}.
-     */
-    public static List<Component> helpAndStatsTooltip(List<Component> statsLines) {
-        List<Component> lines = new ArrayList<>(listHelpLines());
-        lines.add(Component.translatable("allthelogs.meta.hint"));
-        if (statsLines != null) lines.addAll(statsLines);
-        return lines;
     }
 
     /**

@@ -2,6 +2,7 @@ package me.wolfii.allthelogs.client.ui.screen;
 
 import io.wispforest.owo.ui.component.ButtonComponent;
 import me.wolfii.allthelogs.client.AllTheLogsClient;
+import me.wolfii.allthelogs.client.list.ContextPeeks;
 import me.wolfii.allthelogs.client.list.DisplayRow;
 import me.wolfii.allthelogs.client.list.DisplayRows;
 import me.wolfii.allthelogs.client.list.MessageListLayout;
@@ -9,7 +10,6 @@ import me.wolfii.allthelogs.client.list.PageBounds;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.timeline.ScrubJump;
 import me.wolfii.allthelogs.client.timeline.TimelineEdge;
-import me.wolfii.allthelogs.client.ui.text.MessageText;
 import me.wolfii.allthelogs.client.ui.text.StoreSummary;
 import me.wolfii.allthelogs.client.ui.widget.MessageTimeline;
 import me.wolfii.allthelogs.data.ChatEntry;
@@ -144,7 +144,7 @@ final class LogBrowserQueries {
                 takeSnapshot();
                 return;
             }
-            List<DisplayRow> rows = displayRows(entries);
+            List<DisplayRow> rows = displaySearchRows(entries);
             if (chronological) rows = DisplayRows.reversed(rows);
             boolean full = PageBounds.isFull(rows, query.limit());
             list.reset(rows, chronological && full, !chronological && full);
@@ -161,11 +161,10 @@ final class LogBrowserQueries {
         onClient(AllTheLogsClient.worker().metadata(), (metadata, error) -> {
             if (info == null) return;
             if (error != null || metadata == null) {
-                info.tooltip(MessageText.helpAndStatsTooltip(
-                    List.of(Component.translatable("allthelogs.meta.unavailable"))));
+            info.tooltip(List.of(Component.translatable("allthelogs.meta.unavailable")));
                 return;
             }
-            info.tooltip(MessageText.helpAndStatsTooltip(StoreSummary.tooltip(metadata)));
+            info.tooltip(StoreSummary.tooltip(metadata));
             versions = metadata.minecraftVersions();
         });
     }
@@ -209,7 +208,7 @@ final class LogBrowserQueries {
                 AllTheLogsClient.LOGGER.warn("AllTheLogs page query failed", error);
                 return;
             }
-            List<DisplayRow> incoming = displayRows(entries);
+            List<DisplayRow> incoming = displaySearchRows(entries);
             if (towardStart) incoming = DisplayRows.reversed(incoming);
             int added = DisplayRows.countNewKeys(incoming, bufferedKeys);
             boolean more = added > 0 && PageBounds.isFull(incoming, filter.limit());
@@ -238,17 +237,20 @@ final class LogBrowserQueries {
         int extra = MessageListLayout.extraContextLines();
         boolean older = MessageListLayout.expandOlderMessages(
             side == TimelineEdge.BEFORE, filter.sort() == ChatQuery.Sort.ASCENDING);
-        int before = older ? extra : 0;
-        int after = older ? 0 : extra;
+        int before = older ? extra + 1 : 0;
+        int after = older ? 0 : extra + 1;
         DisplayRow.RowKey anchor = row.key();
+        boolean oldestFirst = filter.sort() == ChatQuery.Sort.ASCENDING;
         onClient(AllTheLogsClient.worker().entriesAround(row.chatLog(), row.lineIndex(), before, after),
             (entries, error) -> {
                 if (error != null || list == null) {
                     if (error != null) AllTheLogsClient.LOGGER.warn("AllTheLogs expand query failed", error);
                     return;
                 }
-                List<DisplayRow> merged = DisplayRows.mergeSorted(
-                    list.window().rows(), displayRows(entries), filter.sort());
+                List<DisplayRow> fetched = ContextPeeks.forExpand(displayRows(entries), row, older, extra,
+                    oldestFirst);
+                List<DisplayRow> merged = ContextPeeks.mergeAfterExpand(
+                    list.window().rows(), fetched, row, older, filter.sort());
                 list.applyPage(merged, list.window().hasBefore(), list.window().hasAfter(), anchor);
                 list.setScrollY(list.scrollY());
                 takeSnapshot();
@@ -292,7 +294,7 @@ final class LogBrowserQueries {
         onClient(AllTheLogsClient.worker().findEntries(requested), (entries, error) -> {
             if (preview && list != null) list.scrubQueryFinished();
             if (gen != generation.get()) return;
-            List<DisplayRow> rows = error == null ? displayRows(entries) : List.of();
+            List<DisplayRow> rows = error == null ? displaySearchRows(entries) : List.of();
             if (error != null || rows.isEmpty()) {
                 list.setLoading(false);
                 if (!preview) list.finishScrub();
@@ -341,7 +343,7 @@ final class LogBrowserQueries {
                 applyJump(target, preview, rows, true, hasAfter, progress);
                 return;
             }
-            List<DisplayRow> incoming = DisplayRows.reversed(displayRows(entries));
+            List<DisplayRow> incoming = DisplayRows.reversed(displaySearchRows(entries));
             boolean more = PageBounds.isFull(incoming, extra.limit())
                 && DisplayRows.countNewKeys(incoming, alreadyLoaded) > 0;
             List<DisplayRow> merged = DisplayRows.mergeUnique(incoming, rows);
@@ -357,6 +359,11 @@ final class LogBrowserQueries {
         list.showAt(target, rows, hasBefore, hasAfter, progress);
         if (!preview) list.finishScrub();
         takeSnapshot();
+    }
+
+    private List<DisplayRow> displaySearchRows(List<ChatEntry> entries) {
+        return ContextPeeks.strip(displayRows(entries), filter.contextLines(), filter.hasText(),
+            filter.sort() == ChatQuery.Sort.ASCENDING);
     }
 
     private List<DisplayRow> displayRows(List<ChatEntry> entries) {

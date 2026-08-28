@@ -22,7 +22,9 @@ public record DisplayRow(
     boolean match,
     List<HighlightSpan> highlights,
     String message,
-    long[] visualFormatting
+    long[] visualFormatting,
+    boolean expandUp,
+    boolean expandDown
 ) {
     public DisplayRow {
         Objects.requireNonNull(entry, "entry");
@@ -37,7 +39,16 @@ public record DisplayRow(
 
     private DisplayRow(ChatEntry entry, boolean match, List<HighlightSpan> highlights,
                        VisualMessage.Prepared prepared) {
-        this(entry, match, highlights, prepared.text(), prepared.formatting());
+        this(entry, match, highlights, prepared.text(), prepared.formatting(), false, false);
+    }
+
+    /**
+     * List-direction expand carets for this row's cluster edge. {@code expandUp} loads more toward the top
+     * of the list; {@code expandDown} toward the bottom.
+     */
+    public DisplayRow withExpand(boolean expandUp, boolean expandDown) {
+        if (this.expandUp == expandUp && this.expandDown == expandDown) return this;
+        return new DisplayRow(entry, match, highlights, message, visualFormatting, expandUp, expandDown);
     }
 
     /**

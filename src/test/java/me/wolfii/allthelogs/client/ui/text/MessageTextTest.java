@@ -112,19 +112,6 @@ class MessageTextTest {
     }
 
     @Test
-    void helpAndStatsTooltipListsControlsThenTheStatsTitle() {
-        List<Component> tooltip = MessageText.helpAndStatsTooltip(
-            List.of(Component.translatable("allthelogs.meta.unavailable")));
-        assertEquals("allthelogs.help.select", key(tooltip.get(0)));
-        assertEquals("allthelogs.help.select_all", key(tooltip.get(1)));
-        assertEquals("allthelogs.help.copy", key(tooltip.get(2)));
-        assertEquals("allthelogs.help.expand", key(tooltip.get(3)));
-        assertEquals("allthelogs.help.scroll", key(tooltip.get(4)));
-        assertEquals("allthelogs.meta.hint", key(tooltip.get(5)));
-        assertEquals("allthelogs.meta.unavailable", key(tooltip.get(6)));
-    }
-
-    @Test
     void literalEscapesAreGreyedWhenDrawn() {
         LocalDateTime time = LocalDateTime.of(2026, 8, 27, 12, 0);
         ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), LocalDate.of(2026, 8, 27), "26.2", time, time);

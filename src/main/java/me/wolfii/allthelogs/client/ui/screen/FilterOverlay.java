@@ -81,6 +81,17 @@ final class FilterOverlay {
         open = false;
     }
 
+    /**
+     * Whether {@code component} is inside the open filter panel.
+     */
+    boolean owns(UIComponent component) {
+        if (!open || component == null) return false;
+        for (UIComponent current = component; current != null; current = current.parent()) {
+            if (current == filterPanel) return true;
+        }
+        return false;
+    }
+
     private ParentUIComponent buildFilterPanel() {
         SearchFilter current = filter.get();
         FlowLayout content = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
