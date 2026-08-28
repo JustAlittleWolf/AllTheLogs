@@ -1,5 +1,6 @@
 {
 	"allthelogs.screen.browser": "AllTheLogs",
+	"allthelogs.button.open": "AllTheLogs",
 	"allthelogs.screen.import": "Import logs",
 	"allthelogs.search.placeholder": "Search messages...",
 	"allthelogs.filter": "Filter",

@@ -12,6 +12,9 @@
 	},
 	"license": "MIT",
 	"environment": "client",
+	"mixins": [
+		"allthelogs.mixins.json"
+	],
 	"entrypoints": {
 		"client": [
 			"me.wolfii.allthelogs.client.AllTheLogsClient"

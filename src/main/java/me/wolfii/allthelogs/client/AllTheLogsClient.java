@@ -1,12 +1,10 @@
 package me.wolfii.allthelogs.client;
 
-import me.wolfii.allthelogs.client.ui.screen.LogBrowserScreen;
 import me.wolfii.allthelogs.data.ImportOptions;
 import me.wolfii.allthelogs.data.LogSource;
 import me.wolfii.allthelogs.data.store.SessionMarker;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
@@ -22,7 +20,7 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Fabric client entry: opens the log store, imports this instance's {@code logs} folder, captures live chat,
- * and registers {@code /allthelogs}.
+ * and registers {@code /allthelogs gui} and {@code /allthelogs import}.
  */
 public final class AllTheLogsClient implements ClientModInitializer {
     public static final String MOD_ID = "allthelogs";
@@ -98,10 +96,7 @@ public final class AllTheLogsClient implements ClientModInitializer {
         });
 
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
-            dispatcher.register(ClientCommands.literal("allthelogs").executes(context -> {
-                Minecraft.getInstance().execute(() -> Minecraft.getInstance().gui.setScreen(new LogBrowserScreen()));
-                return 1;
-            })));
+            AllTheLogsCommands.register(dispatcher));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             long now = System.currentTimeMillis();
