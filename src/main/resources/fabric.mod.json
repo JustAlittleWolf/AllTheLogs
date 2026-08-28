@@ -3,7 +3,7 @@
   "id": "allthelogs",
   "version": "${version}",
   "name": "AllTheLogs",
-  "description": "Search, import, and browse Minecraft chat logs from this instance and elsewhere.",
+  "description": "Search all of your minecraft message history across sessions, using the stored logs.",
   "authors": [
     "JustAlittleWolf"
   ],
