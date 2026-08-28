@@ -42,8 +42,6 @@ dependencies {
     implementation(libs.owo.lib)
     compileOnly(libs.modmenu)
 
-    api(libs.duckdb.jdbc)
-    include(libs.duckdb.jdbc)
     implementation(libs.commons.compress)
     include(libs.commons.compress)
     runtimeOnly(libs.xz)
@@ -51,14 +49,25 @@ dependencies {
     implementation(libs.juniversalchardet)
     include(libs.juniversalchardet)
 
+    val duckdbNolib = variantOf(libs.duckdb.jdbc) { classifier("nolib") }
+    api(duckdbNolib)
+    include(duckdbNolib)
+    testRuntimeOnly(variantOf(libs.duckdb.jdbc) { classifier(duckdbNativeClassifier()) })
+
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 tasks.processResources {
-    val properties = mapOf("version" to version)
+    val properties = mapOf(
+        "version" to version,
+        "duckdbVersion" to libs.versions.duckdb.get()
+    )
     inputs.properties(properties)
     filesMatching("fabric.mod.json") {
+        expand(properties)
+    }
+    filesMatching("**/duckdb/jdbc.properties") {
         expand(properties)
     }
 }
@@ -91,5 +100,20 @@ tasks.test {
     }
     testLogging {
         events("passed", "skipped", "failed")
+    }
+}
+
+fun duckdbNativeClassifier(): String {
+    val os = System.getProperty("os.name").lowercase()
+    val arch = System.getProperty("os.arch").lowercase()
+    val normalizedArch = when (arch) {
+        "amd64", "x86_64" -> "amd64"
+        "aarch64", "arm64" -> "arm64"
+        else -> arch
+    }
+    return when {
+        os.startsWith("windows") -> "windows_$normalizedArch"
+        os.startsWith("mac") -> "macos_universal"
+        else -> "linux_$normalizedArch"
     }
 }
