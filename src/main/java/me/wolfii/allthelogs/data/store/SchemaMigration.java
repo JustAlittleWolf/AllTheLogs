@@ -5,85 +5,43 @@ import java.sql.SQLException;
 import java.sql.Statement;
 
 /**
- * Tracks the database schema version and upgrades older files on open.
- * <p>
- * Version history:
- * <ul>
- *   <li>1 — {@link Schema} layout ({@code log_file}, {@code chat_entry}, location index).</li>
- *   <li>2 — {@code import_seen}: files already imported or considered (empty, no chat, live-session
- *       duplicate) so a later {@code skipAlreadyImported} run does not open them again.</li>
- *   <li>3 — {@code import_seen.content_hash}: SHA-256 of the raw log bytes so identical copies at a
- *       new path are skipped without parsing.</li>
- * </ul>
- * <p>
- * To bump the schema:
- * <ol>
- *   <li>Increment {@link #CURRENT_VERSION}</li>
- *   <li>Add a {@code case} in {@link #stepFrom(int)} that migrates from the previous version</li>
- *   <li>Document the change in the version history above</li>
- * </ol>
- * Each step is applied in order, and the stored version is advanced only after that step succeeds.
+ * Records the schema version written by this build. Alpha releases do not migrate existing files:
+ * a matching version opens as-is, anything else is rejected so the database can be deleted and
+ * imported again.
  */
 public final class SchemaMigration {
     /** Schema version written by this release. */
     public static final int CURRENT_VERSION = 3;
     static final String META_TABLE = "allthelogs_meta";
     static final String VERSION_KEY = "schema_version";
-    /**
-     * Migrations from version {@code N} to {@code N + 1}. Add a case when bumping
-     * {@link #CURRENT_VERSION}.
-     */
-    static final UpgradePlan PLAN = SchemaMigration::stepFrom;
 
     private SchemaMigration() {
     }
 
     /**
-     * Ensures the database is at {@link #CURRENT_VERSION}, creating or upgrading it as needed.
+     * Ensures a fresh database is at {@link #CURRENT_VERSION}, or that an existing file already is.
      */
     public static void migrate(Statement statement) throws SQLException {
         createMetaTable(statement);
         int version = readVersion(statement);
         if (version == 0) {
-            boolean existed = hasDataTables(statement);
-            Schema.create(statement);
-            if (existed) {
-                migrateTo2(statement);
-                migrateTo3(statement);
+            if (hasDataTables(statement)) {
+                throw new SQLException("database has no schema version; delete it and import again"
+                    + " (this alpha build does not migrate existing files)");
             }
+            Schema.create(statement);
             setVersion(statement, CURRENT_VERSION);
-        } else if (version > CURRENT_VERSION) {
+            return;
+        }
+        if (version > CURRENT_VERSION) {
             throw new SQLException("database schema version " + version
                 + " is newer than this mod supports (" + CURRENT_VERSION + ")");
-        } else if (version < CURRENT_VERSION) {
-            upgrade(statement, version, CURRENT_VERSION, PLAN);
         }
-    }
-
-    private static UpgradeStep stepFrom(int fromVersion) {
-        return switch (fromVersion) {
-            case 1 -> SchemaMigration::migrateTo2;
-            case 2 -> SchemaMigration::migrateTo3;
-            default -> null;
-        };
-    }
-
-    static void migrateTo2(Statement statement) throws SQLException {
-        statement.execute("""
-            CREATE TABLE IF NOT EXISTS import_seen (
-                source_path VARCHAR NOT NULL,
-                entry_path VARCHAR NOT NULL,
-                PRIMARY KEY (source_path, entry_path)
-            )""");
-        statement.execute("""
-            INSERT INTO import_seen (source_path, entry_path)
-            SELECT source_path, entry_path FROM log_file
-            ON CONFLICT DO NOTHING""");
-    }
-
-    static void migrateTo3(Statement statement) throws SQLException {
-        statement.execute("ALTER TABLE import_seen ADD COLUMN IF NOT EXISTS content_hash VARCHAR");
-        statement.execute("CREATE INDEX IF NOT EXISTS import_seen_hash ON import_seen (content_hash)");
+        if (version < CURRENT_VERSION) {
+            throw new SQLException("database schema version " + version
+                + " is older than this mod (" + CURRENT_VERSION
+                + "); delete the database file (this alpha build does not migrate existing files)");
+        }
     }
 
     private static void createMetaTable(Statement statement) throws SQLException {
@@ -123,26 +81,5 @@ public final class SchemaMigration {
     static void setVersion(Statement statement, int version) throws SQLException {
         statement.execute("DELETE FROM " + META_TABLE + " WHERE k = '" + VERSION_KEY + "'");
         statement.execute("INSERT INTO " + META_TABLE + " VALUES ('" + VERSION_KEY + "', '" + version + "')");
-    }
-
-    static void upgrade(Statement statement, int from, int to, UpgradePlan plan) throws SQLException {
-        for (int version = from; version < to; version++) {
-            UpgradeStep step = plan.stepFrom(version);
-            if (step == null) {
-                throw new SQLException("no migration path from schema version " + version);
-            }
-            step.apply(statement);
-            setVersion(statement, version + 1);
-        }
-    }
-
-    @FunctionalInterface
-    interface UpgradeStep {
-        void apply(Statement statement) throws SQLException;
-    }
-
-    @FunctionalInterface
-    interface UpgradePlan {
-        UpgradeStep stepFrom(int fromVersion);
     }
 }

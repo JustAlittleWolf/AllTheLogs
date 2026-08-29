@@ -151,6 +151,7 @@ final class ArchiveWalker {
         if (LogDiscovery.isLogFile(name)) {
             if (!matches(globPrefix + normalized)) return;
             observer.fileStarted(new LogSource.Archive(Path.of(sourcePath), entryPath));
+            // Path skip before reading bytes; hash skip happens in offerLog after the read.
             if (skipUnopened.test(sourcePath, entryPath)) {
                 onSkipped.run();
                 observer.fileCompleted();

@@ -8,7 +8,7 @@ import java.time.Instant;
  * A log file that was discovered and is ready to be parsed, with its contents already materialised in memory.
  * Archive entries cannot be read lazily from several threads, so discovery reads the raw bytes up front.
  * Files already stored are skipped by path before this object is created, so a boot re-import does not open them.
- * Copies of a file already handled are skipped by {@link #contentHash()} after the bytes are read.
+ * Only after that miss are bytes read and copies skipped by {@link #contentHash()} without parsing.
  *
  * @param fileName     bare file name
  * @param sourceKind   whether it came from a file on disk or an archive

@@ -22,7 +22,9 @@ import java.util.regex.Pattern;
 /**
  * Walks directories and archives and hands every log file that passes the filters to a consumer.
  * Discovery is single-threaded: it is dominated by sequential IO, and formats such as 7z cannot be read concurrently.
- * Copies with the same SHA-256 as a file already handled are skipped after the bytes are read.
+ * <p>
+ * Skip order, cheapest first: known {@code (source_path, entry_path)} is left unopened; otherwise the
+ * file is read and hashed, and a known SHA-256 is skipped without parsing.
  */
 public final class LogDiscovery {
     /** Separates the archive path from the path inside it, matching the convention of JAR URLs. */
@@ -137,6 +139,7 @@ public final class LogDiscovery {
                 if (!matches(entryPath)) continue;
                 Path absoluteFile = child.toAbsolutePath().normalize();
                 observer.fileStarted(new LogSource.File(absoluteFile));
+                // Path skip before reading bytes; hash skip happens in offerLog after the read.
                 if (skipUnopened.test(absoluteFile.toString(), "")) {
                     onSkipped.run();
                     observer.fileCompleted();
