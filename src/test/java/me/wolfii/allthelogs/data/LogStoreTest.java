@@ -1512,7 +1512,8 @@ class LogStoreTest {
             Thread.sleep(20);
             live = liveThreads(prefix);
         }
-        assertEquals(List.of(), live, () -> "threads still running: " + live);
+        List<String> remaining = live;
+        assertEquals(List.of(), remaining, () -> "threads still running: " + remaining);
     }
 
     private static List<String> liveThreads(String prefix) {
