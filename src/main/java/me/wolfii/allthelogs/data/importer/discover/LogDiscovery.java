@@ -22,8 +22,7 @@ import java.util.regex.Pattern;
 /**
  * Walks directories and archives and hands every log file that passes the filters to a consumer.
  * Discovery is single-threaded: it is dominated by sequential IO, and formats such as 7z cannot be read concurrently.
- * Already imported or previously considered files are skipped by stored source path before their
- * bytes are read, so a startup re-import does not open logs that were already handled.
+ * Copies with the same SHA-256 as a file already handled are skipped after the bytes are read.
  */
 public final class LogDiscovery {
     /** Separates the archive path from the path inside it, matching the convention of JAR URLs. */
@@ -38,11 +37,18 @@ public final class LogDiscovery {
     private final BooleanSupplier cancelled;
     private final BiPredicate<String, String> skipUnopened;
     private final Runnable onSkipped;
+    private final ContentTracker content;
     private final List<ImportResult.Failure> failures = new ArrayList<>();
     private final ArchiveWalker archives;
 
     public LogDiscovery(ImportOptions options, Consumer<LogCandidate> consumer, ImportObserver observer,
                         BooleanSupplier cancelled, BiPredicate<String, String> skipUnopened, Runnable onSkipped) {
+        this(options, consumer, observer, cancelled, skipUnopened, onSkipped, ContentTracker.NONE);
+    }
+
+    public LogDiscovery(ImportOptions options, Consumer<LogCandidate> consumer, ImportObserver observer,
+                        BooleanSupplier cancelled, BiPredicate<String, String> skipUnopened, Runnable onSkipped,
+                        ContentTracker content) {
         this.options = options;
         this.pathMatcher = options.pathMatcher() == null ? null : Globs.compile(options.pathMatcher());
         this.consumer = consumer;
@@ -51,8 +57,23 @@ public final class LogDiscovery {
         this.skipUnopened = skipUnopened == null ? (source, entry) -> false : skipUnopened;
         this.onSkipped = onSkipped == null ? () -> {
         } : onSkipped;
-        this.archives = new ArchiveWalker(this.options, this.pathMatcher, this.consumer, this.observer,
-            this.cancelled, this.failures, this.skipUnopened, this.onSkipped);
+        this.content = content == null ? ContentTracker.NONE : content;
+        this.archives = new ArchiveWalker(this.options, this.pathMatcher, this.observer,
+            this.cancelled, this.failures, this.skipUnopened, this.onSkipped, this::offerLog);
+    }
+
+    boolean offerLog(String fileName, SourceKind kind, String sourcePath, String entryPath, Instant modified,
+                     byte[] bytes) {
+        String hash = ContentHashes.sha256(bytes);
+        if (content.skipHash(hash)) {
+            content.remember(sourcePath, entryPath, hash);
+            onSkipped.run();
+            observer.fileCompleted();
+            return false;
+        }
+        content.noteHash(hash);
+        consumer.accept(new LogCandidate(fileName, kind, sourcePath, entryPath, modified, bytes, hash));
+        return true;
     }
 
     static boolean isLogFile(String name) {
@@ -129,9 +150,7 @@ public final class LogDiscovery {
                     observer.fileCompleted();
                     continue;
                 }
-                consumer.accept(new LogCandidate(name, SourceKind.FILE,
-                    absoluteFile.toString(), "",
-                    lastModified(child), content));
+                offerLog(name, SourceKind.FILE, absoluteFile.toString(), "", lastModified(child), content);
             } else if (options.nestedArchives() && isArchive(name)) {
                 archives.read(child, child.toAbsolutePath().normalize().toString(), child.toString(),
                     "", entryPath + ARCHIVE_SEPARATOR, name);

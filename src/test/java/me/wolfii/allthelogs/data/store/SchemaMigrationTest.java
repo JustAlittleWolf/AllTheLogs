@@ -26,6 +26,18 @@ class SchemaMigrationTest {
         }
     }
 
+    private static boolean columnExists(Statement statement, String tableName, String columnName)
+        throws SQLException {
+        try (var result = statement.executeQuery("""
+            SELECT count(*)
+            FROM information_schema.columns
+            WHERE table_schema = 'main' AND table_name = '""" + tableName
+            + "' AND column_name = '" + columnName + "'")) {
+            result.next();
+            return result.getLong(1) > 0;
+        }
+    }
+
     private static boolean tableExists(Statement statement, String tableName) throws SQLException {
         try (var result = statement.executeQuery("""
             SELECT count(*)
@@ -93,10 +105,29 @@ class SchemaMigrationTest {
 
         try (var connection = StoreConnections.openFile(database);
              Statement statement = connection.createStatement()) {
-            assertEquals(2, SchemaMigration.readVersion(statement));
+            assertEquals(SchemaMigration.CURRENT_VERSION, SchemaMigration.readVersion(statement));
             assertTrue(tableExists(statement, "import_seen"));
+            assertTrue(columnExists(statement, "import_seen", "content_hash"));
         }
     }
+
+    @Test
+    void version2DatabaseGainsContentHashOnOpen() throws SQLException {
+        Path database = tempDir.resolve("v2.duckdb");
+        try (var connection = StoreConnections.openFile(database);
+             Statement statement = connection.createStatement()) {
+            statement.execute("DROP INDEX IF EXISTS import_seen_hash");
+            statement.execute("ALTER TABLE import_seen DROP COLUMN content_hash");
+            statement.execute("DELETE FROM " + SchemaMigration.META_TABLE
+                + " WHERE k = '" + SchemaMigration.VERSION_KEY + "'");
+            statement.execute("INSERT INTO " + SchemaMigration.META_TABLE + " VALUES ('"
+                + SchemaMigration.VERSION_KEY + "', '2')");
+        }
+
+        try (var connection = StoreConnections.openFile(database);
+             Statement statement = connection.createStatement()) {
+            assertEquals(SchemaMigration.CURRENT_VERSION, SchemaMigration.readVersion(statement));
+            assertTrue(columnExists(statement, "import_seen", "content_hash"));
 
     @Test
     void legacyImportedEntriesSurviveVersionAdoption() throws SQLException {

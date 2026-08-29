@@ -46,13 +46,13 @@ class StoredSourcesTest {
     @Test
     void preparedLogsRoundTripToTheSameSourceKind() {
         PreparedLog file = new PreparedLog("latest.log", SourceKind.FILE, "/tmp/a.log", "",
-            LocalDate.of(2026, 1, 1), "26.2", List.of(), List.of(), List.of(), false, null, null, null, null);
+            LocalDate.of(2026, 1, 1), "26.2", List.of(), List.of(), List.of(), false, null, null, null, null, null);
         assertInstanceOf(LogSource.File.class, StoredSources.fromPrepared(file));
         PreparedLog archive = new PreparedLog("a.log", SourceKind.ARCHIVE, "/tmp/a.zip", "inside/a.log",
-            LocalDate.of(2026, 1, 1), "26.2", List.of(), List.of(), List.of(), false, null, null, null, null);
+            LocalDate.of(2026, 1, 1), "26.2", List.of(), List.of(), List.of(), false, null, null, null, null, null);
         assertInstanceOf(LogSource.Archive.class, StoredSources.fromPrepared(archive));
         PreparedLog session = new PreparedLog("", SourceKind.SESSION, StoredSources.SESSION_PATH, "session/id",
-            LocalDate.of(2026, 1, 1), "26.2", List.of(), List.of(), List.of(), false, null, null, "id", null);
+            LocalDate.of(2026, 1, 1), "26.2", List.of(), List.of(), List.of(), false, null, null, "id", null, null);
         assertInstanceOf(LogSource.Session.class, StoredSources.fromPrepared(session));
     }
 }

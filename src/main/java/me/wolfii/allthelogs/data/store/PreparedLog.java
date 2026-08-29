@@ -16,6 +16,7 @@ import java.util.List;
  * @param lastLineTime             timestamp of the last logged line of the file, not just chat entries
  * @param sessionId                id from an AllTheLogs session marker in the file, or {@code null}
  * @param minecraftUser            the player from a {@code Setting user:} line, or {@code null}
+ * @param contentHash              SHA-256 of the discovered raw bytes, or {@code null}
  */
 public record PreparedLog(
     String fileName,
@@ -31,6 +32,7 @@ public record PreparedLog(
     LocalDateTime firstLineTime,
     LocalDateTime lastLineTime,
     String sessionId,
-    String minecraftUser
+    String minecraftUser,
+    String contentHash
 ) {
 }

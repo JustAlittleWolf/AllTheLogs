@@ -15,8 +15,10 @@ import java.util.Objects;
  *                                       the file relative to the import root, e.g. {@code **&#47;logs&#47;**};
  *                                       {@code null} accepts everything
  * @param parallelism                    number of log files parsed concurrently
- * @param skipAlreadyImported            whether files whose source and entry path are already present in the database
- *                                       (or were already considered and skipped) are left unopened
+ * @param skipAlreadyImported            whether files already present in the database (same source and entry path,
+ *                                       or the same SHA-256 of raw bytes) are not imported again; path matches are
+ *                                       left unopened, identical copies at a new path are skipped after the bytes
+ *                                       are read
  * @param optimize                       whether a successful import of new files should cluster {@code chat_entry} and
  *                                       compact the database file afterwards
  * @param optimizeIfImportedFilesExceed  when {@code optimize} is false, still cluster and compact if more than this

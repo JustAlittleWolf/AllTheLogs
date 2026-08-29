@@ -26,6 +26,7 @@ public final class LogWriter implements AutoCloseable {
     private final DuckDBAppender entryAppender;
     private final Map<String, Long> existingLocations = new ConcurrentHashMap<>();
     private final Set<String> seenLocations = ConcurrentHashMap.newKeySet();
+    private final Set<String> seenHashes = ConcurrentHashMap.newKeySet();
     private final Set<SeenLocation> pendingSeen = ConcurrentHashMap.newKeySet();
     private final Set<String> knownSessionIds = ConcurrentHashMap.newKeySet();
     private final Set<Long> keepEvenIfEmpty = ConcurrentHashMap.newKeySet();
@@ -55,9 +56,11 @@ public final class LogWriter implements AutoCloseable {
             }
         }
         try (Statement statement = connection.createStatement();
-             ResultSet result = statement.executeQuery("SELECT source_path, entry_path FROM import_seen")) {
+             ResultSet result = statement.executeQuery(
+                 "SELECT source_path, entry_path, content_hash FROM import_seen")) {
             while (result.next()) {
                 seenLocations.add(locationKey(result.getString(1), result.getString(2)));
+                noteHash(result.getString(3));
             }
         }
         this.sessionStartId = nextFileId;
@@ -73,7 +76,7 @@ public final class LogWriter implements AutoCloseable {
         return sourcePath + "\u0000" + entryPath;
     }
 
-    private record SeenLocation(String sourcePath, String entryPath) {
+    private record SeenLocation(String sourcePath, String entryPath, String contentHash) {
     }
 
     /**
@@ -86,14 +89,31 @@ public final class LogWriter implements AutoCloseable {
     }
 
     /**
+     * Whether a log with this SHA-256 of raw bytes has already been stored or considered.
+     */
+    public boolean hasContentHash(String contentHash) {
+        return contentHash != null && !contentHash.isBlank() && seenHashes.contains(contentHash);
+    }
+
+    /**
+     * Remembers a content hash for the rest of this import so a later copy in the same walk is skipped.
+     */
+    public void noteHash(String contentHash) {
+        if (contentHash != null && !contentHash.isBlank()) {
+            seenHashes.add(contentHash);
+        }
+    }
+
+    /**
      * Remembers a log that was opened and then skipped, so a later {@code skipAlreadyImported} run
      * does not parse it again. Empty files, files with no timestamps, and live-session duplicates
-     * are not stored as {@code log_file} rows.
+     * are not stored as {@code log_file} rows. Identical copies are skipped by {@code contentHash}.
      */
-    public void markConsidered(String sourcePath, String entryPath) {
+    public void markConsidered(String sourcePath, String entryPath, String contentHash) {
         String key = locationKey(sourcePath, entryPath);
         seenLocations.add(key);
-        pendingSeen.add(new SeenLocation(sourcePath, entryPath));
+        noteHash(contentHash);
+        pendingSeen.add(new SeenLocation(sourcePath, entryPath, contentHash));
     }
 
     /**
@@ -155,6 +175,7 @@ public final class LogWriter implements AutoCloseable {
 
         if (times.isEmpty() && log.resourceManagerReloaded()) keepEvenIfEmpty.add(fileId);
         existingLocations.put(locationKey(log.sourcePath(), log.entryPath()), fileId);
+        markConsidered(log.sourcePath(), log.entryPath(), log.contentHash());
         writtenFiles++;
         writtenEntries += times.size();
         bufferedEntries += times.size();
@@ -266,11 +287,15 @@ public final class LogWriter implements AutoCloseable {
 
     private void persistSeen() throws SQLException {
         if (pendingSeen.isEmpty()) return;
-        try (PreparedStatement insert = connection.prepareStatement(
-            "INSERT INTO import_seen VALUES (?, ?) ON CONFLICT DO NOTHING")) {
+        try (PreparedStatement insert = connection.prepareStatement("""
+            INSERT INTO import_seen (source_path, entry_path, content_hash) VALUES (?, ?, ?)
+            ON CONFLICT (source_path, entry_path) DO UPDATE SET
+                content_hash = coalesce(excluded.content_hash, import_seen.content_hash)
+            """)) {
             for (SeenLocation location : pendingSeen) {
                 insert.setString(1, location.sourcePath());
                 insert.setString(2, location.entryPath());
+                insert.setString(3, location.contentHash());
                 insert.execute();
             }
         }

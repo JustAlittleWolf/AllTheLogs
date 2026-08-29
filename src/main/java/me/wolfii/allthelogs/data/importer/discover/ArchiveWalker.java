@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.function.BiPredicate;
 import java.util.function.BooleanSupplier;
-import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
 /**
@@ -32,24 +31,24 @@ final class ArchiveWalker {
 
     private final ImportOptions options;
     private final Pattern pathMatcher;
-    private final Consumer<LogCandidate> consumer;
     private final ImportObserver observer;
     private final BooleanSupplier cancelled;
     private final List<ImportResult.Failure> failures;
     private final BiPredicate<String, String> skipUnopened;
     private final Runnable onSkipped;
+    private final LogOffer offerLog;
 
-    ArchiveWalker(ImportOptions options, Pattern pathMatcher, Consumer<LogCandidate> consumer,
-                  ImportObserver observer, BooleanSupplier cancelled, List<ImportResult.Failure> failures,
-                  BiPredicate<String, String> skipUnopened, Runnable onSkipped) {
+    ArchiveWalker(ImportOptions options, Pattern pathMatcher, ImportObserver observer,
+                  BooleanSupplier cancelled, List<ImportResult.Failure> failures,
+                  BiPredicate<String, String> skipUnopened, Runnable onSkipped, LogOffer offerLog) {
         this.options = options;
         this.pathMatcher = pathMatcher;
-        this.consumer = consumer;
         this.observer = observer;
         this.cancelled = cancelled;
         this.failures = failures;
         this.skipUnopened = skipUnopened;
         this.onSkipped = onSkipped;
+        this.offerLog = offerLog;
     }
 
     private static byte[] readFully(InputStream stream, long expectedSize) throws IOException {
@@ -164,7 +163,7 @@ final class ArchiveWalker {
                 observer.fileCompleted();
                 throw e;
             }
-            consumer.accept(new LogCandidate(name, SourceKind.ARCHIVE, sourcePath, entryPath, modified, bytes));
+            offerLog.offer(name, SourceKind.ARCHIVE, sourcePath, entryPath, modified, bytes);
         } else if (options.nestedArchives() && LogDiscovery.isArchive(name)) {
             Path temporary = Files.createTempFile("allthelogs-", "-" + name);
             try {
@@ -181,6 +180,12 @@ final class ArchiveWalker {
 
     private boolean matches(String entryPath) {
         return pathMatcher == null || pathMatcher.matcher(entryPath).matches();
+    }
+
+    @FunctionalInterface
+    interface LogOffer {
+        boolean offer(String fileName, SourceKind kind, String sourcePath, String entryPath, Instant modified,
+                      byte[] bytes);
     }
 
     private interface ContentSupplier {

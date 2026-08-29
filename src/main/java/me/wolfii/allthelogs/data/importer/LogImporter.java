@@ -2,6 +2,7 @@ package me.wolfii.allthelogs.data.importer;
 
 import me.wolfii.allthelogs.DaemonThreads;
 import me.wolfii.allthelogs.data.*;
+import me.wolfii.allthelogs.data.importer.discover.ContentTracker;
 import me.wolfii.allthelogs.data.importer.discover.FileCountEstimator;
 import me.wolfii.allthelogs.data.importer.discover.ImportObserver;
 import me.wolfii.allthelogs.data.importer.discover.LogCandidate;
@@ -37,7 +38,7 @@ public final class LogImporter {
     private static final long STOP_WAIT_MS = 2_000L;
     private static final PreparedLog END_OF_STREAM = new PreparedLog(
         "", SourceKind.FILE, "", "", LocalDate.EPOCH, "", List.of(), List.of(), List.of(),
-        false, null, null, null, null);
+        false, null, null, null, null, null);
 
     private final DuckDBConnection connection;
 
@@ -146,13 +147,15 @@ public final class LogImporter {
                             if (prepared.firstLineTime() == null || prepared.lastLineTime() == null
                                 || (prepared.messages().isEmpty() && !prepared.resourceManagerReloaded())) {
                                 skipped.incrementAndGet();
-                                writer.markConsidered(candidate.sourcePath(), candidate.entryPath());
+                                writer.markConsidered(candidate.sourcePath(), candidate.entryPath(),
+                                    candidate.contentHash());
                                 observer.fileCompleted();
                                 return;
                             }
                             if (prepared.sessionId() != null && writer.hasSession(prepared.sessionId())) {
                                 skipped.incrementAndGet();
-                                writer.markConsidered(candidate.sourcePath(), candidate.entryPath());
+                                writer.markConsidered(candidate.sourcePath(), candidate.entryPath(),
+                                    candidate.contentHash());
                                 observer.fileCompleted();
                                 return;
                             }
@@ -174,7 +177,25 @@ public final class LogImporter {
                 }
             }, observer, stop,
                 (sourcePath, entryPath) -> options.skipAlreadyImported() && writer.isAlreadyImported(sourcePath, entryPath),
-                skipped::incrementAndGet);
+                skipped::incrementAndGet,
+                new ContentTracker() {
+                    @Override
+                    public boolean skipHash(String contentHash) {
+                        return options.skipAlreadyImported() && writer.hasContentHash(contentHash);
+                    }
+
+                    @Override
+                    public void noteHash(String contentHash) {
+                        if (options.skipAlreadyImported()) {
+                            writer.noteHash(contentHash);
+                        }
+                    }
+
+                    @Override
+                    public void remember(String sourcePath, String entryPath, String contentHash) {
+                        writer.markConsidered(sourcePath, entryPath, contentHash);
+                    }
+                });
 
             Thread discoverer = DaemonThreads.create("allthelogs-discovery", () -> {
                 try {

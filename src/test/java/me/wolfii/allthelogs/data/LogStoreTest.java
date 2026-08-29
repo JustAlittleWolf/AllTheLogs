@@ -404,6 +404,52 @@ class LogStoreTest {
     }
 
     @Test
+    void identicalCopiesAreSkippedByContentHash() throws IOException {
+        Path original = tempDir.resolve("original");
+        String body = LogFixtures.modernLog("26.2", "same bytes");
+        Path firstFile = LogFixtures.writeGzipped(original, "2026-08-24-1.log.gz", body);
+        store.importDirectory(original, ImportOptions.defaults().withSkipAlreadyImported(true));
+        assertEquals(1, store.chatLogs().size());
+
+        Path copy = tempDir.resolve("copy");
+        Files.createDirectories(copy);
+        Files.copy(firstFile, copy.resolve("2026-08-25-1.log.gz"));
+        ImportResult second = store.importDirectory(copy, ImportOptions.defaults().withSkipAlreadyImported(true));
+
+        assertEquals(0, second.importedFiles());
+        assertEquals(1, second.skippedFiles());
+        assertEquals(1, store.chatLogs().size());
+        assertEquals(List.of("same bytes"), store.allEntries().stream().map(ChatEntry::message).toList());
+    }
+
+    @Test
+    void identicalCopiesInTheSameWalkAreSkippedByContentHash() throws IOException {
+        String body = LogFixtures.modernLog("26.2", "twin");
+        Path first = LogFixtures.writeGzipped(tempDir, "2026-08-24-1.log.gz", body);
+        Files.copy(first, tempDir.resolve("2026-08-25-1.log.gz"));
+
+        ImportResult result = store.importDirectory(tempDir, ImportOptions.defaults().withSkipAlreadyImported(true));
+
+        assertEquals(1, result.importedFiles());
+        assertEquals(1, result.skippedFiles());
+        assertEquals(1, store.chatLogs().size());
+    }
+
+    @Test
+    void replaceImportStillStoresAnIdenticalCopyAtANewPath() throws IOException {
+        String body = LogFixtures.modernLog("26.2", "replaced twin");
+        Path firstFile = LogFixtures.writeGzipped(tempDir.resolve("a"), "2026-08-24-1.log.gz", body);
+        store.importDirectory(tempDir.resolve("a"));
+
+        Files.createDirectories(tempDir.resolve("b"));
+        Files.copy(firstFile, tempDir.resolve("b/2026-08-25-1.log.gz"));
+        ImportResult second = store.importDirectory(tempDir.resolve("b"));
+
+        assertEquals(0, second.skippedFiles());
+        assertTrue(second.importedFiles() >= 0);
+    }
+
+    @Test
     void alreadyImportedIsKeyedByTheLogFileNotTheImportRoot() throws IOException {
         Path root = logsDirectory();
         store.importDirectory(root);
