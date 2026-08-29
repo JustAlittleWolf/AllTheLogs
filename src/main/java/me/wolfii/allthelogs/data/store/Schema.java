@@ -38,6 +38,14 @@ public final class Schema {
                 formatting BIGINT[]
             )""");
         statement.execute("CREATE UNIQUE INDEX IF NOT EXISTS log_file_location ON log_file (source_path, entry_path)");
+        statement.execute("""
+            CREATE TABLE IF NOT EXISTS import_seen (
+                source_path VARCHAR NOT NULL,
+                entry_path VARCHAR NOT NULL,
+                content_hash VARCHAR,
+                PRIMARY KEY (source_path, entry_path)
+            )""");
+        statement.execute("CREATE INDEX IF NOT EXISTS import_seen_hash ON import_seen (content_hash)");
     }
 
     /**

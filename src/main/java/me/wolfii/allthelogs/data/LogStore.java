@@ -193,10 +193,11 @@ public final class LogStore implements AutoCloseable {
     /**
      * After a batch import, rewrite {@code chat_entry} oldest-first (chunking) and compact the on-disk
      * file. Live session inserts already arrive in time order, so this stays off the hot path.
-     * Current-instance refreshes pass {@link ImportOptions#optimize()} as {@code false} and skip this work.
+     * User imports pass {@link ImportOptions#optimize()} as {@code true}. Startup refreshes compact
+     * only when more than {@link ImportOptions#STARTUP_OPTIMIZE_AFTER_MORE_THAN} files were newly stored.
      */
     private void optimizeAfterImport(ImportResult result, ImportProgressTracker tracker, ImportOptions options) {
-        if (result.importedFiles() <= 0 || !options.optimize()) {
+        if (!options.shouldOptimize(result.importedFiles())) {
             tracker.complete();
             return;
         }

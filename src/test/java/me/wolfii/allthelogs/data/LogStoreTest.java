@@ -403,6 +403,52 @@ class LogStoreTest {
     }
 
     @Test
+    void identicalCopiesAreSkippedByContentHash() throws IOException {
+        Path original = tempDir.resolve("original");
+        String body = LogFixtures.modernLog("26.2", "same bytes");
+        Path firstFile = LogFixtures.writeGzipped(original, "2026-08-24-1.log.gz", body);
+        store.importDirectory(original, ImportOptions.defaults().withSkipAlreadyImported(true));
+        assertEquals(1, store.chatLogs().size());
+
+        Path copy = tempDir.resolve("copy");
+        Files.createDirectories(copy);
+        Files.copy(firstFile, copy.resolve("2026-08-25-1.log.gz"));
+        ImportResult second = store.importDirectory(copy, ImportOptions.defaults().withSkipAlreadyImported(true));
+
+        assertEquals(0, second.importedFiles());
+        assertEquals(1, second.skippedFiles());
+        assertEquals(1, store.chatLogs().size());
+        assertEquals(List.of("same bytes"), store.allEntries().stream().map(ChatEntry::message).toList());
+    }
+
+    @Test
+    void identicalCopiesInTheSameWalkAreSkippedByContentHash() throws IOException {
+        String body = LogFixtures.modernLog("26.2", "twin");
+        Path first = LogFixtures.writeGzipped(tempDir, "2026-08-24-1.log.gz", body);
+        Files.copy(first, tempDir.resolve("2026-08-25-1.log.gz"));
+
+        ImportResult result = store.importDirectory(tempDir, ImportOptions.defaults().withSkipAlreadyImported(true));
+
+        assertEquals(1, result.importedFiles());
+        assertEquals(1, result.skippedFiles());
+        assertEquals(1, store.chatLogs().size());
+    }
+
+    @Test
+    void replaceImportStillStoresAnIdenticalCopyAtANewPath() throws IOException {
+        String body = LogFixtures.modernLog("26.2", "replaced twin");
+        Path firstFile = LogFixtures.writeGzipped(tempDir.resolve("a"), "2026-08-24-1.log.gz", body);
+        store.importDirectory(tempDir.resolve("a"));
+
+        Files.createDirectories(tempDir.resolve("b"));
+        Files.copy(firstFile, tempDir.resolve("b/2026-08-25-1.log.gz"));
+        ImportResult second = store.importDirectory(tempDir.resolve("b"));
+
+        assertEquals(0, second.skippedFiles());
+        assertTrue(second.importedFiles() >= 0);
+    }
+
+    @Test
     void alreadyImportedIsKeyedByTheLogFileNotTheImportRoot() throws IOException {
         Path root = logsDirectory();
         store.importDirectory(root);
@@ -427,6 +473,47 @@ class LogStoreTest {
         assertEquals(3, second.skippedFiles());
         assertTrue(second.failures().isEmpty(), () -> "unexpected failures: " + second.failures());
         assertEquals(8, store.allEntries().size());
+    }
+
+    @Test
+    void consideredEmptyFilesAreSkippedWithoutOpeningThemAgain() throws IOException {
+        Path logs = tempDir.resolve("logs");
+        LogFixtures.writeGzipped(logs, "2026-08-26-1.log.gz", LogFixtures.modernLog("26.2"));
+
+        ImportResult first = store.importDirectory(logs, ImportOptions.currentLogsDirectory());
+        assertEquals(0, first.importedFiles());
+        assertEquals(1, first.skippedFiles());
+
+        replaceLogFilesWithBrokenSymlinks(logs);
+        ImportResult second = store.importDirectory(logs, ImportOptions.currentLogsDirectory());
+
+        assertEquals(0, second.importedFiles(), () -> "failures=" + second.failures());
+        assertEquals(1, second.skippedFiles());
+        assertTrue(second.failures().isEmpty(), () -> "unexpected failures: " + second.failures());
+        assertTrue(store.allEntries().isEmpty());
+    }
+
+    @Test
+    void consideredSessionDuplicatesAreSkippedWithoutOpeningThemAgain() throws IOException {
+        LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+        ChatLog session = store.startSession("26.2", startedAt);
+        String sessionId = ((LogSource.Session) session.source()).id();
+        assertTrue(store.importSessionMessage("live capture", startedAt.plusSeconds(10)));
+
+        Path logs = tempDir.resolve("logs");
+        LogFixtures.writeGzipped(logs, "2026-08-26-1.log.gz",
+            taggedLog(sessionId, "10:00:10", "live capture", "from the file"));
+        ImportResult first = store.importDirectory(tempDir);
+        assertEquals(0, first.importedFiles());
+        assertEquals(1, first.skippedFiles());
+
+        replaceLogFilesWithBrokenSymlinks(logs);
+        ImportResult second = store.importDirectory(logs, ImportOptions.currentLogsDirectory());
+
+        assertEquals(0, second.importedFiles(), () -> "failures=" + second.failures());
+        assertEquals(1, second.skippedFiles());
+        assertTrue(second.failures().isEmpty(), () -> "unexpected failures: " + second.failures());
+        assertEquals(List.of("live capture"), store.allEntries().stream().map(ChatEntry::message).toList());
     }
 
     @Test

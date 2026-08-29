@@ -92,7 +92,7 @@ public final class ImportPaths {
      */
     public static ImportOptions optionsForFolder(Path folder) {
         if (folder != null && Files.isDirectory(folder.resolve("logs"))) {
-            return ImportOptions.currentGameDirectory();
+            return ImportOptions.currentGameDirectory().withOptimize(true);
         }
         return formDefaults();
     }

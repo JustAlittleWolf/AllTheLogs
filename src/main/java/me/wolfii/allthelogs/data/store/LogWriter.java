@@ -25,6 +25,9 @@ public final class LogWriter implements AutoCloseable {
     private final DuckDBAppender fileAppender;
     private final DuckDBAppender entryAppender;
     private final Map<String, Long> existingLocations = new ConcurrentHashMap<>();
+    private final Set<String> seenLocations = ConcurrentHashMap.newKeySet();
+    private final Set<String> seenHashes = ConcurrentHashMap.newKeySet();
+    private final Set<SeenLocation> pendingSeen = ConcurrentHashMap.newKeySet();
     private final Set<String> knownSessionIds = ConcurrentHashMap.newKeySet();
     private final Set<Long> keepEvenIfEmpty = ConcurrentHashMap.newKeySet();
     /** First file id handed out by this writer; counters and dedup bookkeeping are scoped to this import. */
@@ -52,6 +55,14 @@ public final class LogWriter implements AutoCloseable {
                 nextFileId = Math.max(nextFileId, id + 1);
             }
         }
+        try (Statement statement = connection.createStatement();
+             ResultSet result = statement.executeQuery(
+                 "SELECT source_path, entry_path, content_hash FROM import_seen")) {
+            while (result.next()) {
+                seenLocations.add(locationKey(result.getString(1), result.getString(2)));
+                noteHash(result.getString(3));
+            }
+        }
         this.sessionStartId = nextFileId;
         // One transaction for the whole import: the appender would otherwise sync to disk every 204,800 rows.
         try (Statement statement = connection.createStatement()) {
@@ -65,11 +76,44 @@ public final class LogWriter implements AutoCloseable {
         return sourcePath + "\u0000" + entryPath;
     }
 
+    private record SeenLocation(String sourcePath, String entryPath, String contentHash) {
+    }
+
     /**
-     * Whether a log at this location has already been stored, either by an earlier run or earlier in this one.
+     * Whether a log at this location has already been stored or considered (and therefore skipped)
+     * on an earlier import with {@code skipAlreadyImported}.
      */
     public boolean isAlreadyImported(String sourcePath, String entryPath) {
-        return existingLocations.containsKey(locationKey(sourcePath, entryPath));
+        String key = locationKey(sourcePath, entryPath);
+        return existingLocations.containsKey(key) || seenLocations.contains(key);
+    }
+
+    /**
+     * Whether a log with this SHA-256 of raw bytes has already been stored or considered.
+     */
+    public boolean hasContentHash(String contentHash) {
+        return contentHash != null && !contentHash.isBlank() && seenHashes.contains(contentHash);
+    }
+
+    /**
+     * Remembers a content hash for the rest of this import so a later copy in the same walk is skipped.
+     */
+    public void noteHash(String contentHash) {
+        if (contentHash != null && !contentHash.isBlank()) {
+            seenHashes.add(contentHash);
+        }
+    }
+
+    /**
+     * Remembers a log that was opened and then skipped, so a later {@code skipAlreadyImported} run
+     * does not parse it again. Empty files, files with no timestamps, and live-session duplicates
+     * are not stored as {@code log_file} rows. Identical copies are skipped by {@code contentHash}.
+     */
+    public void markConsidered(String sourcePath, String entryPath, String contentHash) {
+        String key = locationKey(sourcePath, entryPath);
+        seenLocations.add(key);
+        noteHash(contentHash);
+        pendingSeen.add(new SeenLocation(sourcePath, entryPath, contentHash));
     }
 
     /**
@@ -131,6 +175,7 @@ public final class LogWriter implements AutoCloseable {
 
         if (times.isEmpty() && log.resourceManagerReloaded()) keepEvenIfEmpty.add(fileId);
         existingLocations.put(locationKey(log.sourcePath(), log.entryPath()), fileId);
+        markConsidered(log.sourcePath(), log.entryPath(), log.contentHash());
         writtenFiles++;
         writtenEntries += times.size();
         bufferedEntries += times.size();
@@ -234,8 +279,26 @@ public final class LogWriter implements AutoCloseable {
     public void close() throws SQLException {
         fileAppender.close();
         entryAppender.close();
+        persistSeen();
         try (Statement statement = connection.createStatement()) {
             statement.execute("COMMIT");
         }
+    }
+
+    private void persistSeen() throws SQLException {
+        if (pendingSeen.isEmpty()) return;
+        try (PreparedStatement insert = connection.prepareStatement("""
+            INSERT INTO import_seen (source_path, entry_path, content_hash) VALUES (?, ?, ?)
+            ON CONFLICT (source_path, entry_path) DO UPDATE SET
+                content_hash = coalesce(excluded.content_hash, import_seen.content_hash)
+            """)) {
+            for (SeenLocation location : pendingSeen) {
+                insert.setString(1, location.sourcePath());
+                insert.setString(2, location.entryPath());
+                insert.setString(3, location.contentHash());
+                insert.execute();
+            }
+        }
+        pendingSeen.clear();
     }
 }

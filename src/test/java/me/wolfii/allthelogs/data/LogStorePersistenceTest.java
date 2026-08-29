@@ -125,6 +125,29 @@ class LogStorePersistenceTest {
     }
 
     @Test
+    void identicalCopiesAreSkippedByContentHashAfterReopen() throws IOException {
+        Path database = database();
+        Path first = tempDir.resolve("first");
+        String body = LogFixtures.modernLog("26.2", "hash twin");
+        Path firstFile = LogFixtures.writeGzipped(first, "2026-08-24-1.log.gz", body);
+
+        try (LogStore store = LogStore.open(database)) {
+            store.importDirectory(first, ImportOptions.defaults().withSkipAlreadyImported(true));
+        }
+
+        Path copy = tempDir.resolve("copy");
+        Files.createDirectories(copy);
+        Files.copy(firstFile, copy.resolve("2026-08-25-1.log.gz"));
+
+        try (LogStore store = LogStore.open(database)) {
+            ImportResult skipped = store.importDirectory(copy, ImportOptions.defaults().withSkipAlreadyImported(true));
+            assertEquals(0, skipped.importedFiles());
+            assertEquals(1, skipped.skippedFiles());
+            assertEquals(1, store.chatLogs().size());
+        }
+    }
+
+    @Test
     void sessionMessagesSurviveReopenAndStayQueryable() {
         Path database = database();
         LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);

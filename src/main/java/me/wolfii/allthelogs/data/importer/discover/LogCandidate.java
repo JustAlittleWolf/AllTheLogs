@@ -8,6 +8,7 @@ import java.time.Instant;
  * A log file that was discovered and is ready to be parsed, with its contents already materialised in memory.
  * Archive entries cannot be read lazily from several threads, so discovery reads the raw bytes up front.
  * Files already stored are skipped by path before this object is created, so a boot re-import does not open them.
+ * Only after that miss are bytes read and copies skipped by {@link #contentHash()} without parsing.
  *
  * @param fileName     bare file name
  * @param sourceKind   whether it came from a file on disk or an archive
@@ -16,6 +17,7 @@ import java.time.Instant;
  *                     empty for a file on disk
  * @param lastModified last modification instant, or {@code null} if the source does not report one
  * @param content      raw file bytes, still gzip compressed if the file name ends in {@code .gz}
+ * @param contentHash  SHA-256 of {@link #content()}
  */
 public record LogCandidate(
     String fileName,
@@ -23,6 +25,7 @@ public record LogCandidate(
     String sourcePath,
     String entryPath,
     Instant lastModified,
-    byte[] content
+    byte[] content,
+    String contentHash
 ) {
 }

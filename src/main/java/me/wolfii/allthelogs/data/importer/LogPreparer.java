@@ -46,7 +46,8 @@ public final class LogPreparer {
         return new PreparedLog(candidate.fileName(), candidate.sourceKind(), candidate.sourcePath(),
             candidate.entryPath(), date, parsed.minecraftVersion(),
             times, messages, formattings, parsed.resourceManagerReloaded(),
-            firstLineTime, lastLineTime, parsed.sessionId(), parsed.minecraftUser());
+            firstLineTime, lastLineTime, parsed.sessionId(), parsed.minecraftUser(),
+            candidate.contentHash());
     }
 
     private static BufferedReader open(LogCandidate candidate) throws IOException {
