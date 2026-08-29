@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.client;
 
+import me.wolfii.allthelogs.DaemonThreads;
 import me.wolfii.allthelogs.client.ui.screen.DuckDbSetupScreen;
 import me.wolfii.allthelogs.data.duckdb.DuckDbJdbc;
 import me.wolfii.allthelogs.data.duckdb.DuckDbJdbcInstaller;
@@ -9,6 +10,9 @@ import net.minecraft.client.Minecraft;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -17,6 +21,8 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class DuckDbRuntime {
     private static final AtomicReference<Progress> PROGRESS = new AtomicReference<>(new Progress(Progress.Stage.LOADING, 0, 0, DuckDbJdbc.classifier(), null));
     private static final Object LOCK = new Object();
+    private static final ExecutorService installerExecutor = Executors.newSingleThreadExecutor(
+        runnable -> DaemonThreads.create("allthelogs-duckdb-install", runnable));
     private static CompletableFuture<Void> inflight;
 
     private DuckDbRuntime() {
@@ -55,16 +61,34 @@ public final class DuckDbRuntime {
             }
             PROGRESS.set(new Progress(Progress.Stage.LOADING, 0, 0, DuckDbJdbc.classifier(), null));
             inflight = CompletableFuture.runAsync(() -> {
-                try {
-                    installer().install(DuckDbRuntime::setProgress);
+                try (DuckDbJdbcInstaller installer = installer()) {
+                    installer.install(DuckDbRuntime::setProgress);
                 } catch (Exception e) {
                     String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
                     setProgress(Progress.failed(message));
                     AllTheLogsClient.LOGGER.error("Failed to load DuckDB JDBC native library", e);
                     throw new CompletionException(e);
                 }
-            });
+            }, installerExecutor);
             return inflight;
+        }
+    }
+
+    /**
+     * Stops a download still in flight so Minecraft can exit.
+     */
+    public static void shutdown() {
+        synchronized (LOCK) {
+            if (inflight != null) {
+                inflight.cancel(true);
+                inflight = null;
+            }
+            installerExecutor.shutdownNow();
+            try {
+                installerExecutor.awaitTermination(2, TimeUnit.SECONDS);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 

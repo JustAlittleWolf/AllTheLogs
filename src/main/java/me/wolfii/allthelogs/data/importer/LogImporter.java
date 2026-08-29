@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.data.importer;
 
+import me.wolfii.allthelogs.DaemonThreads;
 import me.wolfii.allthelogs.data.*;
 import me.wolfii.allthelogs.data.importer.discover.FileCountEstimator;
 import me.wolfii.allthelogs.data.importer.discover.ImportObserver;
@@ -33,6 +34,7 @@ public final class LogImporter {
     private static final int WRITE_QUEUE_CAPACITY = 64;
     /** Caps how many unread log files sit in memory waiting to parse, so a full re-import cannot balloon. */
     private static final int PARSE_QUEUE_CAPACITY = 16;
+    private static final long STOP_WAIT_MS = 2_000L;
     private static final PreparedLog END_OF_STREAM = new PreparedLog(
         "", SourceKind.FILE, "", "", LocalDate.EPOCH, "", List.of(), List.of(), List.of(),
         false, null, null, null, null);
@@ -54,16 +56,40 @@ public final class LogImporter {
         return candidate.sourcePath() + LogDiscovery.ARCHIVE_SEPARATOR + candidate.entryPath();
     }
 
-    /** Drains leftover work so parsing threads do not stay blocked on a full queue if writing failed. */
-    private static void drain(BlockingQueue<PreparedLog> queue, Thread discoverer) throws InterruptedException {
-        while (discoverer.isAlive() || !queue.isEmpty()) {
-            queue.poll(50, TimeUnit.MILLISECONDS);
-        }
-        discoverer.join();
+    private static boolean stopping(BooleanSupplier stop) {
+        return stop.getAsBoolean() || Thread.currentThread().isInterrupted();
     }
 
-    private static void awaitTermination(ExecutorService parsers) throws InterruptedException {
-        while (!parsers.awaitTermination(1, TimeUnit.MINUTES)) {
+    private static void stopParsers(ExecutorService parsers, Thread discoverer) {
+        parsers.shutdownNow();
+        discoverer.interrupt();
+        try {
+            parsers.awaitTermination(STOP_WAIT_MS, TimeUnit.MILLISECONDS);
+            discoverer.join(STOP_WAIT_MS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /** Drains leftover work so parsing threads do not stay blocked on a full queue if writing failed. */
+    private static void drain(BlockingQueue<PreparedLog> queue, Thread discoverer) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(STOP_WAIT_MS);
+        while (discoverer.isAlive() || !queue.isEmpty()) {
+            long remaining = deadline - System.nanoTime();
+            if (remaining <= 0) break;
+            queue.poll(Math.min(50L, TimeUnit.NANOSECONDS.toMillis(remaining) + 1), TimeUnit.MILLISECONDS);
+        }
+        long remainingMs = Math.max(0L, TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime()));
+        discoverer.join(remainingMs);
+    }
+
+    private static void awaitTermination(ExecutorService parsers, BooleanSupplier stop) throws InterruptedException {
+        while (!parsers.awaitTermination(200, TimeUnit.MILLISECONDS)) {
+            if (stopping(stop)) {
+                parsers.shutdownNow();
+                parsers.awaitTermination(STOP_WAIT_MS, TimeUnit.MILLISECONDS);
+                return;
+            }
         }
     }
 
@@ -103,12 +129,13 @@ public final class LogImporter {
                 options.parallelism(), options.parallelism(),
                 0L, TimeUnit.MILLISECONDS,
                 new ArrayBlockingQueue<>(Math.max(PARSE_QUEUE_CAPACITY, options.parallelism())),
+                DaemonThreads.factory("allthelogs-parse"),
                 new ThreadPoolExecutor.CallerRunsPolicy());
             LogDiscovery discovery = new LogDiscovery(options, candidate -> {
-                if (stop.getAsBoolean()) return;
+                if (stopping(stop)) return;
                 try {
                     parsers.execute(() -> {
-                        if (stop.getAsBoolean()) {
+                        if (stopping(stop)) {
                             observer.fileCompleted();
                             return;
                         }
@@ -147,9 +174,9 @@ public final class LogImporter {
                 (sourcePath, entryPath) -> options.skipAlreadyImported() && writer.isAlreadyImported(sourcePath, entryPath),
                 skipped::incrementAndGet);
 
-            Thread discoverer = new Thread(() -> {
+            Thread discoverer = DaemonThreads.create("allthelogs-discovery", () -> {
                 try {
-                    if (!stop.getAsBoolean()) {
+                    if (!stopping(stop)) {
                         walk.accept(discovery);
                     }
                 } catch (RuntimeException e) {
@@ -158,20 +185,26 @@ public final class LogImporter {
                     observer.discoveryFinished();
                     parsers.shutdown();
                     try {
-                        awaitTermination(parsers);
-                        queue.put(END_OF_STREAM);
+                        if (stopping(stop)) {
+                            parsers.shutdownNow();
+                        } else {
+                            awaitTermination(parsers, stop);
+                        }
+                        if (!queue.offer(END_OF_STREAM, STOP_WAIT_MS, TimeUnit.MILLISECONDS)) {
+                            queue.offer(END_OF_STREAM);
+                        }
                     } catch (InterruptedException e) {
+                        parsers.shutdownNow();
                         Thread.currentThread().interrupt();
+                        queue.offer(END_OF_STREAM);
                     }
                 }
-            }, "allthelogs-discovery");
+            });
             discoverer.start();
 
             try {
                 while (true) {
-                    if (stop.getAsBoolean()) {
-                        parsers.shutdownNow();
-                        discoverer.interrupt();
+                    if (stopping(stop)) {
                         break;
                     }
                     PreparedLog log = queue.poll(50, TimeUnit.MILLISECONDS);
@@ -181,13 +214,14 @@ public final class LogImporter {
                     observer.fileCompleted(sourceOf(log));
                 }
             } finally {
+                stopParsers(parsers, discoverer);
                 drain(queue, discoverer);
             }
 
             observer.finished();
 
             RuntimeException discoveryFailure = failureRef.get();
-            if (discoveryFailure != null && !stop.getAsBoolean()) throw discoveryFailure;
+            if (discoveryFailure != null && !stopping(stop)) throw discoveryFailure;
 
             writer.deduplicate();
 

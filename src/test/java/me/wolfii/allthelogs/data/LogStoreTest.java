@@ -17,6 +17,7 @@ import java.time.*;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -1488,5 +1489,38 @@ class LogStoreTest {
         store.importDirectory(tempDir, ImportOptions.defaults().withTimezone(ZoneOffset.ofHours(14)));
         ChatLog plusFourteen = store.chatLogs().getFirst();
         assertEquals(LocalDate.of(2026, 8, 26), plusFourteen.date());
+    }
+
+    @Test
+    void importThreadsStopWhenTheImportFinishes() throws Exception {
+        store.importDirectory(logsDirectory());
+        assertNoLiveThreads("allthelogs-parse");
+        assertNoLiveThreads("allthelogs-discovery");
+    }
+
+    @Test
+    void cancelledImportStopsParserThreads() throws Exception {
+        store.importDirectory(logsDirectory(), ImportOptions.defaults(), null, () -> true);
+        assertNoLiveThreads("allthelogs-parse");
+        assertNoLiveThreads("allthelogs-discovery");
+    }
+
+    private static void assertNoLiveThreads(String prefix) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        List<String> live = liveThreads(prefix);
+        while (!live.isEmpty() && System.nanoTime() < deadline) {
+            Thread.sleep(20);
+            live = liveThreads(prefix);
+        }
+        assertEquals(List.of(), live, () -> "threads still running: " + live);
+    }
+
+    private static List<String> liveThreads(String prefix) {
+        return Thread.getAllStackTraces().keySet().stream()
+            .filter(Thread::isAlive)
+            .map(Thread::getName)
+            .filter(name -> name.startsWith(prefix))
+            .sorted()
+            .toList();
     }
 }
