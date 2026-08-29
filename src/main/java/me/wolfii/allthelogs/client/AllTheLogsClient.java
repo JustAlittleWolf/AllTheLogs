@@ -118,7 +118,6 @@ public final class AllTheLogsClient implements ClientModInitializer {
             if (worker != null) {
                 worker.close();
             }
-            DuckDbRuntime.shutdown();
             DuckDBDriver.shutdownQueryCancelScheduler();
         });
     }

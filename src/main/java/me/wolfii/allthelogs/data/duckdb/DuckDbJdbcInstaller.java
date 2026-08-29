@@ -156,9 +156,6 @@ public final class DuckDbJdbcInstaller implements AutoCloseable {
             int read;
             while ((read = body.read(buffer)) >= 0) {
                 if (read == 0) continue;
-                if (Thread.currentThread().isInterrupted()) {
-                    throw new InterruptedException("DuckDB download interrupted");
-                }
                 out.write(buffer, 0, read);
                 copied += read;
                 notify(progress, new Progress(Progress.Stage.DOWNLOADING, copied, total, classifier, null));
