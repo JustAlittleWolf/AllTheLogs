@@ -11,7 +11,6 @@ import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
-import org.duckdb.DuckDBDriver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -114,11 +113,6 @@ public final class AllTheLogsClient implements ClientModInitializer {
             worker.touchSessionEndTime();
         });
 
-        ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
-            if (worker != null) {
-                worker.close();
-            }
-            DuckDBDriver.shutdownQueryCancelScheduler();
-        });
+        ClientLifecycleEvents.CLIENT_STOPPING.register(client -> worker.close());
     }
 }

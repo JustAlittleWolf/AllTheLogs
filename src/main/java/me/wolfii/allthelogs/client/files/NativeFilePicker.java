@@ -1,6 +1,5 @@
 package me.wolfii.allthelogs.client.files;
 
-import me.wolfii.allthelogs.DaemonThreads;
 import net.minecraft.client.Minecraft;
 
 import java.nio.file.Path;
@@ -31,7 +30,7 @@ public final class NativeFilePicker {
         client.execute(() -> {
             boolean restoreFullscreen = leaveFullscreen(client);
             client.mouseHandler.releaseMouse();
-            Thread thread = DaemonThreads.create("allthelogs-file-picker", () -> {
+            Thread thread = new Thread(() -> {
                 waitForWindowed(client, restoreFullscreen);
                 String result;
                 try {
@@ -46,7 +45,8 @@ public final class NativeFilePicker {
                     }
                     restoreFullscreen(client, restoreFullscreen);
                 });
-            });
+            }, "allthelogs-file-picker");
+            thread.setDaemon(true);
             thread.start();
         });
     }

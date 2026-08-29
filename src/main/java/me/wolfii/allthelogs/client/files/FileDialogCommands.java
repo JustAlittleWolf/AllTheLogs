@@ -170,18 +170,14 @@ final class FileDialogCommands {
     static String run(List<String> command) {
         ProcessBuilder builder = new ProcessBuilder(command);
         builder.redirectErrorStream(true);
-        Process process = null;
         try {
-            process = builder.start();
+            Process process = builder.start();
             String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8)
                 .strip();
             int code = process.waitFor();
             if (code != 0 || output.isBlank()) return null;
             return output.lines().reduce((first, second) -> second).orElse(output);
         } catch (InterruptedException interrupted) {
-            if (process != null) {
-                process.destroyForcibly();
-            }
             Thread.currentThread().interrupt();
             return null;
         } catch (IOException ignored) {
