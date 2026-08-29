@@ -146,11 +146,13 @@ public final class LogImporter {
                             if (prepared.firstLineTime() == null || prepared.lastLineTime() == null
                                 || (prepared.messages().isEmpty() && !prepared.resourceManagerReloaded())) {
                                 skipped.incrementAndGet();
+                                writer.markConsidered(candidate.sourcePath(), candidate.entryPath());
                                 observer.fileCompleted();
                                 return;
                             }
                             if (prepared.sessionId() != null && writer.hasSession(prepared.sessionId())) {
                                 skipped.incrementAndGet();
+                                writer.markConsidered(candidate.sourcePath(), candidate.entryPath());
                                 observer.fileCompleted();
                                 return;
                             }

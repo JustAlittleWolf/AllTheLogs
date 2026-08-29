@@ -7,20 +7,24 @@ import java.util.Objects;
  * Tuning knobs for an import run. Create one via {@link #defaults()} and derive variants with the {@code with*}
  * methods.
  *
- * @param recursive            for directory imports, whether to descend into subdirectories; for archive imports,
- *                             whether to descend into directories of the archive
- * @param nestedArchives       whether archives found inside the imported tree (or inside the imported archive) are
- *                             opened and imported as well
- * @param pathMatcher          glob restricting which log files are considered, matched against the path of the file
- *                             relative to the import root, e.g. {@code **&#47;logs&#47;**}; {@code null} accepts everything
- * @param parallelism          number of log files parsed concurrently
- * @param skipAlreadyImported  whether files whose source and entry path are already present in the database are
- *                             skipped instead of replaced
- * @param optimize             whether a successful import of new files should cluster {@code chat_entry} and compact
- *                             the database file afterwards
- * @param timezone             timezone the timestamps inside the imported log files are expressed in; they are
- *                             converted to the JVM's default timezone for storage, so that files written in different
- *                             zones stay comparable. Passing the default timezone leaves the values unchanged
+ * @param recursive                      for directory imports, whether to descend into subdirectories; for archive
+ *                                       imports, whether to descend into directories of the archive
+ * @param nestedArchives                 whether archives found inside the imported tree (or inside the imported
+ *                                       archive) are opened and imported as well
+ * @param pathMatcher                    glob restricting which log files are considered, matched against the path of
+ *                                       the file relative to the import root, e.g. {@code **&#47;logs&#47;**};
+ *                                       {@code null} accepts everything
+ * @param parallelism                    number of log files parsed concurrently
+ * @param skipAlreadyImported            whether files whose source and entry path are already present in the database
+ *                                       (or were already considered and skipped) are left unopened
+ * @param optimize                       whether a successful import of new files should cluster {@code chat_entry} and
+ *                                       compact the database file afterwards
+ * @param optimizeIfImportedFilesExceed  when {@code optimize} is false, still cluster and compact if more than this
+ *                                       many files were newly stored; {@code 0} disables that threshold
+ * @param timezone                       timezone the timestamps inside the imported log files are expressed in; they
+ *                                       are converted to the JVM's default timezone for storage, so that files written
+ *                                       in different zones stay comparable. Passing the default timezone leaves the
+ *                                       values unchanged
  */
 public record ImportOptions(
     boolean recursive,
@@ -29,6 +33,7 @@ public record ImportOptions(
     int parallelism,
     boolean skipAlreadyImported,
     boolean optimize,
+    int optimizeIfImportedFilesExceed,
     ZoneId timezone
 ) {
     /**
@@ -41,9 +46,18 @@ public record ImportOptions(
      * resource packs, worlds, and other zips are not opened as archives.
      */
     public static final String GAME_DIRECTORY_MATCHER = "**/logs/**";
+    /**
+     * Startup import of the running instance compacting the database only when more than this many files
+     * were newly stored. User-initiated imports still always optimize.
+     */
+    public static final int STARTUP_OPTIMIZE_AFTER_MORE_THAN = 15;
 
     public ImportOptions {
         if (parallelism < 1) throw new IllegalArgumentException("parallelism must be at least 1, was " + parallelism);
+        if (optimizeIfImportedFilesExceed < 0) {
+            throw new IllegalArgumentException(
+                "optimizeIfImportedFilesExceed must be at least 0, was " + optimizeIfImportedFilesExceed);
+        }
         Objects.requireNonNull(timezone, "timezone");
     }
 
@@ -52,13 +66,14 @@ public record ImportOptions(
      * clustering and compacting afterwards, and treating log timestamps as local time.
      */
     public static ImportOptions defaults() {
-        return new ImportOptions(true, true, null, Runtime.getRuntime().availableProcessors(), false, true,
+        return new ImportOptions(true, true, null, Runtime.getRuntime().availableProcessors(), false, true, 0,
             ZoneId.systemDefault());
     }
 
     /**
      * Startup import of this instance's {@code logs} folder: recursive, no nested archives, skip files already
-     * stored, only {@code .log} / {@code .log.gz} names, and skip post-import clustering and compact.
+     * stored or considered, only {@code .log} / {@code .log.gz} names, and compact only when more than
+     * {@link #STARTUP_OPTIMIZE_AFTER_MORE_THAN} files were newly stored.
      */
     public static ImportOptions currentLogsDirectory() {
         return defaults()
@@ -66,13 +81,13 @@ public record ImportOptions(
             .withNestedArchives(false)
             .withSkipAlreadyImported(true)
             .withOptimize(false)
+            .withOptimizeIfImportedFilesExceed(STARTUP_OPTIMIZE_AFTER_MORE_THAN)
             .withPathMatcher(LOGS_DIRECTORY_MATCHER);
     }
 
     /**
      * Import of a Minecraft instance / game directory: walk {@code **&#47;logs&#47;**} and do not open zips found
-     * elsewhere in the tree. Skips post-import clustering and compact because this path is used for frequent local
-     * refreshes.
+     * elsewhere in the tree. Same skip and compact rules as {@link #currentLogsDirectory()}.
      */
     public static ImportOptions currentGameDirectory() {
         return defaults()
@@ -80,17 +95,18 @@ public record ImportOptions(
             .withNestedArchives(false)
             .withSkipAlreadyImported(true)
             .withOptimize(false)
+            .withOptimizeIfImportedFilesExceed(STARTUP_OPTIMIZE_AFTER_MORE_THAN)
             .withPathMatcher(GAME_DIRECTORY_MATCHER);
     }
 
     public ImportOptions withRecursive(boolean recursive) {
         return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
-            timezone);
+            optimizeIfImportedFilesExceed, timezone);
     }
 
     public ImportOptions withNestedArchives(boolean nestedArchives) {
         return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
-            timezone);
+            optimizeIfImportedFilesExceed, timezone);
     }
 
     /**
@@ -98,22 +114,27 @@ public record ImportOptions(
      */
     public ImportOptions withPathMatcher(String pathMatcher) {
         return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
-            timezone);
+            optimizeIfImportedFilesExceed, timezone);
     }
 
     public ImportOptions withParallelism(int parallelism) {
         return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
-            timezone);
+            optimizeIfImportedFilesExceed, timezone);
     }
 
     public ImportOptions withSkipAlreadyImported(boolean skipAlreadyImported) {
         return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
-            timezone);
+            optimizeIfImportedFilesExceed, timezone);
     }
 
     public ImportOptions withOptimize(boolean optimize) {
         return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
-            timezone);
+            optimizeIfImportedFilesExceed, timezone);
+    }
+
+    public ImportOptions withOptimizeIfImportedFilesExceed(int optimizeIfImportedFilesExceed) {
+        return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
+            optimizeIfImportedFilesExceed, timezone);
     }
 
     /**
@@ -123,7 +144,7 @@ public record ImportOptions(
      */
     public ImportOptions withTimezone(ZoneId timezone) {
         return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
-            timezone);
+            optimizeIfImportedFilesExceed, timezone);
     }
 
     /**
@@ -131,5 +152,14 @@ public record ImportOptions(
      */
     public ImportOptions withTimezone(String timezone) {
         return withTimezone(ZoneId.of(timezone));
+    }
+
+    /**
+     * Whether this run should cluster and compact after {@code importedFiles} were newly stored.
+     */
+    public boolean shouldOptimize(int importedFiles) {
+        if (importedFiles <= 0) return false;
+        if (optimize) return true;
+        return optimizeIfImportedFilesExceed > 0 && importedFiles > optimizeIfImportedFilesExceed;
     }
 }

@@ -288,4 +288,34 @@ class ImportProgressTest {
         assertTrue(messages.contains("alpha"));
         assertTrue(messages.contains("second pass"));
     }
+
+    @Test
+    void currentLogsImportSkipsChunkingAtFifteenNewFiles() throws IOException {
+        Path logs = tempDir.resolve("logs");
+        for (int day = 1; day <= 15; day++) {
+            LogFixtures.writeGzipped(logs, "2026-01-%02d-1.log.gz".formatted(day),
+                LogFixtures.modernLog("26.2", "day " + day));
+        }
+        List<ImportProgress> updates = new CopyOnWriteArrayList<>();
+
+        ImportResult result = store.importDirectory(logs, ImportOptions.currentLogsDirectory(), updates::add);
+
+        assertEquals(15, result.importedFiles());
+        assertTrue(updates.stream().noneMatch(progress -> progress.phase() == ImportPhase.CHUNKING));
+    }
+
+    @Test
+    void currentLogsImportChunksWhenMoreThanFifteenNewFilesArrive() throws IOException {
+        Path logs = tempDir.resolve("logs");
+        for (int day = 1; day <= 16; day++) {
+            LogFixtures.writeGzipped(logs, "2026-01-%02d-1.log.gz".formatted(day),
+                LogFixtures.modernLog("26.2", "day " + day));
+        }
+        List<ImportProgress> updates = new CopyOnWriteArrayList<>();
+
+        ImportResult result = store.importDirectory(logs, ImportOptions.currentLogsDirectory(), updates::add);
+
+        assertEquals(16, result.importedFiles());
+        assertTrue(updates.stream().anyMatch(progress -> progress.phase() == ImportPhase.CHUNKING));
+    }
 }

@@ -10,6 +10,8 @@ import java.sql.Statement;
  * Version history:
  * <ul>
  *   <li>1 — {@link Schema} layout ({@code log_file}, {@code chat_entry}, location index).</li>
+ *   <li>2 — {@code import_seen}: files already imported or considered (empty, no chat, live-session
+ *       duplicate) so a later {@code skipAlreadyImported} run does not open them again.</li>
  * </ul>
  * <p>
  * To bump the schema:
@@ -22,7 +24,7 @@ import java.sql.Statement;
  */
 public final class SchemaMigration {
     /** Schema version written by this release. */
-    public static final int CURRENT_VERSION = 1;
+    public static final int CURRENT_VERSION = 2;
     static final String META_TABLE = "allthelogs_meta";
     static final String VERSION_KEY = "schema_version";
     /**
@@ -41,8 +43,10 @@ public final class SchemaMigration {
         createMetaTable(statement);
         int version = readVersion(statement);
         if (version == 0) {
-            if (!hasDataTables(statement)) {
-                Schema.create(statement);
+            boolean existed = hasDataTables(statement);
+            Schema.create(statement);
+            if (existed) {
+                migrateTo2(statement);
             }
             setVersion(statement, CURRENT_VERSION);
         } else if (version > CURRENT_VERSION) {
@@ -55,9 +59,22 @@ public final class SchemaMigration {
 
     private static UpgradeStep stepFrom(int fromVersion) {
         return switch (fromVersion) {
-            // case 1 -> SchemaMigration::migrateTo2;
+            case 1 -> SchemaMigration::migrateTo2;
             default -> null;
         };
+    }
+
+    static void migrateTo2(Statement statement) throws SQLException {
+        statement.execute("""
+            CREATE TABLE IF NOT EXISTS import_seen (
+                source_path VARCHAR NOT NULL,
+                entry_path VARCHAR NOT NULL,
+                PRIMARY KEY (source_path, entry_path)
+            )""");
+        statement.execute("""
+            INSERT INTO import_seen
+            SELECT source_path, entry_path FROM log_file
+            ON CONFLICT DO NOTHING""");
     }
 
     private static void createMetaTable(Statement statement) throws SQLException {

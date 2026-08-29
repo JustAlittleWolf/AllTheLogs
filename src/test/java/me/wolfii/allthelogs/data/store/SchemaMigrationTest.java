@@ -43,6 +43,7 @@ class SchemaMigrationTest {
             assertEquals(SchemaMigration.CURRENT_VERSION, SchemaMigration.readVersion(statement));
             assertTrue(tableExists(statement, "log_file"));
             assertTrue(tableExists(statement, "chat_entry"));
+            assertTrue(tableExists(statement, "import_seen"));
         }
     }
 
@@ -74,6 +75,26 @@ class SchemaMigrationTest {
             assertEquals(SchemaMigration.CURRENT_VERSION, SchemaMigration.readVersion(statement));
             assertTrue(tableExists(statement, "log_file"));
             assertTrue(tableExists(statement, "chat_entry"));
+            assertTrue(tableExists(statement, "import_seen"));
+        }
+    }
+
+    @Test
+    void version1DatabaseGainsImportSeenOnOpen() throws SQLException {
+        Path database = tempDir.resolve("v1.duckdb");
+        try (var connection = StoreConnections.openFile(database);
+             Statement statement = connection.createStatement()) {
+            statement.execute("DROP TABLE IF EXISTS import_seen");
+            statement.execute("DELETE FROM " + SchemaMigration.META_TABLE
+                + " WHERE k = '" + SchemaMigration.VERSION_KEY + "'");
+            statement.execute("INSERT INTO " + SchemaMigration.META_TABLE + " VALUES ('"
+                + SchemaMigration.VERSION_KEY + "', '1')");
+        }
+
+        try (var connection = StoreConnections.openFile(database);
+             Statement statement = connection.createStatement()) {
+            assertEquals(2, SchemaMigration.readVersion(statement));
+            assertTrue(tableExists(statement, "import_seen"));
         }
     }
 
@@ -124,15 +145,16 @@ class SchemaMigrationTest {
     void upgradeAppliesEachStepAndAdvancesTheStoredVersion() throws SQLException {
         try (var connection = StoreConnections.openInMemory();
              Statement statement = connection.createStatement()) {
-            assertEquals(1, SchemaMigration.readVersion(statement));
+            int start = SchemaMigration.CURRENT_VERSION;
+            assertEquals(start, SchemaMigration.readVersion(statement));
 
-            SchemaMigration.upgrade(statement, 1, 3, from -> stmt ->
+            SchemaMigration.upgrade(statement, start, start + 2, from -> stmt ->
                 stmt.execute("INSERT INTO " + SchemaMigration.META_TABLE
                     + " VALUES ('from_" + from + "', 'ok')"));
 
-            assertEquals(3, SchemaMigration.readVersion(statement));
-            assertEquals("ok", meta(statement, "from_1"));
-            assertEquals("ok", meta(statement, "from_2"));
+            assertEquals(start + 2, SchemaMigration.readVersion(statement));
+            assertEquals("ok", meta(statement, "from_" + start));
+            assertEquals("ok", meta(statement, "from_" + (start + 1)));
         }
     }
 
@@ -140,10 +162,11 @@ class SchemaMigrationTest {
     void upgradeDoesNotAdvanceVersionWhenAStepIsMissing() throws SQLException {
         try (var connection = StoreConnections.openInMemory();
              Statement statement = connection.createStatement()) {
+            int start = SchemaMigration.CURRENT_VERSION;
             SQLException error = assertThrows(SQLException.class,
-                () -> SchemaMigration.upgrade(statement, 1, 2, from -> null));
-            assertTrue(error.getMessage().contains("no migration path from schema version 1"));
-            assertEquals(1, SchemaMigration.readVersion(statement));
+                () -> SchemaMigration.upgrade(statement, start, start + 1, from -> null));
+            assertTrue(error.getMessage().contains("no migration path from schema version " + start));
+            assertEquals(start, SchemaMigration.readVersion(statement));
         }
     }
 
@@ -151,12 +174,13 @@ class SchemaMigrationTest {
     void upgradeDoesNotAdvanceVersionWhenAStepFails() throws SQLException {
         try (var connection = StoreConnections.openInMemory();
              Statement statement = connection.createStatement()) {
+            int start = SchemaMigration.CURRENT_VERSION;
             SQLException error = assertThrows(SQLException.class, () ->
-                SchemaMigration.upgrade(statement, 1, 2, from -> stmt -> {
+                SchemaMigration.upgrade(statement, start, start + 1, from -> stmt -> {
                     throw new SQLException("boom");
                 }));
             assertEquals("boom", error.getMessage());
-            assertEquals(1, SchemaMigration.readVersion(statement));
+            assertEquals(start, SchemaMigration.readVersion(statement));
         }
     }
 }

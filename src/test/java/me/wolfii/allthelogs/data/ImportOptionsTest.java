@@ -32,6 +32,7 @@ class ImportOptionsTest {
         assertEquals(original.parallelism(), updated.parallelism());
         assertEquals(original.skipAlreadyImported(), updated.skipAlreadyImported());
         assertEquals(original.optimize(), updated.optimize());
+        assertEquals(original.optimizeIfImportedFilesExceed(), updated.optimizeIfImportedFilesExceed());
     }
 
     @Test
@@ -59,6 +60,7 @@ class ImportOptionsTest {
         assertTrue(options.skipAlreadyImported());
         assertEquals(ImportOptions.LOGS_DIRECTORY_MATCHER, options.pathMatcher());
         assertFalse(options.optimize());
+        assertEquals(ImportOptions.STARTUP_OPTIMIZE_AFTER_MORE_THAN, options.optimizeIfImportedFilesExceed());
     }
 
     @Test
@@ -69,11 +71,16 @@ class ImportOptionsTest {
         assertTrue(options.skipAlreadyImported());
         assertEquals(ImportOptions.GAME_DIRECTORY_MATCHER, options.pathMatcher());
         assertFalse(options.optimize());
+        assertEquals(ImportOptions.STARTUP_OPTIMIZE_AFTER_MORE_THAN, options.optimizeIfImportedFilesExceed());
     }
 
     @Test
     void defaultsOptimizeAfterImport() {
         assertTrue(ImportOptions.defaults().optimize());
+        assertEquals(0, ImportOptions.defaults().optimizeIfImportedFilesExceed());
+        assertTrue(ImportOptions.defaults().shouldOptimize(1));
+        assertFalse(ImportOptions.currentLogsDirectory().shouldOptimize(15));
+        assertTrue(ImportOptions.currentLogsDirectory().shouldOptimize(16));
     }
 
     @Test
@@ -94,6 +101,7 @@ class ImportOptionsTest {
         assertEquals(original.pathMatcher(), skipped.pathMatcher());
         assertEquals(original.parallelism(), skipped.parallelism());
         assertEquals(original.skipAlreadyImported(), skipped.skipAlreadyImported());
+        assertEquals(original.optimizeIfImportedFilesExceed(), skipped.optimizeIfImportedFilesExceed());
         assertEquals(original.timezone(), skipped.timezone());
     }
 }

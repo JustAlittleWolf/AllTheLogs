@@ -431,6 +431,47 @@ class LogStoreTest {
     }
 
     @Test
+    void consideredEmptyFilesAreSkippedWithoutOpeningThemAgain() throws IOException {
+        Path logs = tempDir.resolve("logs");
+        LogFixtures.writeGzipped(logs, "2026-08-26-1.log.gz", LogFixtures.modernLog("26.2"));
+
+        ImportResult first = store.importDirectory(logs, ImportOptions.currentLogsDirectory());
+        assertEquals(0, first.importedFiles());
+        assertEquals(1, first.skippedFiles());
+
+        replaceLogFilesWithBrokenSymlinks(logs);
+        ImportResult second = store.importDirectory(logs, ImportOptions.currentLogsDirectory());
+
+        assertEquals(0, second.importedFiles(), () -> "failures=" + second.failures());
+        assertEquals(1, second.skippedFiles());
+        assertTrue(second.failures().isEmpty(), () -> "unexpected failures: " + second.failures());
+        assertTrue(store.allEntries().isEmpty());
+    }
+
+    @Test
+    void consideredSessionDuplicatesAreSkippedWithoutOpeningThemAgain() throws IOException {
+        LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+        ChatLog session = store.startSession("26.2", startedAt);
+        String sessionId = ((LogSource.Session) session.source()).id();
+        assertTrue(store.importSessionMessage("live capture", startedAt.plusSeconds(10)));
+
+        Path logs = tempDir.resolve("logs");
+        LogFixtures.writeGzipped(logs, "2026-08-26-1.log.gz",
+            taggedLog(sessionId, "10:00:10", "live capture", "from the file"));
+        ImportResult first = store.importDirectory(tempDir);
+        assertEquals(0, first.importedFiles());
+        assertEquals(1, first.skippedFiles());
+
+        replaceLogFilesWithBrokenSymlinks(logs);
+        ImportResult second = store.importDirectory(logs, ImportOptions.currentLogsDirectory());
+
+        assertEquals(0, second.importedFiles(), () -> "failures=" + second.failures());
+        assertEquals(1, second.skippedFiles());
+        assertTrue(second.failures().isEmpty(), () -> "unexpected failures: " + second.failures());
+        assertEquals(List.of("live capture"), store.allEntries().stream().map(ChatEntry::message).toList());
+    }
+
+    @Test
     void alreadyImportedArchiveEntriesAreSkippedWithoutReadingThem() throws IOException {
         Path archive = LogFixtures.writeZip(tempDir.resolve("backup.zip"), new LinkedHashMap<>(Map.of(
             "logs/2026-01-02-1.log.gz", LogFixtures.modernLog("26.2", "in archive"))));

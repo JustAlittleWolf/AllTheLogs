@@ -67,6 +67,7 @@ class ImportPathsTest {
         assertEquals(ImportOptions.GAME_DIRECTORY_MATCHER, options.pathMatcher());
         assertFalse(options.nestedArchives());
         assertTrue(options.recursive());
+        assertTrue(options.optimize());
     }
 
     @Test

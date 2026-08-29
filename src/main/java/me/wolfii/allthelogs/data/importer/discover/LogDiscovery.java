@@ -22,8 +22,8 @@ import java.util.regex.Pattern;
 /**
  * Walks directories and archives and hands every log file that passes the filters to a consumer.
  * Discovery is single-threaded: it is dominated by sequential IO, and formats such as 7z cannot be read concurrently.
- * Already imported files are skipped by stored source path before their bytes are read, so a startup re-import
- * does not open logs that are already in the database.
+ * Already imported or previously considered files are skipped by stored source path before their
+ * bytes are read, so a startup re-import does not open logs that were already handled.
  */
 public final class LogDiscovery {
     /** Separates the archive path from the path inside it, matching the convention of JAR URLs. */
