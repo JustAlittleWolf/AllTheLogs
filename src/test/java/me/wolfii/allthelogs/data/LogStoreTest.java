@@ -306,6 +306,63 @@ class LogStoreTest {
     }
 
     @Test
+    void pathMatcherRequiresTheArchiveItselfToMatch() throws IOException {
+        LogFixtures.writeZip(tempDir.resolve("backup.zip"), new LinkedHashMap<>(Map.of(
+            "logs/2026-01-02-1.log.gz", LogFixtures.modernLog("1.21.8", "from root zip"))));
+        LogFixtures.writeZip(tempDir.resolve("resourcepacks/pack.zip"), new LinkedHashMap<>(Map.of(
+            "logs/2026-03-01-1.log.gz", LogFixtures.modernLog("1.21.8", "from resource pack"))));
+        LogFixtures.writeZip(tempDir.resolve("logs/old.zip"), new LinkedHashMap<>(Map.of(
+            "2026-01-04-1.log.gz", LogFixtures.modernLog("1.21.8", "from logs zip"))));
+        LogFixtures.writeGzipped(tempDir.resolve("logs"), "2026-08-26-1.log.gz",
+            LogFixtures.modernLog("26.2", "from logs folder"));
+
+        ImportResult result = store.importDirectory(tempDir,
+            ImportOptions.defaults().withPathMatcher("**/logs/**"));
+
+        assertTrue(result.failures().isEmpty(), () -> "unexpected failures: " + result.failures());
+        List<String> messages = store.allEntries().stream().map(ChatEntry::message).toList();
+        assertTrue(messages.contains("from logs folder"));
+        assertTrue(messages.contains("from logs zip"));
+        assertFalse(messages.contains("from root zip"));
+        assertFalse(messages.contains("from resource pack"));
+    }
+
+    @Test
+    void archiveImportAppliesThePathMatcherUpToNestedZips() throws IOException {
+        byte[] nestedInLogs = LogFixtures.zipBytes(Map.of(
+            "2026-02-03-1.log", LogFixtures.legacyLog("from nested logs zip")));
+        byte[] nestedElsewhere = LogFixtures.zipBytes(Map.of(
+            "logs/2026-02-04-1.log", LogFixtures.legacyLog("from nested resource zip")));
+        Path archive = tempDir.resolve("backup.zip");
+        Files.createDirectories(archive.getParent());
+        try (var zip = new java.util.zip.ZipOutputStream(Files.newOutputStream(archive))) {
+            zip.putNextEntry(new java.util.zip.ZipEntry("logs/2026-01-02-1.log"));
+            zip.write(LogFixtures.modernLog("1.21.8", "from inner logs")
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            zip.closeEntry();
+            zip.putNextEntry(new java.util.zip.ZipEntry("crash-reports/crash.log"));
+            zip.write(LogFixtures.modernLog("26.2", "from crash report")
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            zip.closeEntry();
+            zip.putNextEntry(new java.util.zip.ZipEntry("logs/old.zip"));
+            zip.write(nestedInLogs);
+            zip.closeEntry();
+            zip.putNextEntry(new java.util.zip.ZipEntry("resourcepacks/pack.zip"));
+            zip.write(nestedElsewhere);
+            zip.closeEntry();
+        }
+
+        ImportResult result = store.importArchive(archive, ImportOptions.defaults().withPathMatcher("**/logs/**"));
+
+        assertTrue(result.failures().isEmpty(), () -> "unexpected failures: " + result.failures());
+        List<String> messages = store.allEntries().stream().map(ChatEntry::message).toList();
+        assertTrue(messages.contains("from inner logs"));
+        assertTrue(messages.contains("from nested logs zip"));
+        assertFalse(messages.contains("from crash report"));
+        assertFalse(messages.contains("from nested resource zip"));
+    }
+
+    @Test
     void importsLogsFromAnArchive() throws IOException {
         Path archive = LogFixtures.writeZip(tempDir.resolve("backup.zip"), new LinkedHashMap<>(Map.of(
             "logs/2026-01-02-1.log.gz", LogFixtures.modernLog("1.21.8", "in archive"))));

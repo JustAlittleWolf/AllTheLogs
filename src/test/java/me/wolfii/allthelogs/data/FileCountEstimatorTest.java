@@ -35,4 +35,20 @@ class FileCountEstimatorTest {
         int directory = FileCountEstimator.estimateDirectory(tempDir, ImportOptions.defaults());
         assertTrue(directory >= 2);
     }
+
+    @Test
+    void directoryEstimateAppliesThePathMatcherUpToZipFiles() throws IOException {
+        LogFixtures.writeZip(tempDir.resolve("backup.zip"), new LinkedHashMap<>(Map.of(
+            "logs/2026-01-02-1.log.gz", LogFixtures.modernLog("1.21.8", "from root zip"))));
+        LogFixtures.writeZip(tempDir.resolve("logs/old.zip"), new LinkedHashMap<>(Map.of(
+            "2026-01-04-1.log.gz", LogFixtures.modernLog("1.21.8", "from logs zip"))));
+        LogFixtures.writeGzipped(tempDir.resolve("logs"), "2026-08-26-1.log.gz",
+            LogFixtures.modernLog("26.2", "from logs folder"));
+        LogFixtures.writePlain(tempDir.resolve("crash-reports"), "crash.log",
+            LogFixtures.modernLog("26.2", "crash"));
+
+        int estimate = FileCountEstimator.estimateDirectory(tempDir,
+            ImportOptions.defaults().withPathMatcher("**/logs/**"));
+        assertEquals(2, estimate);
+    }
 }

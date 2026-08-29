@@ -11,9 +11,13 @@ import java.util.Objects;
  *                                       imports, whether to descend into directories of the archive
  * @param nestedArchives                 whether archives found inside the imported tree (or inside the imported
  *                                       archive) are opened and imported as well
- * @param pathMatcher                    glob restricting which log files are considered, matched against the path of
- *                                       the file relative to the import root, e.g. {@code **&#47;logs&#47;**};
- *                                       {@code null} accepts everything
+ * @param pathMatcher                    glob restricting which files are considered, matched against the path
+ *                                       relative to the import root up to and including a zip (or other archive)
+ *                                       file, e.g. {@code **&#47;logs&#47;**}. Archives found while walking a
+ *                                       directory must themselves match; paths inside a matching archive are not
+ *                                       required to match again. When the import root is an archive, the glob applies
+ *                                       to entry paths inside it until a nested archive. {@code null} accepts
+ *                                       everything
  * @param parallelism                    number of log files parsed concurrently
  * @param skipAlreadyImported            whether files already present in the database (same source and entry path,
  *                                       or the same SHA-256 of raw bytes) are not imported again; path matches are
@@ -44,8 +48,8 @@ public record ImportOptions(
      */
     public static final String LOGS_DIRECTORY_MATCHER = "**/*.{log,log.gz}";
     /**
-     * Glob relative to a Minecraft instance / game directory. Restricts discovery to {@code logs} folders so
-     * resource packs, worlds, and other zips are not opened as archives.
+     * Glob relative to a Minecraft instance / game directory. Restricts discovery to {@code logs} folders, so
+     * resource packs, worlds, and other zips outside those folders are not opened as archives.
      */
     public static final String GAME_DIRECTORY_MATCHER = "**/logs/**";
     /**
