@@ -128,6 +128,8 @@ class SchemaMigrationTest {
              Statement statement = connection.createStatement()) {
             assertEquals(SchemaMigration.CURRENT_VERSION, SchemaMigration.readVersion(statement));
             assertTrue(columnExists(statement, "import_seen", "content_hash"));
+        }
+    }
 
     @Test
     void legacyImportedEntriesSurviveVersionAdoption() throws SQLException {
