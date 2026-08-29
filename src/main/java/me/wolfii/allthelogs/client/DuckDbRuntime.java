@@ -55,8 +55,8 @@ public final class DuckDbRuntime {
             }
             PROGRESS.set(new Progress(Progress.Stage.LOADING, 0, 0, DuckDbJdbc.classifier(), null));
             inflight = CompletableFuture.runAsync(() -> {
-                try {
-                    installer().install(DuckDbRuntime::setProgress);
+                try (DuckDbJdbcInstaller installer = installer()) {
+                    installer.install(DuckDbRuntime::setProgress);
                 } catch (Exception e) {
                     String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
                     setProgress(Progress.failed(message));

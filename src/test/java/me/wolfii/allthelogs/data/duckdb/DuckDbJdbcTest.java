@@ -93,21 +93,24 @@ class DuckDbJdbcTest {
                 added.add(path);
                 present.set(true);
             }, present::get);
+            try {
+                installer.install(progress -> {
+                });
+                Path cached = cache.resolve(jarName);
+                assertTrue(Files.isRegularFile(cached));
+                assertEquals(1, added.size());
+                assertEquals(cached, added.getFirst());
+                assertEquals(1, hits[0]);
 
-            installer.install(progress -> {
-            });
-            Path cached = cache.resolve(jarName);
-            assertTrue(Files.isRegularFile(cached));
-            assertEquals(1, added.size());
-            assertEquals(cached, added.getFirst());
-            assertEquals(1, hits[0]);
-
-            present.set(false);
-            added.clear();
-            installer.install(progress -> {
-            });
-            assertEquals(1, added.size());
-            assertEquals(1, hits[0], "second install should use the cache");
+                present.set(false);
+                added.clear();
+                installer.install(progress -> {
+                });
+                assertEquals(1, added.size());
+                assertEquals(1, hits[0], "second install should use the cache");
+            } finally {
+                installer.close();
+            }
         } finally {
             server.stop(0);
         }
@@ -115,9 +118,10 @@ class DuckDbJdbcTest {
 
     @Test
     void skipsDownloadWhenNativeLibraryIsAlreadyPresent() throws Exception {
-        DuckDbJdbcInstaller installer = new DuckDbJdbcInstaller(
-            tempDir, "http://127.0.0.1:1", path -> fail("should not add " + path), () -> true);
-        installer.install(progress -> assertEquals(DuckDbJdbcInstaller.Progress.Stage.READY, progress.stage()));
+        try (DuckDbJdbcInstaller installer = new DuckDbJdbcInstaller(
+            tempDir, "http://127.0.0.1:1", path -> fail("should not add " + path), () -> true)) {
+            installer.install(progress -> assertEquals(DuckDbJdbcInstaller.Progress.Stage.READY, progress.stage()));
+        }
         assertTrue(isEmpty(tempDir));
     }
 
@@ -141,8 +145,12 @@ class DuckDbJdbcTest {
             Path cache = tempDir.resolve("cache");
             DuckDbJdbcInstaller installer = new DuckDbJdbcInstaller(
                 cache, repo, path -> fail("should not add " + path), () -> false);
-            assertThrows(IOException.class, () -> installer.install(progress -> {
-            }));
+            try {
+                assertThrows(IOException.class, () -> installer.install(progress -> {
+                }));
+            } finally {
+                installer.close();
+            }
             assertTrue(Files.notExists(cache.resolve(jarName)));
             assertTrue(Files.notExists(cache.resolve(jarName + ".part")));
         } finally {

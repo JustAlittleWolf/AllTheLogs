@@ -27,7 +27,7 @@ import java.util.function.Consumer;
  * Downloads the architecture-specific DuckDB JDBC jar into a shared cache and puts it on the classpath
  * so {@code DuckDBNative} can unpack the bundled library.
  */
-public final class DuckDbJdbcInstaller {
+public final class DuckDbJdbcInstaller implements AutoCloseable {
     private static final Logger LOGGER = LoggerFactory.getLogger("allthelogs");
     private static final Duration TIMEOUT = Duration.ofMinutes(2);
 
@@ -106,6 +106,11 @@ public final class DuckDbJdbcInstaller {
         }
         LOGGER.info("Loaded DuckDB JDBC driver");
         notify(progress, Progress.ready());
+    }
+
+    @Override
+    public void close() {
+        http.close();
     }
 
     private boolean isValidCache(Path jar, String classifier, Consumer<Progress> progress) {
