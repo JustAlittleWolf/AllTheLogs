@@ -22,6 +22,8 @@ import java.util.regex.Pattern;
 /**
  * Walks directories and archives and hands every log file that passes the filters to a consumer.
  * Discovery is single-threaded: it is dominated by sequential IO, and formats such as 7z cannot be read concurrently.
+ * {@link ImportOptions#pathMatcher()} is applied to paths from the import root up to an archive file;
+ * contents of a matching archive are not glob-filtered again.
  * <p>
  * Skip order, cheapest first: known {@code (source_path, entry_path)} is left unopened; otherwise the
  * file is read and hashed, and a known SHA-256 is skipped without parsing.
@@ -116,7 +118,8 @@ public final class LogDiscovery {
         if (!Files.isRegularFile(absolute)) {
             throw new LogDataException("not a file: " + absolute);
         }
-        archives.read(absolute, absolute.toString(), absolute.toString(), "", "", absolute.getFileName().toString());
+        archives.read(absolute, absolute.toString(), absolute.toString(), "", true,
+            absolute.getFileName().toString());
     }
 
     private void walk(Path root, Path directory, String prefix) {
@@ -155,8 +158,9 @@ public final class LogDiscovery {
                 }
                 offerLog(name, SourceKind.FILE, absoluteFile.toString(), "", lastModified(child), content);
             } else if (options.nestedArchives() && isArchive(name)) {
+                if (!matches(entryPath)) continue;
                 archives.read(child, child.toAbsolutePath().normalize().toString(), child.toString(),
-                    "", entryPath + ARCHIVE_SEPARATOR, name);
+                    "", false, name);
             }
         }
     }

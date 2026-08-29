@@ -30,7 +30,7 @@
   "allthelogs.import.skip_imported": "Skip already imported",
   "allthelogs.import.skip_imported.hint": "Leave out files that are already in the database instead of importing them again.",
   "allthelogs.import.path_matcher": "Path matcher",
-  "allthelogs.import.path_matcher.hint": "Glob relative to the source path. Leave empty to import every file.\n\n* matches one folder or file name (not a slash).\n** matches nested folders.\n? matches one character.\n{*.log,*.log.gz} matches either pattern.\n[abc] matches one of those characters.\n\nExamples: **/logs/**, *.log, logs/*.log.gz",
+  "allthelogs.import.path_matcher.hint": "Glob relative to the source path, including the path of any zip that is opened. Leave empty to import every file.\n\n* matches one folder or file name (not a slash).\n** matches nested folders.\n? matches one character.\n{*.log,*.log.gz} matches either pattern.\n[abc] matches one of those characters.\n\nWhen scanning archives, the archive file itself must match (for example **/logs/** only opens zips that live under a logs folder). Paths inside a matching zip are then imported without matching again.\n\nExamples: **/logs/**, *.log, logs/*.log.gz",
   "allthelogs.import.threads": "Threads",
   "allthelogs.import.threads.value": "%s threads",
   "allthelogs.import.timezone": "Timezone",

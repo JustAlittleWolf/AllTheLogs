@@ -137,8 +137,9 @@ public final class LogStore implements AutoCloseable {
      * Imports every log file found below {@code directory}. {@code cancelled} is polled during discovery and
      * writing; a {@code true} result stops the run and returns whatever was stored so far.
      *
-     * @param directory the directory to walk; {@link ImportOptions#pathMatcher()} is relative to this directory. Each
-     *                  imported log is recorded as a {@link LogSource.File} pointing at the file itself
+     * @param directory the directory to walk; {@link ImportOptions#pathMatcher()} is relative to this directory
+     *                  and applies up to archive files found in the tree. Each imported log is recorded as a
+     *                  {@link LogSource.File} pointing at the file itself
      * @param progress  called as files are found and processed, with the current log file or archive; {@code null} to
      *                  ignore progress. Session capture does not report progress
      * @throws LogDataException if {@code directory} is not a directory, or the database rejects the writes

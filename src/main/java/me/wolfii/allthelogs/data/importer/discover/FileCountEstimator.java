@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -26,15 +27,18 @@ public final class FileCountEstimator {
      */
     public static int estimateDirectory(Path root, ImportOptions options) {
         if (root == null || !Files.isDirectory(root)) return 1;
+        Pattern pathMatcher = compile(options);
         int estimate = 0;
         try (Stream<Path> stream = options.recursive() ? Files.walk(root) : Files.list(root)) {
             for (Path path : (Iterable<Path>) stream::iterator) {
                 if (!Files.isRegularFile(path)) continue;
+                String relative = posixRelative(root, path);
                 String name = path.getFileName().toString();
                 if (LogDiscovery.isLogFile(name)) {
-                    estimate++;
+                    if (matches(pathMatcher, relative)) estimate++;
                 } else if (options.nestedArchives() && LogDiscovery.isArchive(name)) {
-                    estimate += estimateArchive(path, options);
+                    if (!matches(pathMatcher, relative)) continue;
+                    estimate += estimateArchive(path, options, false);
                 }
             }
         } catch (IOException ignored) {
@@ -47,16 +51,21 @@ public final class FileCountEstimator {
      * Guesses how many log files {@code archive} contains. Zip files are listed; other formats use a constant.
      */
     public static int estimateArchive(Path archive, ImportOptions options) {
+        return estimateArchive(archive, options, true);
+    }
+
+    private static int estimateArchive(Path archive, ImportOptions options, boolean matchEntries) {
         if (archive == null || !Files.isRegularFile(archive)) return DEFAULT_ARCHIVE_LOGS;
         String name = archive.getFileName().toString().toLowerCase(Locale.ROOT);
         if (name.endsWith(".zip")) {
-            int count = countZipLogs(archive, options);
+            int count = countZipLogs(archive, options, matchEntries);
             if (count > 0) return count;
         }
         return DEFAULT_ARCHIVE_LOGS;
     }
 
-    private static int countZipLogs(Path archive, ImportOptions options) {
+    private static int countZipLogs(Path archive, ImportOptions options, boolean matchEntries) {
+        Pattern pathMatcher = matchEntries ? compile(options) : null;
         try (ZipFile zip = new ZipFile(archive.toFile())) {
             int count = 0;
             var entries = zip.entries();
@@ -67,14 +76,26 @@ public final class FileCountEstimator {
                 if (entryName.contains("/") && !options.recursive()) continue;
                 String leaf = entryName.substring(entryName.lastIndexOf('/') + 1);
                 if (LogDiscovery.isLogFile(leaf)) {
-                    count++;
+                    if (matches(pathMatcher, entryName)) count++;
                 } else if (options.nestedArchives() && LogDiscovery.isArchive(leaf)) {
-                    count += LOGS_PER_ARCHIVE;
+                    if (matches(pathMatcher, entryName)) count += LOGS_PER_ARCHIVE;
                 }
             }
             return count;
         } catch (IOException ignored) {
             return 0;
         }
+    }
+
+    private static Pattern compile(ImportOptions options) {
+        return options.pathMatcher() == null ? null : Globs.compile(options.pathMatcher());
+    }
+
+    private static boolean matches(Pattern pathMatcher, String path) {
+        return pathMatcher == null || pathMatcher.matcher(path).matches();
+    }
+
+    private static String posixRelative(Path root, Path path) {
+        return root.relativize(path).toString().replace('\\', '/');
     }
 }
