@@ -701,7 +701,7 @@ public final class MessageTimeline extends BaseUIComponent {
             return;
         }
         LocalDateTime time = timeAtProgress(clamped);
-        if (!scrollLocally(clamped, time, -1)) {
+        if (!scrollLocally(clamped, time, -1, true)) {
             scrollToTime(time);
         }
     }
@@ -709,16 +709,26 @@ public final class MessageTimeline extends BaseUIComponent {
     /**
      * Scrolls to {@code progress} without a store query when the buffer already holds that day. A day whose
      * matches all share one timestamp cannot be reached this way once it holds more matches than are loaded,
-     * because only a match rank can address them.
+     * because only a match rank can address them. A preview slice of a longer day is not enough either:
+     * mapping the whole day onto those rows would hide messages the thumb still points at.
      */
     private boolean scrollLocally(double progress, LocalDateTime time, long skip) {
+        return scrollLocally(progress, time, skip, false);
+    }
+
+    private boolean scrollLocally(double progress, LocalDateTime time, long skip, boolean onFetchedPage) {
         MatchDay day = TimelineScale.dayAtProgress(progress, matches.days());
         if (day != null) {
             MessageListLayout.DateBand band = layout.dateBand(day.date());
-            if (band != null && !(day.collapsed() && skip >= 0 && day.matches() > window.matchCount())) {
+            int loaded = DisplayRows.matchCountOnDate(window.rows(), day.date());
+            boolean timeInBuffer = time != null && window.coversTime(time) && window.showsDate(time);
+            if (band != null && PageBounds.canScrollDayLocally(day, loaded, skip, onFetchedPage, timeInBuffer)) {
                 double fraction = TimelineScale.fractionInDay(progress, matches.days());
                 setScrollY(ScrubberGeometry.scrollForDateFraction(band.y(), layout.dateEndY(band), height, fraction));
                 return true;
+            }
+            if (day.collapsed() && skip >= 0 && loaded < day.matches()) {
+                return false;
             }
         }
         if (time != null && window.showsDate(time)) {
