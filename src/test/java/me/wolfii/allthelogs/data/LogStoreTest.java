@@ -1,6 +1,7 @@
 package me.wolfii.allthelogs.data;
 
 import me.wolfii.allthelogs.api.ChatQuery.Sort;
+import me.wolfii.allthelogs.client.list.PageBounds;
 import me.wolfii.allthelogs.data.parse.LogDates;
 import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import me.wolfii.allthelogs.data.store.SessionMarker;
@@ -1338,6 +1339,29 @@ class LogStoreTest {
             .withOffset(page1.getLast().timestamp())
             .withLimit(2));
         assertTrue(dropped.isEmpty());
+    }
+
+    @Test
+    void fillingOlderRowsFromAWholeSecondDoesNotDropThePreviousMessage() {
+        LocalDateTime darth = LocalDateTime.of(2026, 8, 31, 17, 55, 29);
+        LocalDateTime buabb = LocalDateTime.of(2026, 8, 31, 17, 56, 40);
+        LocalDateTime renamed = LocalDateTime.of(2026, 8, 31, 17, 58, 12);
+        store.startSession("26.2", darth);
+        store.importSessionMessage("[60] Darth69Eagle: IC ist so geilll", darth);
+        store.importSessionMessage("[Freunde] BuaBB ist nun offline", buabb);
+        store.importSessionMessage("Horror_Entity303 changed their name to Till_youtube", renamed);
+
+        List<ChatEntry> jump = store.findEntries(ChatQuery.all()
+            .withOffset(PageBounds.exclusiveOffset(renamed, Sort.ASCENDING))
+            .withLimit(100));
+        assertEquals(List.of("Horror_Entity303 changed their name to Till_youtube"),
+            jump.stream().map(ChatEntry::message).toList());
+
+        List<ChatEntry> fill = store.findEntries(PageBounds.continueFrom(
+            ChatQuery.all().withSort(Sort.DESCENDING).withLimit(32), renamed, 1));
+        assertEquals(
+            List.of("[Freunde] BuaBB ist nun offline", "[60] Darth69Eagle: IC ist so geilll"),
+            fill.stream().map(ChatEntry::message).toList());
     }
 
     @Test

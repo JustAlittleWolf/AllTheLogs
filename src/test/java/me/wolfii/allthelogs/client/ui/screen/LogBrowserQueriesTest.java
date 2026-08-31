@@ -28,19 +28,19 @@ class LogBrowserQueriesTest {
     void continueFromIncludesTheCursorSecondAndSkipsAlreadyBufferedHits() {
         LocalDateTime time = LocalDateTime.of(2026, 8, 27, 10, 0, 0);
         ChatQuery next = PageBounds.continueFrom(ChatQuery.all().withLimit(100), time, 40);
-        assertEquals(time.minusNanos(1), next.offset());
+        assertEquals(time.minusNanos(1_000), next.offset());
         assertEquals(40, next.skip());
         ChatQuery previous = PageBounds.continueFrom(
             ChatQuery.all().withSort(ChatQuery.Sort.DESCENDING).withLimit(100), time, 40);
-        assertEquals(time.plusNanos(1), previous.offset());
+        assertEquals(time.plusNanos(1_000), previous.offset());
         assertEquals(40, previous.skip());
     }
 
     @Test
     void exclusiveOffsetIncludesTheTargetTimestamp() {
         LocalDateTime time = LocalDateTime.of(2026, 8, 27, 10, 0, 0);
-        assertEquals(time.plusNanos(1), PageBounds.exclusiveOffset(time, ChatQuery.Sort.DESCENDING));
-        assertEquals(time.minusNanos(1), PageBounds.exclusiveOffset(time, ChatQuery.Sort.ASCENDING));
+        assertEquals(time.plusNanos(1_000), PageBounds.exclusiveOffset(time, ChatQuery.Sort.DESCENDING));
+        assertEquals(time.minusNanos(1_000), PageBounds.exclusiveOffset(time, ChatQuery.Sort.ASCENDING));
     }
 
     @Test
