@@ -1,6 +1,7 @@
 package me.wolfii.allthelogs.client.list;
 
 import me.wolfii.allthelogs.api.ChatQuery;
+import me.wolfii.allthelogs.api.MatchDay;
 import me.wolfii.allthelogs.data.MatchSummary;
 
 import java.time.LocalDateTime;
@@ -89,5 +90,24 @@ public final class PageBounds {
         int needed = Math.max(8, viewHeight / MessageListLayout.ROW_HEIGHT + 8);
         if (pageLimit < 0) return needed;
         return (int) Math.max(needed, Math.min(pageLimit, Integer.MAX_VALUE));
+    }
+
+    /**
+     * Whether the thumb can map 0–1 progress onto the rows already buffered for {@code day}.
+     * <p>
+     * A scrubber preview only loads a slice. Treating that slice as the whole day would scroll inside it
+     * instead of fetching, so a line at the edge of the original page (the newest live message, for
+     * example) would disappear. After a fetch, {@code onFetchedPage} is set so the new slice can still
+     * be positioned. Releasing the thumb ({@code commit}) always refetches unless the day is fully
+     * loaded, because the target time can sit inside the preview while the rest of the original page
+     * does not. A collapsed day addressed by match rank always jumps until every match is loaded.
+     */
+    public static boolean canScrollDayLocally(MatchDay day, int loadedMatchesOnDay, long skip,
+                                              boolean onFetchedPage, boolean timeInBuffer, boolean commit) {
+        if (day == null) return false;
+        boolean allLoaded = loadedMatchesOnDay >= day.matches();
+        if (day.collapsed() && skip >= 0 && !allLoaded) return false;
+        if (commit) return allLoaded;
+        return allLoaded || onFetchedPage || timeInBuffer;
     }
 }

@@ -7,6 +7,7 @@ import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.LogDataException;
 import me.wolfii.allthelogs.data.LogSource;
+import me.wolfii.allthelogs.data.MatchDay;
 import me.wolfii.allthelogs.data.MatchSummary;
 import org.junit.jupiter.api.Test;
 
@@ -79,6 +80,23 @@ class LogBrowserQueriesTest {
         assertFalse(PageBounds.needsMoreToFill(many, 0, 200, true));
         assertEquals(24, PageBounds.extraFillLimit(200, 8));
         assertEquals(32, PageBounds.extraFillLimit(200, 32));
+    }
+
+    @Test
+    void scrubberDoesNotTreatAPreviewSliceAsTheWholeDay() {
+        LocalDateTime time = LocalDateTime.of(2026, 8, 27, 10, 0, 0);
+        MatchDay day = new MatchDay(time.toLocalDate(), time, time.plusHours(8), 80);
+        assertFalse(PageBounds.canScrollDayLocally(day, 32, -1, false, false, false));
+        assertTrue(PageBounds.canScrollDayLocally(day, 32, -1, true, false, false));
+        assertTrue(PageBounds.canScrollDayLocally(day, 32, -1, false, true, false));
+        assertTrue(PageBounds.canScrollDayLocally(day, 80, -1, false, false, false));
+        assertFalse(PageBounds.canScrollDayLocally(day, 32, -1, false, true, true));
+        assertFalse(PageBounds.canScrollDayLocally(day, 32, -1, true, false, true));
+        assertTrue(PageBounds.canScrollDayLocally(day, 80, -1, false, false, true));
+        MatchDay collapsed = new MatchDay(time.toLocalDate(), time, time, 50);
+        assertFalse(PageBounds.canScrollDayLocally(collapsed, 32, 10, false, true, false));
+        assertTrue(PageBounds.canScrollDayLocally(collapsed, 50, 10, false, false, false));
+        assertFalse(PageBounds.canScrollDayLocally(collapsed, 32, 10, false, true, true));
     }
 
     @Test
