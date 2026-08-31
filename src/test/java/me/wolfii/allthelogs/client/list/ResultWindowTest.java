@@ -136,6 +136,9 @@ class ResultWindowTest {
         assertEquals(context, DisplayRows.firstMatch(onlyContext));
         assertEquals(context, DisplayRows.lastMatch(onlyContext));
     }
+
+    @Test
+    void reverseRestoresChronologicalOrderAfterABackwardFetch() {
         List<DisplayRow> newestFirst = List.of(row("a.log", 5), row("a.log", 4), row("a.log", 3));
         List<DisplayRow> chronological = DisplayRows.reversed(newestFirst);
         assertEquals(List.of(3, 4, 5), chronological.stream().map(DisplayRow::lineIndex).toList());
