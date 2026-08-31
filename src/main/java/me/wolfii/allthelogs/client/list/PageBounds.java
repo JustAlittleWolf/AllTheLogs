@@ -2,6 +2,7 @@ package me.wolfii.allthelogs.client.list;
 
 import me.wolfii.allthelogs.api.ChatQuery;
 import me.wolfii.allthelogs.api.MatchDay;
+import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.MatchSummary;
 
 import java.time.LocalDateTime;
@@ -11,7 +12,8 @@ import java.util.List;
  * Decides what lies beyond the page that just arrived: whether more matches exist before or after it, whether
  * it fills the viewport, and which cursor the next page should start from.
  * <p>
- * The store pages by timestamp cursor rather than by row offset, because rows shift as logs are imported. That
+ * The store pages by a row cursor {@code (time, file, line)} rather than by row offset, because rows shift
+ * as logs are imported. Timestamp-only exclusive offsets are still used to jump to a clock time. That
  * makes "is there more?" a comparison against the unpaged {@link MatchSummary} instead of a row count.
  */
 public final class PageBounds {
@@ -37,13 +39,30 @@ public final class PageBounds {
     }
 
     /**
-     * Continues a paged query from {@code cursor} without dropping other matches that share that
-     * second. The store cursor is exclusive on timestamp only, so the edge second is included with
-     * {@link #exclusiveOffset} and already-buffered hits at that time are skipped.
+     * Continues a paged query after {@code edge} without dropping other matches that share that
+     * second. The store cursor is exclusive on {@code (time, file, line)}, so later (or earlier)
+     * lines at the same timestamp are still returned and {@code edge} itself is not.
      */
-    public static ChatQuery continueFrom(ChatQuery page, LocalDateTime cursor, int alreadyAtCursor) {
-        return page.withOffset(exclusiveOffset(cursor, page.sort()))
-            .withSkip(Math.max(0, alreadyAtCursor));
+    public static ChatQuery continueFrom(ChatQuery page, DisplayRow edge) {
+        return continueFrom(page, edge.entry());
+    }
+
+    /**
+     * Same as {@link #continueFrom(ChatQuery, DisplayRow)} when the caller already has the stored
+     * line rather than a display row.
+     */
+    public static ChatQuery continueFrom(ChatQuery page, ChatEntry edge) {
+        return page.withOffset(edge.timestamp(), edge.chatLog().source(), edge.lineIndex());
+    }
+
+    /**
+     * Whether matches exist before this page, judged against the whole matched range.
+     * {@code skipped} is the match rank a timeline jump already walked past; those rows sit
+     * before the page even when they share its first timestamp.
+     */
+    public static boolean hasBefore(ChatQuery.Sort sort, List<DisplayRow> rows, MatchSummary summary,
+                                    long skipped) {
+        return skipped > 0 || hasBefore(sort, rows, summary);
     }
 
     /**

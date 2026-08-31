@@ -14,6 +14,8 @@ class ChatQueryTest {
 
         assertEquals(Sort.ASCENDING, query.sort());
         assertNull(query.offset());
+        assertNull(query.offsetSource());
+        assertEquals(0, query.offsetLine());
         assertNull(query.startingAt());
         assertNull(query.upUntil());
         assertNull(query.version());
@@ -34,7 +36,18 @@ class ChatQueryTest {
         assertThrows(NullPointerException.class, () -> ChatQuery.all().withOffset(null));
         LocalDateTime offset = LocalDateTime.of(2026, 1, 1, 0, 0);
         assertEquals(offset, ChatQuery.all().withOffset(offset).offset());
+        assertNull(ChatQuery.all().withOffset(offset).offsetSource());
         assertEquals(12, ChatQuery.all().withSkip(12).skip());
+        LogSource source = new LogSource.Session("cursor");
+        ChatQuery row = ChatQuery.all().withOffset(offset, source, 4);
+        assertEquals(offset, row.offset());
+        assertEquals(source, row.offsetSource());
+        assertEquals(4, row.offsetLine());
+        ChatQuery timestampOnly = row.withOffset(offset.plusSeconds(1));
+        assertNull(timestampOnly.offsetSource());
+        assertEquals(0, timestampOnly.offsetLine());
+        assertThrows(NullPointerException.class, () -> ChatQuery.all().withOffset(offset, null, 0));
+        assertThrows(IllegalArgumentException.class, () -> ChatQuery.all().withOffset(offset, source, -1));
     }
 
     @Test

@@ -84,23 +84,39 @@ public final class DisplayRows {
     }
 
     /**
+     * The first search hit, falling back to the first row when the page holds only context lines.
+     */
+    public static DisplayRow firstMatch(List<DisplayRow> rows) {
+        for (DisplayRow row : rows) {
+            if (row.match()) return row;
+        }
+        return rows.isEmpty() ? null : rows.getFirst();
+    }
+
+    /**
      * Timestamp of the first hit, falling back to the first row when the page holds only context lines.
      */
     public static LocalDateTime firstMatchTime(List<DisplayRow> rows) {
-        for (DisplayRow row : rows) {
-            if (row.match()) return row.entry().timestamp();
+        DisplayRow match = firstMatch(rows);
+        return match == null ? null : match.entry().timestamp();
+    }
+
+    /**
+     * The last search hit, falling back to the last row when the page holds only context lines.
+     */
+    public static DisplayRow lastMatch(List<DisplayRow> rows) {
+        for (int i = rows.size() - 1; i >= 0; i--) {
+            if (rows.get(i).match()) return rows.get(i);
         }
-        return rows.isEmpty() ? null : rows.getFirst().entry().timestamp();
+        return rows.isEmpty() ? null : rows.getLast();
     }
 
     /**
      * Timestamp of the last hit, falling back to the last row when the page holds only context lines.
      */
     public static LocalDateTime lastMatchTime(List<DisplayRow> rows) {
-        for (int i = rows.size() - 1; i >= 0; i--) {
-            if (rows.get(i).match()) return rows.get(i).entry().timestamp();
-        }
-        return rows.isEmpty() ? null : rows.getLast().entry().timestamp();
+        DisplayRow match = lastMatch(rows);
+        return match == null ? null : match.entry().timestamp();
     }
 
     /**

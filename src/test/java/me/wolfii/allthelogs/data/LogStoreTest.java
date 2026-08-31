@@ -1339,6 +1339,36 @@ class LogStoreTest {
             .withOffset(page1.getLast().timestamp())
             .withLimit(2));
         assertTrue(dropped.isEmpty());
+
+        List<ChatEntry> fromRow = store.findEntries(PageBounds.continueFrom(
+            ChatQuery.all().withLimit(2), page1.getLast()));
+        assertEquals(List.of("three", "four"), fromRow.stream().map(ChatEntry::message).toList());
+    }
+
+    @Test
+    void rowCursorKeepsTheRestOfASecondWhenContinuingFromTheMiddle() {
+        LocalDateTime older = LocalDateTime.of(2026, 8, 26, 11, 59, 59);
+        LocalDateTime at = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+        LocalDateTime newer = LocalDateTime.of(2026, 8, 26, 12, 0, 1);
+        store.startSession("26.2", older);
+        store.importSessionMessage("older", older);
+        store.importSessionMessage("one", at);
+        store.importSessionMessage("two", at);
+        store.importSessionMessage("three", at);
+        store.importSessionMessage("four", at);
+        store.importSessionMessage("five", at);
+        store.importSessionMessage("newer", newer);
+
+        List<ChatEntry> middle = store.findEntries(ChatQuery.all().withSkip(3).withLimit(2));
+        assertEquals(List.of("three", "four"), middle.stream().map(ChatEntry::message).toList());
+
+        List<ChatEntry> after = store.findEntries(PageBounds.continueFrom(
+            ChatQuery.all().withLimit(10), middle.getLast()));
+        assertEquals(List.of("five", "newer"), after.stream().map(ChatEntry::message).toList());
+
+        List<ChatEntry> before = store.findEntries(PageBounds.continueFrom(
+            ChatQuery.all().withSort(Sort.DESCENDING).withLimit(10), middle.getFirst()));
+        assertEquals(List.of("two", "one", "older"), before.stream().map(ChatEntry::message).toList());
     }
 
     @Test
@@ -1358,7 +1388,7 @@ class LogStoreTest {
             jump.stream().map(ChatEntry::message).toList());
 
         List<ChatEntry> fill = store.findEntries(PageBounds.continueFrom(
-            ChatQuery.all().withSort(Sort.DESCENDING).withLimit(32), renamed, 1));
+            ChatQuery.all().withSort(Sort.DESCENDING).withLimit(32), jump.getFirst()));
         assertEquals(
             List.of("[Freunde] BuaBB ist nun offline", "[60] Darth69Eagle: IC ist so geilll"),
             fill.stream().map(ChatEntry::message).toList());

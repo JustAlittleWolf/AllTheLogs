@@ -18,6 +18,8 @@ import java.util.function.Consumer;
  * @param limit         cap on matches, not counting context lines; negative means no cap
  * @param sort          result order
  * @param offset        exclusive timestamp cursor the page starts after, or {@code null} to start at the end
+ * @param offsetSource  log of the exclusive row cursor, or {@code null} when {@code offset} is timestamp-only
+ * @param offsetLine    line index of the exclusive row cursor; ignored when {@code offsetSource} is {@code null}
  * @param skip          matches to drop after filtering and ordering
  */
 public record ChatQuery(
@@ -31,12 +33,18 @@ public record ChatQuery(
     long limit,
     Sort sort,
     LocalDateTime offset,
+    LogSource offsetSource,
+    int offsetLine,
     long skip
 ) implements me.wolfii.allthelogs.api.ChatQuery {
     public ChatQuery {
         Objects.requireNonNull(sort, "sort");
         if (contextLines < 0) throw new IllegalArgumentException("contextLines must not be negative");
+        if (offsetLine < 0) throw new IllegalArgumentException("offsetLine must not be negative");
         if (skip < 0) throw new IllegalArgumentException("skip must not be negative");
+        if (offsetSource != null && offset == null) {
+            throw new IllegalArgumentException("offsetSource requires offset");
+        }
         if (startingAt != null && upUntil != null && startingAt.isAfter(upUntil)) {
             throw new IllegalArgumentException("startingAt " + startingAt + " is after upUntil " + upUntil);
         }
@@ -46,7 +54,7 @@ public record ChatQuery(
      * A query matching every stored entry, ordered by timestamp ascending.
      */
     public static ChatQuery all() {
-        return new ChatQuery(null, false, null, null, null, null, 0, -1, Sort.ASCENDING, null, 0);
+        return new ChatQuery(null, false, null, null, null, null, 0, -1, Sort.ASCENDING, null, null, 0, 0);
     }
 
     /**
@@ -145,13 +153,37 @@ public record ChatQuery(
      * <p>
      * When sorting ascending, only matches after {@code offset} are kept; when sorting descending, only matches before
      * {@code offset} are kept. Context lines around those matches may still fall on the other side of {@code offset},
-     * including at the offset timestamp itself. Combine with a limit by passing the last returned match timestamp as
-     * the next page's offset.
+     * including at the offset timestamp itself.
+     * <p>
+     * This bound is exclusive on the whole timestamp, so later matches that share {@code offset} are dropped.
+     * To continue after a specific line without losing the rest of that second, use
+     * {@link #withOffset(LocalDateTime, LogSource, int)}.
      */
     @Override
     public ChatQuery withOffset(LocalDateTime offset) {
         Objects.requireNonNull(offset, "offset");
-        return with(draft -> draft.offset = offset);
+        return with(draft -> {
+            draft.offset = offset;
+            draft.offsetSource = null;
+            draft.offsetLine = 0;
+        });
+    }
+
+    /**
+     * Starts the page after this exact line, exclusive, keeping other matches that share {@code offset}.
+     */
+    @Override
+    public ChatQuery withOffset(LocalDateTime offset, me.wolfii.allthelogs.api.LogSource source, int lineIndex) {
+        Objects.requireNonNull(offset, "offset");
+        Objects.requireNonNull(source, "source");
+        if (!(source instanceof LogSource dataSource)) {
+            throw new IllegalArgumentException("source");
+        }
+        return with(draft -> {
+            draft.offset = offset;
+            draft.offsetSource = dataSource;
+            draft.offsetLine = lineIndex;
+        });
     }
 
     /**
@@ -187,6 +219,8 @@ public record ChatQuery(
         private long limit;
         private Sort sort;
         private LocalDateTime offset;
+        private LogSource offsetSource;
+        private int offsetLine;
         private long skip;
 
         private Draft(ChatQuery query) {
@@ -200,12 +234,14 @@ public record ChatQuery(
             this.limit = query.limit;
             this.sort = query.sort;
             this.offset = query.offset;
+            this.offsetSource = query.offsetSource;
+            this.offsetLine = query.offsetLine;
             this.skip = query.skip;
         }
 
         private ChatQuery build() {
             return new ChatQuery(substring, caseSensitive, regex, version, startingAt, upUntil, contextLines,
-                limit, sort, offset, skip);
+                limit, sort, offset, offsetSource, offsetLine, skip);
         }
     }
 }

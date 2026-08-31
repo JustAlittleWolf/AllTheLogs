@@ -76,6 +76,16 @@ public interface ChatQuery {
     LocalDateTime offset();
 
     /**
+     * Log of the exclusive row cursor, or {@code null} when {@link #offset()} is timestamp-only.
+     */
+    LogSource offsetSource();
+
+    /**
+     * Line index of the exclusive row cursor. Ignored when {@link #offsetSource()} is {@code null}.
+     */
+    int offsetLine();
+
+    /**
      * Matches to drop after filtering and ordering.
      */
     long skip();
@@ -144,10 +154,21 @@ public interface ChatQuery {
      * <p>
      * When sorting ascending, only matches after {@code offset} are kept; when sorting descending, only matches before
      * {@code offset} are kept. Context lines around those matches may still fall on the other side of {@code offset},
-     * including at the offset timestamp itself. Combine with a limit by passing the last returned match timestamp as
-     * the next page's offset.
+     * including at the offset timestamp itself.
+     * <p>
+     * This bound is exclusive on the whole timestamp, so later matches that share {@code offset} are dropped.
+     * To continue after a specific line without losing the rest of that second, use
+     * {@link #withOffset(LocalDateTime, LogSource, int)}.
      */
     ChatQuery withOffset(LocalDateTime offset);
+
+    /**
+     * Starts the page after this exact line, exclusive, keeping other matches that share {@code offset}.
+     * <p>
+     * Sort order is timestamp, then file, then line index, so a later (or earlier) line in the same
+     * second is still returned. Clears any previous timestamp-only offset.
+     */
+    ChatQuery withOffset(LocalDateTime offset, LogSource source, int lineIndex);
 
     /**
      * Skips the first {@code skip} matches after filtering and ordering. Used by the timeline to land inside

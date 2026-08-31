@@ -121,7 +121,21 @@ class ResultWindowTest {
     }
 
     @Test
-    void reverseRestoresChronologicalOrderAfterABackwardFetch() {
+    void firstAndLastMatchSkipContextLinesThenFallBackToTheRow() {
+        LocalDateTime time = LocalDateTime.of(2026, 8, 26, 10, 0);
+        ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), time.toLocalDate(), "26.2", time, time);
+        DisplayRow context = new DisplayRow(new ChatEntry(log, time, 0, "ctx"), false, List.of());
+        DisplayRow first = rowAt(time, 1);
+        DisplayRow last = rowAt(time.plusSeconds(1), 2);
+        List<DisplayRow> rows = List.of(context, first, last);
+        assertEquals(first, DisplayRows.firstMatch(rows));
+        assertEquals(last, DisplayRows.lastMatch(rows));
+        assertEquals(time, DisplayRows.firstMatchTime(rows));
+        assertEquals(time.plusSeconds(1), DisplayRows.lastMatchTime(rows));
+        List<DisplayRow> onlyContext = List.of(context);
+        assertEquals(context, DisplayRows.firstMatch(onlyContext));
+        assertEquals(context, DisplayRows.lastMatch(onlyContext));
+    }
         List<DisplayRow> newestFirst = List.of(row("a.log", 5), row("a.log", 4), row("a.log", 3));
         List<DisplayRow> chronological = DisplayRows.reversed(newestFirst);
         assertEquals(List.of(3, 4, 5), chronological.stream().map(DisplayRow::lineIndex).toList());

@@ -1,6 +1,8 @@
 package me.wolfii.allthelogs.data.query;
 
 import me.wolfii.allthelogs.api.ChatQuery;
+import me.wolfii.allthelogs.data.LogSource;
+import me.wolfii.allthelogs.data.store.StoredSources;
 
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
@@ -16,7 +18,9 @@ import java.util.Locale;
  * {@code file_id}. Context lines expand each match into concrete {@code (file_id, line_index)} keys and hash-join
  * them back, rather than using a range predicate that DuckDB cannot hash.
  * <p>
- * A timestamp {@link ChatQuery#offset()} filters which rows count as matches, in the sort direction. Context expansion
+ * A timestamp {@link ChatQuery#offset()} filters which rows count as matches, in the sort direction. A row
+ * cursor ({@link ChatQuery#offsetSource()}) is exclusive on {@code (entry_time, file_id, line_index)} so
+ * paging after a line still returns other matches that share that second. Context expansion
  * does not apply that bound, so surrounding lines may fall on the other side of the cursor.
  * {@link ChatQuery#startingAt} and {@link ChatQuery#upUntil} still clip both matches and context. When context is
  * requested, {@link ChatQuery#limit()} applies to the match set
@@ -150,6 +154,10 @@ public final class QueryBuilder {
 
     private static void addOffsetCondition(ChatQuery query, List<String> conditions, List<Object> parameters) {
         if (query.offset() == null) return;
+        if (query.offsetSource() != null) {
+            addRowCursorCondition(query, conditions, parameters);
+            return;
+        }
         // Exclusive in the sort direction so (limit, offset=lastTimestamp) is the next page without repeating the
         // last match. Context is added later without this predicate. The bound is a DuckDB TIMESTAMP (microseconds);
         // callers that need the cursor second included must nudge by 1µs, not 1ns.
@@ -159,6 +167,34 @@ public final class QueryBuilder {
             conditions.add("entry_time > ?");
         }
         parameters.add(Timestamp.valueOf(query.offset()));
+    }
+
+    /**
+     * Exclusive on {@code (entry_time, file_id, line_index)} so paging after a line keeps the rest of that
+     * second. Timestamp-only {@link ChatQuery#offset()} cannot do that.
+     */
+    private static void addRowCursorCondition(ChatQuery query, List<String> conditions, List<Object> parameters) {
+        LogSource source = dataSource(query.offsetSource());
+        String cmp = query.sort() == ChatQuery.Sort.DESCENDING ? "<" : ">";
+        String fileId = "(SELECT id FROM log_file WHERE source_path = ? AND entry_path = ?)";
+        conditions.add("(entry_time " + cmp + " ? OR (entry_time = ? AND file_id = " + fileId
+            + " AND line_index " + cmp + " ?) OR (entry_time = ? AND file_id " + cmp + " " + fileId + "))");
+        Timestamp time = Timestamp.valueOf(query.offset());
+        String sourcePath = StoredSources.sourcePath(source);
+        String entryPath = StoredSources.entryPath(source);
+        parameters.add(time);
+        parameters.add(time);
+        parameters.add(sourcePath);
+        parameters.add(entryPath);
+        parameters.add(query.offsetLine());
+        parameters.add(time);
+        parameters.add(sourcePath);
+        parameters.add(entryPath);
+    }
+
+    private static LogSource dataSource(me.wolfii.allthelogs.api.LogSource source) {
+        if (source instanceof LogSource dataSource) return dataSource;
+        throw new IllegalArgumentException("offsetSource");
     }
 
     private static String orderBy(ChatQuery query, String time, String file, String line) {
