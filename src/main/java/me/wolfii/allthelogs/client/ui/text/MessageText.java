@@ -160,11 +160,11 @@ public final class MessageText {
     }
 
     /**
-     * Glyph used when measuring wrap width. Obfuscation is omitted so width stays stable and cheap;
-     * Minecraft picks same-advance replacements when drawing {@code §k}.
+     * Glyph used when measuring wrap width. Obfuscation is omitted so width stays stable;
+     * {@link #messageRange} draws the same way.
      */
     public static Component measureChar(char c, int format) {
-        return styled(String.valueOf(c), 0xFFFFFFFF, format & ~PackedFormatting.OBFUSCATED);
+        return styled(String.valueOf(c), 0xFFFFFFFF, format);
     }
 
     private static int stackedColor(DisplayRow row, int index, boolean interpretEscapes, int format) {
@@ -212,7 +212,10 @@ public final class MessageText {
         if (PackedFormatting.italic(format)) style = style.withItalic(true);
         if (PackedFormatting.underline(format)) style = style.withUnderlined(true);
         if (PackedFormatting.strikethrough(format)) style = style.withStrikethrough(true);
-        if (PackedFormatting.obfuscated(format)) style = style.withObfuscated(true);
+        // Minecraft 26.2 prepares GUI text, then drops the whole string when the prepared
+        // bounds are null. §k swaps in random glyphs at prepare time; those often have no
+        // drawable glyph, so a row that was on screen can vanish after it is scrolled away
+        // and back. Draw the real characters instead. Wrap already measured them this way.
         return Component.literal(text).withStyle(style);
     }
 

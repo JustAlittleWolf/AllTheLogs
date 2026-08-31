@@ -156,7 +156,7 @@ class MessageTextTest {
     }
 
     @Test
-    void measureCharDropsObfuscationAndKeepsBold() {
+    void drawnTextDropsObfuscationSoRowsStayVisible() {
         int format = PackedFormatting.OBFUSCATED | PackedFormatting.BOLD;
         Component glyph = MessageText.measureChar('k', format);
         assertTrue(glyph.getStyle().isBold());
@@ -167,7 +167,7 @@ class MessageTextTest {
             new ChatEntry(log, time, 0, "abc", new long[]{PackedFormatting.run(0, 3, PackedFormatting.OBFUSCATED)}),
             true, List.of());
         Component drawn = drawn(row);
-        assertTrue(drawn.getStyle().isObfuscated());
+        assertFalse(drawn.getStyle().isObfuscated());
         assertEquals("abc", drawn.getString());
     }
 
