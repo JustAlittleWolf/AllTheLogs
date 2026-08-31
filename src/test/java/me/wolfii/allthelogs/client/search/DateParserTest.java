@@ -15,4 +15,20 @@ class DateParserTest {
         assertTrue(DateParser.isBlankOrValid(""));
         assertFalse(DateParser.isBlankOrValid("nope"));
     }
+
+    @Test
+    void parseUntilIncludesTheWholeTypedDate() {
+        assertEquals(LocalDateTime.of(2026, 8, 27, 0, 0), DateParser.parseUntil("2026-08-26").orElseThrow());
+        assertEquals(LocalDateTime.of(2026, 8, 26, 14, 30), DateParser.parseUntil("2026-08-26 14:30").orElseThrow());
+        assertTrue(DateParser.parseUntil("").isEmpty());
+        assertTrue(DateParser.parseUntil("not a date").isEmpty());
+    }
+
+    @Test
+    void formatUntilShowsTheInclusiveDateForExclusiveMidnight() {
+        assertEquals("2026-08-26", DateParser.formatUntil(LocalDateTime.of(2026, 8, 27, 0, 0)));
+        assertEquals("2026-08-26 14:30", DateParser.formatUntil(LocalDateTime.of(2026, 8, 26, 14, 30)));
+        assertEquals("", DateParser.formatUntil(null));
+        assertEquals("2026-08-26 00:00", DateParser.format(LocalDateTime.of(2026, 8, 26, 0, 0)));
+    }
 }
