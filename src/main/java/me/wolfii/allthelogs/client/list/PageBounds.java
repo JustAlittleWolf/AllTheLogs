@@ -19,14 +19,21 @@ public final class PageBounds {
     }
 
     /**
-     * Cursor that starts a page at {@code time} itself. Cursors are exclusive, so it has to be nudged one tick
-     * past {@code time} against the sort direction.
+     * DuckDB {@code TIMESTAMP} stores microseconds. A 1-nanosecond nudge is truncated, so a descending
+     * {@code entry_time < cursor} already excludes the cursor second and {@code OFFSET skip} then drops
+     * the next older message.
+     */
+    private static final int CURSOR_STEP_NANOS = 1_000;
+
+    /**
+     * Cursor that starts a page at {@code time} itself. Cursors are exclusive, so it has to be nudged one
+     * microsecond past {@code time} against the sort direction.
      */
     public static LocalDateTime exclusiveOffset(LocalDateTime time, ChatQuery.Sort sort) {
         if (sort == ChatQuery.Sort.DESCENDING) {
-            return time.plusNanos(1);
+            return time.plusNanos(CURSOR_STEP_NANOS);
         }
-        return time.minusNanos(1);
+        return time.minusNanos(CURSOR_STEP_NANOS);
     }
 
     /**

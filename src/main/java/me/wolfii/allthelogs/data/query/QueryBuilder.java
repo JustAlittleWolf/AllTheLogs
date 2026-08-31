@@ -151,7 +151,8 @@ public final class QueryBuilder {
     private static void addOffsetCondition(ChatQuery query, List<String> conditions, List<Object> parameters) {
         if (query.offset() == null) return;
         // Exclusive in the sort direction so (limit, offset=lastTimestamp) is the next page without repeating the
-        // last match. Context is added later without this predicate.
+        // last match. Context is added later without this predicate. The bound is a DuckDB TIMESTAMP (microseconds);
+        // callers that need the cursor second included must nudge by 1µs, not 1ns.
         if (query.sort() == ChatQuery.Sort.DESCENDING) {
             conditions.add("entry_time < ?");
         } else {
