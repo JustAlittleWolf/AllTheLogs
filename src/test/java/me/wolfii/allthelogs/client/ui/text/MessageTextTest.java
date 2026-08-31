@@ -8,6 +8,7 @@ import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.LogSource;
 import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import org.junit.jupiter.api.Test;
 
@@ -15,6 +16,7 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -156,7 +158,7 @@ class MessageTextTest {
     }
 
     @Test
-    void measureCharDropsObfuscationAndKeepsBold() {
+    void drawnTextDoesNotUseObfuscatedStyleSoPreparedGuiBoundsStayValid() {
         int format = PackedFormatting.OBFUSCATED | PackedFormatting.BOLD;
         Component glyph = MessageText.measureChar('k', format);
         assertTrue(glyph.getStyle().isBold());
@@ -167,8 +169,33 @@ class MessageTextTest {
             new ChatEntry(log, time, 0, "abc", new long[]{PackedFormatting.run(0, 3, PackedFormatting.OBFUSCATED)}),
             true, List.of());
         Component drawn = drawn(row);
-        assertTrue(drawn.getStyle().isObfuscated());
+        assertFalse(drawn.getStyle().isObfuscated());
         assertEquals("abc", drawn.getString());
+        assertTrue(PackedFormatting.obfuscated(PackedFormatting.at(row.visualFormatting(), 0)));
+    }
+
+    @Test
+    void schnellemitteGgKeepsStoredObfuscationButDrawsRealGlyphs() {
+        // Exact line from the reporter's store: grey obfuscated "--" around gold " gg ".
+        String message = "[-] schnellemitte: -- gg --";
+        long[] formatting = {
+            120095987199967232L, 144115183780954113L, 120095987200032770L, 144020630076719108L,
+            120095987200032785L, 2425938996413726739L, 144020630076129301L, 2425938996413726745L
+        };
+        LocalDateTime time = LocalDateTime.of(2026, 8, 31, 13, 18, 38);
+        ChatLog log = new ChatLog(new LogSource.Session("live"), LocalDate.of(2026, 8, 31), "26.2", time, time);
+        DisplayRow row = new DisplayRow(new ChatEntry(log, time, 151, message, formatting), true, List.of());
+        assertEquals(message, row.message());
+        assertTrue(PackedFormatting.obfuscated(PackedFormatting.at(row.visualFormatting(), 19)));
+        assertTrue(PackedFormatting.obfuscated(PackedFormatting.at(row.visualFormatting(), 20)));
+        assertFalse(PackedFormatting.obfuscated(PackedFormatting.at(row.visualFormatting(), 21)));
+        assertTrue(PackedFormatting.obfuscated(PackedFormatting.at(row.visualFormatting(), 25)));
+        Component drawn = drawn(row);
+        assertEquals(message, drawn.getString());
+        drawn.visit((style, text) -> {
+            assertFalse(style.isObfuscated(), text);
+            return Optional.empty();
+        }, Style.EMPTY);
     }
 
     @Test

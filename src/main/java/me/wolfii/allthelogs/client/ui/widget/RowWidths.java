@@ -8,8 +8,7 @@ import net.minecraft.client.gui.Font;
 
 /**
  * Per-character prefix widths for the row currently being measured, cached across the wrap, selection, and
- * hit-testing queries of one frame. Obfuscated glyphs would otherwise be re-measured on every prefix query
- * and jitter between them.
+ * hit-testing queries of one frame so wrapping does not remeasure every prefix.
  */
 final class RowWidths {
     private DisplayRow row;
