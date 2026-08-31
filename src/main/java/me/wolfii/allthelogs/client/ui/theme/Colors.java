@@ -17,7 +17,7 @@ public final class Colors {
     /**
      * Multiply layer that darkens context lines relative to matches.
      */
-    public static final int CONTEXT_TEXT = 0xFFA4A4A4;
+    public static final int CONTEXT_TEXT = 0xFFC4C4C4;
     /**
      * Multiply layer for literal {@code \n} tokens that were turned into visual linebreaks.
      */
