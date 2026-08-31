@@ -658,16 +658,16 @@ public final class MessageTimeline extends BaseUIComponent {
     private void applyScrub(double progress, boolean commit) {
         double clamped = Math.clamp(progress, 0, 1);
         if (clamped <= 0) {
-            if (window.hasBefore() || (commit && !dayFullyLoaded(0))) {
+            setScrollY(0);
+            if (window.hasBefore()) {
                 jump(new ScrubJump(scrubOldest(), 0, 0), commit);
                 return;
             }
-            setScrollY(0);
             if (commit) finishScrub();
             return;
         }
         if (clamped >= 1) {
-            if (window.hasAfter() || (commit && !dayFullyLoaded(1))) {
+            if (window.hasAfter()) {
                 jump(new ScrubJump(scrubNewest(), skipAtEnd(), 1), commit);
                 return;
             }
@@ -677,7 +677,7 @@ public final class MessageTimeline extends BaseUIComponent {
         }
         LocalDateTime time = timeAtProgress(clamped);
         long skip = matches.days().isEmpty() ? -1 : TimelineScale.skipAtProgress(clamped, matches.days());
-        if (scrollLocally(clamped, time, skip, false, commit)) {
+        if (scrollLocally(clamped, time, skip)) {
             if (!scrub.dragging()) maybeRequestMore();
             if (commit) finishScrub();
             return;
@@ -701,39 +701,24 @@ public final class MessageTimeline extends BaseUIComponent {
             return;
         }
         LocalDateTime time = timeAtProgress(clamped);
-        if (!scrollLocally(clamped, time, -1, true, false)) {
+        if (!scrollLocally(clamped, time, -1)) {
             scrollToTime(time);
         }
-    }
-
-    private boolean dayFullyLoaded(double progress) {
-        MatchDay day = TimelineScale.dayAtProgress(progress, matches.days());
-        if (day == null) return false;
-        return DisplayRows.matchCountOnDate(window.rows(), day.date()) >= day.matches();
     }
 
     /**
      * Scrolls to {@code progress} without a store query when the buffer already holds that day. A day whose
      * matches all share one timestamp cannot be reached this way once it holds more matches than are loaded,
-     * because only a match rank can address them. A preview slice of a longer day is not enough either:
-     * mapping the whole day onto those rows would hide messages the thumb still points at. Releasing the
-     * thumb always jumps unless every match of that day is loaded, so a full-limit page replaces the preview.
+     * because only a match rank can address them.
      */
-    private boolean scrollLocally(double progress, LocalDateTime time, long skip, boolean onFetchedPage,
-                                  boolean commit) {
+    private boolean scrollLocally(double progress, LocalDateTime time, long skip) {
         MatchDay day = TimelineScale.dayAtProgress(progress, matches.days());
         if (day != null) {
             MessageListLayout.DateBand band = layout.dateBand(day.date());
-            int loaded = DisplayRows.matchCountOnDate(window.rows(), day.date());
-            boolean timeInBuffer = time != null && window.coversTime(time) && window.showsDate(time);
-            if (band != null && PageBounds.canScrollDayLocally(day, loaded, skip, onFetchedPage, timeInBuffer,
-                commit)) {
+            if (band != null && !(day.collapsed() && skip >= 0 && day.matches() > window.matchCount())) {
                 double fraction = TimelineScale.fractionInDay(progress, matches.days());
                 setScrollY(ScrubberGeometry.scrollForDateFraction(band.y(), layout.dateEndY(band), height, fraction));
                 return true;
-            }
-            if (loaded < day.matches()) {
-                return false;
             }
         }
         if (time != null && window.showsDate(time)) {

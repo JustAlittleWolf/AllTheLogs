@@ -84,18 +84,6 @@ class ResultWindowTest {
     }
 
     @Test
-    void matchCountOnDateIgnoresOtherDaysAndContextLines() {
-        LocalDateTime first = LocalDateTime.of(2026, 8, 26, 10, 0);
-        LocalDateTime nextDay = LocalDateTime.of(2026, 8, 27, 10, 0);
-        ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), first.toLocalDate(), "26.2", first, first);
-        DisplayRow context = new DisplayRow(new ChatEntry(log, first, 0, "ctx"), false, List.of());
-        List<DisplayRow> rows = List.of(context, rowAt(first, 1), rowAt(nextDay, 2));
-        assertEquals(1, DisplayRows.matchCountOnDate(rows, first.toLocalDate()));
-        assertEquals(1, DisplayRows.matchCountOnDate(rows, nextDay.toLocalDate()));
-        assertEquals(0, DisplayRows.matchCountOnDate(rows, first.toLocalDate().minusDays(1)));
-    }
-
-    @Test
     void coversTimeAndNearestIndexUseBufferedTimestamps() {
         ResultWindow window = new ResultWindow();
         window.reset(List.of(row("a.log", 0), row("a.log", 10)), false, false);

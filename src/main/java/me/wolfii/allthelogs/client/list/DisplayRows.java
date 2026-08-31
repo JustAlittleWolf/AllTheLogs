@@ -2,7 +2,6 @@ package me.wolfii.allthelogs.client.list;
 
 import me.wolfii.allthelogs.api.ChatQuery;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -21,19 +20,6 @@ public final class DisplayRows {
         int count = 0;
         for (DisplayRow row : rows) {
             if (row.match()) count++;
-        }
-        return count;
-    }
-
-    /**
-     * Search hits in {@code rows} that fall on {@code date}. Used to tell a fully loaded day from a
-     * scrubber preview that only fetched a slice of it.
-     */
-    public static int matchCountOnDate(List<DisplayRow> rows, LocalDate date) {
-        if (rows == null || date == null) return 0;
-        int count = 0;
-        for (DisplayRow row : rows) {
-            if (row.match() && date.equals(row.entry().timestamp().toLocalDate())) count++;
         }
         return count;
     }
