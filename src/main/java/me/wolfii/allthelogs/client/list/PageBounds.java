@@ -105,16 +105,13 @@ public final class PageBounds {
      * A scrubber preview only loads a slice. Treating that slice as the whole day would scroll inside it
      * instead of fetching, so a line at the edge of the original page (the newest live message, for
      * example) would disappear. After a fetch, {@code onFetchedPage} is set so the new slice can still
-     * be positioned. Releasing the thumb ({@code commit}) always refetches unless the day is fully
-     * loaded, because the target time can sit inside the preview while the rest of the original page
-     * does not. A collapsed day addressed by match rank always jumps until every match is loaded.
+     * be positioned. A collapsed day addressed by match rank always jumps until every match is loaded.
      */
     public static boolean canScrollDayLocally(MatchDay day, int loadedMatchesOnDay, long skip,
-                                              boolean onFetchedPage, boolean timeInBuffer, boolean commit) {
+                                              boolean onFetchedPage, boolean timeInBuffer) {
         if (day == null) return false;
         boolean allLoaded = loadedMatchesOnDay >= day.matches();
         if (day.collapsed() && skip >= 0 && !allLoaded) return false;
-        if (commit) return allLoaded;
         return allLoaded || onFetchedPage || timeInBuffer;
     }
 }

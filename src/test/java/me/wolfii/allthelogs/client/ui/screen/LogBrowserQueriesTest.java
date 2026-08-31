@@ -86,20 +86,13 @@ class LogBrowserQueriesTest {
     void scrubberDoesNotTreatAPreviewSliceAsTheWholeDay() {
         LocalDateTime time = LocalDateTime.of(2026, 8, 27, 10, 0, 0);
         MatchDay day = new MatchDay(time.toLocalDate(), time, time.plusHours(8), 80);
-        assertFalse(PageBounds.canScrollDayLocally(day, 32, -1, false, false, false));
-        assertTrue(PageBounds.canScrollDayLocally(day, 32, -1, true, false, false));
-        assertTrue(PageBounds.canScrollDayLocally(day, 32, -1, false, true, false));
-        assertTrue(PageBounds.canScrollDayLocally(day, 80, -1, false, false, false));
-        assertFalse(PageBounds.canScrollDayLocally(day, 32, -1, false, true, true));
-        assertFalse(PageBounds.canScrollDayLocally(day, 32, -1, true, false, true));
-        assertTrue(PageBounds.canScrollDayLocally(day, 80, -1, false, false, true));
-        MatchDay liveDay = new MatchDay(time.toLocalDate(), time, time.plusHours(8), 235);
-        assertFalse(PageBounds.canScrollDayLocally(liveDay, 32, -1, false, true, true));
-        assertFalse(PageBounds.canScrollDayLocally(liveDay, 100, -1, false, true, true));
+        assertFalse(PageBounds.canScrollDayLocally(day, 32, -1, false, false));
+        assertTrue(PageBounds.canScrollDayLocally(day, 32, -1, true, false));
+        assertTrue(PageBounds.canScrollDayLocally(day, 32, -1, false, true));
+        assertTrue(PageBounds.canScrollDayLocally(day, 80, -1, false, false));
         MatchDay collapsed = new MatchDay(time.toLocalDate(), time, time, 50);
-        assertFalse(PageBounds.canScrollDayLocally(collapsed, 32, 10, false, true, false));
-        assertTrue(PageBounds.canScrollDayLocally(collapsed, 50, 10, false, false, false));
-        assertFalse(PageBounds.canScrollDayLocally(collapsed, 32, 10, false, true, true));
+        assertFalse(PageBounds.canScrollDayLocally(collapsed, 32, 10, false, true));
+        assertTrue(PageBounds.canScrollDayLocally(collapsed, 50, 10, false, false));
     }
 
     @Test
