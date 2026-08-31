@@ -17,7 +17,9 @@ import net.minecraft.network.chat.Component;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 
@@ -43,10 +45,6 @@ final class FilterOverlay {
         this.filter = filter;
         this.onChange = onChange;
         this.versionsMenu = new VersionMenu(overlays, screenWidth, screenHeight, filter, versions, onChange);
-    }
-
-    private static String formatBound(LocalDateTime time) {
-        return time == null ? "" : time.toString().replace('T', ' ');
     }
 
     void toggle(ButtonComponent button) {
@@ -103,10 +101,10 @@ final class FilterOverlay {
             }
         }));
 
-        content.child(dateField("allthelogs.filter.from", current.startingAt(), parsed ->
-            onChange.accept(filter.get().withStartingAt(parsed))));
-        content.child(dateField("allthelogs.filter.until", current.upUntil(), parsed ->
-            onChange.accept(filter.get().withUpUntil(parsed))));
+        content.child(dateField("allthelogs.filter.from", DateParser.format(current.startingAt()),
+            DateParser::parse, parsed -> onChange.accept(filter.get().withStartingAt(parsed))));
+        content.child(dateField("allthelogs.filter.until", DateParser.formatUntil(current.upUntil()),
+            DateParser::parseUntil, parsed -> onChange.accept(filter.get().withUpUntil(parsed))));
         content.child(UIComponents.label(Component.translatable("allthelogs.filter.date_hint"))
             .color(Color.ofRgb(0x888888)));
         content.child(versionsMenu.row());
@@ -130,10 +128,11 @@ final class FilterOverlay {
         versionsMenu.syncButton();
     }
 
-    private FlowLayout dateField(String key, LocalDateTime value, Consumer<LocalDateTime> onParsed) {
-        return labeledField(key, formatBound(value), text -> {
+    private FlowLayout dateField(String key, String value, Function<String, Optional<LocalDateTime>> parse,
+                                 Consumer<LocalDateTime> onParsed) {
+        return labeledField(key, value, text -> {
             if (!DateParser.isBlankOrValid(text)) return;
-            onParsed.accept(DateParser.parse(text).orElse(null));
+            onParsed.accept(parse.apply(text).orElse(null));
         });
     }
 
