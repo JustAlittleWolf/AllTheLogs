@@ -7,7 +7,6 @@ import me.wolfii.allthelogs.client.ui.theme.Colors;
 import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.LogSource;
 import me.wolfii.allthelogs.data.parse.PackedFormatting;
-import net.minecraft.client.gui.Font;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
@@ -128,15 +127,6 @@ public final class MessageText {
     }
 
     public static Component messageRange(DisplayRow row, int from, int to) {
-        return messageRange(row, from, to, null, 0);
-    }
-
-    /**
-     * Message text for {@code [from, to)}. When {@code font} is present, obfuscated runs are
-     * scrambled with {@link ObfuscatedGlyphs} so they still look like {@code §k} without using
-     * {@link Style#withObfuscated(Boolean)}, which Minecraft 26.2 can cull after a scroll.
-     */
-    public static Component messageRange(DisplayRow row, int from, int to, Font font, long tick) {
         String full = row.message();
         int start = Math.clamp(from, 0, full.length());
         int end = Math.clamp(to, start, full.length());
@@ -152,8 +142,7 @@ public final class MessageText {
             int format = i < text.length() ? PackedFormatting.at(formatting, start + i) : runFormat ^ 1;
             int color = i < text.length() ? stackedColor(row, start + i, interpret, format) : runColor ^ 1;
             if (color != runColor || format != runFormat) {
-                result.append(drawnRun(text.substring(runStart, i), start + runStart, runColor, runFormat,
-                    font, tick));
+                result.append(styled(text.substring(runStart, i), runColor, runFormat));
                 runStart = i;
                 runFormat = format;
                 runColor = color;
@@ -171,8 +160,8 @@ public final class MessageText {
     }
 
     /**
-     * Glyph used when measuring wrap width. Obfuscation is omitted so width stays stable;
-     * {@link #messageRange} draws a same-advance replacement instead of {@code Style.obfuscated}.
+     * Glyph used when measuring wrap width. Obfuscation is omitted so width stays stable and cheap;
+     * Minecraft picks same-advance replacements when drawing {@code §k}.
      */
     public static Component measureChar(char c, int format) {
         return styled(String.valueOf(c), 0xFFFFFFFF, format & ~PackedFormatting.OBFUSCATED);
@@ -217,23 +206,13 @@ public final class MessageText {
         return component.copy().withStyle(Style.EMPTY.withColor(Colors.META_LABEL & 0xFFFFFF));
     }
 
-    private static Component drawnRun(String text, int storedStart, int argb, int format, Font font,
-                                      long tick) {
-        int drawnFormat = format & ~PackedFormatting.OBFUSCATED;
-        String drawn = text;
-        if (font != null && PackedFormatting.obfuscated(format)) {
-            drawn = ObfuscatedGlyphs.scramble(text, storedStart, tick,
-                codePoint -> font.width(measureChar((char) codePoint, drawnFormat)));
-        }
-        return styled(drawn, argb, drawnFormat);
-    }
-
     private static Component styled(String text, int argb, int format) {
         Style style = Style.EMPTY.withColor(argb & 0xFFFFFF);
         if (PackedFormatting.bold(format)) style = style.withBold(true);
         if (PackedFormatting.italic(format)) style = style.withItalic(true);
         if (PackedFormatting.underline(format)) style = style.withUnderlined(true);
         if (PackedFormatting.strikethrough(format)) style = style.withStrikethrough(true);
+        if (PackedFormatting.obfuscated(format)) style = style.withObfuscated(true);
         return Component.literal(text).withStyle(style);
     }
 
