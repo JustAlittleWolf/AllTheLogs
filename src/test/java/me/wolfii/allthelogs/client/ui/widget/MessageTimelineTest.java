@@ -42,4 +42,13 @@ class MessageTimelineTest {
         assertTrue(ScrubDrag.sameTarget(sent, new ScrubJump(sent.time(), sent.skip(), sent.progress())));
         assertFalse(ScrubDrag.sameTarget(sent, parked));
     }
+
+    @Test
+    void releasingTheThumbRefetchesWhenTheDayIsOnlyPartiallyLoaded() {
+        assertFalse(MessageTimeline.mustRefetchScrubEdge(false, false, false));
+        assertTrue(MessageTimeline.mustRefetchScrubEdge(true, false, false));
+        assertTrue(MessageTimeline.mustRefetchScrubEdge(false, true, false));
+        assertFalse(MessageTimeline.mustRefetchScrubEdge(false, true, true));
+        assertTrue(MessageTimeline.mustRefetchScrubEdge(true, true, true));
+    }
 }

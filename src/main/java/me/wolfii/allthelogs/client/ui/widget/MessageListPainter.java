@@ -3,7 +3,6 @@ package me.wolfii.allthelogs.client.ui.widget;
 import io.wispforest.owo.ui.core.OwoUIGraphics;
 import me.wolfii.allthelogs.client.list.*;
 import me.wolfii.allthelogs.client.ui.text.MessageText;
-import me.wolfii.allthelogs.client.ui.text.ObfuscatedGlyphs;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
 import net.minecraft.client.gui.Font;
 import net.minecraft.network.chat.Component;
@@ -71,10 +70,8 @@ final class MessageListPainter {
                 int timestampColor = row.match() ? Colors.MUTED : Colors.CONTEXT_TIMESTAMP;
                 graphics.drawText(MessageText.timestamp(row), view.x() + ListView.PAD, rowY + 1, 1, timestampColor);
                 int lineY = rowY;
-                long tick = ObfuscatedGlyphs.tick();
                 for (MessageWrap.Line line : lines) {
-                    graphics.drawText(MessageText.messageRange(row, line.start(),
-                            line.start() + line.text().length(), view.font(), tick),
+                    graphics.drawText(MessageText.messageRange(row, line.start(), line.start() + line.text().length()),
                         messageX, lineY + 1, 1, Colors.TEXT);
                     lineY += ROW_HEIGHT;
                 }
