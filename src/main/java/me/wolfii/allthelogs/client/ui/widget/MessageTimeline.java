@@ -658,16 +658,16 @@ public final class MessageTimeline extends BaseUIComponent {
     private void applyScrub(double progress, boolean commit) {
         double clamped = Math.clamp(progress, 0, 1);
         if (clamped <= 0) {
-            setScrollY(0);
-            if (window.hasBefore()) {
+            if (mustRefetchScrubEdge(window.hasBefore(), commit, dayFullyLoaded(0))) {
                 jump(new ScrubJump(scrubOldest(), 0, 0), commit);
                 return;
             }
+            setScrollY(0);
             if (commit) finishScrub();
             return;
         }
         if (clamped >= 1) {
-            if (window.hasAfter()) {
+            if (mustRefetchScrubEdge(window.hasAfter(), commit, dayFullyLoaded(1))) {
                 jump(new ScrubJump(scrubNewest(), skipAtEnd(), 1), commit);
                 return;
             }
@@ -677,7 +677,7 @@ public final class MessageTimeline extends BaseUIComponent {
         }
         LocalDateTime time = timeAtProgress(clamped);
         long skip = matches.days().isEmpty() ? -1 : TimelineScale.skipAtProgress(clamped, matches.days());
-        if (scrollLocally(clamped, time, skip)) {
+        if (scrollLocally(clamped, time, skip, false, commit)) {
             if (!scrub.dragging()) maybeRequestMore();
             if (commit) finishScrub();
             return;
@@ -701,33 +701,46 @@ public final class MessageTimeline extends BaseUIComponent {
             return;
         }
         LocalDateTime time = timeAtProgress(clamped);
-        if (!scrollLocally(clamped, time, -1, true)) {
+        if (!scrollLocally(clamped, time, -1, true, false)) {
             scrollToTime(time);
         }
+    }
+
+    private boolean dayFullyLoaded(double progress) {
+        MatchDay day = TimelineScale.dayAtProgress(progress, matches.days());
+        if (day == null) return false;
+        return DisplayRows.matchCountOnDate(window.rows(), day.date()) >= day.matches();
+    }
+
+    /**
+     * A 32-row preview that filled its limit still reports more matches beyond the edge. Releasing the
+     * thumb must refetch even when that flag is false, or a partial day stays on screen.
+     */
+    static boolean mustRefetchScrubEdge(boolean moreBeyondEdge, boolean commit, boolean dayFullyLoaded) {
+        return moreBeyondEdge || (commit && !dayFullyLoaded);
     }
 
     /**
      * Scrolls to {@code progress} without a store query when the buffer already holds that day. A day whose
      * matches all share one timestamp cannot be reached this way once it holds more matches than are loaded,
      * because only a match rank can address them. A preview slice of a longer day is not enough either:
-     * mapping the whole day onto those rows would hide messages the thumb still points at.
+     * mapping the whole day onto those rows would hide messages the thumb still points at. Releasing the
+     * thumb always jumps unless every match of that day is loaded, so a full-limit page replaces the preview.
      */
-    private boolean scrollLocally(double progress, LocalDateTime time, long skip) {
-        return scrollLocally(progress, time, skip, false);
-    }
-
-    private boolean scrollLocally(double progress, LocalDateTime time, long skip, boolean onFetchedPage) {
+    private boolean scrollLocally(double progress, LocalDateTime time, long skip, boolean onFetchedPage,
+                                  boolean commit) {
         MatchDay day = TimelineScale.dayAtProgress(progress, matches.days());
         if (day != null) {
             MessageListLayout.DateBand band = layout.dateBand(day.date());
             int loaded = DisplayRows.matchCountOnDate(window.rows(), day.date());
             boolean timeInBuffer = time != null && window.coversTime(time) && window.showsDate(time);
-            if (band != null && PageBounds.canScrollDayLocally(day, loaded, skip, onFetchedPage, timeInBuffer)) {
+            if (band != null && PageBounds.canScrollDayLocally(day, loaded, skip, onFetchedPage, timeInBuffer,
+                commit)) {
                 double fraction = TimelineScale.fractionInDay(progress, matches.days());
                 setScrollY(ScrubberGeometry.scrollForDateFraction(band.y(), layout.dateEndY(band), height, fraction));
                 return true;
             }
-            if (day.collapsed() && skip >= 0 && loaded < day.matches()) {
+            if (loaded < day.matches()) {
                 return false;
             }
         }
