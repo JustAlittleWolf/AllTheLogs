@@ -22,8 +22,8 @@ class ObfuscatedGlyphsTest {
         assertEquals('a', mixed.charAt(0));
         assertEquals(' ', mixed.charAt(1));
         assertNotEquals('b', mixed.charAt(2));
-        assertEquals("hi\n", ObfuscatedGlyphs.scramble("hi\n", 0, 3,
-            codePoint -> codePoint == 'h' || codePoint == 'i' ? 4 : 1));
+        assertEquals("§\n", ObfuscatedGlyphs.scramble("§\n", 0, 3,
+            codePoint -> codePoint == '§' ? 4 : 1));
     }
 
     @Test
