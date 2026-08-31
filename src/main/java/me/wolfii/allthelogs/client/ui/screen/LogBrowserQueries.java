@@ -191,15 +191,15 @@ final class LogBrowserQueries {
     private void loadMore(TimelineEdge edge) {
         if (!filter.canQuery() || list.loading() || list.window().rows().isEmpty()) return;
         boolean towardStart = edge == TimelineEdge.BEFORE;
-        LocalDateTime cursor = towardStart ? list.window().firstMatchTime() : list.window().lastMatchTime();
+        DisplayRow cursor = towardStart ? DisplayRows.firstMatch(list.window().rows())
+            : DisplayRows.lastMatch(list.window().rows());
         if (cursor == null) return;
         list.setLoading(true);
         List<DisplayRow> buffered = list.window().rows();
         SearchFilter page = towardStart
             ? filter.withoutOffset().withSort(filter.sort().opposite())
             : filter.withoutOffset();
-        ChatQuery query = PageBounds.continueFrom(page.toQuery(), cursor,
-            DisplayRows.matchCountAt(buffered, cursor));
+        ChatQuery query = PageBounds.continueFrom(page.toQuery(), cursor);
         DisplayRow.RowKey anchor = list.visibleAnchor();
         int firstVisible = list.firstVisibleIndex();
         int lastVisible = list.lastVisibleIndex();
@@ -306,7 +306,8 @@ final class LogBrowserQueries {
             }
             boolean full = PageBounds.isFull(rows, requested.limit());
             double progress = jump == null ? Double.NaN : jump.progress();
-            boolean hasBefore = PageBounds.hasBefore(filter.sort(), rows, matchSummary);
+            long skipped = jump == null ? -1 : jump.skip();
+            boolean hasBefore = PageBounds.hasBefore(filter.sort(), rows, matchSummary, skipped);
             boolean hasAfter = PageBounds.hasAfter(filter.sort(), full, rows, matchSummary);
             if (PageBounds.needsMoreToFill(rows, filter.contextLines(), list.viewHeight(), hasBefore)) {
                 fillJumpViewport(gen, target, preview, rows, hasAfter, requested.limit(), progress);
@@ -333,15 +334,14 @@ final class LogBrowserQueries {
      */
     private void fillJumpViewport(int gen, LocalDateTime target, boolean preview, List<DisplayRow> rows,
                                   boolean hasAfter, long pageLimit, double progress) {
-        LocalDateTime cursor = DisplayRows.firstMatchTime(rows);
+        DisplayRow cursor = DisplayRows.firstMatch(rows);
         if (cursor == null) {
             applyJump(target, preview, rows, true, hasAfter, progress);
             return;
         }
         SearchFilter extra = filter.withoutOffset().withSort(filter.sort().opposite())
             .withLimit(PageBounds.extraFillLimit(list.viewHeight(), pageLimit));
-        ChatQuery extraQuery = PageBounds.continueFrom(extra.toQuery(), cursor,
-            DisplayRows.matchCountAt(rows, cursor));
+        ChatQuery extraQuery = PageBounds.continueFrom(extra.toQuery(), cursor);
         Set<DisplayRow.RowKey> alreadyLoaded = DisplayRows.keysOf(rows);
         onClient(AllTheLogsClient.worker().findEntries(extraQuery), (entries, error) -> {
             if (gen != generation.get()) return;

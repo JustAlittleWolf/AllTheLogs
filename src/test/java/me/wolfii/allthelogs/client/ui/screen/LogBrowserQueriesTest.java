@@ -25,15 +25,20 @@ class LogBrowserQueriesTest {
     }
 
     @Test
-    void continueFromIncludesTheCursorSecondAndSkipsAlreadyBufferedHits() {
+    void continueFromKeepsTheEdgeSecondByExcludingOnlyTheEdgeRow() {
         LocalDateTime time = LocalDateTime.of(2026, 8, 27, 10, 0, 0);
-        ChatQuery next = PageBounds.continueFrom(ChatQuery.all().withLimit(100), time, 40);
-        assertEquals(time.minusNanos(1_000), next.offset());
-        assertEquals(40, next.skip());
+        DisplayRow edge = row(time, 40);
+        ChatQuery next = PageBounds.continueFrom(ChatQuery.all().withLimit(100), edge);
+        assertEquals(time, next.offset());
+        assertEquals(edge.chatLog().source(), next.offsetSource());
+        assertEquals(40, next.offsetLine());
+        assertEquals(0, next.skip());
         ChatQuery previous = PageBounds.continueFrom(
-            ChatQuery.all().withSort(ChatQuery.Sort.DESCENDING).withLimit(100), time, 40);
-        assertEquals(time.plusNanos(1_000), previous.offset());
-        assertEquals(40, previous.skip());
+            ChatQuery.all().withSort(ChatQuery.Sort.DESCENDING).withLimit(100), edge);
+        assertEquals(time, previous.offset());
+        assertEquals(edge.chatLog().source(), previous.offsetSource());
+        assertEquals(40, previous.offsetLine());
+        assertEquals(ChatQuery.Sort.DESCENDING, previous.sort());
     }
 
     @Test
@@ -65,6 +70,17 @@ class LogBrowserQueriesTest {
         MatchSummary summary = new MatchSummary(oldest.minusHours(1), newest.plusHours(1), 1, List.of());
         assertTrue(PageBounds.hasBefore(ChatQuery.Sort.DESCENDING, rows, summary));
         assertTrue(PageBounds.hasAfter(ChatQuery.Sort.DESCENDING, false, rows, summary));
+    }
+
+    @Test
+    void skippedMatchesCountAsRowsBeforeThePageEvenAtTheSameTimestamp() {
+        LocalDateTime time = LocalDateTime.of(2026, 8, 27, 10, 0, 0);
+        List<DisplayRow> rows = List.of(row(time, 40), row(time, 41));
+        MatchSummary summary = new MatchSummary(time, time, 80, List.of());
+        assertFalse(PageBounds.hasBefore(ChatQuery.Sort.ASCENDING, rows, summary));
+        assertTrue(PageBounds.hasBefore(ChatQuery.Sort.ASCENDING, rows, summary, 40));
+        assertFalse(PageBounds.hasBefore(ChatQuery.Sort.ASCENDING, rows, summary, 0));
+        assertFalse(PageBounds.hasBefore(ChatQuery.Sort.ASCENDING, rows, summary, -1));
     }
 
     @Test
