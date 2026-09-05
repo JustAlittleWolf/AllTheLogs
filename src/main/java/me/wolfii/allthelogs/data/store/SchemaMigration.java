@@ -60,6 +60,7 @@ public final class SchemaMigration {
                 throw new SQLException("no migration registered from schema version " + version
                     + " to " + (version + 1));
             }
+            System.out.println("[AllTheLogs] Migrating schema from version " + version + " to " + (version + 1));
             step.apply(statement);
             version++;
             setVersion(statement, version);
