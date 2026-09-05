@@ -251,6 +251,11 @@ public final class LogStore implements AutoCloseable {
     }
 
     ChatLog startSession(String minecraftVersion, LocalDateTime startedAt, String minecraftUser) {
+        try (Statement statement = connection.createStatement()) {
+            Schema.clusterTail(statement);
+        } catch (SQLException e) {
+            throw new LogDataException("could not chunk pending live-capture entries", e);
+        }
         return sessions.start(minecraftVersion, startedAt, minecraftUser);
     }
 
