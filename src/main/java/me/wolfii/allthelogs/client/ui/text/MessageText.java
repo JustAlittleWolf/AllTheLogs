@@ -12,6 +12,7 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.temporal.ChronoField;
@@ -33,10 +34,8 @@ public final class MessageText {
 
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss");
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("EEE, MMM d, yyyy", Locale.US);
-    private static final DateTimeFormatter FULL_DATE = new DateTimeFormatterBuilder()
-        .appendPattern("yyyy-MM-dd HH:mm:ss")
-        .appendFraction(ChronoField.NANO_OF_SECOND, 0, 3, true)
-        .toFormatter();
+    private static final DateTimeFormatter FULL_DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final DateTimeFormatter MILLIS = DateTimeFormatter.ofPattern(".SSS");
 
     private MessageText() {
     }
@@ -96,8 +95,12 @@ public final class MessageText {
      */
     public static List<Component> messageInfo(DisplayRow row, int maxWidth, ToIntFunction<String> widthOf) {
         List<Component> lines = new ArrayList<>();
-        String date = row.entry().timestamp().format(FULL_DATE);
-        lines.add(colored(date, Colors.INFO_DATE));
+        LocalDateTime timestamp = row.entry().timestamp();
+        MutableComponent date = Component.empty().append(colored(timestamp.format(FULL_DATE), Colors.INFO_DATE));
+        if (timestamp.get(ChronoField.MILLI_OF_SECOND) != 0) {
+            date.append(colored(timestamp.format(MILLIS), Colors.multiply(Colors.INFO_DATE, 0xFF808080)));
+        }
+        lines.add(date);
         String version = displayVersion(row.chatLog());
         if (version != null) {
             lines.add(labeled("allthelogs.info.version", colored(version, Colors.INFO_VERSION)));
