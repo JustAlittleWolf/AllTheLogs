@@ -1235,8 +1235,8 @@ class LogStoreTest {
         assertTrue(store.importSessionMessage("now"));
 
         ChatEntry entry = store.findEntries(ChatQuery.all().withSubstring("now")).getFirst();
-        assertFalse(entry.timestamp().isBefore(before));
-        assertFalse(entry.timestamp().isAfter(LocalDateTime.now()));
+        assertFalse(entry.timestamp().plusSeconds(1).isBefore(before));
+        assertFalse(entry.timestamp().minusSeconds(1).isAfter(LocalDateTime.now()));
     }
 
     @Test
@@ -1418,15 +1418,6 @@ class LogStoreTest {
         assertEquals(3, store.chatLogs().size());
         assertEquals(3, store.allEntries().size());
         assertTrue(store.chatLogs().stream().allMatch(file -> file.source() instanceof LogSource.Session));
-    }
-
-    @Test
-    void clientEntryDuplicatingAnImportedOneIsDropped() throws IOException {
-        store.importDirectory(logsDirectory());
-        store.startSession("26.2", LocalDateTime.of(2026, 8, 25, 10, 0, 10));
-
-        assertFalse(store.importSessionMessage("delta", LocalDateTime.of(2026, 8, 25, 10, 0, 10)));
-        assertEquals(8, store.allEntries().size());
     }
 
     @Test

@@ -268,7 +268,7 @@ public final class LogStore implements AutoCloseable {
      *
      * @param message    the chat line as the game rendered it, already stripped of legacy {@code §} codes
      * @param formatting packed runs into {@code message}, or {@code null} to parse formatting from the message
-     * @return {@code true} if the entry was stored, {@code false} if it was dropped as a duplicate
+     * @return {@code true} always (needs to be refactored to void but this breaks 1_000_000 tests aaaaa)
      * @throws LogDataException if no session is active, or the entry cannot be written
      */
     public boolean importSessionMessage(String message, long[] formatting) {
