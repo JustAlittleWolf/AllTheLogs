@@ -29,7 +29,7 @@ public final class Colors {
     public static final int DATE_BAND = 0xE0141414;
     public static final int SELECTION = 0x663A6EA5;
     public static final int STATUS_CHIP = 0xE0181818;
-    public static final int HOVER_CHIP = 0xF01C1C1C;
+    public static final int HOVER_CHIP = 0xFb1C1C1C;
     /**
      * Rule drawn between sessions and where context runs out.
      */
