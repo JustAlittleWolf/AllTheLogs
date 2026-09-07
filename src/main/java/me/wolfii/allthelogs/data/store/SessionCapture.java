@@ -10,6 +10,7 @@ import org.duckdb.DuckDBConnection;
 import java.sql.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 
 /**
@@ -42,7 +43,7 @@ public final class SessionCapture {
     public ChatLog start(String minecraftVersion, LocalDateTime startedAt, String minecraftUser) {
         Objects.requireNonNull(minecraftVersion, "minecraftVersion");
         Objects.requireNonNull(startedAt, "startedAt");
-        LocalDateTime start = startedAt.withNano(0);
+        LocalDateTime start = startedAt.truncatedTo(ChronoUnit.MILLIS);
         String sessionId = SessionMarker.newId();
         try {
             long fileId = nextFileId();
@@ -94,7 +95,7 @@ public final class SessionCapture {
         Objects.requireNonNull(message, "message");
         Objects.requireNonNull(timestamp, "timestamp");
         requireActiveSession();
-        LocalDateTime stamp = timestamp.withNano(0);
+        LocalDateTime stamp = timestamp.truncatedTo(ChronoUnit.MILLIS);
         String text;
         long[] packed;
         if (formatting == null) {
@@ -121,7 +122,7 @@ public final class SessionCapture {
     public void updateEndTime(LocalDateTime timestamp) {
         Objects.requireNonNull(timestamp, "timestamp");
         requireActiveSession();
-        LocalDateTime stamp = timestamp.withNano(0);
+        LocalDateTime stamp = timestamp.truncatedTo(ChronoUnit.MILLIS);
         try (PreparedStatement update = connection.prepareStatement("""
             UPDATE log_file SET end_time = greatest(end_time, ?)
             WHERE id = ?""")) {
@@ -140,15 +141,6 @@ public final class SessionCapture {
     }
 
     private boolean writeEntry(String message, long[] formatting, LocalDateTime timestamp) throws SQLException {
-        try (PreparedStatement duplicate = connection.prepareStatement(
-            "SELECT 1 FROM chat_entry WHERE entry_time = ? AND message = ? LIMIT 1")) {
-            duplicate.setTimestamp(1, Timestamp.valueOf(timestamp));
-            duplicate.setString(2, message);
-            try (ResultSet result = duplicate.executeQuery()) {
-                if (result.next()) return false;
-            }
-        }
-
         try (PreparedStatement insert = connection.prepareStatement(
             "INSERT INTO chat_entry (file_id, line_index, entry_time, message, formatting) VALUES (?, ?, ?, ?, CAST(? AS BIGINT[]))")) {
             insert.setLong(1, sessionFileId);

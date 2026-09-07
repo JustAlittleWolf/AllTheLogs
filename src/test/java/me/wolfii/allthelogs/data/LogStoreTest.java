@@ -1231,7 +1231,7 @@ class LogStoreTest {
     @Test
     void clientEntriesUseTheCurrentTimeByDefault() {
         store.startSession("26.2");
-        LocalDateTime before = LocalDateTime.now().withNano(0);
+        LocalDateTime before = LocalDateTime.now();
         assertTrue(store.importSessionMessage("now"));
 
         ChatEntry entry = store.findEntries(ChatQuery.all().withSubstring("now")).getFirst();
@@ -1418,16 +1418,6 @@ class LogStoreTest {
         assertEquals(3, store.chatLogs().size());
         assertEquals(3, store.allEntries().size());
         assertTrue(store.chatLogs().stream().allMatch(file -> file.source() instanceof LogSource.Session));
-    }
-
-    @Test
-    void repeatedClientEntriesAreDroppedAsDuplicates() {
-        LocalDateTime timestamp = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
-        store.startSession("26.2", timestamp);
-        assertTrue(store.importSessionMessage("duplicated", timestamp));
-        assertFalse(store.importSessionMessage("duplicated", timestamp));
-
-        assertEquals(1, store.allEntries().size());
     }
 
     @Test

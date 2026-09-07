@@ -13,6 +13,8 @@ import net.minecraft.network.chat.Style;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.temporal.ChronoField;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -31,7 +33,10 @@ public final class MessageText {
 
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss");
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("EEE, MMM d, yyyy", Locale.US);
-    private static final DateTimeFormatter FULL_DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final DateTimeFormatter FULL_DATE = new DateTimeFormatterBuilder()
+        .appendPattern("yyyy-MM-dd HH:mm:ss")
+        .appendFraction(ChronoField.NANO_OF_SECOND, 0, 3, true)
+        .toFormatter();
 
     private MessageText() {
     }
@@ -91,7 +96,7 @@ public final class MessageText {
      */
     public static List<Component> messageInfo(DisplayRow row, int maxWidth, ToIntFunction<String> widthOf) {
         List<Component> lines = new ArrayList<>();
-        String date = row.entry().timestamp().withNano(0).format(FULL_DATE);
+        String date = row.entry().timestamp().format(FULL_DATE);
         lines.add(colored(date, Colors.INFO_DATE));
         String version = displayVersion(row.chatLog());
         if (version != null) {

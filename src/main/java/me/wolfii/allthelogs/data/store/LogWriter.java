@@ -191,9 +191,8 @@ public final class LogWriter implements AutoCloseable {
     }
 
     /**
-     * Drops entries that repeat a timestamp and message already stored elsewhere, keeping the earliest imported one.
-     * Runs once at the end of an import across the whole store. {@link #writtenFiles()} / {@link #writtenEntries()}
-     * only move for rows that belonged to files this session wrote.
+     * Drops entries from imported files that duplicate an existing entry (either from a live session
+     * or an earlier imported file) within the same second. Live session entries are never dropped.
      *
      * @return the number of removed entries, across the whole store
      */
@@ -205,11 +204,18 @@ public final class LogWriter implements AutoCloseable {
              ResultSet deleted = statement.executeQuery("""
                  DELETE FROM chat_entry WHERE rowid IN (
                      SELECT rowid FROM (
-                         SELECT rowid, row_number() OVER (
-                             PARTITION BY entry_time, message ORDER BY file_id, line_index) AS rn
-                         FROM chat_entry
-                     ) WHERE rn > 1
-                 ) RETURNING file_id""")) {
+                         SELECT e.rowid,
+                                f.source_kind,
+                                row_number() OVER (
+                                    PARTITION BY date_trunc('second', e.entry_time), e.message
+                                    ORDER BY CASE WHEN f.source_kind = '%s' THEN 0 ELSE 1 END,
+                                             e.file_id,
+                                             e.line_index
+                                ) AS rn
+                         FROM chat_entry e
+                         JOIN log_file f ON f.id = e.file_id
+                     ) WHERE rn > 1 AND source_kind <> '%s'
+                 ) RETURNING file_id""".formatted(SourceKind.SESSION.name(), SourceKind.SESSION.name()))) {
             while (deleted.next()) {
                 removed++;
                 if (deleted.getLong(1) >= sessionStartId) removedFromSession++;
