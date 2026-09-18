@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "allthelogs",
   "version": "${version}",
-  "name": "AllTheLogs",
+  "name": "All The Logs",
   "description": "Search all of your minecraft message history across sessions, using the stored logs.",
   "authors": [
     "JustAlittleWolf"
