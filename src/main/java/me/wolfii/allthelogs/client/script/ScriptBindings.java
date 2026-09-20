@@ -1,6 +1,5 @@
 package me.wolfii.allthelogs.client.script;
 
-import me.wolfii.allthelogs.api.AllTheLogs;
 import me.wolfii.allthelogs.api.ChatEntry;
 import me.wolfii.allthelogs.api.ChatLog;
 import me.wolfii.allthelogs.api.ChatQuery;
@@ -15,8 +14,8 @@ import org.graalvm.polyglot.proxy.ProxyExecutable;
 import java.util.Objects;
 
 /**
- * Globals injected into every script: the public AllTheLogs API types plus {@code allEntries} and
- * {@code writeToOutputFile}.
+ * Globals injected into every script: {@code allEntries}, {@code writeToOutputFile},
+ * {@code database}, and the public API types.
  */
 final class ScriptBindings {
     private ScriptBindings() {
@@ -32,7 +31,6 @@ final class ScriptBindings {
             return null;
         });
         bindings.putMember("database", HostObjects.wrap(joining));
-        bindings.putMember("AllTheLogs", HostObjects.wrap(AllTheLogs.class));
         bindings.putMember("ChatQuery", HostObjects.wrap(ChatQuery.class));
         bindings.putMember("ChatEntry", HostObjects.wrap(ChatEntry.class));
         bindings.putMember("ChatLog", HostObjects.wrap(ChatLog.class));

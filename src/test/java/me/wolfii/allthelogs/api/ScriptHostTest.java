@@ -70,4 +70,16 @@ class ScriptHostTest {
         assertTrue(written.contains("other"));
         assertFalse(written.contains("legacy"));
     }
+
+    @Test
+    void chatQueryStartingAtAcceptsIsoTimestampStrings() throws Exception {
+        Path output = tempDir.resolve("output").resolve("range.txt");
+        ScriptHost.Result result = ScriptHost.execute("""
+            const first = allEntries()[0];
+            const hits = database.findEntries(ChatQuery.all().startingAt(first.timestamp));
+            writeToOutputFile("count=" + hits.length);
+            """, "range.js", database, output);
+        assertTrue(result.succeeded(), () -> result.console() + " / " + result.error());
+        assertTrue(Files.readString(output).contains("count=3"));
+    }
 }

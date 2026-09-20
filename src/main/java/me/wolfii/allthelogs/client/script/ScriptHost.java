@@ -12,7 +12,8 @@ import java.nio.file.Path;
 import java.util.Objects;
 
 /**
- * Runs a {@code .ts} or {@code .js} script against the public AllTheLogs API on the calling thread.
+ * Runs a {@code .js} or {@code .ts} file as JavaScript against the public AllTheLogs API.
+ * TypeScript is not compiled: {@code example.ts} is JavaScript with a JSDoc TypeScript API sketch.
  */
 public final class ScriptHost {
     private ScriptHost() {
@@ -23,13 +24,12 @@ public final class ScriptHost {
         Objects.requireNonNull(fileName, "fileName");
         Objects.requireNonNull(database, "database");
         Objects.requireNonNull(outputFile, "outputFile");
-        String javascript = ScriptSource.toJavaScript(source);
         ByteArrayOutputStream console = new ByteArrayOutputStream();
         PrintStream print = new PrintStream(console, true, StandardCharsets.UTF_8);
         ScriptOutput output = new ScriptOutput(outputFile);
         try (Context context = context(print)) {
             ScriptBindings.install(context.getBindings("js"), database, output);
-            context.eval("js", javascript);
+            context.eval("js", source);
             return Result.ok(console.toString(StandardCharsets.UTF_8), output.written() ? outputFile : null);
         } catch (PolyglotException e) {
             print.println(e.getMessage());

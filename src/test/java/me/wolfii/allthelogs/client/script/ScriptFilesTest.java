@@ -10,35 +10,6 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class ScriptSourceTest {
-    @Test
-    void transpilesTheIssueSketchIntoCallableJavascript() throws Exception {
-        String source = Files.readString(
-            Path.of("src/main/resources/me/wolfii/allthelogs/client/script/example.ts"),
-            StandardCharsets.UTF_8);
-        String js = ScriptSource.toJavaScript(source);
-        assertFalse(js.contains("from \"allthelogs\""));
-        assertFalse(js.contains("ChatEntry ->"));
-        assertTrue(js.contains("allEntries().forEach((entry) =>"));
-        assertTrue(js.contains("writeToOutputFile"));
-        assertTrue(js.contains("entry.chatLog.minecraftVersion"));
-    }
-
-    @Test
-    void stripsEsModuleImportsAndParameterTypes() {
-        String js = ScriptSource.toJavaScript("""
-            import { allEntries, ChatEntry } from "allthelogs";
-            allEntries().forEach((entry: ChatEntry) => {
-                console.log(entry.message as string);
-            });
-            """);
-        assertFalse(js.contains("import"));
-        assertFalse(js.contains(": ChatEntry"));
-        assertFalse(js.contains(" as string"));
-        assertTrue(js.contains("allEntries().forEach((entry) =>"));
-    }
-}
-
 class ScriptFilesTest {
     @TempDir
     Path tempDir;
@@ -59,6 +30,28 @@ class ScriptFilesTest {
         List<Path> listed = ScriptFiles.list(scripts);
         assertEquals(List.of(scripts.resolve("example.ts"), scripts.resolve("extra.js")), listed);
         assertTrue(first.contains("allEntries()"));
+    }
+
+    @Test
+    void exampleDocumentsTheApiInJsdocAndDoesNotImportLibraries() throws Exception {
+        String source = Files.readString(
+            Path.of("src/main/resources/me/wolfii/allthelogs/client/script/example.ts"),
+            StandardCharsets.UTF_8);
+        assertFalse(source.contains("import "));
+        assertFalse(source.contains("from \"allthelogs\""));
+        assertFalse(source.contains("from 'allthelogs'"));
+        assertTrue(source.contains("```ts"));
+        assertTrue(source.contains("interface ChatEntry"));
+        assertTrue(source.contains("interface ChatLog"));
+        assertTrue(source.contains("interface ChatQuery"));
+        assertTrue(source.contains("interface LogDatabase"));
+        assertTrue(source.contains("interface LogStoreMetadata"));
+        assertTrue(source.contains("interface MatchSummary"));
+        assertTrue(source.contains("interface MatchDay"));
+        assertTrue(source.contains("type LogSource"));
+        assertTrue(source.contains("declare function allEntries()"));
+        assertTrue(source.contains("declare function writeToOutputFile"));
+        assertTrue(source.contains("allEntries().forEach((entry) =>"));
     }
 }
 

@@ -8,6 +8,8 @@ import org.graalvm.polyglot.proxy.ProxyObject;
 import java.lang.reflect.Array;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.temporal.TemporalAccessor;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -163,6 +165,14 @@ final class HostObjects {
         }
         if ((type == boolean.class || type == Boolean.class) && value instanceof Boolean bool) {
             return bool;
+        }
+        if (value instanceof String text) {
+            if (type == LocalDateTime.class) {
+                return LocalDateTime.parse(text);
+            }
+            if (type == LocalDate.class) {
+                return LocalDate.parse(text);
+            }
         }
         if (type.isEnum() && value instanceof String name) {
             @SuppressWarnings({"rawtypes", "unchecked"})
