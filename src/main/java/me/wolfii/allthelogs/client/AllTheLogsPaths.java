@@ -6,6 +6,7 @@ import java.nio.file.Path;
 
 /**
  * Instance-relative paths: the database lives in {@code .allthelogs}.
+ * The DuckDB JDBC native jar is cached under {@code cache/allthelogs}, not next to the database.
  */
 public final class AllTheLogsPaths {
     public static final String DATABASE_DIRECTORY = ".allthelogs";
