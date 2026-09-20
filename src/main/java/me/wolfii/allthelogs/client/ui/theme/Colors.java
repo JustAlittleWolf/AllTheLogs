@@ -15,9 +15,17 @@ public final class Colors {
      */
     public static final int CONTEXT_TIMESTAMP = 0xFF7E7E7E;
     /**
-     * Multiply layer that darkens context lines relative to matches.
+     * Vertical bar that marks a context line between the timestamp and the message.
      */
-    public static final int CONTEXT_TEXT = 0xFFC4C4C4;
+    public static final int CONTEXT_BAR = 0xFF6AA8C8;
+    /**
+     * Width of {@link #CONTEXT_BAR} in pixels.
+     */
+    public static final int CONTEXT_BAR_WIDTH = 2;
+    /**
+     * Gap between the context bar and the message text.
+     */
+    public static final int CONTEXT_BAR_GAP = 3;
     /**
      * Multiply layer for literal {@code \n} tokens that were turned into visual linebreaks.
      */
@@ -40,6 +48,11 @@ public final class Colors {
      */
     public static final int SEARCH_TEXT = 0xFFE0E0E0;
     public static final int SEARCH_INVALID = 0xFFE8A8A8;
+    public static final int REGEX_ESCAPE = 0xFF7EB8D4;
+    public static final int REGEX_CLASS = 0xFFA8C48A;
+    public static final int REGEX_GROUP = 0xFFB8A9E0;
+    public static final int REGEX_QUANTIFIER = 0xFFE0B070;
+    public static final int REGEX_ANCHOR = 0xFFE08A8A;
 
     public static final int TRACK = 0xFF2B2B2B;
     public static final int TRACK_BORDER = 0xFF3A3A3A;

@@ -103,6 +103,8 @@ class ResultWindowTest {
         assertTrue(window.coversTime(start.plusSeconds(10)));
         assertFalse(window.coversTime(start.plusHours(3)));
         assertEquals(1, window.nearestIndex(start.plusSeconds(9)));
+        assertEquals(1, DisplayRows.nearestIndex(window.rows(), start.plusSeconds(9)));
+        assertEquals(-1, DisplayRows.nearestIndex(List.of(), start));
         assertTrue(window.showsDate(start.plusSeconds(10)));
         assertFalse(window.showsDate(start.plusDays(1)));
     }

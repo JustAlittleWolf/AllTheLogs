@@ -80,6 +80,8 @@ public final class MessageTimeline extends BaseUIComponent {
     };
     private ExpandHandler onExpand = (row, side, extraLines) -> {
     };
+    private ContextMenuHandler onContextMenu = (row, selection, rows, screenX, screenY) -> {
+    };
     private Runnable onScrubBegin = () -> {
     };
 
@@ -115,6 +117,10 @@ public final class MessageTimeline extends BaseUIComponent {
 
     public void onExpand(ExpandHandler onExpand) {
         this.onExpand = onExpand;
+    }
+
+    public void onContextMenu(ContextMenuHandler onContextMenu) {
+        this.onContextMenu = onContextMenu;
     }
 
     public void onScrubBegin(Runnable onScrubBegin) {
@@ -343,9 +349,16 @@ public final class MessageTimeline extends BaseUIComponent {
             return true;
         }
         if (click.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
-            selection.clear();
+            if (clearsSelectionOnMouseDown(click.button())) {
+                selection.clear();
+            }
             pendingClear = false;
             draggingSelection = false;
+            int row = view().rowAt(click.y());
+            if (row >= 0) {
+                onContextMenu.open(window.rows().get(row), selection, window.rows(),
+                    x + click.x(), y + click.y());
+            }
             return true;
         }
         if (click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
@@ -553,9 +566,16 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     /**
+     * Right-click opens a context menu and must keep the current selection so it can be copied.
+     */
+    static boolean clearsSelectionOnMouseDown(int button) {
+        return false;
+    }
+
+    /**
      * Timestamp of the row at the top of the viewport, which is what the thumb tracks.
      */
-    private LocalDateTime visibleTime() {
+    public LocalDateTime visibleTime() {
         List<DisplayRow> rows = window.rows();
         if (rows.isEmpty()) return null;
         int header = contentOrigin() > 0 ? 0 : MessageListLayout.DATE_HEIGHT;
@@ -801,5 +821,10 @@ public final class MessageTimeline extends BaseUIComponent {
     @FunctionalInterface
     public interface ExpandHandler {
         void expand(DisplayRow row, TimelineEdge side, int extraLines);
+    }
+
+    @FunctionalInterface
+    public interface ContextMenuHandler {
+        void open(DisplayRow row, MessageSelection selection, List<DisplayRow> rows, double screenX, double screenY);
     }
 }

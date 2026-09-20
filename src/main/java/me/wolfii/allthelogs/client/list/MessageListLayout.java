@@ -126,6 +126,14 @@ public final class MessageListLayout {
         return shift ? SHIFT_EXPAND_LINES : EXPAND_LINES;
     }
 
+    public static String expandClickHint() {
+        return "Click: +" + extraContextLines(false);
+    }
+
+    public static String expandShiftClickHint() {
+        return "Shift+Click: +" + extraContextLines(true);
+    }
+
     /**
      * Expanding toward the top of the list loads older messages when the list is oldest-first, and
      * newer ones when it is newest-first.

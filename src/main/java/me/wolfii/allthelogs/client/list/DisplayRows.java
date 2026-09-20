@@ -2,6 +2,7 @@ package me.wolfii.allthelogs.client.list;
 
 import me.wolfii.allthelogs.api.ChatQuery;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -54,6 +55,23 @@ public final class DisplayRows {
     /**
      * Position of {@code key} in {@code rows}, or {@code -1} when it is not loaded.
      */
+    /**
+     * Index of the row whose timestamp is closest to {@code time}, or {@code -1} when the list is empty.
+     */
+    public static int nearestIndex(List<DisplayRow> rows, LocalDateTime time) {
+        if (rows == null || rows.isEmpty() || time == null) return -1;
+        int best = 0;
+        long bestDelta = Long.MAX_VALUE;
+        for (int i = 0; i < rows.size(); i++) {
+            long delta = Math.abs(Duration.between(rows.get(i).entry().timestamp(), time).toMillis());
+            if (delta < bestDelta) {
+                bestDelta = delta;
+                best = i;
+            }
+        }
+        return best;
+    }
+
     public static int indexOf(List<DisplayRow> rows, DisplayRow.RowKey key) {
         if (key == null) return -1;
         for (int i = 0; i < rows.size(); i++) {
