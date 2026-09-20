@@ -11,6 +11,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -85,5 +86,19 @@ class ScriptHostTest {
             """, "range.js", database, output);
         assertTrue(result.succeeded(), () -> result.console() + " / " + result.error());
         assertTrue(Files.readString(output).contains("count=4"));
+    }
+
+    @Test
+    void writeToOutputFileFlushesManyLinesThroughOneStream() throws Exception {
+        Path output = tempDir.resolve("output").resolve("stream.txt");
+        ScriptHost.Result result = ScriptHost.execute("""
+            for (let i = 0; i < 200; i++) writeToOutputFile("line-" + i);
+            """, "stream.js", database, output);
+        assertTrue(result.succeeded(), () -> result.console() + " / " + result.error());
+        assertEquals(output, result.outputFile());
+        List<String> lines = Files.readAllLines(output);
+        assertEquals(200, lines.size());
+        assertEquals("line-0", lines.getFirst());
+        assertEquals("line-199", lines.getLast());
     }
 }

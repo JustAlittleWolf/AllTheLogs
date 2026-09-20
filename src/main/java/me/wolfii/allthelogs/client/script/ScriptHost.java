@@ -27,7 +27,7 @@ public final class ScriptHost {
         ByteArrayOutputStream console = new ByteArrayOutputStream();
         PrintStream print = new PrintStream(console, true, StandardCharsets.UTF_8);
         ScriptOutput output = new ScriptOutput(outputFile);
-        try (Context context = context(print)) {
+        try (output; Context context = context(print)) {
             ScriptBindings.install(context.getBindings("js"), database, output);
             context.eval("js", source);
             return Result.ok(console.toString(StandardCharsets.UTF_8), output.written() ? outputFile : null);

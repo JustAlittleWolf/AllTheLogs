@@ -1,7 +1,6 @@
 package me.wolfii.allthelogs.client.ui.screen;
 
 import io.wispforest.owo.ui.base.BaseOwoScreen;
-import io.wispforest.owo.ui.component.BoxComponent;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.LabelComponent;
 import io.wispforest.owo.ui.component.UIComponents;
@@ -54,11 +53,8 @@ public final class ScriptsScreen extends BaseOwoScreen<FlowLayout> {
     private LabelComponent engineStatus;
     private LabelComponent console;
     private LabelComponent outputPath;
-    private LabelComponent listStatus;
     private FlowLayout scriptList;
     private ButtonComponent run;
-    private ButtonComponent retry;
-    private BoxComponent fill;
     private @Nullable Path selected;
     private long retryLockoutUntilMs;
     private boolean running;
@@ -86,31 +82,10 @@ public final class ScriptsScreen extends BaseOwoScreen<FlowLayout> {
             .padding(Insets.of(12))
             .surface(PanelSurfaces.card());
 
-        card.child(UIComponents.label(Component.translatable("allthelogs.screen.scripts")));
-
         engineStatus = UIComponents.label(engineStatusText());
         engineStatus.color(Color.ofRgb(0xA0A0A0));
         engineStatus.sizing(Sizing.fill(100), Sizing.content());
         card.child(engineStatus);
-
-        FlowLayout track = UIContainers.horizontalFlow(Sizing.fill(), Sizing.fixed(8));
-        track.surface(Surface.flat(0xFF1A1A1A).and(Surface.outline(0xFF3C3C3C)));
-        fill = UIComponents.box(Sizing.fill(1), Sizing.fill());
-        fill.fill(true).color(Color.ofRgb(0x7CB342));
-        track.child(fill);
-        card.child(track);
-
-        FlowLayout engineActions = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
-        engineActions.gap(8).verticalAlignment(VerticalAlignment.CENTER);
-        retry = UIComponents.button(Component.translatable("allthelogs.scripts.retry"), button -> retryEngine());
-        engineActions.child(retry);
-        engineActions.child(UIComponents.button(Component.translatable("allthelogs.scripts.open_folder"),
-            button -> ScriptFolders.open(AllTheLogsPaths.scripts())));
-        card.child(engineActions);
-
-        listStatus = UIComponents.label(Component.translatable("allthelogs.scripts.none"));
-        listStatus.color(Color.ofRgb(0xA0A0A0));
-        card.child(listStatus);
 
         scriptList = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
         scriptList.gap(4);
@@ -119,11 +94,16 @@ public final class ScriptsScreen extends BaseOwoScreen<FlowLayout> {
         listScroll.scrollbar(OverflowScrollbar.vanillaFlat());
         card.child(listScroll);
 
-        FlowLayout runRow = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
-        runRow.gap(8).verticalAlignment(VerticalAlignment.CENTER);
-        run = UIComponents.button(Component.translatable("allthelogs.scripts.run"), button -> runSelected());
-        runRow.child(run);
-        card.child(runRow);
+        FlowLayout actions = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
+        actions.gap(8).verticalAlignment(VerticalAlignment.CENTER);
+        actions.child(UIComponents.button(Component.translatable("allthelogs.scripts.open_folder"),
+            button -> ScriptFolders.open(AllTheLogsPaths.scripts())));
+        run = UIComponents.button(Component.translatable("allthelogs.scripts.run"), button -> primaryAction());
+        actions.child(run);
+        actions.child(UIContainers.horizontalFlow(Sizing.expand(), Sizing.content()));
+        actions.child(UIComponents.button(Component.translatable("allthelogs.done"),
+            button -> Minecraft.getInstance().gui.setScreen(parent)));
+        card.child(actions);
 
         outputPath = UIComponents.label(Component.empty());
         outputPath.color(Color.ofRgb(0xA0A0A0));
@@ -137,13 +117,6 @@ public final class ScriptsScreen extends BaseOwoScreen<FlowLayout> {
             Sizing.fill(), Sizing.expand(), console);
         consoleScroll.scrollbar(OverflowScrollbar.vanillaFlat());
         card.child(consoleScroll);
-
-        FlowLayout bottom = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
-        bottom.gap(8);
-        bottom.child(UIContainers.horizontalFlow(Sizing.expand(), Sizing.content()));
-        bottom.child(UIComponents.button(Component.translatable("allthelogs.done"),
-            button -> Minecraft.getInstance().gui.setScreen(parent)));
-        card.child(bottom);
 
         root.child(card);
         reloadScripts();
@@ -160,19 +133,15 @@ public final class ScriptsScreen extends BaseOwoScreen<FlowLayout> {
         if (engineStatus != null) {
             engineStatus.text(engineStatusText());
         }
-        if (fill != null) {
-            int percent = ScriptRuntime.isReady() ? 100 : Math.max(1, ScriptRuntime.progress().percent());
-            if (ScriptRuntime.hasFailed()) {
-                percent = 1;
-            }
-            fill.horizontalSizing(Sizing.fill(percent));
-        }
-        if (retry != null) {
-            boolean locked = System.currentTimeMillis() < retryLockoutUntilMs;
-            retry.active(ScriptRuntime.hasFailed() && !locked);
-        }
         if (run != null) {
-            run.active(ScriptRuntime.isReady() && selected != null && !running);
+            if (ScriptRuntime.hasFailed()) {
+                boolean locked = System.currentTimeMillis() < retryLockoutUntilMs;
+                run.setMessage(Component.translatable("allthelogs.scripts.retry"));
+                run.active(!locked);
+            } else {
+                run.setMessage(Component.translatable("allthelogs.scripts.run"));
+                run.active(ScriptRuntime.isReady() && selected != null && !running);
+            }
         }
     }
 
@@ -181,10 +150,18 @@ public final class ScriptsScreen extends BaseOwoScreen<FlowLayout> {
         Minecraft.getInstance().gui.setScreen(parent);
     }
 
+    private void primaryAction() {
+        if (ScriptRuntime.hasFailed()) {
+            retryEngine();
+        } else {
+            runSelected();
+        }
+    }
+
     private void retryEngine() {
         retryLockoutUntilMs = System.currentTimeMillis() + RETRY_THROTTLE_MS;
-        if (retry != null) {
-            retry.active(false);
+        if (run != null) {
+            run.active(false);
         }
         ScriptRuntime.ensure();
     }
@@ -194,11 +171,12 @@ public final class ScriptsScreen extends BaseOwoScreen<FlowLayout> {
         List.copyOf(scriptList.children()).forEach(scriptList::removeChild);
         List<Path> scripts = ScriptFiles.list(AllTheLogsPaths.scripts());
         if (scripts.isEmpty()) {
-            listStatus.text(Component.translatable("allthelogs.scripts.none"));
+            LabelComponent empty = UIComponents.label(Component.translatable("allthelogs.scripts.none"));
+            empty.color(Color.ofRgb(0xA0A0A0));
+            scriptList.child(empty);
             selected = null;
             return;
         }
-        listStatus.text(Component.translatable("allthelogs.scripts.count", scripts.size()));
         if (selected == null || !scripts.contains(selected)) {
             selected = scripts.getFirst();
         }
@@ -263,7 +241,7 @@ public final class ScriptsScreen extends BaseOwoScreen<FlowLayout> {
     private static Component engineStatusText() {
         Progress progress = ScriptRuntime.progress();
         return switch (progress.stage()) {
-            case READY -> Component.translatable("allthelogs.scripts.engine.ready");
+            case READY -> Component.empty();
             case FAILED -> Component.translatable("allthelogs.scripts.engine.failed",
                 progress.error() == null ? "" : progress.error());
             case DOWNLOADING -> Component.translatable("allthelogs.scripts.engine.downloading", progress.percent());
