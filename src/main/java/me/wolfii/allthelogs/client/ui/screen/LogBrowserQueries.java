@@ -504,16 +504,8 @@ final class LogBrowserQueries {
     }
 
     private List<DisplayRow> displaySearchRows(List<ChatEntry> entries) {
-        List<DisplayRow> rows = displayRows(entries);
-        boolean oldestFirst = filter.sort() == ChatQuery.Sort.ASCENDING;
-        if (filter.hasText()) {
-            return ContextPeeks.strip(rows, filter.contextLines(), true, oldestFirst);
-        }
-        if (filter.hasVersion() || filter.hasServerOrWorld()
-            || filter.startingAt() != null || filter.upUntil() != null) {
-            return ContextPeeks.markFileGaps(rows, oldestFirst);
-        }
-        return rows;
+        return ContextPeeks.forSearchPage(displayRows(entries), filter.hasText(), filter.contextLines(),
+            filter.sort() == ChatQuery.Sort.ASCENDING);
     }
 
     private List<DisplayRow> displayRows(List<ChatEntry> entries) {

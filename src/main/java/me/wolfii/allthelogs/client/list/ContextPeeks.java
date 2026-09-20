@@ -18,6 +18,19 @@ public final class ContextPeeks {
     }
 
     /**
+     * Marks expand carets for a result page. Text search can grow around hits. Server, version, and
+     * date filters without a message already return every matching line: a line-index hole is another
+     * server or time, or a missing file number, not more matching chat.
+     */
+    public static List<DisplayRow> forSearchPage(List<DisplayRow> rows, boolean hasText, int contextLines,
+                                                 boolean oldestFirst) {
+        if (!hasText || rows == null || rows.isEmpty()) {
+            return rows == null ? List.of() : List.copyOf(rows);
+        }
+        return strip(rows, contextLines, true, oldestFirst);
+    }
+
+    /**
      * Drops lines that are only there to detect more content, and marks the visible edges that can expand.
      */
     public static List<DisplayRow> strip(List<DisplayRow> rows, int contextLines, boolean hasText,
@@ -59,31 +72,6 @@ public final class ContextPeeks {
             }
         }
         return List.copyOf(visible);
-    }
-
-    /**
-     * Marks same-day, same-log holes in a date- or version-filtered page so those edges can expand.
-     * Unfiltered pages do not call this: every stored line is already in the result, and a line-index
-     * gap is missing file numbers, not hidden chat.
-     */
-    public static List<DisplayRow> markFileGaps(List<DisplayRow> rows, boolean oldestFirst) {
-        if (rows == null || rows.size() < 2) {
-            return rows == null ? List.of() : List.copyOf(rows);
-        }
-        DisplayRow[] out = rows.toArray(DisplayRow[]::new);
-        for (int i = 1; i < out.length; i++) {
-            DisplayRow previous = out[i - 1];
-            DisplayRow current = out[i];
-            if (!previous.sameLog(current)) continue;
-            if (!previous.entry().timestamp().toLocalDate().equals(current.entry().timestamp().toLocalDate())) {
-                continue;
-            }
-            if (Math.abs(current.lineIndex() - previous.lineIndex()) <= 1) continue;
-            boolean laterInFile = current.lineIndex() > previous.lineIndex();
-            out[i - 1] = addFileExpand(previous, !laterInFile, laterInFile, oldestFirst);
-            out[i] = addFileExpand(current, laterInFile, !laterInFile, oldestFirst);
-        }
-        return List.of(out);
     }
 
     /**
