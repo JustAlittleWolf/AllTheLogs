@@ -13,7 +13,7 @@ import java.util.Objects;
 
 /**
  * Runs a {@code .js} or {@code .ts} file as JavaScript against the public AllTheLogs API.
- * TypeScript is not compiled: {@code example.ts} is JavaScript with a JSDoc TypeScript API sketch.
+ * TypeScript is not compiled: {@code example.js} is JavaScript with a JSDoc TypeScript API sketch.
  */
 public final class ScriptHost {
     private ScriptHost() {

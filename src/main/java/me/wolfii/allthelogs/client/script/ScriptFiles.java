@@ -14,11 +14,11 @@ import java.util.Objects;
 import java.util.stream.Stream;
 
 /**
- * Scripts live in {@code .allthelogs/scripts}. {@code example.ts} (JavaScript plus a JSDoc API
+ * Scripts live in {@code .allthelogs/scripts}. {@code example.js} (JavaScript plus a JSDoc API
  * sketch) is created the first time the scripts screen opens.
  */
 public final class ScriptFiles {
-    public static final String EXAMPLE = "example.ts";
+    public static final String EXAMPLE = "example.js";
     private static final DateTimeFormatter OUTPUT_STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
     private ScriptFiles() {

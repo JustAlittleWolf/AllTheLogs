@@ -54,4 +54,12 @@ class MessageTimelineTest {
         assertTrue(MessageTimeline.dismissesContextMenuOnMouseDown(org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_MIDDLE));
         assertFalse(MessageTimeline.dismissesContextMenuOnMouseDown(org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_RIGHT));
     }
+
+    @Test
+    void resizeKeepsTheBottomPinnedWhenTheViewportWasAtTheEnd() {
+        assertFalse(MessageTimeline.pinToBottomOnResize(0, 400, -1));
+        assertTrue(MessageTimeline.pinToBottomOnResize(200, 400, 200));
+        assertTrue(MessageTimeline.pinToBottomOnResize(0, 120, 200));
+        assertFalse(MessageTimeline.pinToBottomOnResize(40, 400, 200));
+    }
 }

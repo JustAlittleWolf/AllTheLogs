@@ -42,7 +42,7 @@ class ScriptHostTest {
     @Test
     void exampleScriptQueriesWelcomeMatchesWithoutDumpingTheStore() throws Exception {
         String source = Files.readString(
-            Path.of("src/main/resources/me/wolfii/allthelogs/client/script/example.ts"),
+            Path.of("src/main/resources/me/wolfii/allthelogs/client/script/example.js"),
             StandardCharsets.UTF_8);
         Path output = tempDir.resolve("output").resolve("example.txt");
         ScriptHost.Result result = ScriptHost.execute(source, ScriptFiles.EXAMPLE, database, output);

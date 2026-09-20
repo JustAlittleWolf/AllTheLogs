@@ -40,7 +40,7 @@ import java.util.function.Consumer;
  * thumb is sized from how many days the query matches and dragging it can land outside the buffer.
  */
 public final class MessageTimeline extends BaseUIComponent {
-    public static final int TIMELINE_WIDTH = 68;
+    public static final int TIMELINE_WIDTH = 58;
     /** Matches fetched per preview query while the thumb is being dragged. */
     public static final int SCRUB_PAGE_SIZE = 32;
     private static final int SELECT_DRAG_SLOP = 3;
@@ -63,6 +63,7 @@ public final class MessageTimeline extends BaseUIComponent {
     private int messageRowHeight = MessageListLayout.ROW_HEIGHT;
     private double scrollY;
     private int laidOutWidth = -1;
+    private int laidOutHeight = -1;
 
     private boolean draggingSelection;
     private boolean pendingClear;
@@ -299,9 +300,12 @@ public final class MessageTimeline extends BaseUIComponent {
     @Override
     public void draw(OwoUIGraphics graphics, int mouseX, int mouseY, float partialTicks, float delta) {
         int listWidth = ListView.listWidth(width);
-        if (listWidth != laidOutWidth) {
+        if (listWidth != laidOutWidth || height != laidOutHeight) {
+            boolean pinBottom = pinToBottomOnResize(scrollY, layout.contentHeight(), laidOutHeight);
             laidOutWidth = listWidth;
+            laidOutHeight = height;
             rebuildLayout();
+            if (pinBottom) scrollToEnd();
         }
         graphics.fill(x, y, x + listWidth, y + height, Colors.LIST_BACKGROUND);
         if (scrub.dragging()) {
@@ -579,6 +583,11 @@ public final class MessageTimeline extends BaseUIComponent {
      */
     static boolean clearsSelectionOnMouseDown(int button) {
         return false;
+    }
+
+    static boolean pinToBottomOnResize(double scrollY, int contentHeight, int previousHeight) {
+        if (previousHeight <= 0) return false;
+        return scrollY >= Math.max(0, contentHeight - previousHeight) - 0.5;
     }
 
     static boolean dismissesContextMenuOnMouseDown(int button) {
