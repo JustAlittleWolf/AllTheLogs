@@ -14,7 +14,7 @@ class SearchDecorationsTest {
         assertEquals("/foo.*/i", SearchDecorations.wrap(regex, "foo.*"));
         assertEquals("foo.*", SearchDecorations.unwrap(regex, "/foo.*/i"));
         assertEquals(1, SearchDecorations.clampCursor(regex, "/foo.*/i", 0));
-        assertEquals(5, SearchDecorations.clampCursor(regex, "/foo.*/i", 99));
+        assertEquals(6, SearchDecorations.clampCursor(regex, "/foo.*/i", 99));
     }
 
     @Test
