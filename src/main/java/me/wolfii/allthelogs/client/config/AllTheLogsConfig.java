@@ -140,7 +140,7 @@ public final class AllTheLogsConfig {
         json.addProperty("filterPersistence", filterPersistence.name());
         json.addProperty("hideImportButton", hideImportButton);
         json.addProperty("messageFontSize", messageFontSize);
-        json.add("filter", PersistedSearchFilter.toJson(persistedFilter));
+        json.add("filter", FilterPersistence.toJson(persistedFilter));
         return json;
     }
 
@@ -150,7 +150,7 @@ public final class AllTheLogsConfig {
         hideImportButton = bool(json, "hideImportButton", false);
         messageFontSize = clampFontSize(integer(json, "messageFontSize", DEFAULT_MESSAGE_FONT_SIZE));
         if (json.has("filter") && json.get("filter").isJsonObject()) {
-            persistedFilter = PersistedSearchFilter.fromJson(json.getAsJsonObject("filter"));
+            persistedFilter = FilterPersistence.fromJson(json.getAsJsonObject("filter"));
         }
     }
 
