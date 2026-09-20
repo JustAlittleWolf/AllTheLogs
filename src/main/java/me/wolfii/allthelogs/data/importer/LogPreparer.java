@@ -31,7 +31,7 @@ public final class LogPreparer {
         try (BufferedReader reader = open(candidate)) {
             parsed = LogParser.parse(reader);
         }
-        LocalDate date = LogDates.resolve(candidate.fileName(), candidate.lastModified(), timezone);
+        LocalDate fileDate = LogDates.resolve(candidate.fileName(), candidate.lastModified(), timezone);
 
         List<LocalDateTime> times = new ArrayList<>(parsed.entries().size());
         List<String> messages = new ArrayList<>(parsed.entries().size());
@@ -39,19 +39,29 @@ public final class LogPreparer {
         List<String> users = new ArrayList<>(parsed.entries().size());
         List<String> places = new ArrayList<>(parsed.entries().size());
         for (ParsedLog.Entry entry : parsed.entries()) {
-            times.add(LogDates.toSystemLocal(date, entry.time(), timezone));
+            times.add(LogDates.toSystemLocal(calendarDate(entry.date(), fileDate), entry.time(), timezone));
             messages.add(entry.message());
             formattings.add(entry.formatting());
             users.add(entry.minecraftUser());
             places.add(entry.serverOrWorld());
         }
-        LocalDateTime firstLineTime = LogDates.toSystemLocal(date, parsed.firstLineTime(), timezone);
-        LocalDateTime lastLineTime = LogDates.toSystemLocal(date, parsed.lastLineTime(), timezone);
+        LocalDateTime firstLineTime = LogDates.toSystemLocal(
+            calendarDate(parsed.firstLineDate(), fileDate), parsed.firstLineTime(), timezone);
+        LocalDateTime lastLineTime = LogDates.toSystemLocal(
+            calendarDate(parsed.lastLineDate(), fileDate), parsed.lastLineTime(), timezone);
         return new PreparedLog(candidate.fileName(), candidate.sourceKind(), candidate.sourcePath(),
-            candidate.entryPath(), date, parsed.minecraftVersion(),
+            candidate.entryPath(), fileDate, parsed.minecraftVersion(),
             times, messages, formattings, parsed.resourceManagerReloaded(),
             firstLineTime, lastLineTime, parsed.sessionId(), parsed.minecraftUser(),
             users, places, candidate.contentHash());
+    }
+
+    /**
+     * Uses the date printed in the log line when one is present. Time-only lines still use the file
+     * name / mtime date, so ordinary {@code [12:16:21]} logs keep the same calendar day as before.
+     */
+    private static LocalDate calendarDate(LocalDate lineDate, LocalDate fileDate) {
+        return lineDate != null ? lineDate : fileDate;
     }
 
     private static BufferedReader open(LogCandidate candidate) throws IOException {
