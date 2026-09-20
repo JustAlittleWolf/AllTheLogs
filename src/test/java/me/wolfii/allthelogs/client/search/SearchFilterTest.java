@@ -138,6 +138,20 @@ class SearchFilterTest {
     }
 
     @Test
+    void filterBarQueryOmitsTheSearchTerm() {
+        SearchFilter filter = SearchFilter.defaults()
+            .withText("needle")
+            .withServerOrWorld("hypixel.net")
+            .withVersion("26.2");
+        ChatQuery bar = filter.toFilterBarQuery();
+        assertNull(bar.substring());
+        assertNull(bar.regex());
+        assertEquals("hypixel.net", bar.serverOrWorld());
+        assertEquals("26.2", bar.version());
+        assertEquals("needle", filter.toQuery().substring());
+    }
+
+    @Test
     void isNarrowedIgnoresSortPagingAndContext() {
         assertFalse(SearchFilter.defaults().isNarrowed());
         assertFalse(SearchFilter.defaults().withSort(ChatQuery.Sort.DESCENDING).isNarrowed());

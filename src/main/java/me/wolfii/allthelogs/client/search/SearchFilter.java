@@ -212,7 +212,19 @@ public record SearchFilter(
         return toStoreQuery(0, -1, null);
     }
 
+    /**
+     * Date, version, and server or world only. Expand and context walks use this so the search term
+     * does not hide neighbouring chat that still passes the filter bar.
+     */
+    public ChatQuery toFilterBarQuery() {
+        return toStoreQuery(0, -1, null, false);
+    }
+
     private ChatQuery toStoreQuery(int context, long pageLimit, LocalDateTime pageOffset) {
+        return toStoreQuery(context, pageLimit, pageOffset, true);
+    }
+
+    private ChatQuery toStoreQuery(int context, long pageLimit, LocalDateTime pageOffset, boolean includeText) {
         ChatQuery query = ChatQuery.all()
             .withContextLines(context)
             .withLimit(pageLimit)
@@ -222,7 +234,7 @@ public record SearchFilter(
         if (pageOffset != null) query = query.withOffset(pageOffset);
         if (hasVersion()) query = query.withVersion(version);
         if (hasServerOrWorld()) query = query.withServerOrWorld(serverOrWorld);
-        if (!hasText()) return query;
+        if (!includeText || !hasText()) return query;
         if (regex) return query.withRegex(regexPattern(text, caseSensitive));
         if (caseSensitive) return query.withSubstringCaseSensitive(text);
         return query.withSubstring(text);

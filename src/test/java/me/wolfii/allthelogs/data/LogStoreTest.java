@@ -741,6 +741,45 @@ class LogStoreTest {
     }
 
     @Test
+    void contextLinesSkipOtherServersToFillTheRequestedCount() throws IOException {
+        LogFixtures.writePlain(tempDir.resolve("logs"), "debug.log", """
+            [14:44:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [14:44:40] [Render thread/INFO]: Connecting to unicacity.eu, 25565
+            [14:44:41] [Render thread/INFO]: [CHAT] uni far before
+            [14:44:42] [Render thread/INFO]: Stopping worker threads
+            [14:44:43] [Render thread/INFO]: Connecting to localhost, 25565
+            [14:44:44] [Render thread/INFO]: [CHAT] local before
+            [14:44:45] [Render thread/INFO]: Stopping worker threads
+            [14:44:46] [Render thread/INFO]: Connecting to unicacity.eu, 25565
+            [14:44:47] [Render thread/INFO]: [CHAT] needle on uni
+            [14:44:48] [Render thread/INFO]: Stopping worker threads
+            [14:44:49] [Render thread/INFO]: Connecting to localhost, 25565
+            [14:44:50] [Render thread/INFO]: [CHAT] local after
+            [14:44:51] [Render thread/INFO]: Stopping worker threads
+            [14:44:52] [Render thread/INFO]: Connecting to unicacity.eu, 25565
+            [14:44:53] [Render thread/INFO]: [CHAT] uni far after
+            """);
+        store.importDirectory(tempDir);
+
+        assertEquals(List.of("uni far before", "needle on uni", "uni far after"),
+            store.findEntries(ChatQuery.all()
+                    .withSubstring("needle")
+                    .withServerOrWorld("unicacity.eu")
+                    .withContextLines(1))
+                .stream().map(ChatEntry::message).toList());
+        ChatEntry hit = store.findEntries(ChatQuery.all()
+            .withSubstring("needle").withServerOrWorld("unicacity.eu")).getFirst();
+        assertEquals(List.of("uni far after"),
+            store.matchingContextToward(hit.chatLog(), hit.lineIndex(), false, 2,
+                    ChatQuery.all().withServerOrWorld("unicacity.eu"), hit.timestamp().toLocalDate())
+                .stream().map(ChatEntry::message).toList());
+        assertEquals(List.of("uni far before"),
+            store.matchingContextToward(hit.chatLog(), hit.lineIndex(), true, 2,
+                    ChatQuery.all().withServerOrWorld("unicacity.eu"), hit.timestamp().toLocalDate())
+                .stream().map(ChatEntry::message).toList());
+    }
+
+    @Test
     void versionFilterCombinesWithTextAndContext() throws IOException {
         store.importDirectory(logsDirectory());
 

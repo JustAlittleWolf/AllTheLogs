@@ -151,30 +151,16 @@ class ContextPeeksTest {
     }
 
     @Test
-    void serverFilterWithoutTextDoesNotMarkExpandIntoOtherPlaces() {
-        ChatLog log = log("a.log");
-        DisplayRow first = row(log, 0, "on hypixel", true);
-        DisplayRow later = row(log, 20, "back on hypixel", true);
-        List<DisplayRow> rows = List.of(first, later);
-        List<DisplayRow> visible = ContextPeeks.forSearchPage(rows, false, 4, true, false);
-        assertEquals(rows, visible);
-        assertFalse(visible.getFirst().expandDown());
-        assertFalse(visible.getFirst().expandUp());
-        assertFalse(visible.getLast().expandUp());
-        assertFalse(visible.getLast().expandDown());
-        assertEquals(0, MessageListLayout.of(visible, 4).separators().size());
-    }
-
-    @Test
-    void dateFilteredGapsCanStillExpandOnTheSameDay() {
+    void filterBarWithoutSearchDoesNotMarkExpand() {
         ChatLog log = log("a.log");
         DisplayRow first = row(log, 0, "a", true);
         DisplayRow later = row(log, 20, "b", true);
-        List<DisplayRow> marked = ContextPeeks.forSearchPage(List.of(first, later), false, 4, true, true);
-        assertTrue(marked.getFirst().expandDown());
-        assertFalse(marked.getFirst().expandUp());
-        assertTrue(marked.getLast().expandUp());
-        assertFalse(marked.getLast().expandDown());
+        List<DisplayRow> rows = List.of(first, later);
+        List<DisplayRow> visible = ContextPeeks.forSearchPage(rows, false, 4, true);
+        assertEquals(rows, visible);
+        assertFalse(visible.getFirst().expandDown());
+        assertFalse(visible.getLast().expandUp());
+        assertEquals(0, MessageListLayout.of(visible, 4).separators().size());
     }
 
     @Test
@@ -182,7 +168,7 @@ class ContextPeeksTest {
         ChatLog log = log("a.log");
         List<DisplayRow> rows = List.of(row(log, 0, "a", true), row(log, 20, "b", true));
         assertEquals(rows, ContextPeeks.strip(rows, 4, false, true));
-        assertEquals(rows, ContextPeeks.forSearchPage(rows, false, 4, true, false));
+        assertEquals(rows, ContextPeeks.forSearchPage(rows, false, 4, true));
         assertFalse(rows.getFirst().expandDown());
         assertFalse(rows.getLast().expandUp());
     }
@@ -196,14 +182,29 @@ class ContextPeeksTest {
             row(log, 2, "hit", true),
             row(log, 3, "ctx3", false),
             row(log, 4, "ctx4", false));
-        List<DisplayRow> visible = ContextPeeks.forSearchPage(rows, true, 1, true, false);
+        List<DisplayRow> visible = ContextPeeks.forSearchPage(rows, true, 1, true);
         assertEquals(List.of(1, 2, 3), visible.stream().map(DisplayRow::lineIndex).toList());
         assertTrue(visible.getFirst().expandUp());
         assertTrue(visible.getLast().expandDown());
     }
 
     @Test
-    void expandDropsOtherServersThenKeepsSameDayContext() {
+    void stripCountsFetchedNeighboursNotFileLineGaps() {
+        ChatLog log = log("a.log");
+        List<DisplayRow> rows = List.of(
+            row(log, 0, "far before", false),
+            row(log, 5, "near before", false),
+            row(log, 10, "hit", true),
+            row(log, 15, "near after", false),
+            row(log, 20, "far after", false));
+        List<DisplayRow> visible = ContextPeeks.strip(rows, 1, true, true);
+        assertEquals(List.of(5, 10, 15), visible.stream().map(DisplayRow::lineIndex).toList());
+        assertTrue(visible.getFirst().expandUp());
+        assertTrue(visible.getLast().expandDown());
+    }
+
+    @Test
+    void expandCountsFilterMatchingLinesNotFileIndices() {
         ChatLog log = log("a.log");
         DisplayRow anchor = row(log, 10, "on hypixel", true, "hypixel.net");
         SearchFilter filter = SearchFilter.defaults().withServerOrWorld("hypixel");
@@ -213,7 +214,7 @@ class ContextPeeksTest {
             row(log, 12, "still hypixel", false, "mc.hypixel.net"),
             row(log, 13, "peek", false, "hypixel.net"));
         List<DisplayRow> allowed = fetched.stream().filter(row -> filter.allowsContext(row.entry())).toList();
-        List<DisplayRow> kept = ContextPeeks.forExpand(allowed, anchor, false, 2, true);
+        List<DisplayRow> kept = ContextPeeks.forExpand(allowed, anchor, false, 1, true);
         assertEquals(List.of(10, 12), kept.stream().map(DisplayRow::lineIndex).toList());
         assertTrue(kept.getLast().expandDown());
     }

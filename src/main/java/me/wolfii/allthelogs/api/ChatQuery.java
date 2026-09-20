@@ -147,7 +147,9 @@ public interface ChatQuery {
     ChatQuery upUntil(LocalDateTime upUntil);
 
     /**
-     * Also returns up to {@code contextLines} entries before and after every match, taken from the same log file.
+     * Also returns up to {@code contextLines} entries before and after every match, taken from the same log file
+     * and still passing the date and server filters. Neighbours that fail those filters are skipped so the
+     * requested count is filled with matching context.
      * Overlapping context windows are merged, so no entry is ever returned twice.
      */
     ChatQuery withContextLines(int contextLines);
