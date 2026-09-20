@@ -37,13 +37,21 @@ import java.util.function.BiConsumer;
  */
 final class LogBrowserQueries {
     private final AtomicInteger generation = new AtomicInteger();
-    private SearchFilter filter = SearchFilter.defaults();
+    private SearchFilter filter;
     private MessageTimeline list;
     private ButtonComponent info;
     private List<String> versions = List.of();
     private MatchSummary matchSummary = MatchSummary.empty();
     private boolean reloadPending = true;
     private ListSnapshot snapshot = ListSnapshot.EMPTY;
+
+    LogBrowserQueries() {
+        this(SearchFilter.defaults());
+    }
+
+    LogBrowserQueries(SearchFilter initial) {
+        this.filter = initial == null ? SearchFilter.defaults() : initial;
+    }
 
     private static long elapsedMs(long startedAtNanos) {
         return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos);

@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 class AllTheLogsCommandsTest {
     @Test
-    void registersGuiImportAndScriptsSubcommands() {
+    void registersGuiImportScriptsAndSettingsSubcommands() {
         CommandDispatcher<FabricClientCommandSource> dispatcher = new CommandDispatcher<>();
         AllTheLogsCommands.register(dispatcher);
 
@@ -20,5 +20,6 @@ class AllTheLogsCommandsTest {
         assertNotNull(root.getChild("gui"));
         assertNotNull(root.getChild("import"));
         assertNotNull(root.getChild("scripts"));
+        assertNotNull(root.getChild("settings"));
     }
 }

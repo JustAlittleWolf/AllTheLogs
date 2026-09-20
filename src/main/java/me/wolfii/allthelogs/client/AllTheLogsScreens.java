@@ -5,6 +5,7 @@ import me.wolfii.allthelogs.client.script.ScriptRuntime;
 import me.wolfii.allthelogs.client.ui.screen.ImportScreen;
 import me.wolfii.allthelogs.client.ui.screen.LogBrowserScreen;
 import me.wolfii.allthelogs.client.ui.screen.ScriptsScreen;
+import me.wolfii.allthelogs.client.ui.screen.SettingsScreen;
 import me.wolfii.allthelogs.client.ui.widget.IconButtonWidget;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Tooltip;
@@ -41,5 +42,9 @@ public final class AllTheLogsScreens {
         ScriptFiles.ensureExample(AllTheLogsPaths.scripts());
         Minecraft.getInstance().gui.setScreen(new ScriptsScreen(parent));
         ScriptRuntime.ensure();
+    }
+
+    public static void openSettings(@Nullable Screen parent) {
+        Minecraft.getInstance().gui.setScreen(new SettingsScreen(parent));
     }
 }

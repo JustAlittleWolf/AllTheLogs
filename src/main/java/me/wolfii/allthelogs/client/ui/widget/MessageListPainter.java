@@ -15,7 +15,6 @@ import java.util.List;
  * the sticky date headers, and the hover card for the row under the pointer.
  */
 final class MessageListPainter {
-    private static final int ROW_HEIGHT = MessageListLayout.ROW_HEIGHT;
     private static final float DATE_SCALE = 1.25f;
     private static final int HIGHLIGHT_PAD_LEFT = 1;
     private static final int HIGHLIGHT_TRIM_BOTTOM = 2;
@@ -33,7 +32,11 @@ final class MessageListPainter {
     }
 
     static int highlightHeight() {
-        return ROW_HEIGHT - HIGHLIGHT_TRIM_BOTTOM;
+        return highlightHeight(MessageListLayout.ROW_HEIGHT);
+    }
+
+    static int highlightHeight(int rowHeight) {
+        return rowHeight - HIGHLIGHT_TRIM_BOTTOM;
     }
 
     static MessageListLayout.ExpandDirection expandAt(ListView view, double localX, double localY) {
@@ -57,6 +60,7 @@ final class MessageListPainter {
             MessageListLayout layout = view.layout();
             int messageWidth = view.messageWidth();
             int messageX = view.messageX();
+            float scale = view.fontScale();
             int first = Math.max(0, layout.rowAtY(view.scrollY() - view.contentOrigin()));
             int last = Math.min(rows.size() - 1,
                 layout.rowAtY(view.scrollY() - view.contentOrigin() + view.height()) + 1);
@@ -64,16 +68,17 @@ final class MessageListPainter {
                 DisplayRow row = rows.get(i);
                 int rowY = view.screenY(layout.rowY(i));
                 List<MessageWrap.Line> lines = MessageWrap.wrap(row.message(), messageWidth,
-                    rowWidths.of(row, view.font()));
+                    (from, to) -> Math.round(rowWidths.width(row, view.font(), from, to) * scale));
                 drawHighlights(graphics, view, row, lines, messageX, rowY);
                 drawSelection(graphics, view, row, i, selection, lines, messageX, rowY);
                 int timestampColor = row.match() ? Colors.MUTED : Colors.CONTEXT_TIMESTAMP;
-                graphics.drawText(MessageText.timestamp(row), view.x() + ListView.PAD, rowY + 1, 1, timestampColor);
+                graphics.drawText(MessageText.timestamp(row), view.x() + ListView.PAD, rowY + 1, view.fontScale(),
+                    timestampColor);
                 int lineY = rowY;
                 for (MessageWrap.Line line : lines) {
                     graphics.drawText(MessageText.messageRange(row, line.start(), line.start() + line.text().length()),
-                        messageX, lineY + 1, 1, Colors.TEXT);
-                    lineY += ROW_HEIGHT;
+                        messageX, lineY + 1, view.fontScale(), Colors.TEXT);
+                    lineY += view.rowHeight();
                 }
             }
             drawSeparators(graphics, view);
@@ -180,11 +185,11 @@ final class MessageListPainter {
                 int from = Math.max(span.start(), lineStart);
                 int to = Math.min(span.end(), lineEnd);
                 if (from >= to) continue;
-                int left = highlightLeft(messageX + rowWidths.width(row, view.font(), lineStart, from));
-                int right = messageX + rowWidths.width(row, view.font(), lineStart, to);
-                graphics.fill(left, lineY, right, lineY + highlightHeight(), Colors.MATCH_HIGHLIGHT);
+                int left = highlightLeft(messageX + Math.round(rowWidths.width(row, view.font(), lineStart, from) * view.fontScale()));
+                int right = messageX + Math.round(rowWidths.width(row, view.font(), lineStart, to) * view.fontScale());
+                graphics.fill(left, lineY, right, lineY + highlightHeight(view.rowHeight()), Colors.MATCH_HIGHLIGHT);
             }
-            lineY += ROW_HEIGHT;
+            lineY += view.rowHeight();
         }
     }
 
@@ -199,13 +204,13 @@ final class MessageListPainter {
                 boolean covered = i < text.length() && selection.covers(rowIndex, line.start() + i);
                 if (covered && start < 0) start = i;
                 if (!covered && start >= 0) {
-                    int left = messageX + rowWidths.width(row, view.font(), line.start(), line.start() + start);
-                    int right = messageX + rowWidths.width(row, view.font(), line.start(), line.start() + i);
-                    graphics.fill(left, lineY, right, lineY + ROW_HEIGHT, Colors.SELECTION);
+                    int left = messageX + Math.round(rowWidths.width(row, view.font(), line.start(), line.start() + start) * view.fontScale());
+                    int right = messageX + Math.round(rowWidths.width(row, view.font(), line.start(), line.start() + i) * view.fontScale());
+                    graphics.fill(left, lineY, right, lineY + view.rowHeight(), Colors.SELECTION);
                     start = -1;
                 }
             }
-            lineY += ROW_HEIGHT;
+            lineY += view.rowHeight();
         }
     }
 
