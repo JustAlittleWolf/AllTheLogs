@@ -40,6 +40,7 @@ import java.util.function.Consumer;
  * thumb is sized from how many days the query matches and dragging it can land outside the buffer.
  */
 public final class MessageTimeline extends BaseUIComponent {
+    /** Gutter for the date track; ~15% narrower than 68 so the message list can grow. */
     public static final int TIMELINE_WIDTH = 58;
     /** Matches fetched per preview query while the thumb is being dragged. */
     public static final int SCRUB_PAGE_SIZE = 32;
