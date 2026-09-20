@@ -1,8 +1,6 @@
 package me.wolfii.allthelogs.client.ui.screen;
 
-import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.CheckboxComponent;
-import io.wispforest.owo.ui.component.LabelComponent;
 import io.wispforest.owo.ui.component.TextBoxComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
@@ -14,7 +12,6 @@ import me.wolfii.allthelogs.client.search.DateParser;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
-import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 
 import java.time.LocalDateTime;
@@ -39,7 +36,7 @@ final class FilterOverlay {
     private ParentUIComponent filterPanel;
     private CheckboxComponent regexBox;
     private CheckboxComponent caseBox;
-    private LabelComponent contextValue;
+    private TextBoxComponent contextBox;
     private TextBoxComponent serverBox;
     private TextBoxComponent fromBox;
     private TextBoxComponent untilBox;
@@ -96,8 +93,8 @@ final class FilterOverlay {
         try {
             if (regexBox != null) regexBox.checked(current.regex());
             if (caseBox != null) caseBox.checked(current.caseSensitive());
-            if (contextValue != null) {
-                contextValue.text(Component.literal(String.valueOf(current.contextLines())));
+            if (contextBox != null && !contextBox.getValue().equals(String.valueOf(current.contextLines()))) {
+                contextBox.setValue(String.valueOf(current.contextLines()));
             }
             String from = DateParser.format(current.startingAt());
             if (fromBox != null && !fromBox.getValue().equals(from)) fromBox.setValue(from);
@@ -170,53 +167,12 @@ final class FilterOverlay {
     }
 
     private FlowLayout contextField(SearchFilter current) {
-        FlowLayout column = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
-        column.gap(2);
-        column.child(UIComponents.label(Component.translatable("allthelogs.filter.context")));
-
-        FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
-        row.gap(4).verticalAlignment(VerticalAlignment.CENTER);
-
-        contextValue = UIComponents.label(Component.literal(String.valueOf(current.contextLines())));
-        contextValue.horizontalTextAlignment(HorizontalAlignment.RIGHT);
-        contextValue.horizontalSizing(Sizing.expand());
-        row.child(contextValue);
-        row.child(UIComponents.label(Component.translatable("allthelogs.filter.context.unit"))
-            .color(Color.ofRgb(0xA0A0A0)));
-
-        FlowLayout steppers = UIContainers.verticalFlow(Sizing.content(), Sizing.content());
-        steppers.gap(1);
-        steppers.child(stepper("▲", 1, "allthelogs.filter.context.up"));
-        steppers.child(stepper("▼", -1, "allthelogs.filter.context.down"));
-        row.child(steppers);
-        row.mouseScroll().subscribe((mouseX, mouseY, amount) -> {
-            stepContext(amount > 0 ? 1 : -1);
-            return true;
-        });
-        column.child(row);
-        return column;
-    }
-
-    private ButtonComponent stepper(String glyph, int sign, String tooltipKey) {
-        ButtonComponent button = UIComponents.button(Component.literal(glyph), ignored -> {
-        });
-        button.horizontalSizing(Sizing.fixed(14));
-        button.verticalSizing(Sizing.fixed(10));
-        button.tooltip(List.of(
-            Component.translatable(tooltipKey,
-                Component.translatable("key.mouse.left").withStyle(ChatFormatting.AQUA),
-                Component.translatable("key.mouse.right").withStyle(ChatFormatting.GOLD))));
-        button.mouseDown().subscribe((event, delta) -> {
-            int step = event.button() == 1 ? 10 : 1;
-            stepContext(sign * step);
-            return true;
-        });
-        return button;
-    }
-
-    private void stepContext(int delta) {
-        int next = Math.clamp(filter.get().contextLines() + delta, 0, SearchFilter.MAX_CONTEXT_LINES);
-        emit(filter.get().withContextLines(next));
+        return labeledField("allthelogs.filter.context", String.valueOf(current.contextLines()), text -> {
+            try {
+                emit(filter.get().withContextLines(Integer.parseInt(text.trim())));
+            } catch (RuntimeException ignored) {
+            }
+        }, true);
     }
 
     private CheckboxComponent checkbox(String key, boolean checked, Consumer<Boolean> onChanged) {
@@ -233,13 +189,13 @@ final class FilterOverlay {
         FlowLayout row = labeledField(key, value, text -> {
             if (!DateParser.isBlankOrValid(text)) return;
             onParsed.accept(parse.apply(text).orElse(null));
-        });
+        }, false);
         if (from) fromBox = lastBox(row);
         else untilBox = lastBox(row);
         return row;
     }
 
-    private FlowLayout labeledField(String key, String value, Consumer<String> onFieldChange) {
+    private FlowLayout labeledField(String key, String value, Consumer<String> onFieldChange, boolean context) {
         FlowLayout row = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
         row.gap(2);
         row.child(UIComponents.label(Component.translatable(key)));
@@ -249,6 +205,7 @@ final class FilterOverlay {
             if (!syncing) onFieldChange.accept(text);
         });
         row.child(box);
+        if (context) contextBox = box;
         return row;
     }
 
