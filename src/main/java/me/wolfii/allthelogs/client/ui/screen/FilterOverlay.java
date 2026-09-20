@@ -9,7 +9,6 @@ import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.*;
 import me.wolfii.allthelogs.client.search.DateParser;
-import me.wolfii.allthelogs.client.search.RegexFlags;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
@@ -27,7 +26,7 @@ import java.util.function.Supplier;
  * Side-expandable filter panel for {@link LogBrowserScreen}. It stays open while the user searches.
  */
 final class FilterOverlay {
-    static final int PANEL_WIDTH = 240;
+    static final int PANEL_WIDTH = 144;
     private static boolean sessionOpen;
 
     private final FlowLayout host;
@@ -37,7 +36,6 @@ final class FilterOverlay {
     private ParentUIComponent filterPanel;
     private CheckboxComponent regexBox;
     private CheckboxComponent caseBox;
-    private TextBoxComponent flagsBox;
     private TextBoxComponent contextBox;
     private TextBoxComponent fromBox;
     private TextBoxComponent untilBox;
@@ -94,9 +92,6 @@ final class FilterOverlay {
         try {
             if (regexBox != null) regexBox.checked(current.regex());
             if (caseBox != null) caseBox.checked(current.caseSensitive());
-            if (flagsBox != null && !flagsBox.getValue().equals(current.regexFlags())) {
-                flagsBox.setValue(current.regexFlags());
-            }
             if (contextBox != null && !contextBox.getValue().equals(String.valueOf(current.contextLines()))) {
                 contextBox.setValue(String.valueOf(current.contextLines()));
             }
@@ -124,7 +119,7 @@ final class FilterOverlay {
     private ParentUIComponent buildFilterPanel() {
         SearchFilter current = filter.get();
         FlowLayout content = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
-        content.padding(Insets.of(8));
+        content.padding(Insets.both(2, 6));
         content.gap(4);
 
         regexBox = checkbox("allthelogs.filter.regex", current.regex(), value ->
@@ -133,7 +128,6 @@ final class FilterOverlay {
         caseBox = checkbox("allthelogs.filter.case_sensitive", current.caseSensitive(), value ->
             emit(filter.get().withCaseSensitive(value)));
         content.child(caseBox);
-        content.child(flagsField(current.regexFlags()));
         content.child(contextField(current));
 
         content.child(dateField("allthelogs.filter.from", DateParser.format(current.startingAt()),
@@ -148,22 +142,10 @@ final class FilterOverlay {
             Sizing.fixed(PANEL_WIDTH), Sizing.fill(), content);
         panel.scrollbar(OverflowScrollbar.vanillaFlat());
         panel.surface(PanelSurfaces.card());
+        panel.margins(Insets.none());
+        panel.padding(Insets.none());
         panel.verticalSizing(Sizing.fill());
         return panel;
-    }
-
-    private FlowLayout flagsField(String flags) {
-        FlowLayout row = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
-        row.gap(2);
-        row.child(UIComponents.label(Component.translatable("allthelogs.filter.regex_flags")));
-        flagsBox = UIComponents.textBox(Sizing.fill(), flags);
-        flagsBox.setMaxLength(RegexFlags.VALID.length());
-        flagsBox.setFilter(RegexFlags::isLegal);
-        flagsBox.onChanged().subscribe(text -> {
-            if (!syncing) emit(filter.get().withRegexFlags(text));
-        });
-        row.child(flagsBox);
-        return row;
     }
 
     private FlowLayout contextField(SearchFilter current) {

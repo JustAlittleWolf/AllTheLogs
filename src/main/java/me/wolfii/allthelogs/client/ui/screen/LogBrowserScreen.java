@@ -49,6 +49,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     private ButtonComponent infoButton;
     private FilterOverlay filters;
     private StackLayout overlays;
+    private DropdownComponent messageMenu;
 
     public LogBrowserScreen() {
         this(null);
@@ -71,7 +72,8 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     protected void build(StackLayout root) {
         this.overlays = root;
         FlowLayout chrome = UIContainers.horizontalFlow(Sizing.fill(), Sizing.fill());
-        chrome.gap(6);
+        chrome.gap(2);
+        chrome.padding(Insets.none());
 
         FlowLayout content = UIContainers.verticalFlow(Sizing.expand(), Sizing.fill());
         content.gap(6);
@@ -84,6 +86,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         list = new MessageTimeline();
         list.setMessageFontSize(AllTheLogsConfig.get().messageFontSize());
         list.onContextMenu(this::openMessageMenu);
+        list.onDismissContextMenu(this::closeMessageMenu);
         FlowLayout toolbar = buildToolbar();
         queries.attach(list, infoButton);
         content.child(list.verticalSizing(Sizing.expand()));
@@ -221,7 +224,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
             regexPrefix.text(regex ? Component.literal("/") : Component.empty());
         }
         if (regexSuffix != null) {
-            regexSuffix.text(regex ? Component.literal("/" + queries.filter().regexFlags()) : Component.empty());
+            regexSuffix.text(regex ? Component.literal("/") : Component.empty());
         }
     }
 
@@ -230,9 +233,18 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         search.setTextColor(queries.filter().invalidRegex() ? Colors.SEARCH_INVALID : Colors.SEARCH_TEXT);
     }
 
+    private void closeMessageMenu() {
+        if (messageMenu == null || overlays == null) return;
+        if (overlays.children().contains(messageMenu)) {
+            overlays.removeChild(messageMenu);
+        }
+        messageMenu = null;
+    }
+
     private void openMessageMenu(DisplayRow row, MessageSelection selection, List<DisplayRow> rows,
                                  double screenX, double screenY) {
-        DropdownComponent.openContextMenu(this, overlays, StackLayout::child, screenX, screenY, menu -> {
+        closeMessageMenu();
+        messageMenu = DropdownComponent.openContextMenu(this, overlays, StackLayout::child, screenX, screenY, menu -> {
             if (!selection.isEmpty()) {
                 menu.button(Component.translatable("allthelogs.menu.copy_selection"), ignored ->
                     Minecraft.getInstance().keyboardHandler.setClipboard(selection.copy(rows)));

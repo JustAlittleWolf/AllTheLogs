@@ -6,7 +6,6 @@
   "allthelogs.filter": "Filter",
   "allthelogs.filter.regex": "Use Regex",
   "allthelogs.filter.case_sensitive": "Case sensitive",
-  "allthelogs.filter.regex_flags": "Regex flags",
   "allthelogs.filter.context": "Lines of context",
   "allthelogs.filter.version": "Minecraft version",
   "allthelogs.filter.version.all": "ALL",
