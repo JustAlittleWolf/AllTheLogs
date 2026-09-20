@@ -163,7 +163,7 @@ final class LogBrowserQueries {
      * <p>
      * An oldest-first search still fetches its newest page first, then reverses it, because that is the page
      * the user sees: the list starts scrolled to the bottom. If the list already has a location, clearing the
-     * query or searching again keeps that place: a new term jumps to the closest match.
+     * query or searching again keeps that place: a new term jumps to the closest match in either direction.
      */
     void reload() {
         if (list == null) return;
@@ -350,39 +350,81 @@ final class LogBrowserQueries {
             }
             return;
         }
+        if (replaceOnJumpFailure && (jump == null || jump.skip() < 0)) {
+            jumpToClosest(target, preview);
+            return;
+        }
         ChatQuery requested = jumpQuery(jump, target, preview);
         int gen = generation.incrementAndGet();
         if (!preview) list.setLoading(true);
         onClient(AllTheLogsClient.worker().findEntries(requested), (entries, error) -> {
-            if (preview && list != null) list.scrubQueryFinished();
-            if (gen != generation.get()) return;
-            List<DisplayRow> rows = error == null ? displaySearchRows(entries) : List.of();
-            if (error != null || rows.isEmpty()) {
-                if (error != null) logQueryFailure("AllTheLogs jump query failed", error);
-                list.setLoading(false);
-                if (replaceOnJumpFailure && !preview) {
-                    replaceOnJumpFailure = false;
-                    list.reset(List.of(), false, false);
-                    if (error != null) {
-                        list.showOverlay(Component.translatable("allthelogs.status.error"));
-                    }
-                    takeSnapshot();
-                } else if (!preview) {
-                    list.finishScrub();
-                }
-                return;
-            }
-            boolean full = PageBounds.isFull(rows, requested.limit());
-            double progress = jump == null ? Double.NaN : jump.progress();
-            long skipped = jump == null ? -1 : jump.skip();
-            boolean hasBefore = PageBounds.hasBefore(filter.sort(), rows, matchSummary, skipped);
-            boolean hasAfter = PageBounds.hasAfter(filter.sort(), full, rows, matchSummary);
-            if (PageBounds.needsMoreToFill(rows, filter.contextLines(), list.viewHeight(), hasBefore)) {
-                fillJumpViewport(gen, target, preview, rows, hasAfter, requested.limit(), progress);
-                return;
-            }
-            applyJump(target, preview, rows, hasBefore, hasAfter, progress);
+            applyJumpEntries(jump, target, preview, gen, requested, entries, error);
         });
+    }
+
+    /**
+     * Fetches matches on both sides of {@code target} and lands on whichever timestamp is closer.
+     * A one-sided exclusive offset from the latest line would otherwise miss every earlier hit.
+     */
+    private void jumpToClosest(LocalDateTime target, boolean preview) {
+        SearchFilter page = filter.withoutOffset();
+        ChatQuery later = previewLimit(page.withSort(ChatQuery.Sort.ASCENDING)
+            .withOffset(PageBounds.exclusiveOffset(target, ChatQuery.Sort.ASCENDING)).toQuery(), preview);
+        ChatQuery earlier = previewLimit(page.withSort(ChatQuery.Sort.DESCENDING)
+            .withOffset(PageBounds.exclusiveOffset(target, ChatQuery.Sort.DESCENDING)).toQuery(), preview);
+        int gen = generation.incrementAndGet();
+        if (!preview) list.setLoading(true);
+        CompletableFuture<List<ChatEntry>> laterFuture = AllTheLogsClient.worker().findEntries(later);
+        CompletableFuture<List<ChatEntry>> earlierFuture = AllTheLogsClient.worker().findEntries(earlier);
+        onClient(laterFuture, (laterEntries, laterError) ->
+            onClient(earlierFuture, (earlierEntries, earlierError) -> {
+                if (preview && list != null) list.scrubQueryFinished();
+                if (gen != generation.get()) return;
+                List<ChatEntry> laterRows = laterError == null ? laterEntries : List.of();
+                List<ChatEntry> earlierRows = earlierError == null ? earlierEntries : List.of();
+                boolean useLater = PageBounds.preferLater(target,
+                    firstMatchTime(laterRows), firstMatchTime(earlierRows));
+                List<ChatEntry> chosen = useLater ? laterRows : earlierRows;
+                ChatQuery requested = useLater ? later : earlier;
+                Throwable error = chosen.isEmpty()
+                    ? (laterError != null ? laterError : earlierError)
+                    : null;
+                applyJumpEntries(null, target, preview, gen, requested,
+                    orderedForFilter(chosen, useLater ? ChatQuery.Sort.ASCENDING : ChatQuery.Sort.DESCENDING),
+                    error);
+            }));
+    }
+
+    private void applyJumpEntries(ScrubJump jump, LocalDateTime target, boolean preview, int gen,
+                                  ChatQuery requested, List<ChatEntry> entries, Throwable error) {
+        if (preview && list != null && jump != null) list.scrubQueryFinished();
+        if (gen != generation.get()) return;
+        List<DisplayRow> rows = error == null && entries != null ? displaySearchRows(entries) : List.of();
+        if (error != null || rows.isEmpty()) {
+            if (error != null) logQueryFailure("AllTheLogs jump query failed", error);
+            list.setLoading(false);
+            if (replaceOnJumpFailure && !preview) {
+                replaceOnJumpFailure = false;
+                list.reset(List.of(), false, false);
+                if (error != null) {
+                    list.showOverlay(Component.translatable("allthelogs.status.error"));
+                }
+                takeSnapshot();
+            } else if (!preview) {
+                list.finishScrub();
+            }
+            return;
+        }
+        boolean full = PageBounds.isFull(rows, requested.limit());
+        double progress = jump == null ? Double.NaN : jump.progress();
+        long skipped = jump == null ? -1 : jump.skip();
+        boolean hasBefore = PageBounds.hasBefore(filter.sort(), rows, matchSummary, skipped);
+        boolean hasAfter = PageBounds.hasAfter(filter.sort(), full, rows, matchSummary);
+        if (PageBounds.needsMoreToFill(rows, filter.contextLines(), list.viewHeight(), hasBefore)) {
+            fillJumpViewport(gen, target, preview, rows, hasAfter, requested.limit(), progress);
+            return;
+        }
+        applyJump(target, preview, rows, hasBefore, hasAfter, progress);
     }
 
     private ChatQuery jumpQuery(ScrubJump jump, LocalDateTime target, boolean preview) {
@@ -390,11 +432,31 @@ final class LogBrowserQueries {
         ChatQuery query = jump != null && jump.skip() >= 0
             ? page.toQuery().withSkip(jump.skip())
             : page.withOffset(PageBounds.exclusiveOffset(target, filter.sort())).toQuery();
+        return previewLimit(query, preview);
+    }
+
+    private ChatQuery previewLimit(ChatQuery query, boolean preview) {
         if (!preview) return query;
         long cap = filter.limit() < 0
             ? MessageTimeline.SCRUB_PAGE_SIZE
             : Math.min(MessageTimeline.SCRUB_PAGE_SIZE, filter.limit());
         return query.withLimit(Math.max(8, cap));
+    }
+
+    private LocalDateTime firstMatchTime(List<ChatEntry> entries) {
+        if (entries == null || entries.isEmpty()) return null;
+        var predicate = filter.messagePredicate();
+        for (ChatEntry entry : entries) {
+            if (predicate.test(entry.message())) return entry.timestamp();
+        }
+        return entries.getFirst().timestamp();
+    }
+
+    private List<ChatEntry> orderedForFilter(List<ChatEntry> entries, ChatQuery.Sort fetched) {
+        if (entries == null || entries.isEmpty() || fetched == filter.sort()) return entries;
+        List<ChatEntry> reversed = new java.util.ArrayList<>(entries);
+        java.util.Collections.reverse(reversed);
+        return reversed;
     }
 
     /**
