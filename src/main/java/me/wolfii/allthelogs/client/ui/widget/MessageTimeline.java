@@ -82,6 +82,8 @@ public final class MessageTimeline extends BaseUIComponent {
     };
     private ContextMenuHandler onContextMenu = (row, selection, rows, screenX, screenY) -> {
     };
+    private Runnable onDismissContextMenu = () -> {
+    };
     private Runnable onScrubBegin = () -> {
     };
 
@@ -121,6 +123,10 @@ public final class MessageTimeline extends BaseUIComponent {
 
     public void onContextMenu(ContextMenuHandler onContextMenu) {
         this.onContextMenu = onContextMenu;
+    }
+
+    public void onDismissContextMenu(Runnable onDismissContextMenu) {
+        this.onDismissContextMenu = onDismissContextMenu;
     }
 
     public void onScrubBegin(Runnable onScrubBegin) {
@@ -333,6 +339,9 @@ public final class MessageTimeline extends BaseUIComponent {
     public boolean onMouseDown(MouseButtonEvent click, boolean doubled) {
         if (focusHandler() != null) {
             focusHandler().focus(this, UIComponent.FocusSource.MOUSE_CLICK);
+        }
+        if (dismissesContextMenuOnMouseDown(click.button())) {
+            onDismissContextMenu.run();
         }
         if (overTimeline(click.x())) {
             beginScrub(click.y());
@@ -570,6 +579,10 @@ public final class MessageTimeline extends BaseUIComponent {
      */
     static boolean clearsSelectionOnMouseDown(int button) {
         return false;
+    }
+
+    static boolean dismissesContextMenuOnMouseDown(int button) {
+        return button != GLFW.GLFW_MOUSE_BUTTON_RIGHT;
     }
 
     /**

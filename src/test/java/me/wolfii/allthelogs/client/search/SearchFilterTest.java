@@ -4,7 +4,6 @@ import me.wolfii.allthelogs.api.ChatQuery;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
-import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -125,32 +124,6 @@ class SearchFilterTest {
         assertFalse(SearchFilter.defaults().withVersion("ALL").isNarrowed());
         assertTrue(SearchFilter.defaults().withServerOrWorld("hypixel.net").isNarrowed());
         assertTrue(SearchFilter.defaults().withServerOrWorld("ALL").isNarrowed());
-    }
-
-    @Test
-    void regexFlagsStayTiedToCaseSensitiveAndRejectInvalidLetters() {
-        SearchFilter defaults = SearchFilter.defaults();
-        assertEquals("i", defaults.regexFlags());
-        assertFalse(defaults.caseSensitive());
-        SearchFilter sensitive = defaults.withCaseSensitive(true);
-        assertEquals("", sensitive.regexFlags());
-        assertTrue(sensitive.caseSensitive());
-        SearchFilter flagged = defaults.withRegexFlags("ms");
-        assertTrue(flagged.caseSensitive());
-        assertEquals("ms", flagged.regexFlags());
-        SearchFilter ignore = flagged.withRegexFlags("msi");
-        assertFalse(ignore.caseSensitive());
-        assertEquals("(?ims)hi", SearchFilter.defaults().withText("hi").withRegex(true).withRegexFlags("msi")
-            .toQuery().regex());
-        assertEquals("hi", SearchFilter.defaults().withText("hi").withRegex(true).withCaseSensitive(true)
-            .toQuery().regex());
-        assertFalse(RegexFlags.isLegal("g"));
-        assertEquals("im", RegexFlags.sanitize("imm"));
-        assertEquals("i", RegexFlags.sanitize("iUx"));
-        Pattern highlighted = SearchFilter.compiledRegex("a.b", "s").orElseThrow();
-        assertEquals("(?s)a.b", highlighted.pattern());
-        assertTrue(highlighted.matcher("a\nb").find());
-        assertEquals("(?s)a.b", SearchFilter.regexPattern("a.b", "s"));
     }
 
     @Test

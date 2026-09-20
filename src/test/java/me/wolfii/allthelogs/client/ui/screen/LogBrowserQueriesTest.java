@@ -125,4 +125,9 @@ class LogBrowserQueriesTest {
         assertFalse(LogBrowserQueries.keepViewport(LocalDateTime.of(2026, 8, 27, 10, 0), false));
         assertTrue(LogBrowserQueries.keepViewport(LocalDateTime.of(2026, 8, 27, 10, 0), true));
     }
+
+    @Test
+    void filterSidebarIsAboutSixtyPercentOfThePreviousWidth() {
+        assertEquals(144, FilterOverlay.PANEL_WIDTH);
+    }
 }

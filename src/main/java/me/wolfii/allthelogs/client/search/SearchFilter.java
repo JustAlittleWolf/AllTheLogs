@@ -22,7 +22,6 @@ import java.util.regex.PatternSyntaxException;
  *
  * @param text         the search text, empty for no text filter
  * @param regex        whether {@code text} is a regular expression rather than a literal substring
- * @param regexFlags   DuckDB RE2 letters {@code ims}; {@code i} is tied to {@code caseSensitive}
  * @param limit        matches per page; negative means no cap
  * @param offset       exclusive timestamp cursor the current page starts after, or {@code null} for the first page
  * @param version      Minecraft version to restrict to, or {@code null} for all of them
@@ -32,7 +31,6 @@ public record SearchFilter(
     String text,
     boolean regex,
     boolean caseSensitive,
-    String regexFlags,
     int contextLines,
     long limit,
     ChatQuery.Sort sort,
@@ -53,8 +51,6 @@ public record SearchFilter(
     public SearchFilter {
         Objects.requireNonNull(text, "text");
         Objects.requireNonNull(sort, "sort");
-        regexFlags = regexFlags == null ? (caseSensitive ? "" : "i") : RegexFlags.sanitize(regexFlags);
-        caseSensitive = !RegexFlags.ignoreCase(regexFlags);
         if (contextLines < 0) throw new IllegalArgumentException("contextLines must not be negative");
         if (contextLines > MAX_CONTEXT_LINES) {
             throw new IllegalArgumentException("contextLines must be at most " + MAX_CONTEXT_LINES);
@@ -69,7 +65,7 @@ public record SearchFilter(
     }
 
     public static SearchFilter defaults() {
-        return new SearchFilter("", false, false, "i", DEFAULT_CONTEXT_LINES, DEFAULT_LIMIT, ChatQuery.Sort.ASCENDING,
+        return new SearchFilter("", false, false, DEFAULT_CONTEXT_LINES, DEFAULT_LIMIT, ChatQuery.Sort.ASCENDING,
             null, null, null, null, null);
     }
 
@@ -77,36 +73,20 @@ public record SearchFilter(
      * Compiles a search regex for Java-side matching, or empty when the pattern is malformed.
      */
     public static Optional<Pattern> compiledRegex(String regex, boolean caseSensitive) {
-        return compiledRegex(regex, caseSensitive ? "" : "i");
-    }
-
-    /**
-     * Compiles the same pattern string DuckDB receives, so highlights match store hits.
-     */
-    public static Optional<Pattern> compiledRegex(String regex, String flags) {
         try {
-            return Optional.of(Pattern.compile(regexPattern(regex, flags), RegexFlags.highlightBits(flags)));
+            int flags = caseSensitive ? 0 : Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE;
+            return Optional.of(Pattern.compile(regex, flags));
         } catch (PatternSyntaxException e) {
             return Optional.empty();
         }
     }
 
     /**
-     * Pattern passed to DuckDB {@code regexp_matches}: the user text plus an inline {@code (?ims)} group.
+     * The same regex for DuckDB's RE2, which has no case-insensitive flag outside the pattern itself.
      */
     static String regexPattern(String regex, boolean caseSensitive) {
-        return regexPattern(regex, caseSensitive ? "" : "i");
-    }
-
-    static String regexPattern(String regex, String flags) {
-        String inline = RegexFlags.re2Inline(flags);
-        if (inline.isEmpty()) return regex;
-        if (hasInlineCaseFlag(regex)) {
-            String rest = inline.replace("i", "");
-            if (rest.isEmpty()) return regex;
-            return "(?" + rest + ")" + regex;
-        }
-        return "(?" + inline + ")" + regex;
+        if (caseSensitive || hasInlineCaseFlag(regex)) return regex;
+        return "(?i)" + regex;
     }
 
     private static boolean hasInlineCaseFlag(String regex) {
@@ -122,17 +102,7 @@ public record SearchFilter(
     }
 
     public SearchFilter withCaseSensitive(boolean caseSensitive) {
-        return with(draft -> {
-            draft.caseSensitive = caseSensitive;
-            draft.regexFlags = RegexFlags.withIgnoreCase(draft.regexFlags, !caseSensitive);
-        });
-    }
-
-    public SearchFilter withRegexFlags(String regexFlags) {
-        return with(draft -> {
-            draft.regexFlags = RegexFlags.sanitize(regexFlags);
-            draft.caseSensitive = !RegexFlags.ignoreCase(draft.regexFlags);
-        });
+        return with(draft -> draft.caseSensitive = caseSensitive);
     }
 
     /**
@@ -196,7 +166,7 @@ public record SearchFilter(
      * (lookarounds, backreferences, possessive quantifiers). Incomplete patterns while typing count too.
      */
     public boolean invalidRegex() {
-        return regex && hasText() && (compiledRegex(text, regexFlags).isEmpty()
+        return regex && hasText() && (compiledRegex(text, caseSensitive).isEmpty()
             || Re2Regex.unsupportedConstruct(text) != null);
     }
 
@@ -226,9 +196,9 @@ public record SearchFilter(
     }
 
     /**
-     * Store query for this filter. Empty text means every entry; regex uses DuckDB RE2 with the same
-     * inline {@code (?ims)} group that highlighting compiles. Lookarounds and other Java-only constructs
-     * are rejected by {@link #canQuery()} so they never reach DuckDB.
+     * Store query for this filter. Empty text means every entry; regex uses DuckDB RE2 with an inline
+     * {@code (?i)} flag when the search is case insensitive. Lookarounds and other Java-only constructs are
+     * rejected by {@link #canQuery()} so they never reach DuckDB.
      */
     public ChatQuery toQuery() {
         return toStoreQuery(queryContextLines(), limit, offset);
@@ -253,7 +223,7 @@ public record SearchFilter(
         if (hasVersion()) query = query.withVersion(version);
         if (hasServerOrWorld()) query = query.withServerOrWorld(serverOrWorld);
         if (!hasText()) return query;
-        if (regex) return query.withRegex(regexPattern(text, regexFlags));
+        if (regex) return query.withRegex(regexPattern(text, caseSensitive));
         if (caseSensitive) return query.withSubstringCaseSensitive(text);
         return query.withSubstring(text);
     }
@@ -264,7 +234,7 @@ public record SearchFilter(
     public Predicate<String> messagePredicate() {
         if (!hasText()) return message -> true;
         if (regex) {
-            return compiledRegex(text, regexFlags)
+            return compiledRegex(text, caseSensitive)
                 .map(pattern -> (Predicate<String>) message -> pattern.matcher(message).find())
                 .orElse(message -> false);
         }
@@ -293,7 +263,6 @@ public record SearchFilter(
         private String text;
         private boolean regex;
         private boolean caseSensitive;
-        private String regexFlags;
         private int contextLines;
         private long limit;
         private ChatQuery.Sort sort;
@@ -307,7 +276,6 @@ public record SearchFilter(
             this.text = filter.text;
             this.regex = filter.regex;
             this.caseSensitive = filter.caseSensitive;
-            this.regexFlags = filter.regexFlags;
             this.contextLines = filter.contextLines;
             this.limit = filter.limit;
             this.sort = filter.sort;
@@ -319,7 +287,7 @@ public record SearchFilter(
         }
 
         private SearchFilter build() {
-            return new SearchFilter(text, regex, caseSensitive, regexFlags, contextLines, limit, sort, startingAt,
+            return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt,
                 upUntil, offset, version, serverOrWorld);
         }
     }
