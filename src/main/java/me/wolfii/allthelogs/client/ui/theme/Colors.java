@@ -15,9 +15,14 @@ public final class Colors {
      */
     public static final int CONTEXT_TIMESTAMP = 0xFF7E7E7E;
     /**
-     * Vertical bar that marks a context line between the timestamp and the message.
+     * Message text on context lines, a bit darker than {@link #CONTEXT_TIMESTAMP}.
      */
-    public static final int CONTEXT_BAR = 0xFF9A9A9A;
+    public static final int CONTEXT_TEXT = 0xFF686868;
+    /**
+     * Vertical bar that marks a context line between the timestamp and the message. Darker than
+     * {@link #CONTEXT_TIMESTAMP}.
+     */
+    public static final int CONTEXT_BAR = 0xFF5A5A5A;
     /**
      * Width of {@link #CONTEXT_BAR} in pixels.
      */
