@@ -5,7 +5,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import java.nio.file.Path;
 
 /**
- * Instance-relative paths: the database lives in {@code .allthelogs}.
+ * Instance-relative paths: the database and the DuckDB JDBC native-jar cache live in {@code .allthelogs}.
  */
 public final class AllTheLogsPaths {
     public static final String DATABASE_DIRECTORY = ".allthelogs";

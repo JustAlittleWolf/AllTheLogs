@@ -85,6 +85,9 @@ public final class DuckDbRuntime {
     }
 
     private static DuckDbJdbcInstaller installer() {
-        return new DuckDbJdbcInstaller(DuckDbJdbc.cacheDirectory(), DuckDbJdbc.MAVEN_REPO, new FabricClassPath());
+        return new DuckDbJdbcInstaller(
+            DuckDbJdbc.cacheDirectory(AllTheLogsPaths.gameDirectory()),
+            DuckDbJdbc.MAVEN_REPO,
+            new FabricClassPath());
     }
 }

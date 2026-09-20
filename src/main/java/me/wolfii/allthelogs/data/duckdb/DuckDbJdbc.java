@@ -8,7 +8,7 @@ import java.util.Properties;
 
 /**
  * Maven coordinates and cache layout for the architecture-specific DuckDB JDBC native jar.
- * Cached under {@code ~/.duckdb/jdbc/<version>} so any app on the machine can reuse it.
+ * Cached under {@code <gameDir>/.allthelogs/duckdb/jdbc/<version>}, next to the log database.
  */
 public final class DuckDbJdbc {
     public static final String VERSION = readVersion();
@@ -19,25 +19,8 @@ public final class DuckDbJdbc {
     private DuckDbJdbc() {
     }
 
-    public static Path cacheDirectory() {
-        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
-        Path baseCacheDir;
-
-        if (os.contains("win")) {
-            String localAppData = System.getenv("LOCALAPPDATA");
-            baseCacheDir = localAppData != null && !localAppData.isBlank()
-                ? Path.of(localAppData)
-                : Path.of(System.getProperty("user.home"), "AppData", "Local");
-        } else if (os.contains("mac")) {
-            baseCacheDir = Path.of(System.getProperty("user.home"), "Library", "Caches");
-        } else {
-            String xdgCache = System.getenv("XDG_CACHE_HOME");
-            baseCacheDir = xdgCache != null && !xdgCache.isBlank()
-                ? Path.of(xdgCache)
-                : Path.of(System.getProperty("user.home"), ".cache");
-        }
-
-        return baseCacheDir.resolve("duckdb").resolve("jdbc").resolve(VERSION);
+    public static Path cacheDirectory(Path gameDirectory) {
+        return gameDirectory.resolve(".allthelogs").resolve("duckdb").resolve("jdbc").resolve(VERSION);
     }
 
     public static String classifier() {
