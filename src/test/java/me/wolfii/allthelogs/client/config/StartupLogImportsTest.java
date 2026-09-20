@@ -34,6 +34,16 @@ class StartupLogImportsTest {
     }
 
     @Test
+    void treatsALogsFolderAsTheCurrentLogsDirectory() throws Exception {
+        Path logs = Files.createDirectories(temp.resolve("other-instance").resolve("logs"));
+        Files.createFile(logs.resolve("2026-01-01-1.log"));
+        Optional<StartupLogImports.Target> target = StartupLogImports.targetFor(logs);
+        assertTrue(target.isPresent());
+        assertEquals(logs, target.get().root());
+        assertEquals(ImportOptions.currentLogsDirectory(), target.get().options());
+    }
+
+    @Test
     void skipsMissingDirectories() {
         assertTrue(StartupLogImports.targetFor(temp.resolve("gone")).isEmpty());
         assertTrue(StartupLogImports.targetFor(null).isEmpty());
