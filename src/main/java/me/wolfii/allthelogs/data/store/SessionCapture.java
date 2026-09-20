@@ -152,6 +152,19 @@ public final class SessionCapture {
         currentPlace = serverOrWorld;
     }
 
+    /**
+     * Stamps the player and server/world read from the Minecraft client at live-capture time.
+     * A blank or null username keeps the last known player; {@code serverOrWorld} is always applied,
+     * including {@code null} after leave.
+     */
+    public void stampLiveCapture(String minecraftUser, String serverOrWorld) {
+        requireActiveSession();
+        if (minecraftUser != null && !minecraftUser.isBlank()) {
+            currentUser = minecraftUser;
+        }
+        currentPlace = serverOrWorld == null || serverOrWorld.isBlank() ? null : serverOrWorld;
+    }
+
     private void requireActiveSession() {
         if (sessionFileId < 0) {
             throw new LogDataException("no client session is active; call startSession first");

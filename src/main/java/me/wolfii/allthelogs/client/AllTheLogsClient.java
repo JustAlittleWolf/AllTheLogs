@@ -36,13 +36,16 @@ public final class AllTheLogsClient implements ClientModInitializer {
 
     /**
      * Stores a line that Minecraft is about to write as {@code [CHAT]} in {@code latest.log}.
+     * Reads the current player and server/world from the client on this call so each live line
+     * is stamped with the place in effect then, without polling those values every tick.
      * Called from {@code ChatComponentMixin}; HUD-only chat that skips the logger is never passed in.
      */
     public static void captureLoggedChat(GuiMessage message) {
         if (worker == null || message == null) return;
         Component content = message.content();
         if (content == null) return;
-        worker.importSessionMessage(content);
+        Minecraft client = Minecraft.getInstance();
+        worker.importSessionMessage(content, currentUsername(client), currentServerOrWorld(client));
     }
 
     private static String minecraftVersion() {
@@ -52,12 +55,20 @@ public final class AllTheLogsClient implements ClientModInitializer {
     }
 
     private static String currentUsername() {
-        Minecraft client = Minecraft.getInstance();
+        return currentUsername(Minecraft.getInstance());
+    }
+
+    private static String currentUsername(Minecraft client) {
         if (client == null) return null;
         var user = client.getUser();
         if (user == null) return null;
         String name = user.getName();
         return name == null || name.isBlank() ? null : name;
+    }
+
+    private static String currentServerOrWorld(Minecraft client) {
+        if (client == null) return null;
+        return ServerId.current(client);
     }
 
     /**
@@ -88,7 +99,6 @@ public final class AllTheLogsClient implements ClientModInitializer {
 
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
             AllTheLogsCommands.register(dispatcher));
-        ServerPlaceTracker.register();
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             long now = System.currentTimeMillis();

@@ -1276,6 +1276,44 @@ class LogStoreTest {
     }
 
     @Test
+    void liveImportStampsThePlayerAndPlaceFromTheClientOnEachMessage() {
+        LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+        store.startSession("26.2", startedAt, "session-start-user");
+
+        assertTrue(store.importSessionMessage("on hypixel", null, startedAt.plusSeconds(1),
+            "JustAlittleWolf", "hypixel.net"));
+        assertTrue(store.importSessionMessage("on gommehd", null, startedAt.plusSeconds(2),
+            "JustAlittleWolf", "GommeHD.net"));
+        assertTrue(store.importSessionMessage("after leave", null, startedAt.plusSeconds(3),
+            "JustAlittleWolf", null));
+        assertTrue(store.importSessionMessage("keeps last user", startedAt.plusSeconds(4)));
+
+        ChatEntry hypixel = store.findEntries(ChatQuery.all().withSubstring("on hypixel")).getFirst();
+        assertEquals("JustAlittleWolf", hypixel.minecraftUser());
+        assertEquals("hypixel.net", hypixel.serverOrWorld());
+        ChatEntry gommehd = store.findEntries(ChatQuery.all().withSubstring("on gommehd")).getFirst();
+        assertEquals("JustAlittleWolf", gommehd.minecraftUser());
+        assertEquals("GommeHD.net", gommehd.serverOrWorld());
+        ChatEntry afterLeave = store.findEntries(ChatQuery.all().withSubstring("after leave")).getFirst();
+        assertEquals("JustAlittleWolf", afterLeave.minecraftUser());
+        assertNull(afterLeave.serverOrWorld());
+        ChatEntry keepsUser = store.findEntries(ChatQuery.all().withSubstring("keeps last user")).getFirst();
+        assertEquals("JustAlittleWolf", keepsUser.minecraftUser());
+        assertNull(keepsUser.serverOrWorld());
+    }
+
+    @Test
+    void liveImportBlankUsernameKeepsThePreviousPlayer() {
+        LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+        store.startSession("26.2", startedAt, "JustAlittleWolf");
+        assertTrue(store.importSessionMessage("still me", null, startedAt.plusSeconds(1), "  ", "localhost"));
+
+        ChatEntry entry = store.findEntries(ChatQuery.all().withSubstring("still me")).getFirst();
+        assertEquals("JustAlittleWolf", entry.minecraftUser());
+        assertEquals("localhost", entry.serverOrWorld());
+    }
+
+    @Test
     void updateSessionPlaceRequiresAnActiveSession() {
         assertThrows(LogDataException.class, () -> store.updateSessionPlace("unicacity.eu"));
     }

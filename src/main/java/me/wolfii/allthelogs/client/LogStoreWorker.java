@@ -63,15 +63,18 @@ public final class LogStoreWorker implements AutoCloseable {
     }
 
     /**
-     * Queues a live chat line. Returns immediately; the insert runs on the worker.
+     * Queues a live chat line stamped with the player and server/world read on the client thread.
+     * Returns immediately; the insert runs on the worker.
      */
-    public void importSessionMessage(Component message) {
+    public void importSessionMessage(Component message, String minecraftUser, String serverOrWorld) {
         FormattingCodes.Parsed flat = ComponentFormatting.flatten(message);
         String text = flat.text();
         long[] formatting = flat.formatting() == null ? null : flat.formatting().clone();
+        String user = minecraftUser == null || minecraftUser.isBlank() ? null : minecraftUser;
+        String place = serverOrWorld == null || serverOrWorld.isBlank() ? null : serverOrWorld;
         executor.execute(() -> {
             if (store == null) return;
-            store.importSessionMessage(text, formatting);
+            store.importSessionMessage(text, formatting, user, place);
         });
     }
 
@@ -81,21 +84,6 @@ public final class LogStoreWorker implements AutoCloseable {
      */
     public void touchSessionEndTime() {
         executor.execute(this::touchSessionEndTimeNow);
-    }
-
-    /**
-     * Queues an update of the live session's server or world. No-op when the store is not open
-     * or no session is active.
-     */
-    public void updateSessionPlace(String serverPlace) {
-        String place = serverPlace == null || serverPlace.isBlank() ? null : serverPlace;
-        executor.execute(() -> {
-            if (store == null) return;
-            try {
-                store.updateSessionPlace(place);
-            } catch (LogDataException ignored) {
-            }
-        });
     }
 
     public boolean isOpen() {
