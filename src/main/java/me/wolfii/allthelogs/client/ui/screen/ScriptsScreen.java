@@ -1,8 +1,10 @@
 package me.wolfii.allthelogs.client.ui.screen;
 
 import io.wispforest.owo.ui.base.BaseOwoScreen;
+import io.wispforest.owo.ui.component.BoxComponent;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.LabelComponent;
+import io.wispforest.owo.ui.component.TextBoxComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.ScrollContainer;
@@ -17,6 +19,7 @@ import io.wispforest.owo.ui.core.VerticalAlignment;
 import me.wolfii.allthelogs.api.AllTheLogs;
 import me.wolfii.allthelogs.client.AllTheLogsClient;
 import me.wolfii.allthelogs.client.AllTheLogsPaths;
+import me.wolfii.allthelogs.client.script.GraalJs;
 import me.wolfii.allthelogs.client.script.GraalJsInstaller.Progress;
 import me.wolfii.allthelogs.client.script.ScriptFiles;
 import me.wolfii.allthelogs.client.script.ScriptFolders;
@@ -39,7 +42,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Lists {@code .ts}/{@code .js} scripts, opens the scripts folder, and runs the selected file.
+ * Lists {@code .ts}/{@code .js} scripts after the GraalJS engine is present. First open asks before
+ * downloading, then shows a single progress bar until the editor is ready.
  */
 public final class ScriptsScreen extends BaseOwoScreen<FlowLayout> {
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(runnable -> {
@@ -50,14 +54,20 @@ public final class ScriptsScreen extends BaseOwoScreen<FlowLayout> {
     private static final int RETRY_THROTTLE_MS = 1000;
 
     private final Screen parent;
+    private FlowLayout card;
     private LabelComponent engineStatus;
     private LabelComponent console;
     private LabelComponent outputPath;
     private FlowLayout scriptList;
+    private TextBoxComponent search;
+    private BoxComponent progressFill;
     private ButtonComponent run;
+    private ButtonComponent download;
     private @Nullable Path selected;
+    private String query = "";
     private long retryLockoutUntilMs;
     private boolean running;
+    private boolean showingEditor;
 
     public ScriptsScreen(@Nullable Screen parent) {
         super(Component.translatable("allthelogs.screen.scripts"));
@@ -77,59 +87,29 @@ public final class ScriptsScreen extends BaseOwoScreen<FlowLayout> {
             .horizontalAlignment(HorizontalAlignment.LEFT)
             .verticalAlignment(VerticalAlignment.TOP);
 
-        FlowLayout card = UIContainers.verticalFlow(Sizing.fill(), Sizing.fill());
+        card = UIContainers.verticalFlow(Sizing.fill(), Sizing.fill());
         card.gap(8)
             .padding(Insets.of(12))
             .surface(PanelSurfaces.card());
-
-        engineStatus = UIComponents.label(engineStatusText());
-        engineStatus.color(Color.ofRgb(0xA0A0A0));
-        engineStatus.sizing(Sizing.fill(100), Sizing.content());
-        card.child(engineStatus);
-
-        scriptList = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
-        scriptList.gap(4);
-        ScrollContainer<FlowLayout> listScroll = UIContainers.verticalScroll(
-            Sizing.fill(), Sizing.fixed(90), scriptList);
-        listScroll.scrollbar(OverflowScrollbar.vanillaFlat());
-        card.child(listScroll);
-
-        FlowLayout actions = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
-        actions.gap(8).verticalAlignment(VerticalAlignment.CENTER);
-        actions.child(UIComponents.button(Component.translatable("allthelogs.scripts.open_folder"),
-            button -> ScriptFolders.open(AllTheLogsPaths.scripts())));
-        run = UIComponents.button(Component.translatable("allthelogs.scripts.run"), button -> primaryAction());
-        actions.child(run);
-        actions.child(UIContainers.horizontalFlow(Sizing.expand(), Sizing.content()));
-        actions.child(UIComponents.button(Component.translatable("allthelogs.done"),
-            button -> Minecraft.getInstance().gui.setScreen(parent)));
-        card.child(actions);
-
-        outputPath = UIComponents.label(Component.empty());
-        outputPath.color(Color.ofRgb(0xA0A0A0));
-        outputPath.sizing(Sizing.fill(100), Sizing.content());
-        card.child(outputPath);
-
-        console = UIComponents.label(Component.empty());
-        console.color(Color.ofRgb(0xCCCCCC));
-        console.sizing(Sizing.fill(100), Sizing.content());
-        ScrollContainer<LabelComponent> consoleScroll = UIContainers.verticalScroll(
-            Sizing.fill(), Sizing.expand(), console);
-        consoleScroll.scrollbar(OverflowScrollbar.vanillaFlat());
-        card.child(consoleScroll);
-
         root.child(card);
-        reloadScripts();
-        refresh();
+        showAppropriateCard();
     }
 
     @Override
     public void tick() {
         super.tick();
+        if (!showingEditor && ScriptRuntime.isReady()) {
+            showAppropriateCard();
+            return;
+        }
         refresh();
     }
 
     public void refresh() {
+        if (!showingEditor) {
+            refreshSetup();
+            return;
+        }
         if (engineStatus != null) {
             engineStatus.text(engineStatusText());
         }
@@ -148,6 +128,146 @@ public final class ScriptsScreen extends BaseOwoScreen<FlowLayout> {
     @Override
     public void onClose() {
         Minecraft.getInstance().gui.setScreen(parent);
+    }
+
+    private void showAppropriateCard() {
+        if (ScriptRuntime.isReady() || GraalJs.enginePresent()) {
+            if (GraalJs.enginePresent() && !ScriptRuntime.isReady()) {
+                ScriptRuntime.ensure();
+            }
+            showEditor();
+            return;
+        }
+        Progress progress = ScriptRuntime.progress();
+        if (progress.stage() == Progress.Stage.IDLE) {
+            showDownloadPrompt();
+        } else {
+            showDownloadProgress();
+        }
+    }
+
+    private void showDownloadPrompt() {
+        showingEditor = false;
+        card.clearChildren();
+        card.horizontalAlignment(HorizontalAlignment.LEFT);
+        card.child(UIComponents.label(Component.translatable("allthelogs.scripts.download.title")));
+        LabelComponent body = UIComponents.label(Component.translatable("allthelogs.scripts.download.body"));
+        body.color(Color.ofRgb(0xA0A0A0));
+        body.sizing(Sizing.fill(100), Sizing.content());
+        card.child(body);
+        FlowLayout actions = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
+        actions.gap(8).verticalAlignment(VerticalAlignment.CENTER);
+        download = UIComponents.button(Component.translatable("allthelogs.scripts.download.start"),
+            button -> startDownload());
+        actions.child(download);
+        actions.child(UIContainers.horizontalFlow(Sizing.expand(), Sizing.content()));
+        actions.child(UIComponents.button(Component.translatable("allthelogs.done"),
+            button -> Minecraft.getInstance().gui.setScreen(parent)));
+        card.child(actions);
+    }
+
+    private void showDownloadProgress() {
+        showingEditor = false;
+        card.clearChildren();
+        engineStatus = UIComponents.label(engineStatusText());
+        engineStatus.color(Color.ofRgb(0xA0A0A0));
+        engineStatus.sizing(Sizing.fill(100), Sizing.content());
+        card.child(engineStatus);
+        FlowLayout track = UIContainers.horizontalFlow(Sizing.fill(), Sizing.fixed(10));
+        track.surface(Surface.flat(0xFF1A1A1A).and(Surface.outline(0xFF3C3C3C)));
+        progressFill = UIComponents.box(Sizing.fill(1), Sizing.fill());
+        progressFill.fill(true).color(Color.ofRgb(0x7CB342));
+        track.child(progressFill);
+        card.child(track);
+        FlowLayout actions = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
+        actions.child(UIContainers.horizontalFlow(Sizing.expand(), Sizing.content()));
+        actions.child(UIComponents.button(Component.translatable("allthelogs.done"),
+            button -> Minecraft.getInstance().gui.setScreen(parent)));
+        card.child(actions);
+        refreshSetup();
+    }
+
+    private void showEditor() {
+        showingEditor = true;
+        card.clearChildren();
+        card.gap(8);
+        card.verticalAlignment(VerticalAlignment.TOP);
+
+        FlowLayout top = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
+        top.gap(8).verticalAlignment(VerticalAlignment.CENTER);
+        search = UIComponents.textBox(Sizing.fixed(160), query);
+        search.setHint(Component.translatable("allthelogs.scripts.search"));
+        search.setMaxLength(128);
+        search.onChanged().subscribe(text -> {
+            query = text;
+            reloadScripts();
+        });
+        top.child(search);
+
+        LabelComponent suggestedLabel = UIComponents.label(Component.translatable("allthelogs.scripts.suggested"));
+        suggestedLabel.color(Color.ofRgb(0xA0A0A0));
+        top.child(suggestedLabel);
+
+        scriptList = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
+        scriptList.gap(4).verticalAlignment(VerticalAlignment.CENTER);
+        ScrollContainer<FlowLayout> chips = UIContainers.horizontalScroll(
+            Sizing.expand(), Sizing.fixed(24), scriptList);
+        chips.scrollbar(OverflowScrollbar.vanillaFlat());
+        top.child(chips);
+        card.child(top);
+
+        outputPath = UIComponents.label(Component.empty());
+        outputPath.color(Color.ofRgb(0xA0A0A0));
+        outputPath.sizing(Sizing.fill(100), Sizing.content());
+        card.child(outputPath);
+
+        console = UIComponents.label(Component.empty());
+        console.color(Color.ofRgb(0xCCCCCC));
+        console.sizing(Sizing.fill(100), Sizing.content());
+        ScrollContainer<LabelComponent> consoleScroll = UIContainers.verticalScroll(
+            Sizing.fill(), Sizing.expand(), console);
+        consoleScroll.scrollbar(OverflowScrollbar.vanillaFlat());
+        card.child(consoleScroll);
+
+        engineStatus = UIComponents.label(engineStatusText());
+        engineStatus.color(Color.ofRgb(0xA0A0A0));
+        engineStatus.sizing(Sizing.fill(100), Sizing.content());
+        card.child(engineStatus);
+
+        FlowLayout actions = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
+        actions.gap(8).verticalAlignment(VerticalAlignment.CENTER);
+        actions.child(UIComponents.button(Component.translatable("allthelogs.scripts.open_folder"),
+            button -> ScriptFolders.open(AllTheLogsPaths.scripts())));
+        run = UIComponents.button(Component.translatable("allthelogs.scripts.run"), button -> primaryAction());
+        actions.child(run);
+        actions.child(UIContainers.horizontalFlow(Sizing.expand(), Sizing.content()));
+        actions.child(UIComponents.button(Component.translatable("allthelogs.done"),
+            button -> Minecraft.getInstance().gui.setScreen(parent)));
+        card.child(actions);
+
+        reloadScripts();
+        refresh();
+    }
+
+    private void startDownload() {
+        showDownloadProgress();
+        ScriptRuntime.ensure();
+    }
+
+    private void refreshSetup() {
+        if (engineStatus != null) {
+            engineStatus.text(engineStatusText());
+        }
+        if (progressFill != null) {
+            int percent = Math.max(1, ScriptRuntime.progress().percent());
+            if (ScriptRuntime.progress().stage() == Progress.Stage.LOADING) percent = Math.max(percent, 5);
+            if (ScriptRuntime.hasFailed()) percent = 1;
+            progressFill.horizontalSizing(Sizing.fill(percent));
+        }
+        if (ScriptRuntime.hasFailed() && download != null) {
+            download.setMessage(Component.translatable("allthelogs.scripts.retry"));
+            download.active(System.currentTimeMillis() >= retryLockoutUntilMs);
+        }
     }
 
     private void primaryAction() {
@@ -170,19 +290,25 @@ public final class ScriptsScreen extends BaseOwoScreen<FlowLayout> {
         if (scriptList == null) return;
         List.copyOf(scriptList.children()).forEach(scriptList::removeChild);
         List<Path> scripts = ScriptFiles.list(AllTheLogsPaths.scripts());
-        if (scripts.isEmpty()) {
+        List<Path> visible = scripts.stream()
+            .filter(path -> ScriptFiles.suggested(path) || ScriptFiles.nameMatches(path, query))
+            .toList();
+        if (visible.isEmpty()) {
             LabelComponent empty = UIComponents.label(Component.translatable("allthelogs.scripts.none"));
             empty.color(Color.ofRgb(0xA0A0A0));
             scriptList.child(empty);
             selected = null;
             return;
         }
-        if (selected == null || !scripts.contains(selected)) {
-            selected = scripts.getFirst();
+        if (selected == null || !visible.contains(selected)) {
+            selected = visible.stream().filter(ScriptFiles::suggested).findFirst().orElse(visible.getFirst());
         }
-        for (Path script : scripts) {
+        for (Path script : visible) {
             String name = script.getFileName().toString();
-            ButtonComponent button = UIComponents.button(Component.literal(name), ignored -> {
+            Component label = ScriptFiles.suggested(script)
+                ? Component.translatable("allthelogs.scripts.suggested.item", name)
+                : Component.literal(name);
+            ButtonComponent button = UIComponents.button(label, ignored -> {
                 selected = script;
                 reloadScripts();
                 refresh();
@@ -241,7 +367,7 @@ public final class ScriptsScreen extends BaseOwoScreen<FlowLayout> {
     private static Component engineStatusText() {
         Progress progress = ScriptRuntime.progress();
         return switch (progress.stage()) {
-            case READY -> Component.empty();
+            case READY, IDLE -> Component.empty();
             case FAILED -> Component.translatable("allthelogs.scripts.engine.failed",
                 progress.error() == null ? "" : progress.error());
             case DOWNLOADING -> Component.translatable("allthelogs.scripts.engine.downloading", progress.percent());

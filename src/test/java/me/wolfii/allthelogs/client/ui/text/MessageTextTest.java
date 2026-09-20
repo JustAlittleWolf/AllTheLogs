@@ -145,8 +145,9 @@ class MessageTextTest {
         assertEquals(Colors.MATCH_TEXT, MessageText.stackedColor(match, 3, false));
         DisplayRow context = new DisplayRow(new ChatEntry(log, time, 1, "hello\\nworld"), false,
             List.of());
-        assertEquals(Colors.MATCH_TEXT, MessageText.stackedColor(context, 0, true));
-        assertEquals(Colors.ESCAPE_TEXT, MessageText.stackedColor(context, 5, true));
+        assertEquals(Colors.CONTEXT_TEXT, MessageText.stackedColor(context, 0, true));
+        assertEquals(Colors.multiply(Colors.CONTEXT_TEXT, Colors.ESCAPE_TEXT),
+            MessageText.stackedColor(context, 5, true));
         int red = PackedFormatting.color(0xFF5555);
         DisplayRow coloured = new DisplayRow(
             new ChatEntry(log, time, 2, "abc", new long[]{PackedFormatting.run(0, 3, red)}), true, List.of());
@@ -183,5 +184,9 @@ class MessageTextTest {
         assertEquals(Colors.TIMESTAMP & 0xFFFFFF, MessageText.timestamp(match).getStyle().getColor().getValue());
         assertEquals(Colors.CONTEXT_TIMESTAMP & 0xFFFFFF,
             MessageText.timestamp(context).getStyle().getColor().getValue());
+        int contextMessage = drawn(context).getStyle().getColor().getValue();
+        int matchMessage = drawn(match).getStyle().getColor().getValue();
+        assertTrue(contextMessage < (Colors.CONTEXT_TIMESTAMP & 0xFFFFFF));
+        assertEquals(Colors.MATCH_TEXT & 0xFFFFFF, matchMessage);
     }
 }

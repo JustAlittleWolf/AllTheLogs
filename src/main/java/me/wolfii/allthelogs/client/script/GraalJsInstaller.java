@@ -202,6 +202,10 @@ public final class GraalJsInstaller {
             return new Progress(Stage.READY, 0, 0, "graaljs", null);
         }
 
+        public static Progress idle() {
+            return new Progress(Stage.IDLE, 0, 0, "graaljs", null);
+        }
+
         public static Progress failed(String message) {
             return new Progress(Stage.FAILED, 0, 0, "graaljs", message);
         }
@@ -212,6 +216,7 @@ public final class GraalJsInstaller {
         }
 
         public enum Stage {
+            IDLE,
             DOWNLOADING,
             VERIFYING,
             LOADING,
