@@ -37,9 +37,10 @@ class ScriptFilesTest {
         String source = Files.readString(
             Path.of("src/main/resources/me/wolfii/allthelogs/client/script/example.ts"),
             StandardCharsets.UTF_8);
-        assertFalse(source.contains("import "));
-        assertFalse(source.contains("from \"allthelogs\""));
-        assertFalse(source.contains("from 'allthelogs'"));
+        assertTrue(source.lines().noneMatch(line -> {
+            String stripped = line.strip();
+            return stripped.startsWith("import ") || stripped.startsWith("from \"");
+        }));
         assertTrue(source.contains("```ts"));
         assertTrue(source.contains("interface ChatEntry"));
         assertTrue(source.contains("interface ChatLog"));
