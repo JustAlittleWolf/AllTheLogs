@@ -164,8 +164,8 @@ public final class MessageText {
     }
 
     /**
-     * Chat colour with context dimming and {@code \n} darkening multiplied in that order.
-     * Search hits are marked with a background fill, not a text tint.
+     * Chat colour with {@code \n} darkening multiplied in. Search hits are marked with a background fill,
+     * and context lines use a vertical bar rather than a text tint.
      */
     static int stackedColor(DisplayRow row, int index, boolean interpretEscapes) {
         return stackedColor(row, index, interpretEscapes, PackedFormatting.at(row.visualFormatting(), index));
@@ -183,9 +183,6 @@ public final class MessageText {
         int color = PackedFormatting.hasColor(format)
             ? 0xFF000000 | PackedFormatting.rgb(format)
             : Colors.MATCH_TEXT;
-        if (!row.match()) {
-            color = Colors.multiply(color, Colors.CONTEXT_TEXT);
-        }
         if (VisualMessage.escapeChar(row.message(), index, interpretEscapes)) {
             color = Colors.multiply(color, Colors.ESCAPE_TEXT);
         }

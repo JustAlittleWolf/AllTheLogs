@@ -43,7 +43,10 @@ final class LogBrowserQueries {
     private List<String> versions = List.of();
     private MatchSummary matchSummary = MatchSummary.empty();
     private boolean reloadPending = true;
+    private boolean replaceOnJumpFailure;
     private ListSnapshot snapshot = ListSnapshot.EMPTY;
+    private static ListSnapshot sessionSnapshot = ListSnapshot.EMPTY;
+    private static MatchSummary sessionMatchSummary = MatchSummary.empty();
 
     LogBrowserQueries() {
         this(SearchFilter.defaults());
@@ -51,6 +54,39 @@ final class LogBrowserQueries {
 
     LogBrowserQueries(SearchFilter initial) {
         this.filter = initial == null ? SearchFilter.defaults() : initial;
+    }
+
+    /**
+     * Restores the last closed viewport when filter persistence is session or across-restarts.
+     * {@code NOT_PERSISTED} always starts empty so {@link #reload} jumps to the latest messages.
+     */
+    void restoreSessionLocation(boolean persistLocation) {
+        if (!persistLocation) {
+            sessionSnapshot = ListSnapshot.EMPTY;
+            sessionMatchSummary = MatchSummary.empty();
+            snapshot = ListSnapshot.EMPTY;
+            matchSummary = MatchSummary.empty();
+            reloadPending = true;
+            return;
+        }
+        if (sessionSnapshot.isEmpty()) return;
+        snapshot = sessionSnapshot;
+        matchSummary = sessionMatchSummary;
+        reloadPending = false;
+    }
+
+    /**
+     * Keeps the current viewport for the next browser open when persistence allows it.
+     */
+    void rememberSessionLocation(boolean persistLocation) {
+        takeSnapshot();
+        if (!persistLocation) {
+            sessionSnapshot = ListSnapshot.EMPTY;
+            sessionMatchSummary = MatchSummary.empty();
+            return;
+        }
+        sessionSnapshot = snapshot;
+        sessionMatchSummary = matchSummary;
     }
 
     private static long elapsedMs(long startedAtNanos) {
@@ -110,6 +146,10 @@ final class LogBrowserQueries {
         reload();
     }
 
+    static boolean keepViewport(LocalDateTime visibleTime, boolean hasRows) {
+        return visibleTime != null && hasRows;
+    }
+
     int bumpGeneration() {
         return generation.incrementAndGet();
     }
@@ -122,7 +162,8 @@ final class LogBrowserQueries {
      * Runs the current filter from scratch.
      * <p>
      * An oldest-first search still fetches its newest page first, then reverses it, because that is the page
-     * the user sees: the list starts scrolled to the bottom.
+     * the user sees: the list starts scrolled to the bottom. If the list already has a location, clearing the
+     * query or searching again keeps that place: a new term jumps to the closest match.
      */
     void reload() {
         if (list == null) return;
@@ -130,6 +171,15 @@ final class LogBrowserQueries {
         if (!filter.canQuery()) {
             generation.incrementAndGet();
             list.setLoading(false);
+            return;
+        }
+        LocalDateTime stayAt = list.visibleTime();
+        if (keepViewport(stayAt, !list.window().rows().isEmpty())) {
+            long startedAt = System.nanoTime();
+            replaceOnJumpFailure = true;
+            jumpTo(new ScrubJump(stayAt, -1, Double.NaN), false);
+            loadMatchSummary(generation.get(), filter.withoutOffset(), startedAt);
+            refreshStats();
             return;
         }
         int gen = generation.incrementAndGet();
@@ -290,7 +340,8 @@ final class LogBrowserQueries {
             }
             return;
         }
-        LocalDateTime target = clampToMatchedRange(jump == null ? null : jump.time());
+        LocalDateTime requestedTime = jump == null ? null : jump.time();
+        LocalDateTime target = replaceOnJumpFailure ? requestedTime : clampToMatchedRange(requestedTime);
         if (target == null && (jump == null || jump.skip() < 0)) {
             if (preview) {
                 if (list != null) list.scrubQueryFinished();
@@ -309,7 +360,16 @@ final class LogBrowserQueries {
             if (error != null || rows.isEmpty()) {
                 if (error != null) logQueryFailure("AllTheLogs jump query failed", error);
                 list.setLoading(false);
-                if (!preview) list.finishScrub();
+                if (replaceOnJumpFailure && !preview) {
+                    replaceOnJumpFailure = false;
+                    list.reset(List.of(), false, false);
+                    if (error != null) {
+                        list.showOverlay(Component.translatable("allthelogs.status.error"));
+                    }
+                    takeSnapshot();
+                } else if (!preview) {
+                    list.finishScrub();
+                }
                 return;
             }
             boolean full = PageBounds.isFull(rows, requested.limit());
@@ -370,9 +430,14 @@ final class LogBrowserQueries {
 
     private void applyJump(LocalDateTime target, boolean preview, List<DisplayRow> rows,
                            boolean hasBefore, boolean hasAfter, double progress) {
+        boolean fromSearch = replaceOnJumpFailure;
+        replaceOnJumpFailure = false;
         list.setLoading(false);
         list.showAt(target, rows, hasBefore, hasAfter, progress);
         if (!preview) list.finishScrub();
+        if (fromSearch) {
+            list.showMatchCount(DisplayRows.matchCount(rows), 0, filter.isNarrowed());
+        }
         takeSnapshot();
     }
 
@@ -406,7 +471,7 @@ final class LogBrowserQueries {
         return time;
     }
 
-    private void takeSnapshot() {
+    void takeSnapshot() {
         if (list == null) return;
         snapshot = ListSnapshot.of(list);
     }

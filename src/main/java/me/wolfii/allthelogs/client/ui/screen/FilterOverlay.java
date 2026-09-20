@@ -1,6 +1,5 @@
 package me.wolfii.allthelogs.client.ui.screen;
 
-import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.CheckboxComponent;
 import io.wispforest.owo.ui.component.TextBoxComponent;
 import io.wispforest.owo.ui.component.UIComponents;
@@ -10,6 +9,7 @@ import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.*;
 import me.wolfii.allthelogs.client.search.DateParser;
+import me.wolfii.allthelogs.client.search.RegexFlags;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
@@ -24,64 +24,101 @@ import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 
 /**
- * Filter popover and version menu for {@link LogBrowserScreen}.
+ * Side-expandable filter panel for {@link LogBrowserScreen}. It stays open while the user searches.
  */
 final class FilterOverlay {
-    private final StackLayout overlays;
-    private final IntSupplier screenWidth;
-    private final IntSupplier screenHeight;
+    static final int PANEL_WIDTH = 240;
+    private static boolean sessionOpen;
+
+    private final FlowLayout host;
     private final Supplier<SearchFilter> filter;
     private final Consumer<SearchFilter> onChange;
     private final VersionMenu versionsMenu;
     private ParentUIComponent filterPanel;
-    private boolean open;
+    private CheckboxComponent regexBox;
+    private CheckboxComponent caseBox;
+    private TextBoxComponent flagsBox;
+    private TextBoxComponent contextBox;
+    private TextBoxComponent fromBox;
+    private TextBoxComponent untilBox;
+    private boolean syncing;
 
-    FilterOverlay(StackLayout overlays, IntSupplier screenWidth, IntSupplier screenHeight,
+    FilterOverlay(FlowLayout host, StackLayout overlays, IntSupplier screenWidth, IntSupplier screenHeight,
                   Supplier<SearchFilter> filter, Supplier<List<String>> versions,
                   Consumer<SearchFilter> onChange) {
-        this.overlays = overlays;
-        this.screenWidth = screenWidth;
-        this.screenHeight = screenHeight;
+        this.host = host;
         this.filter = filter;
         this.onChange = onChange;
         this.versionsMenu = new VersionMenu(overlays, screenWidth, screenHeight, filter, versions, onChange);
     }
 
-    void toggle(ButtonComponent button) {
-        if (open) {
+    boolean open() {
+        return filterPanel != null && host.children().contains(filterPanel);
+    }
+
+    void restore() {
+        if (sessionOpen) openPanel();
+    }
+
+    void toggle() {
+        if (open()) {
             close();
             return;
         }
-        open = true;
-        int panelHeight = Math.max(96, Math.min(screenHeight.getAsInt() - 40, 280));
-        int below = button.y() + button.height() + 4;
-        int above = button.y() - panelHeight - 4;
-        int panelY = below + panelHeight > screenHeight.getAsInt() - 8 ? Math.max(8, above) : below;
-        filterPanel = buildFilterPanel();
-        filterPanel.positioning(Positioning.absolute(
-            Math.max(8, screenWidth.getAsInt() - 258),
-            panelY));
-        overlays.child(filterPanel);
+        openPanel();
     }
 
     void close() {
+        versionsMenu.close();
         if (filterPanel != null) {
-            overlays.removeChild(filterPanel);
+            host.removeChild(filterPanel);
             filterPanel = null;
         }
-        versionsMenu.close();
-        open = false;
+        sessionOpen = false;
     }
 
     /**
      * Whether {@code component} is inside the open filter panel.
      */
     boolean owns(UIComponent component) {
-        if (!open || component == null) return false;
+        if (!open() || component == null) return false;
         for (UIComponent current = component; current != null; current = current.parent()) {
             if (current == filterPanel) return true;
         }
         return false;
+    }
+
+    void syncFromFilter() {
+        SearchFilter current = filter.get();
+        syncing = true;
+        try {
+            if (regexBox != null) regexBox.checked(current.regex());
+            if (caseBox != null) caseBox.checked(current.caseSensitive());
+            if (flagsBox != null && !flagsBox.getValue().equals(current.regexFlags())) {
+                flagsBox.setValue(current.regexFlags());
+            }
+            if (contextBox != null && !contextBox.getValue().equals(String.valueOf(current.contextLines()))) {
+                contextBox.setValue(String.valueOf(current.contextLines()));
+            }
+            String from = DateParser.format(current.startingAt());
+            if (fromBox != null && !fromBox.getValue().equals(from)) fromBox.setValue(from);
+            String until = DateParser.formatUntil(current.upUntil());
+            if (untilBox != null && !untilBox.getValue().equals(until)) untilBox.setValue(until);
+            versionsMenu.syncButton();
+        } finally {
+            syncing = false;
+        }
+    }
+
+    void syncVersionButton() {
+        versionsMenu.syncButton();
+    }
+
+    private void openPanel() {
+        if (open()) return;
+        filterPanel = buildFilterPanel();
+        host.child(filterPanel);
+        sessionOpen = true;
     }
 
     private ParentUIComponent buildFilterPanel() {
@@ -90,60 +127,96 @@ final class FilterOverlay {
         content.padding(Insets.of(8));
         content.gap(4);
 
-        content.child(checkbox("allthelogs.filter.regex", current.regex(), value ->
-            onChange.accept(filter.get().withRegex(value))));
-        content.child(checkbox("allthelogs.filter.case_sensitive", current.caseSensitive(), value ->
-            onChange.accept(filter.get().withCaseSensitive(value))));
-        content.child(labeledField("allthelogs.filter.context", String.valueOf(current.contextLines()), text -> {
-            try {
-                onChange.accept(filter.get().withContextLines(Integer.parseInt(text.trim())));
-            } catch (RuntimeException ignored) {
-            }
-        }));
+        regexBox = checkbox("allthelogs.filter.regex", current.regex(), value ->
+            emit(filter.get().withRegex(value)));
+        content.child(regexBox);
+        caseBox = checkbox("allthelogs.filter.case_sensitive", current.caseSensitive(), value ->
+            emit(filter.get().withCaseSensitive(value)));
+        content.child(caseBox);
+        content.child(flagsField(current.regexFlags()));
+        content.child(contextField(current));
 
         content.child(dateField("allthelogs.filter.from", DateParser.format(current.startingAt()),
-            DateParser::parse, parsed -> onChange.accept(filter.get().withStartingAt(parsed))));
+            DateParser::parse, parsed -> emit(filter.get().withStartingAt(parsed)), true));
         content.child(dateField("allthelogs.filter.until", DateParser.formatUntil(current.upUntil()),
-            DateParser::parseUntil, parsed -> onChange.accept(filter.get().withUpUntil(parsed))));
+            DateParser::parseUntil, parsed -> emit(filter.get().withUpUntil(parsed)), false));
         content.child(UIComponents.label(Component.translatable("allthelogs.filter.date_hint"))
             .color(Color.ofRgb(0x888888)));
         content.child(versionsMenu.row());
 
-        int panelHeight = Math.max(96, Math.min(screenHeight.getAsInt() - 40, 280));
         ScrollContainer<FlowLayout> panel = UIContainers.verticalScroll(
-            Sizing.fixed(240), Sizing.fixed(panelHeight), content);
+            Sizing.fixed(PANEL_WIDTH), Sizing.fill(), content);
         panel.scrollbar(OverflowScrollbar.vanillaFlat());
         panel.surface(PanelSurfaces.card());
+        panel.verticalSizing(Sizing.fill());
         return panel;
+    }
+
+    private FlowLayout flagsField(String flags) {
+        FlowLayout row = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
+        row.gap(2);
+        row.child(UIComponents.label(Component.translatable("allthelogs.filter.regex_flags")));
+        flagsBox = UIComponents.textBox(Sizing.fill(), flags);
+        flagsBox.setMaxLength(RegexFlags.VALID.length());
+        flagsBox.setFilter(RegexFlags::isLegal);
+        flagsBox.onChanged().subscribe(text -> {
+            if (!syncing) emit(filter.get().withRegexFlags(text));
+        });
+        row.child(flagsBox);
+        return row;
+    }
+
+    private FlowLayout contextField(SearchFilter current) {
+        return labeledField("allthelogs.filter.context", String.valueOf(current.contextLines()), text -> {
+            try {
+                emit(filter.get().withContextLines(Integer.parseInt(text.trim())));
+            } catch (RuntimeException ignored) {
+            }
+        }, true);
     }
 
     private CheckboxComponent checkbox(String key, boolean checked, Consumer<Boolean> onChanged) {
         CheckboxComponent box = UIComponents.checkbox(Component.translatable(key));
         box.checked(checked);
-        box.onChanged(onChanged::accept);
+        box.onChanged(value -> {
+            if (!syncing) onChanged.accept(value);
+        });
         return box;
     }
 
-    void syncVersionButton() {
-        versionsMenu.syncButton();
-    }
-
     private FlowLayout dateField(String key, String value, Function<String, Optional<LocalDateTime>> parse,
-                                 Consumer<LocalDateTime> onParsed) {
-        return labeledField(key, value, text -> {
+                                 Consumer<LocalDateTime> onParsed, boolean from) {
+        FlowLayout row = labeledField(key, value, text -> {
             if (!DateParser.isBlankOrValid(text)) return;
             onParsed.accept(parse.apply(text).orElse(null));
-        });
+        }, false);
+        if (from) fromBox = lastBox(row);
+        else untilBox = lastBox(row);
+        return row;
     }
 
-    private FlowLayout labeledField(String key, String value, Consumer<String> onFieldChange) {
+    private FlowLayout labeledField(String key, String value, Consumer<String> onFieldChange, boolean context) {
         FlowLayout row = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
         row.gap(2);
         row.child(UIComponents.label(Component.translatable(key)));
         TextBoxComponent box = UIComponents.textBox(Sizing.fill(), value);
         box.setMaxLength(32);
-        box.onChanged().subscribe(onFieldChange::accept);
+        box.onChanged().subscribe(text -> {
+            if (!syncing) onFieldChange.accept(text);
+        });
         row.child(box);
+        if (context) contextBox = box;
         return row;
+    }
+
+    private static TextBoxComponent lastBox(FlowLayout row) {
+        List<UIComponent> children = row.children();
+        return (TextBoxComponent) children.getLast();
+    }
+
+    private void emit(SearchFilter next) {
+        if (syncing) return;
+        onChange.accept(next);
+        syncFromFilter();
     }
 }

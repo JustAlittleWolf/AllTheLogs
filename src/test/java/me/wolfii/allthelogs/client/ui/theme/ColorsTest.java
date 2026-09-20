@@ -18,13 +18,15 @@ class ColorsTest {
     void contextTimestampsAreSlightlyDarker() {
         assertEquals(0xFFA0A0A0, Colors.TIMESTAMP);
         assertEquals(0xFF7E7E7E, Colors.CONTEXT_TIMESTAMP);
+        assertEquals(0xFF6AA8C8, Colors.CONTEXT_BAR);
+        assertEquals(2, Colors.CONTEXT_BAR_WIDTH);
         assertEquals(0xFF3A3A3A, Colors.SEPARATOR);
         assertEquals(0xFFE8A8A8, Colors.SEARCH_INVALID);
     }
 
     @Test
     void multiplyStacksChannelsAndWhiteIsANoOp() {
-        assertEquals(Colors.CONTEXT_TEXT, Colors.multiply(Colors.MATCH_TEXT, Colors.CONTEXT_TEXT));
+        assertEquals(Colors.ESCAPE_TEXT, Colors.multiply(Colors.MATCH_TEXT, Colors.ESCAPE_TEXT));
         assertEquals(Colors.MATCH_TEXT, Colors.multiply(Colors.MATCH_TEXT, Colors.MATCH_TEXT));
     }
 }

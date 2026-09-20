@@ -74,6 +74,11 @@ final class MessageListPainter {
                 int timestampColor = row.match() ? Colors.MUTED : Colors.CONTEXT_TIMESTAMP;
                 graphics.drawText(MessageText.timestamp(row), view.x() + ListView.PAD, rowY + 1, view.fontScale(),
                     timestampColor);
+                if (!row.match()) {
+                    int barRight = messageX - Colors.CONTEXT_BAR_GAP;
+                    int barLeft = barRight - Colors.CONTEXT_BAR_WIDTH;
+                    graphics.fill(barLeft, rowY, barRight, rowY + layout.rowHeight(i), Colors.CONTEXT_BAR);
+                }
                 int lineY = rowY;
                 for (MessageWrap.Line line : lines) {
                     graphics.drawText(MessageText.messageRange(row, line.start(), line.start() + line.text().length()),
@@ -94,7 +99,12 @@ final class MessageListPainter {
     void drawMessageInfo(OwoUIGraphics graphics, ListView view, int mouseX, int mouseY) {
         if (mouseY < view.y() || mouseY >= view.y() + view.height()) return;
         if (mouseX < view.x() || mouseX >= view.x() + view.listWidth()) return;
-        if (expandAt(view, mouseX - view.x(), mouseY - view.y()) != null) return;
+        if (expandAt(view, mouseX - view.x(), mouseY - view.y()) != null) {
+            drawChip(graphics, view, mouseX, mouseY, List.of(
+                Component.literal(MessageListLayout.expandClickHint()),
+                Component.literal(MessageListLayout.expandShiftClickHint())));
+            return;
+        }
         if (mouseX < view.x() + ListView.PAD || mouseX >= view.messageX()) return;
         int row = view.rowAt(mouseY - view.y());
         if (row < 0) return;

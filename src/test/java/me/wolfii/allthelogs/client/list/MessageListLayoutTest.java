@@ -34,6 +34,8 @@ class MessageListLayoutTest {
     void shiftClickLoadsAHundredLines() {
         assertEquals(100, MessageListLayout.SHIFT_EXPAND_LINES);
         assertEquals(100, MessageListLayout.extraContextLines(true));
+        assertEquals("Click: +10", MessageListLayout.expandClickHint());
+        assertEquals("Shift+Click: +100", MessageListLayout.expandShiftClickHint());
     }
 
     @Test

@@ -114,4 +114,32 @@ class SearchFilterTest {
         assertTrue(SearchFilter.defaults().withUpUntil(LocalDateTime.of(2026, 1, 2, 0, 0)).isNarrowed());
         assertFalse(SearchFilter.defaults().withVersion("ALL").isNarrowed());
     }
+
+    @Test
+    void regexFlagsStayTiedToCaseSensitiveAndRejectInvalidLetters() {
+        SearchFilter defaults = SearchFilter.defaults();
+        assertEquals("i", defaults.regexFlags());
+        assertFalse(defaults.caseSensitive());
+        SearchFilter sensitive = defaults.withCaseSensitive(true);
+        assertEquals("", sensitive.regexFlags());
+        assertTrue(sensitive.caseSensitive());
+        SearchFilter flagged = defaults.withRegexFlags("ms");
+        assertTrue(flagged.caseSensitive());
+        assertEquals("ms", flagged.regexFlags());
+        SearchFilter ignore = flagged.withRegexFlags("msi");
+        assertFalse(ignore.caseSensitive());
+        assertEquals("(?ims)hi", SearchFilter.defaults().withText("hi").withRegex(true).withRegexFlags("msi")
+            .toQuery().regex());
+        assertEquals("hi", SearchFilter.defaults().withText("hi").withRegex(true).withCaseSensitive(true)
+            .toQuery().regex());
+        assertFalse(RegexFlags.isLegal("g"));
+        assertEquals("im", RegexFlags.sanitize("imm"));
+    }
+
+    @Test
+    void withDaySetsInclusiveMidnightBounds() {
+        SearchFilter day = SearchFilter.defaults().withDay(java.time.LocalDate.of(2026, 8, 27));
+        assertEquals(LocalDateTime.of(2026, 8, 27, 0, 0), day.startingAt());
+        assertEquals(LocalDateTime.of(2026, 8, 28, 0, 0), day.upUntil());
+    }
 }

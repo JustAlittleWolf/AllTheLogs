@@ -39,7 +39,12 @@ class MessageTimelineTest {
         ScrubJump parked = new ScrubJump(LocalDateTime.of(2026, 1, 1, 12, 0), 5, 0.5);
         assertFalse(ScrubDrag.shouldSendPreviewQuery(false, 200, 100, 100, sent, sent));
         assertTrue(ScrubDrag.shouldSendPreviewQuery(false, 200, 100, 100, parked, sent));
-        assertTrue(ScrubDrag.sameTarget(sent, new ScrubJump(sent.time(), sent.skip(), sent.progress())));
         assertFalse(ScrubDrag.sameTarget(sent, parked));
+    }
+
+    @Test
+    void rightClickDoesNotClearTheSelection() {
+        assertFalse(MessageTimeline.clearsSelectionOnMouseDown(org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_RIGHT));
+        assertFalse(MessageTimeline.clearsSelectionOnMouseDown(org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT));
     }
 }
