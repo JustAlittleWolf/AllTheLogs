@@ -11,7 +11,6 @@ import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.*;
 import me.wolfii.allthelogs.client.config.AllTheLogsConfig;
-import me.wolfii.allthelogs.client.config.BrowserFilterMemory;
 import me.wolfii.allthelogs.client.config.FilterPersistence;
 import me.wolfii.allthelogs.client.list.DisplayRow;
 import me.wolfii.allthelogs.client.list.MessageSelection;
@@ -57,7 +56,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     public LogBrowserScreen(@Nullable Screen parent) {
         super(Component.translatable("allthelogs.screen.browser"));
         this.parent = parent;
-        this.queries = new LogBrowserQueries(BrowserFilterMemory.openingFilter());
+        this.queries = new LogBrowserQueries(FilterPersistence.openingFilter());
         this.queries.restoreSessionLocation(
             AllTheLogsConfig.get().filterPersistence() != FilterPersistence.NOT_PERSISTED);
     }
@@ -118,7 +117,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
 
     @Override
     public void onClose() {
-        BrowserFilterMemory.remember(queries.filter());
+        FilterPersistence.remember(queries.filter());
         queries.rememberSessionLocation(
             AllTheLogsConfig.get().filterPersistence() != FilterPersistence.NOT_PERSISTED);
         Minecraft.getInstance().gui.setScreen(parent);
@@ -193,7 +192,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     private void onSearchChanged(String text) {
         if (text.equals(queries.filter().text())) return;
         queries.updateFilter(queries.filter().withText(text));
-        BrowserFilterMemory.remember(queries.filter(), AllTheLogsConfig.get(), false);
+        FilterPersistence.remember(queries.filter(), AllTheLogsConfig.get(), false);
         refreshSearchColor();
         if (!queries.filter().canQuery()) {
             queries.bumpGeneration();
@@ -209,7 +208,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
 
     private void applyFilter(SearchFilter next) {
         queries.setFilter(next);
-        BrowserFilterMemory.remember(next);
+        FilterPersistence.remember(next);
         refreshSearchDecorations();
         if (filters != null) filters.syncFromFilter();
     }
