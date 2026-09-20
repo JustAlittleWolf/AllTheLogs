@@ -294,7 +294,8 @@ final class LogBrowserQueries {
                     if (error != null) logQueryFailure("AllTheLogs expand query failed", error);
                     return;
                 }
-                List<DisplayRow> fetched = ContextPeeks.forExpand(displayRows(entries), row, older, extra,
+                List<ChatEntry> allowed = entries.stream().filter(filter::allowsContext).toList();
+                List<DisplayRow> fetched = ContextPeeks.forExpand(displayRows(allowed), row, older, extra,
                     oldestFirst);
                 List<DisplayRow> merged = ContextPeeks.mergeAfterExpand(
                     list.window().rows(), fetched, row, older, filter.sort());
@@ -490,8 +491,10 @@ final class LogBrowserQueries {
     }
 
     private List<DisplayRow> displaySearchRows(List<ChatEntry> entries) {
+        boolean markDateOrVersionGaps = !filter.hasServerOrWorld()
+            && (filter.hasVersion() || filter.startingAt() != null || filter.upUntil() != null);
         return ContextPeeks.forSearchPage(displayRows(entries), filter.hasText(), filter.contextLines(),
-            filter.sort() == ChatQuery.Sort.ASCENDING);
+            filter.sort() == ChatQuery.Sort.ASCENDING, markDateOrVersionGaps);
     }
 
     private List<DisplayRow> displayRows(List<ChatEntry> entries) {

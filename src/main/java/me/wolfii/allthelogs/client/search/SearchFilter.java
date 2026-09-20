@@ -229,6 +229,20 @@ public record SearchFilter(
     }
 
     /**
+     * Surrounding chat may miss the search text, but it must still sit in the date window and on a
+     * matching server or world. Expand uses this so a caret cannot load another place.
+     */
+    public boolean allowsContext(me.wolfii.allthelogs.api.ChatEntry entry) {
+        if (entry == null) return false;
+        if (startingAt != null && entry.timestamp().isBefore(startingAt)) return false;
+        if (upUntil != null && !entry.timestamp().isBefore(upUntil)) return false;
+        if (!hasServerOrWorld()) return true;
+        String place = entry.serverOrWorld();
+        if (place == null || place.isEmpty()) return false;
+        return place.toLowerCase(Locale.ROOT).contains(serverOrWorld.toLowerCase(Locale.ROOT));
+    }
+
+    /**
      * Java-side matching used to mark hits after a query. Invalid regex never matches.
      */
     public Predicate<String> messagePredicate() {
