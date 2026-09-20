@@ -81,7 +81,7 @@ class FilterPersistenceTest {
     @Test
     void fromJsonIgnoresBrokenValues() {
         JsonObject json = new JsonObject();
-        json.addProperty("text", 12);
+        json.add("text", new JsonObject());
         json.addProperty("contextLines", "nope");
         json.addProperty("startingAt", "not-a-date");
         SearchFilter restored = FilterPersistence.fromJson(json);
