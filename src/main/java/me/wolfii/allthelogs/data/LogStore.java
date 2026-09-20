@@ -262,9 +262,9 @@ public final class LogStore implements AutoCloseable {
     /**
      * Imports an already-stripped live chat line with flattened packed formatting, stamped with the current time.
      * <p>
-     * A line that repeats the timestamp and text of an entry already stored is dropped. Live capture of a play
-     * session is not duplicated on a later file import when that log contains this session's
-     * {@link me.wolfii.allthelogs.data.store.SessionMarker}.
+     * Live rows are always stored. A later file import that repeats the same second and text is the copy that
+     * is removed. A log that contains this session's
+     * {@link me.wolfii.allthelogs.data.store.SessionMarker} is skipped entirely.
      *
      * @param message    the chat line as the game rendered it, already stripped of legacy {@code §} codes
      * @param formatting packed runs into {@code message}, or {@code null} to parse formatting from the message
@@ -308,7 +308,7 @@ public final class LogStore implements AutoCloseable {
     /**
      * Updates {@link ChatLog#endTime()} of the current session, without storing a chat line.
      * <p>
-     * Whole seconds only, matching {@link #importSessionMessage(String, long[])}. If {@code timestamp} is
+     * Truncated to milliseconds, matching {@link #importSessionMessage(String, long[])}. If {@code timestamp} is
      * earlier than the time already stored, the existing end time is kept.
      *
      * @throws LogDataException if no session is active, or the update cannot be written

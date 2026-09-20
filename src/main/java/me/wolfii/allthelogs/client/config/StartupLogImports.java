@@ -23,18 +23,25 @@ public final class StartupLogImports {
     }
 
     /**
-     * Chooses a logs folder vs game-directory glob the same way the current instance is imported.
+     * Chooses a logs-folder glob when {@code directory} is itself a {@code logs} folder (the extra-import
+     * path users add in settings), or when it contains a {@code logs} child. Other directories keep the
+     * game-directory glob.
      */
     public static Optional<Target> targetFor(Path directory) {
-        if (directory == null) return Optional.empty();
+        if (directory == null || !Files.isDirectory(directory)) return Optional.empty();
+        if (isLogsFolder(directory)) {
+            return Optional.of(new Target(directory, ImportOptions.currentLogsDirectory()));
+        }
         Path logs = directory.resolve("logs");
         if (Files.isDirectory(logs)) {
             return Optional.of(new Target(logs, ImportOptions.currentLogsDirectory()));
         }
-        if (Files.isDirectory(directory)) {
-            return Optional.of(new Target(directory, ImportOptions.currentGameDirectory()));
-        }
-        return Optional.empty();
+        return Optional.of(new Target(directory, ImportOptions.currentGameDirectory()));
+    }
+
+    static boolean isLogsFolder(Path directory) {
+        Path name = directory.getFileName();
+        return name != null && name.toString().equalsIgnoreCase("logs");
     }
 
     public static CompletableFuture<Void> importOnBoot(LogStoreWorker worker, Path instanceDir,
