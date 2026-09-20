@@ -47,4 +47,11 @@ class MessageTimelineTest {
         assertFalse(MessageTimeline.clearsSelectionOnMouseDown(org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_RIGHT));
         assertFalse(MessageTimeline.clearsSelectionOnMouseDown(org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT));
     }
+
+    @Test
+    void leftClickOnAMessageDismissesTheContextMenu() {
+        assertTrue(MessageTimeline.dismissesContextMenuOnMouseDown(org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT));
+        assertTrue(MessageTimeline.dismissesContextMenuOnMouseDown(org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_MIDDLE));
+        assertFalse(MessageTimeline.dismissesContextMenuOnMouseDown(org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_RIGHT));
+    }
 }
