@@ -244,6 +244,17 @@ class LogStoreTest {
     }
 
     @Test
+    void storesTheServerPlaceFromTheLog() throws IOException {
+        LogFixtures.writePlain(tempDir.resolve("logs"), "debug.log", """
+            [09:32:50] [Render thread/INFO]: Connecting to unicacity.eu, 25565
+            [09:32:51] [Render thread/INFO]: [CHAT] hi from uni
+            """);
+        store.importDirectory(tempDir);
+        ChatEntry entry = store.findEntries(ChatQuery.all().withSubstring("hi from uni")).getFirst();
+        assertEquals("unicacity.eu", entry.chatLog().serverPlace());
+    }
+
+    @Test
     void reusesTheSameChatLogInstanceForEntriesFromTheSameFile() throws IOException {
         store.importDirectory(logsDirectory());
 
@@ -1135,6 +1146,29 @@ class LogStoreTest {
         assertTrue(store.importSessionMessage("hello from live", startedAt.plusSeconds(1)));
         ChatEntry queried = store.findEntries(ChatQuery.all().withSubstring("hello from live")).getFirst();
         assertEquals("JustAlittleWolf", queried.chatLog().minecraftUser());
+    }
+
+    @Test
+    void updateSessionPlaceStoresTheServerOrWorldAndCanChangeLater() {
+        LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+
+        ChatLog file = store.startSession("26.2", startedAt, "JustAlittleWolf");
+        assertNull(file.serverPlace());
+
+        store.updateSessionPlace("unicacity.eu");
+        assertEquals("unicacity.eu", store.chatLogs().getFirst().serverPlace());
+
+        store.updateSessionPlace("world/Audio Test");
+        assertEquals("world/Audio Test", store.chatLogs().getFirst().serverPlace());
+
+        assertTrue(store.importSessionMessage("hello from live", startedAt.plusSeconds(1)));
+        ChatEntry queried = store.findEntries(ChatQuery.all().withSubstring("hello from live")).getFirst();
+        assertEquals("world/Audio Test", queried.chatLog().serverPlace());
+    }
+
+    @Test
+    void updateSessionPlaceRequiresAnActiveSession() {
+        assertThrows(LogDataException.class, () -> store.updateSessionPlace("unicacity.eu"));
     }
 
     @Test

@@ -91,7 +91,7 @@ public final class MessageText {
     }
 
     /**
-     * Compact hover card for a message timestamp: full date, labelled version/user, path and archive entry.
+     * Compact hover card for a message timestamp: full date, labelled version/user/place, path and archive entry.
      */
     public static List<Component> messageInfo(DisplayRow row, int maxWidth, ToIntFunction<String> widthOf) {
         List<Component> lines = new ArrayList<>();
@@ -108,6 +108,10 @@ public final class MessageText {
         String user = row.chatLog().minecraftUser();
         if (user != null && !user.isBlank()) {
             lines.add(labeled("allthelogs.info.playing", colored(user, Colors.INFO_VERSION)));
+        }
+        String place = row.chatLog().serverPlace();
+        if (place != null && !place.isBlank()) {
+            lines.add(labeled("allthelogs.info.playing_on", colored(place, Colors.INFO_VERSION)));
         }
         int width = Math.max(16, maxWidth);
         switch (row.chatLog().source()) {

@@ -60,6 +60,7 @@
   "allthelogs.status.messages.timed": "%s messages (%ss)",
   "allthelogs.info.version": "Version: %s",
   "allthelogs.info.playing": "Playing as: %s",
+  "allthelogs.info.playing_on": "Playing on: %s",
   "allthelogs.info.path": "Path: %s",
   "allthelogs.info.entry": "Entry: %s",
   "allthelogs.status.importing": "Importing...",

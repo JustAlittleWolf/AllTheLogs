@@ -108,6 +108,7 @@ public final class AllTheLogsClient implements ClientModInitializer {
 
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
             AllTheLogsCommands.register(dispatcher));
+        ServerPlaceTracker.register();
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             long now = System.currentTimeMillis();

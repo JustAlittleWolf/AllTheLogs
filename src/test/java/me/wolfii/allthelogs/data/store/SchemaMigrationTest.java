@@ -52,6 +52,8 @@ class SchemaMigrationTest {
             assertTrue(tableExists(statement, "chat_entry"));
             assertTrue(tableExists(statement, "import_seen"));
             assertTrue(columnExists(statement, "import_seen", "content_hash"));
+            assertTrue(columnExists(statement, "log_file", "minecraft_user"));
+            assertTrue(columnExists(statement, "log_file", "server_place"));
         }
     }
 
@@ -134,6 +136,28 @@ class SchemaMigrationTest {
                 assertTrue(result.next());
                 assertEquals(2, result.getLong(1), "the pre-existing session's rows must survive the sweep");
             }
+            assertTrue(columnExists(statement, "log_file", "server_place"),
+                "4→5 should have added server_place while stepping through from version 3");
+        }
+    }
+
+    @Test
+    void migratesVersion4DatabasesByAddingServerPlace() throws SQLException {
+        Path database = tempDir.resolve("v4.duckdb");
+        try (var connection = StoreConnections.openFile(database);
+             Statement statement = connection.createStatement()) {
+            statement.execute("ALTER TABLE log_file DROP COLUMN server_place");
+            statement.execute("DELETE FROM " + Schema.META_TABLE
+                + " WHERE k = '" + Schema.VERSION_KEY + "'");
+            statement.execute("INSERT INTO " + Schema.META_TABLE + " VALUES ('"
+                + Schema.VERSION_KEY + "', '4')");
+            assertFalse(columnExists(statement, "log_file", "server_place"));
+        }
+
+        try (var connection = StoreConnections.openFile(database);
+             Statement statement = connection.createStatement()) {
+            assertEquals(Schema.CURRENT_VERSION, SchemaMigration.readVersion(statement));
+            assertTrue(columnExists(statement, "log_file", "server_place"));
         }
     }
 

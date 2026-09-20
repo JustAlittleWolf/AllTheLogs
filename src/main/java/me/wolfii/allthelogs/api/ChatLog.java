@@ -43,4 +43,9 @@ public interface ChatLog {
      * The player from a {@code Setting user:} line, or {@code null} if unknown.
      */
     String minecraftUser();
+
+    /**
+     * The remote server address or {@code world/{name}} local world, or {@code null} if unknown.
+     */
+    String serverPlace();
 }
