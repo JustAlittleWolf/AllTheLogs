@@ -22,6 +22,7 @@
  *   readonly caseSensitive: boolean;
  *   readonly regex: string | null;
  *   readonly version: string | null;
+ *   readonly serverOrWorld: string | null;
  *   readonly startingAt: string | null;
  *   readonly upUntil: string | null;
  *   readonly contextLines: number;
@@ -36,6 +37,7 @@
  *   withSubstringCaseSensitive(substring: string): ChatQuery;
  *   withRegex(regex: string): ChatQuery;
  *   withVersion(version: string): ChatQuery;
+ *   withServerOrWorld(serverOrWorld: string): ChatQuery;
  *   startingAt(startingAt: string): ChatQuery;
  *   upUntil(upUntil: string): ChatQuery;
  *   withContextLines(contextLines: number): ChatQuery;
@@ -95,6 +97,7 @@
  *
  * interface LogStoreMetadata {
  *   readonly minecraftVersions: string[];
+ *   readonly serverOrWorlds: string[];
  *   readonly firstLogDate: string | null;
  *   readonly lastLogDate: string | null;
  *   readonly chatLogCount: number;

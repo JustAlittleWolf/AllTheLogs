@@ -19,6 +19,7 @@ class ChatQueryTest {
         assertNull(query.startingAt());
         assertNull(query.upUntil());
         assertNull(query.version());
+        assertNull(query.serverOrWorld());
         assertEquals(-1, query.limit());
     }
 
@@ -94,6 +95,14 @@ class ChatQueryTest {
         ChatQuery first = ChatQuery.all().withVersion("26.2");
         assertEquals("26.2", first.version());
         assertEquals("1.8.9", first.withVersion("1.8.9").version());
+    }
+
+    @Test
+    void withServerOrWorldReplacesAndRejectsNull() {
+        assertThrows(NullPointerException.class, () -> ChatQuery.all().withServerOrWorld(null));
+        ChatQuery first = ChatQuery.all().withServerOrWorld("unicacity.eu");
+        assertEquals("unicacity.eu", first.serverOrWorld());
+        assertEquals("world/Survival", first.withServerOrWorld("world/Survival").serverOrWorld());
     }
 
     @Test

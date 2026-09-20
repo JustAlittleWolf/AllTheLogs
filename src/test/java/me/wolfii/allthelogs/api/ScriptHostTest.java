@@ -77,6 +77,25 @@ class ScriptHostTest {
     }
 
     @Test
+    void chatQueryCanFilterByServerOrWorld() throws Exception {
+        store.updateSessionPlace("unicacity.eu");
+        store.importSessionMessage("on uni", null);
+        store.updateSessionPlace(null);
+        store.importSessionMessage("after leave", null);
+        Path output = tempDir.resolve("output").resolve("server.txt");
+        ScriptHost.Result result = ScriptHost.execute("""
+            const hits = database.findEntries(ChatQuery.all().withServerOrWorld("unicacity.eu"));
+            writeToOutputFile("count=" + hits.length);
+            hits.forEach((entry) => writeToOutputFile(entry.message + " @ " + entry.serverOrWorld));
+            """, "server.js", database, output);
+        assertTrue(result.succeeded(), () -> result.console() + " / " + result.error());
+        String written = Files.readString(output);
+        assertTrue(written.contains("count=1"));
+        assertTrue(written.contains("on uni @ unicacity.eu"));
+        assertFalse(written.contains("after leave"));
+    }
+
+    @Test
     void chatQueryStartingAtAcceptsIsoTimestampStrings() throws Exception {
         Path output = tempDir.resolve("output").resolve("range.txt");
         ScriptHost.Result result = ScriptHost.execute("""

@@ -64,6 +64,7 @@ class FilterPersistenceTest {
             .withStartingAt(LocalDateTime.of(2026, 1, 2, 3, 4))
             .withUpUntil(LocalDateTime.of(2026, 2, 3, 4, 5))
             .withVersion("26.2")
+            .withServerOrWorld("hypixel.net")
             .withLimit(25)
             .withOffset(LocalDateTime.of(2026, 1, 2, 3, 5));
         SearchFilter restored = FilterPersistence.fromJson(FilterPersistence.toJson(filter));
@@ -74,6 +75,7 @@ class FilterPersistenceTest {
         assertEquals(LocalDateTime.of(2026, 1, 2, 3, 4), restored.startingAt());
         assertEquals(LocalDateTime.of(2026, 2, 3, 4, 5), restored.upUntil());
         assertEquals("26.2", restored.version());
+        assertEquals("hypixel.net", restored.serverOrWorld());
         assertEquals(SearchFilter.DEFAULT_LIMIT, restored.limit());
         assertNull(restored.offset());
     }

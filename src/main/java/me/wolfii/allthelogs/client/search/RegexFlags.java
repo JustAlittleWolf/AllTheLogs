@@ -3,14 +3,18 @@ package me.wolfii.allthelogs.client.search;
 import java.util.regex.Pattern;
 
 /**
- * Java / RE2 letter flags the filter UI accepts. {@code i} is kept in lockstep with
+ * DuckDB RE2 letter flags the filter UI accepts. {@code i} is kept in lockstep with
  * {@link SearchFilter#caseSensitive()}: ignore-case means {@code i} is present.
+ * <p>
+ * Only letters that RE2 and Java treat the same way are allowed, so search-bar highlighting
+ * can compile the same pattern DuckDB runs. {@code U} is omitted: RE2 uses it for ungreedy
+ * matching, Java for Unicode character classes.
  */
 public final class RegexFlags {
     /**
-     * Letters {@link Pattern} understands as inline / compile flags, plus RE2's {@code U}.
+     * Inline RE2 flags with matching Java {@link Pattern} meaning: ignore-case, multiline, dotall.
      */
-    public static final String VALID = "dimsuxU";
+    public static final String VALID = "ims";
 
     private RegexFlags() {
     }
@@ -56,45 +60,27 @@ public final class RegexFlags {
         return cleaned.replace("i", "");
     }
 
-    public static int toPatternFlags(String flags) {
-        String cleaned = sanitize(flags);
-        int bits = 0;
-        for (int i = 0; i < cleaned.length(); i++) {
-            bits |= bit(cleaned.charAt(i));
-        }
-        if ((bits & Pattern.CASE_INSENSITIVE) != 0) {
-            bits |= Pattern.UNICODE_CASE;
-        }
-        return bits;
-    }
-
     /**
-     * RE2 inline group {@code (?imsU)}, omitting letters DuckDB does not accept.
+     * RE2 inline group {@code (?ims)} in a stable letter order.
      */
     public static String re2Inline(String flags) {
         String cleaned = sanitize(flags);
-        StringBuilder inline = new StringBuilder(4);
+        StringBuilder inline = new StringBuilder(VALID.length());
         appendIfPresent(inline, cleaned, 'i');
         appendIfPresent(inline, cleaned, 'm');
         appendIfPresent(inline, cleaned, 's');
-        appendIfPresent(inline, cleaned, 'U');
         return inline.toString();
+    }
+
+    /**
+     * Extra Java compile bits so {@code (?i)} folds Unicode the way RE2 does. {@code m} and {@code s}
+     * come from the inline group on the DuckDB pattern string, not from these bits.
+     */
+    public static int highlightBits(String flags) {
+        return ignoreCase(flags) ? Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE : 0;
     }
 
     private static void appendIfPresent(StringBuilder into, String flags, char letter) {
         if (flags.indexOf(letter) >= 0) into.append(letter);
-    }
-
-    private static int bit(char flag) {
-        return switch (flag) {
-            case 'd' -> Pattern.UNIX_LINES;
-            case 'i' -> Pattern.CASE_INSENSITIVE;
-            case 'm' -> Pattern.MULTILINE;
-            case 's' -> Pattern.DOTALL;
-            case 'u' -> Pattern.UNICODE_CASE;
-            case 'x' -> Pattern.COMMENTS;
-            case 'U' -> Pattern.UNICODE_CHARACTER_CLASS;
-            default -> 0;
-        };
     }
 }

@@ -447,7 +447,8 @@ final class LogBrowserQueries {
         if (filter.hasText()) {
             return ContextPeeks.strip(rows, filter.contextLines(), true, oldestFirst);
         }
-        if (filter.hasVersion() || filter.startingAt() != null || filter.upUntil() != null) {
+        if (filter.hasVersion() || filter.hasServerOrWorld()
+            || filter.startingAt() != null || filter.upUntil() != null) {
             return ContextPeeks.markFileGaps(rows, oldestFirst);
         }
         return rows;

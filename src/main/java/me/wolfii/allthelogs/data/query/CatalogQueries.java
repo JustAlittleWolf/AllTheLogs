@@ -68,6 +68,18 @@ final class CatalogQueries {
                     versions.add(result.getString(1));
                 }
             }
+            List<String> servers = new ArrayList<>();
+            try (Statement statement = connection.createStatement();
+                 ResultSet result = statement.executeQuery("""
+                     SELECT server_or_world
+                     FROM chat_entry
+                     WHERE server_or_world IS NOT NULL
+                     GROUP BY server_or_world
+                     ORDER BY MIN(entry_time), server_or_world""")) {
+                while (result.next()) {
+                    servers.add(result.getString(1));
+                }
+            }
             long chatLogCount;
             LocalDate firstLogDate;
             LocalDate lastLogDate;
@@ -86,7 +98,7 @@ final class CatalogQueries {
                 result.next();
                 chatEntryCount = result.getLong(1);
             }
-            return new LogStoreMetadata(versions, firstLogDate, lastLogDate, chatLogCount, chatEntryCount,
+            return new LogStoreMetadata(versions, servers, firstLogDate, lastLogDate, chatLogCount, chatEntryCount,
                 databaseSizeBytes);
         } catch (SQLException e) {
             throw new LogDataException("could not read store metadata", e);

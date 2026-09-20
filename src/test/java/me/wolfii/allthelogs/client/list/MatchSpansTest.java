@@ -25,6 +25,20 @@ class MatchSpansTest {
     }
 
     @Test
+    void regexHighlightsUseDuckDbInlineFlags() {
+        String message = "a\nneedle";
+        SearchFilter dotall = SearchFilter.defaults().withText("a.needle").withRegex(true).withRegexFlags("s");
+        List<HighlightSpan> spans = MatchSpans.spans(message, dotall);
+        assertEquals(1, spans.size());
+        assertEquals(message, message.substring(spans.get(0).start(), spans.get(0).end()));
+        SearchFilter anchored = SearchFilter.defaults().withText("^needle").withRegex(true)
+            .withCaseSensitive(true).withRegexFlags("m");
+        List<HighlightSpan> line = MatchSpans.spans(message, anchored);
+        assertEquals(1, line.size());
+        assertEquals("needle", message.substring(line.get(0).start(), line.get(0).end()));
+    }
+
+    @Test
     void invalidRegexYieldsNoSpans() {
         SearchFilter filter = SearchFilter.defaults().withText("(").withRegex(true);
         assertTrue(MatchSpans.spans("hello", filter).isEmpty());

@@ -240,6 +240,10 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
                 Minecraft.getInstance().keyboardHandler.setClipboard(row.message()));
             menu.button(Component.translatable("allthelogs.menu.filter_day"), ignored ->
                 applyFilter(queries.filter().withDay(row.entry().timestamp().toLocalDate())));
+            if (row.entry().serverOrWorld() != null) {
+                menu.button(Component.translatable("allthelogs.menu.filter_server"), ignored ->
+                    applyFilter(queries.filter().withServerOrWorld(row.entry().serverOrWorld())));
+            }
         });
     }
 }

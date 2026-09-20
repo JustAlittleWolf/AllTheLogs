@@ -39,6 +39,7 @@ final class FilterOverlay {
     private CheckboxComponent caseBox;
     private TextBoxComponent flagsBox;
     private TextBoxComponent contextBox;
+    private TextBoxComponent serverBox;
     private TextBoxComponent fromBox;
     private TextBoxComponent untilBox;
     private boolean syncing;
@@ -104,6 +105,8 @@ final class FilterOverlay {
             if (fromBox != null && !fromBox.getValue().equals(from)) fromBox.setValue(from);
             String until = DateParser.formatUntil(current.upUntil());
             if (untilBox != null && !untilBox.getValue().equals(until)) untilBox.setValue(until);
+            String server = current.serverOrWorld() == null ? "" : current.serverOrWorld();
+            if (serverBox != null && !serverBox.getValue().equals(server)) serverBox.setValue(server);
             versionsMenu.syncButton();
         } finally {
             syncing = false;
@@ -143,6 +146,7 @@ final class FilterOverlay {
         content.child(UIComponents.label(Component.translatable("allthelogs.filter.date_hint"))
             .color(Color.ofRgb(0x888888)));
         content.child(versionsMenu.row());
+        content.child(serverField(current.serverOrWorld()));
 
         ScrollContainer<FlowLayout> panel = UIContainers.verticalScroll(
             Sizing.fixed(PANEL_WIDTH), Sizing.fill(), content);
@@ -163,6 +167,20 @@ final class FilterOverlay {
             if (!syncing) emit(filter.get().withRegexFlags(text));
         });
         row.child(flagsBox);
+        return row;
+    }
+
+    private FlowLayout serverField(String value) {
+        FlowLayout row = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
+        row.gap(2);
+        row.child(UIComponents.label(Component.translatable("allthelogs.filter.server")));
+        serverBox = UIComponents.textBox(Sizing.fill(), value == null ? "" : value);
+        serverBox.setMaxLength(256);
+        serverBox.setHint(Component.translatable("allthelogs.filter.server_hint"));
+        serverBox.onChanged().subscribe(text -> {
+            if (!syncing) emit(filter.get().withServerOrWorld(text));
+        });
+        row.child(serverBox);
         return row;
     }
 
