@@ -1,8 +1,12 @@
 package me.wolfii.allthelogs.client.search;
 
 import me.wolfii.allthelogs.api.ChatQuery;
+import me.wolfii.allthelogs.data.ChatEntry;
+import me.wolfii.allthelogs.data.ChatLog;
+import me.wolfii.allthelogs.data.LogSource;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Path;
 import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -108,6 +112,29 @@ class SearchFilterTest {
     @Test
     void emptyTextMatchesEverything() {
         assertTrue(SearchFilter.defaults().messagePredicate().test("anything"));
+    }
+
+    @Test
+    void allowsContextKeepsTheDateWindowAndMatchingServers() {
+        ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")),
+            LocalDateTime.of(2026, 8, 26, 10, 0).toLocalDate(), "26.2",
+            LocalDateTime.of(2026, 8, 26, 10, 0), LocalDateTime.of(2026, 8, 26, 10, 0));
+        ChatEntry onHypixel = new ChatEntry(log, LocalDateTime.of(2026, 8, 26, 10, 5), 1, "hi",
+            null, "player", "Hypixel.net");
+        ChatEntry elsewhere = new ChatEntry(log, LocalDateTime.of(2026, 8, 26, 10, 6), 2, "hi",
+            null, "player", "gommehd.net");
+        ChatEntry tooEarly = new ChatEntry(log, LocalDateTime.of(2026, 8, 26, 9, 0), 0, "hi",
+            null, "player", "Hypixel.net");
+        SearchFilter server = SearchFilter.defaults().withServerOrWorld("hypixel");
+        assertTrue(server.allowsContext(onHypixel));
+        assertFalse(server.allowsContext(elsewhere));
+        assertFalse(server.allowsContext(new ChatEntry(log, LocalDateTime.of(2026, 8, 26, 10, 7), 3, "hi")));
+        SearchFilter window = SearchFilter.defaults()
+            .withStartingAt(LocalDateTime.of(2026, 8, 26, 10, 0))
+            .withUpUntil(LocalDateTime.of(2026, 8, 26, 11, 0));
+        assertTrue(window.allowsContext(onHypixel));
+        assertFalse(window.allowsContext(tooEarly));
+        assertTrue(SearchFilter.defaults().allowsContext(elsewhere));
     }
 
     @Test
