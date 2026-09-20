@@ -1,6 +1,5 @@
 package me.wolfii.allthelogs.client.list;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -92,16 +91,6 @@ public final class ResultWindow {
      * Index of the row whose timestamp is closest to {@code time}, or {@code -1} when the window is empty.
      */
     public int nearestIndex(LocalDateTime time) {
-        if (rows.isEmpty() || time == null) return -1;
-        int best = 0;
-        long bestDelta = Long.MAX_VALUE;
-        for (int i = 0; i < rows.size(); i++) {
-            long delta = Math.abs(Duration.between(rows.get(i).entry().timestamp(), time).toMillis());
-            if (delta < bestDelta) {
-                bestDelta = delta;
-                best = i;
-            }
-        }
-        return best;
+        return DisplayRows.nearestIndex(rows, time);
     }
 }

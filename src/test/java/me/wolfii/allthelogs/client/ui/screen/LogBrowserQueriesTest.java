@@ -118,4 +118,11 @@ class LogBrowserQueriesTest {
         assertSame(storeError, LogBrowserQueries.unwrap(wrapped));
         assertEquals(storeError.getMessage(), LogBrowserQueries.unwrap(wrapped).getMessage());
     }
+
+    @Test
+    void keepViewportWhenTheListAlreadyHasAPlace() {
+        assertFalse(LogBrowserQueries.keepViewport(null, true));
+        assertFalse(LogBrowserQueries.keepViewport(LocalDateTime.of(2026, 8, 27, 10, 0), false));
+        assertTrue(LogBrowserQueries.keepViewport(LocalDateTime.of(2026, 8, 27, 10, 0), true));
+    }
 }

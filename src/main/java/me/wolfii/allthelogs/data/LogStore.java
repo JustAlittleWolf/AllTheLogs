@@ -288,6 +288,24 @@ public final class LogStore implements AutoCloseable {
     }
 
     /**
+     * Imports a live chat line using the player and server/world observed on the client when that
+     * line was captured. Later calls without this context keep the last stamped values.
+     *
+     * @param minecraftUser the current player name, or {@code null} to keep the last known name
+     * @param serverOrWorld the current remote server or {@code world/{name}}, or {@code null} after leave
+     */
+    public boolean importSessionMessage(String message, long[] formatting, String minecraftUser,
+                                        String serverOrWorld) {
+        return importSessionMessage(message, formatting, LocalDateTime.now(), minecraftUser, serverOrWorld);
+    }
+
+    boolean importSessionMessage(String message, long[] formatting, LocalDateTime timestamp,
+                                 String minecraftUser, String serverOrWorld) {
+        sessions.stampLiveCapture(minecraftUser, serverOrWorld);
+        return sessions.importMessage(message, formatting, timestamp);
+    }
+
+    /**
      * Updates {@link ChatLog#endTime()} of the current session, without storing a chat line.
      * <p>
      * Whole seconds only, matching {@link #importSessionMessage(String, long[])}. If {@code timestamp} is
@@ -297,6 +315,17 @@ public final class LogStore implements AutoCloseable {
      */
     public void updateSessionEndTime(LocalDateTime timestamp) {
         sessions.updateEndTime(timestamp);
+    }
+
+    /**
+     * Sets the remote server or local world used for subsequent live chat. Pass {@code null} when
+     * the player leaves so later lines are not tagged with the previous place. Already stored lines
+     * keep the place they were captured with.
+     *
+     * @throws LogDataException if no session is active, or the update cannot be written
+     */
+    public void updateSessionPlace(String serverPlace) {
+        sessions.updatePlace(serverPlace);
     }
 
     /**

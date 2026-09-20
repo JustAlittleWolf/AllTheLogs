@@ -25,7 +25,8 @@ public final class SchemaMigration {
     private static final Map<Integer, Migration> MIGRATIONS = Map.of(
         1, NO_OP,
         2, NO_OP,
-        3, SchemaMigration::migrate3To4SeedClusterMarker
+        3, SchemaMigration::migrate3To4SeedClusterMarker,
+        4, SchemaMigration::migrate4To5PerEntryMetadata
     );
 
     @FunctionalInterface
@@ -82,6 +83,22 @@ public final class SchemaMigration {
      */
     private static void migrate3To4SeedClusterMarker(Statement statement) throws SQLException {
         statement.execute("INSERT INTO " + Schema.META_TABLE + " VALUES ('" + Schema.CLUSTER_MARKER_KEY + "', '0')");
+    }
+
+    /**
+     * 4 → 5: stamps each chat line with the Minecraft user and the server or world in effect at
+     * that line. Place is per message because one log can visit several servers
+     * (connect → leave → connect). Existing rows inherit {@code log_file.minecraft_user};
+     * {@code server_or_world} is null until those logs are imported again.
+     */
+    private static void migrate4To5PerEntryMetadata(Statement statement) throws SQLException {
+        statement.execute("ALTER TABLE chat_entry ADD COLUMN IF NOT EXISTS minecraft_user VARCHAR");
+        statement.execute("ALTER TABLE chat_entry ADD COLUMN IF NOT EXISTS server_or_world VARCHAR");
+        statement.execute("""
+            UPDATE chat_entry e
+            SET minecraft_user = f.minecraft_user
+            FROM log_file f
+            WHERE e.file_id = f.id AND e.minecraft_user IS NULL AND f.minecraft_user IS NOT NULL""");
     }
 
     static int readVersion(Statement statement) throws SQLException {

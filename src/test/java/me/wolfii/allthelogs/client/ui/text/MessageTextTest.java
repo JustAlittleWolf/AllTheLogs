@@ -52,16 +52,18 @@ class MessageTextTest {
         LocalDateTime time = LocalDateTime.of(2026, 8, 27, 19, 22, 14);
         ChatLog log = new ChatLog(new LogSource.File(Path.of("/home/wolf/logs/2026-08-27-1.log.gz")),
             LocalDate.of(2026, 8, 27), "1.12.2", time, time, "Steve");
-        DisplayRow row = new DisplayRow(new ChatEntry(log, time, 0, "hi"), true, List.of());
+        DisplayRow row = new DisplayRow(new ChatEntry(log, time, 0, "hi", null, "Steve", "unicacity.eu"), true, List.of());
         List<Component> info = MessageText.messageInfo(row, Integer.MAX_VALUE, String::length);
         assertEquals("2026-08-27 19:22:14", info.get(0).getString());
         assertEquals("allthelogs.info.version", key(info.get(1)));
         assertEquals("allthelogs.info.playing", key(info.get(2)));
-        assertEquals("allthelogs.info.path", key(info.get(3)));
+        assertEquals("allthelogs.info.playing_on", key(info.get(3)));
+        assertEquals("allthelogs.info.path", key(info.get(4)));
         assertEquals(Colors.META_LABEL & 0xFFFFFF, info.get(1).getStyle().getColor().getValue());
         assertEquals("1.12.2", ((Component) args(info.get(1))[0]).getString());
         assertEquals("Steve", ((Component) args(info.get(2))[0]).getString());
-        assertTrue(((Component) args(info.get(3))[0]).getString().contains("2026-08-27-1.log.gz"));
+        assertEquals("unicacity.eu", ((Component) args(info.get(3))[0]).getString());
+        assertTrue(((Component) args(info.get(4))[0]).getString().contains("2026-08-27-1.log.gz"));
         ChatLog archive = new ChatLog(new LogSource.Archive(Path.of("/tmp/logs.zip"), "instance/logs/latest.log"),
             LocalDate.of(2026, 8, 27), "26.2", time, time);
         List<Component> archiveInfo = MessageText.messageInfo(
@@ -143,9 +145,8 @@ class MessageTextTest {
         assertEquals(Colors.MATCH_TEXT, MessageText.stackedColor(match, 3, false));
         DisplayRow context = new DisplayRow(new ChatEntry(log, time, 1, "hello\\nworld"), false,
             List.of());
-        assertEquals(Colors.CONTEXT_TEXT, MessageText.stackedColor(context, 0, true));
-        assertEquals(Colors.multiply(Colors.CONTEXT_TEXT, Colors.ESCAPE_TEXT),
-            MessageText.stackedColor(context, 5, true));
+        assertEquals(Colors.MATCH_TEXT, MessageText.stackedColor(context, 0, true));
+        assertEquals(Colors.ESCAPE_TEXT, MessageText.stackedColor(context, 5, true));
         int red = PackedFormatting.color(0xFF5555);
         DisplayRow coloured = new DisplayRow(
             new ChatEntry(log, time, 2, "abc", new long[]{PackedFormatting.run(0, 3, red)}), true, List.of());

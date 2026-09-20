@@ -43,7 +43,6 @@ public final class MessageTimeline extends BaseUIComponent {
     public static final int TIMELINE_WIDTH = 68;
     /** Matches fetched per preview query while the thumb is being dragged. */
     public static final int SCRUB_PAGE_SIZE = 32;
-    private static final int ROW_HEIGHT = MessageListLayout.ROW_HEIGHT;
     private static final int SELECT_DRAG_SLOP = 3;
     private static final int MULTI_CLICK_MS = 400;
     private static final int MULTI_CLICK_SLOP = 4;
@@ -61,6 +60,7 @@ public final class MessageTimeline extends BaseUIComponent {
     private MessageListLayout layout = MessageListLayout.of(List.of(), 0);
     private MatchSummary matches = MatchSummary.empty();
     private int contextLines;
+    private int messageRowHeight = MessageListLayout.ROW_HEIGHT;
     private double scrollY;
     private int laidOutWidth = -1;
 
@@ -79,6 +79,8 @@ public final class MessageTimeline extends BaseUIComponent {
     private BiConsumer<ScrubJump, Boolean> onJump = (jump, preview) -> {
     };
     private ExpandHandler onExpand = (row, side, extraLines) -> {
+    };
+    private ContextMenuHandler onContextMenu = (row, selection, rows, screenX, screenY) -> {
     };
     private Runnable onScrubBegin = () -> {
     };
@@ -117,12 +119,24 @@ public final class MessageTimeline extends BaseUIComponent {
         this.onExpand = onExpand;
     }
 
+    public void onContextMenu(ContextMenuHandler onContextMenu) {
+        this.onContextMenu = onContextMenu;
+    }
+
     public void onScrubBegin(Runnable onScrubBegin) {
         this.onScrubBegin = onScrubBegin;
     }
 
     public void setContextLines(int contextLines) {
         this.contextLines = contextLines;
+        rebuildLayout();
+    }
+
+    /**
+     * Line box for chat text and timestamps. Default {@link MessageListLayout#ROW_HEIGHT} is current drawing.
+     */
+    public void setMessageFontSize(int fontSize) {
+        this.messageRowHeight = Math.max(1, fontSize);
         rebuildLayout();
     }
 
@@ -310,7 +324,7 @@ public final class MessageTimeline extends BaseUIComponent {
             autoScroll.stop();
             return true;
         }
-        setScrollY(scrollY - amount * ROW_HEIGHT * 3);
+        setScrollY(scrollY - amount * messageRowHeight * 3);
         maybeRequestMore();
         return true;
     }
@@ -335,9 +349,16 @@ public final class MessageTimeline extends BaseUIComponent {
             return true;
         }
         if (click.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
-            selection.clear();
+            if (clearsSelectionOnMouseDown(click.button())) {
+                selection.clear();
+            }
             pendingClear = false;
             draggingSelection = false;
+            int row = view().rowAt(click.y());
+            if (row >= 0) {
+                onContextMenu.open(window.rows().get(row), selection, window.rows(),
+                    x + click.x(), y + click.y());
+            }
             return true;
         }
         if (click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
@@ -442,7 +463,7 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     private ListView view() {
-        return new ListView(x, y, width, height, scrollY, layout, window.rows(), font());
+        return new ListView(x, y, width, height, scrollY, layout, window.rows(), font(), messageRowHeight);
     }
 
     private TimelineTrackPainter.Track track() {
@@ -477,8 +498,9 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     private void rebuildLayout() {
-        layout = MessageListLayout.of(window.rows(), contextLines, ListView.messageWidth(width, font()),
-            (row, from, to) -> rowWidths.width(row, font(), from, to));
+        float scale = ListView.fontScale(messageRowHeight);
+        layout = MessageListLayout.of(window.rows(), contextLines, ListView.messageWidth(width, font(), messageRowHeight),
+            (row, from, to) -> Math.round(rowWidths.width(row, font(), from, to) * scale), messageRowHeight);
         this.scrollY = clampScroll(scrollY);
     }
 
@@ -544,9 +566,16 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     /**
+     * Right-click opens a context menu and must keep the current selection so it can be copied.
+     */
+    static boolean clearsSelectionOnMouseDown(int button) {
+        return false;
+    }
+
+    /**
      * Timestamp of the row at the top of the viewport, which is what the thumb tracks.
      */
-    private LocalDateTime visibleTime() {
+    public LocalDateTime visibleTime() {
         List<DisplayRow> rows = window.rows();
         if (rows.isEmpty()) return null;
         int header = contentOrigin() > 0 ? 0 : MessageListLayout.DATE_HEIGHT;
@@ -763,9 +792,10 @@ public final class MessageTimeline extends BaseUIComponent {
         ListView view = view();
         int xInMessage = (int) Math.round(localX - view.messageLocalX());
         int yInRow = (int) Math.round(localY + scrollY - contentOrigin() - layout.rowY(row));
-        int line = yInRow < 0 ? 0 : yInRow / ROW_HEIGHT;
+        int line = yInRow < 0 ? 0 : yInRow / Math.max(1, messageRowHeight);
         DisplayRow displayRow = rows.get(row);
-        MessageWrap.RangeWidth widths = rowWidths.of(displayRow, view.font());
+        float scale = view.fontScale();
+        MessageWrap.RangeWidth widths = (from, to) -> Math.round(rowWidths.width(displayRow, view.font(), from, to) * scale);
         return MessageWrap.charIndex(displayRow.message(), view.messageWidth(), line, xInMessage, widths);
     }
 
@@ -791,5 +821,10 @@ public final class MessageTimeline extends BaseUIComponent {
     @FunctionalInterface
     public interface ExpandHandler {
         void expand(DisplayRow row, TimelineEdge side, int extraLines);
+    }
+
+    @FunctionalInterface
+    public interface ContextMenuHandler {
+        void open(DisplayRow row, MessageSelection selection, List<DisplayRow> rows, double screenX, double screenY);
     }
 }

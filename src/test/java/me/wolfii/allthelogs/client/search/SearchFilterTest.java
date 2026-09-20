@@ -4,6 +4,7 @@ import me.wolfii.allthelogs.api.ChatQuery;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -61,6 +62,7 @@ class SearchFilterTest {
         assertEquals(5, SearchFilter.defaults().withText("hi").toQuery().contextLines());
         assertEquals(0, SearchFilter.defaults().toQuery().contextLines());
         assertEquals(0, SearchFilter.defaults().withVersion("26.2").toQuery().contextLines());
+        assertEquals(0, SearchFilter.defaults().withServerOrWorld("hypixel.net").toQuery().contextLines());
         assertEquals(0, SearchFilter.defaults()
             .withStartingAt(LocalDateTime.of(2026, 1, 1, 0, 0)).toQuery().contextLines());
     }
@@ -71,6 +73,14 @@ class SearchFilterTest {
         assertEquals("26.2", SearchFilter.defaults().withVersion("26.2").toQuery().version());
         assertNull(SearchFilter.defaults().withVersion("ALL").toQuery().version());
         assertNull(SearchFilter.defaults().withVersion("  ").version());
+    }
+
+    @Test
+    void serverFilterIsOmittedByDefaultAndAppliedWhenSet() {
+        assertNull(SearchFilter.defaults().toQuery().serverOrWorld());
+        assertEquals("hypixel.net", SearchFilter.defaults().withServerOrWorld("hypixel.net").toQuery().serverOrWorld());
+        assertEquals("ALL", SearchFilter.defaults().withServerOrWorld("ALL").toQuery().serverOrWorld());
+        assertNull(SearchFilter.defaults().withServerOrWorld("  ").serverOrWorld());
     }
 
     @Test
@@ -113,5 +123,40 @@ class SearchFilterTest {
         assertTrue(SearchFilter.defaults().withStartingAt(LocalDateTime.of(2026, 1, 1, 0, 0)).isNarrowed());
         assertTrue(SearchFilter.defaults().withUpUntil(LocalDateTime.of(2026, 1, 2, 0, 0)).isNarrowed());
         assertFalse(SearchFilter.defaults().withVersion("ALL").isNarrowed());
+        assertTrue(SearchFilter.defaults().withServerOrWorld("hypixel.net").isNarrowed());
+        assertTrue(SearchFilter.defaults().withServerOrWorld("ALL").isNarrowed());
+    }
+
+    @Test
+    void regexFlagsStayTiedToCaseSensitiveAndRejectInvalidLetters() {
+        SearchFilter defaults = SearchFilter.defaults();
+        assertEquals("i", defaults.regexFlags());
+        assertFalse(defaults.caseSensitive());
+        SearchFilter sensitive = defaults.withCaseSensitive(true);
+        assertEquals("", sensitive.regexFlags());
+        assertTrue(sensitive.caseSensitive());
+        SearchFilter flagged = defaults.withRegexFlags("ms");
+        assertTrue(flagged.caseSensitive());
+        assertEquals("ms", flagged.regexFlags());
+        SearchFilter ignore = flagged.withRegexFlags("msi");
+        assertFalse(ignore.caseSensitive());
+        assertEquals("(?ims)hi", SearchFilter.defaults().withText("hi").withRegex(true).withRegexFlags("msi")
+            .toQuery().regex());
+        assertEquals("hi", SearchFilter.defaults().withText("hi").withRegex(true).withCaseSensitive(true)
+            .toQuery().regex());
+        assertFalse(RegexFlags.isLegal("g"));
+        assertEquals("im", RegexFlags.sanitize("imm"));
+        assertEquals("i", RegexFlags.sanitize("iUx"));
+        Pattern highlighted = SearchFilter.compiledRegex("a.b", "s").orElseThrow();
+        assertEquals("(?s)a.b", highlighted.pattern());
+        assertTrue(highlighted.matcher("a\nb").find());
+        assertEquals("(?s)a.b", SearchFilter.regexPattern("a.b", "s"));
+    }
+
+    @Test
+    void withDaySetsInclusiveMidnightBounds() {
+        SearchFilter day = SearchFilter.defaults().withDay(java.time.LocalDate.of(2026, 8, 27));
+        assertEquals(LocalDateTime.of(2026, 8, 27, 0, 0), day.startingAt());
+        assertEquals(LocalDateTime.of(2026, 8, 28, 0, 0), day.upUntil());
     }
 }

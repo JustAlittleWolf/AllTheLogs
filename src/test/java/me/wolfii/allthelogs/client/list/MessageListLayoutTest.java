@@ -34,6 +34,8 @@ class MessageListLayoutTest {
     void shiftClickLoadsAHundredLines() {
         assertEquals(100, MessageListLayout.SHIFT_EXPAND_LINES);
         assertEquals(100, MessageListLayout.extraContextLines(true));
+        assertEquals("Click: +10", MessageListLayout.expandClickHint());
+        assertEquals("Shift+Click: +100", MessageListLayout.expandShiftClickHint());
     }
 
     @Test
@@ -186,5 +188,14 @@ class MessageListLayoutTest {
         MessageListLayout layout = MessageListLayout.of(List.of(first, next), 5);
         assertEquals(0, layout.separators().size());
         assertEquals(layout.rowY(0) + MessageListLayout.ROW_HEIGHT, layout.rowY(1));
+    }
+
+    @Test
+    void customRowHeightScalesWrappedLines() {
+        LocalDateTime time = LocalDateTime.of(2026, 8, 26, 10, 0);
+        ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), time.toLocalDate(), "26.2", time, time);
+        DisplayRow row = new DisplayRow(new ChatEntry(log, time, 0, "abcdefghij"), true, List.of());
+        MessageListLayout layout = MessageListLayout.of(List.of(row), 5, 4, charWidths(), 8);
+        assertEquals(3 * 8, layout.rowHeight(0));
     }
 }

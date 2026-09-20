@@ -9,6 +9,8 @@ import java.util.Objects;
  *
  * @param minecraftVersions distinct {@link ChatLog#minecraftVersion()} values, ordered by the earliest log date of
  *                          each version, then by name
+ * @param serverOrWorlds    distinct {@link ChatEntry#serverOrWorld()} values, ordered by the earliest matching
+ *                          entry time, then by name
  * @param firstLogDate      earliest {@link ChatLog#date()} among stored logs, or {@code null} when the store is empty
  * @param lastLogDate       latest {@link ChatLog#date()} among stored logs, or {@code null} when the store is empty
  * @param chatLogCount      number of stored chat logs, including those with no chat entries
@@ -19,6 +21,7 @@ import java.util.Objects;
  */
 public record LogStoreMetadata(
     List<String> minecraftVersions,
+    List<String> serverOrWorlds,
     LocalDate firstLogDate,
     LocalDate lastLogDate,
     long chatLogCount,
@@ -28,6 +31,8 @@ public record LogStoreMetadata(
     public LogStoreMetadata {
         Objects.requireNonNull(minecraftVersions, "minecraftVersions");
         minecraftVersions = List.copyOf(minecraftVersions);
+        Objects.requireNonNull(serverOrWorlds, "serverOrWorlds");
+        serverOrWorlds = List.copyOf(serverOrWorlds);
         if (chatLogCount < 0) throw new IllegalArgumentException("chatLogCount must not be negative");
         if (chatEntryCount < 0) throw new IllegalArgumentException("chatEntryCount must not be negative");
         if (databaseSizeBytes < 0) throw new IllegalArgumentException("databaseSizeBytes must not be negative");

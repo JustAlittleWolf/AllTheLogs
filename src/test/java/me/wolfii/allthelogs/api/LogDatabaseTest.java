@@ -2,6 +2,7 @@ package me.wolfii.allthelogs.api;
 
 import me.wolfii.allthelogs.client.LogStoreWorker;
 import me.wolfii.allthelogs.data.LogStore;
+import net.minecraft.network.chat.Component;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -88,6 +89,19 @@ class LogDatabaseTest {
             assertEquals(1, open.chatLogs().join().size());
             assertTrue(open.allEntries().join().isEmpty());
             assertEquals(0, open.countMatches(ChatQuery.all()).join());
+        }
+    }
+
+    @Test
+    void workerLiveImportStampsUserAndPlaceOnThatMessage() {
+        try (LogStoreWorker worker = new LogStoreWorker()) {
+            worker.open(tempDir.resolve("live.duckdb")).join();
+            worker.startSession("26.2", "session-start-user").join();
+            worker.importSessionMessage(Component.literal("hello from live"), "JustAlittleWolf", "hypixel.net");
+            ChatEntry entry = worker.allEntries().join().getFirst();
+            assertEquals("hello from live", entry.message());
+            assertEquals("JustAlittleWolf", entry.minecraftUser());
+            assertEquals("hypixel.net", entry.serverOrWorld());
         }
     }
 }

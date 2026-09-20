@@ -12,6 +12,7 @@ import java.util.function.Consumer;
  * @param caseSensitive whether {@code substring} is compared case sensitively
  * @param regex         RE2 pattern every matching message must match somewhere, or {@code null}
  * @param version       Minecraft version the matching entries' logs must have, or {@code null} for any
+ * @param serverOrWorld server or world the matching entries must have been on, or {@code null} for any
  * @param startingAt    earliest timestamp to return, inclusive, or {@code null} for no lower bound
  * @param upUntil       latest timestamp to return, exclusive, or {@code null} for no upper bound
  * @param contextLines  how many entries to also return either side of every match
@@ -27,6 +28,7 @@ public record ChatQuery(
     boolean caseSensitive,
     String regex,
     String version,
+    String serverOrWorld,
     LocalDateTime startingAt,
     LocalDateTime upUntil,
     int contextLines,
@@ -54,7 +56,7 @@ public record ChatQuery(
      * A query matching every stored entry, ordered by timestamp ascending.
      */
     public static ChatQuery all() {
-        return new ChatQuery(null, false, null, null, null, null, 0, -1, Sort.ASCENDING, null, null, 0, 0);
+        return new ChatQuery(null, false, null, null, null, null, null, 0, -1, Sort.ASCENDING, null, null, 0, 0);
     }
 
     /**
@@ -100,6 +102,17 @@ public record ChatQuery(
     public ChatQuery withVersion(String version) {
         Objects.requireNonNull(version, "version");
         return with(draft -> draft.version = version);
+    }
+
+    /**
+     * Keeps only entries whose {@link ChatEntry#serverOrWorld()} contains {@code serverOrWorld},
+     * compared case insensitively. Replaces any previously set server or world. Remote servers use the
+     * address; local worlds use {@code world/{name}}. Context lines are taken from servers that also match.
+     */
+    @Override
+    public ChatQuery withServerOrWorld(String serverOrWorld) {
+        Objects.requireNonNull(serverOrWorld, "serverOrWorld");
+        return with(draft -> draft.serverOrWorld = serverOrWorld);
     }
 
     /**
@@ -213,6 +226,7 @@ public record ChatQuery(
         private boolean caseSensitive;
         private String regex;
         private String version;
+        private String serverOrWorld;
         private LocalDateTime startingAt;
         private LocalDateTime upUntil;
         private int contextLines;
@@ -228,6 +242,7 @@ public record ChatQuery(
             this.caseSensitive = query.caseSensitive;
             this.regex = query.regex;
             this.version = query.version;
+            this.serverOrWorld = query.serverOrWorld;
             this.startingAt = query.startingAt;
             this.upUntil = query.upUntil;
             this.contextLines = query.contextLines;
@@ -240,8 +255,8 @@ public record ChatQuery(
         }
 
         private ChatQuery build() {
-            return new ChatQuery(substring, caseSensitive, regex, version, startingAt, upUntil, contextLines,
-                limit, sort, offset, offsetSource, offsetLine, skip);
+            return new ChatQuery(substring, caseSensitive, regex, version, serverOrWorld, startingAt, upUntil,
+                contextLines, limit, sort, offset, offsetSource, offsetLine, skip);
         }
     }
 }

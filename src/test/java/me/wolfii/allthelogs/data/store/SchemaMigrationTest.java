@@ -52,6 +52,10 @@ class SchemaMigrationTest {
             assertTrue(tableExists(statement, "chat_entry"));
             assertTrue(tableExists(statement, "import_seen"));
             assertTrue(columnExists(statement, "import_seen", "content_hash"));
+            assertTrue(columnExists(statement, "log_file", "minecraft_user"));
+            assertFalse(columnExists(statement, "log_file", "server_place"));
+            assertTrue(columnExists(statement, "chat_entry", "minecraft_user"));
+            assertTrue(columnExists(statement, "chat_entry", "server_or_world"));
         }
     }
 
@@ -102,6 +106,9 @@ class SchemaMigrationTest {
                     (0, 0, '2024-01-01 00:00:00', 'hello', NULL),
                     (0, 1, '2024-01-01 00:01:00', 'world', NULL)""");
 
+            statement.execute("ALTER TABLE chat_entry DROP COLUMN IF EXISTS server_or_world");
+            statement.execute("ALTER TABLE chat_entry DROP COLUMN IF EXISTS minecraft_user");
+
             // Simulate a real version-3 database: no cluster marker key yet.
             statement.execute("DELETE FROM " + Schema.META_TABLE
                 + " WHERE k = '" + Schema.CLUSTER_MARKER_KEY + "'");
@@ -134,6 +141,35 @@ class SchemaMigrationTest {
                 assertTrue(result.next());
                 assertEquals(2, result.getLong(1), "the pre-existing session's rows must survive the sweep");
             }
+            assertFalse(columnExists(statement, "log_file", "server_place"),
+                "place is per chat line, not on log_file");
+            assertTrue(columnExists(statement, "chat_entry", "server_or_world"),
+                "4→5 should have added chat_entry.server_or_world");
+            assertTrue(columnExists(statement, "chat_entry", "minecraft_user"),
+                "4→5 should have added chat_entry.minecraft_user");
+        }
+    }
+
+    @Test
+    void migratesVersion4DatabasesToPerEntryServerOrWorld() throws SQLException {
+        Path database = tempDir.resolve("v4.duckdb");
+        try (var connection = StoreConnections.openFile(database);
+             Statement statement = connection.createStatement()) {
+            statement.execute("ALTER TABLE chat_entry DROP COLUMN IF EXISTS server_or_world");
+            statement.execute("ALTER TABLE chat_entry DROP COLUMN IF EXISTS minecraft_user");
+            statement.execute("DELETE FROM " + Schema.META_TABLE
+                + " WHERE k = '" + Schema.VERSION_KEY + "'");
+            statement.execute("INSERT INTO " + Schema.META_TABLE + " VALUES ('"
+                + Schema.VERSION_KEY + "', '4')");
+            assertFalse(columnExists(statement, "chat_entry", "server_or_world"));
+        }
+
+        try (var connection = StoreConnections.openFile(database);
+             Statement statement = connection.createStatement()) {
+            assertEquals(Schema.CURRENT_VERSION, SchemaMigration.readVersion(statement));
+            assertFalse(columnExists(statement, "log_file", "server_place"));
+            assertTrue(columnExists(statement, "chat_entry", "server_or_world"));
+            assertTrue(columnExists(statement, "chat_entry", "minecraft_user"));
         }
     }
 
