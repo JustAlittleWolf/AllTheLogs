@@ -120,6 +120,17 @@ class LogBrowserQueriesTest {
     }
 
     @Test
+    void preferLaterPicksTheCloserTimestampAndBreaksTiesTowardLater() {
+        LocalDateTime target = LocalDateTime.of(2026, 8, 27, 12, 0, 0);
+        assertTrue(PageBounds.preferLater(target, target.plusMinutes(1), target.minusHours(1)));
+        assertFalse(PageBounds.preferLater(target, target.plusHours(1), target.minusMinutes(1)));
+        assertTrue(PageBounds.preferLater(target, target.plusMinutes(5), target.minusMinutes(5)));
+        assertTrue(PageBounds.preferLater(target, target, target.minusSeconds(1)));
+        assertFalse(PageBounds.preferLater(target, null, target.minusMinutes(1)));
+        assertTrue(PageBounds.preferLater(target, target.plusMinutes(1), null));
+    }
+
+    @Test
     void keepViewportWhenTheListAlreadyHasAPlace() {
         assertFalse(LogBrowserQueries.keepViewport(null, true));
         assertFalse(LogBrowserQueries.keepViewport(LocalDateTime.of(2026, 8, 27, 10, 0), false));

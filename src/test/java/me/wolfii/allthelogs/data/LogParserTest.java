@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 
@@ -113,6 +114,16 @@ class LogParserTest {
         ParsedLog parsed = parse("[2026-08-25 21:04:09] [Render thread/INFO]: [CHAT] hi\n");
         assertEquals(1, parsed.entries().size());
         assertEquals(LocalTime.of(21, 4, 9), parsed.entries().getFirst().time());
+        assertEquals(LocalDate.of(2026, 8, 25), parsed.entries().getFirst().date());
+        assertEquals(LocalDate.of(2026, 8, 25), parsed.firstLineDate());
+    }
+
+    @Test
+    void timeOnlyPrefixesDoNotInventACalendarDate() throws IOException {
+        ParsedLog parsed = parse("[12:16:21] [Client thread/INFO]: [CHAT] hello\n");
+        assertNull(parsed.entries().getFirst().date());
+        assertNull(parsed.firstLineDate());
+        assertEquals(LocalTime.of(12, 16, 21), parsed.entries().getFirst().time());
     }
 
     @Test
@@ -193,6 +204,7 @@ class LogParserTest {
             """);
         assertEquals(1, parsed.entries().size());
         assertEquals(LocalTime.of(16, 9, 48), parsed.entries().getFirst().time());
+        assertEquals(LocalDate.of(2026, 2, 24), parsed.entries().getFirst().date());
         assertEquals("<JustAlittleWolf> noch nicht mal fertig gejoined D:", parsed.entries().getFirst().message());
     }
 
@@ -245,6 +257,50 @@ class LogParserTest {
             [12:50:41] [Render thread/INFO]: [CHAT] hi
             """);
         assertEquals("JustAlittleWolf", parsed.minecraftUser());
+    }
+
+    @Test
+    void backfillsWorldNameOntoEarlierChatInTheSameSingleplayerSession() throws IOException {
+        ParsedLog parsed = parse("""
+            [12:50:38] [Server thread/INFO]: Starting integrated minecraft server version 26.3 Snapshot 9
+            [12:50:39] [Render thread/INFO]: [CHAT] during play
+            [12:50:40] [Client thread/INFO]: [CHAT] still playing
+            [12:50:41] [Server thread/INFO]: Saving chunks for level 'ServerLevel[Audio Test]'/minecraft:overworld
+            """);
+        assertEquals("world/Audio Test", parsed.serverOrWorld());
+        assertEquals("world/Audio Test", parsed.entries().get(0).serverOrWorld());
+        assertEquals("world/Audio Test", parsed.entries().get(1).serverOrWorld());
+    }
+
+    @Test
+    void doesNotBackfillMenuChatFromALaterWorldName() throws IOException {
+        ParsedLog parsed = parse("""
+            [12:50:30] [Render thread/INFO]: [CHAT] in the menu
+            [12:50:38] [Server thread/INFO]: Starting integrated minecraft server version 26.3 Snapshot 9
+            [12:50:39] [Render thread/INFO]: [CHAT] during play
+            [12:50:41] [Server thread/INFO]: Saving chunks for level 'ServerLevel[Audio Test]'/minecraft:overworld
+            """);
+        assertNull(parsed.entries().get(0).serverOrWorld());
+        assertEquals("world/Audio Test", parsed.entries().get(1).serverOrWorld());
+    }
+
+    @Test
+    void singleplayerLeaveClearsPlaceBeforeTheNextWorld() throws IOException {
+        ParsedLog parsed = parse("""
+            [12:50:38] [Server thread/INFO]: Starting integrated minecraft server version 26.3
+            [12:50:39] [Server thread/INFO]: Saving chunks for level 'ServerLevel[Audio Test]'/minecraft:overworld
+            [12:50:40] [Render thread/INFO]: [CHAT] in audio
+            [12:50:41] [Server thread/INFO]: Stopping singleplayer server as player logged out
+            [12:50:41] [Render thread/INFO]: Stopping!
+            [12:50:42] [Render thread/INFO]: [CHAT] in the menu
+            [16:38:57] [Server thread/INFO]: Starting integrated minecraft server version 1.9
+            [16:38:58] [Render thread/INFO]: [CHAT] in the next world
+            [16:40:16] [Server thread/INFO]: Saving chunks for level 'LinkcraftII'/Overworld
+            """);
+        assertEquals("world/Audio Test", parsed.entries().get(0).serverOrWorld());
+        assertNull(parsed.entries().get(1).serverOrWorld());
+        assertEquals("world/LinkcraftII", parsed.entries().get(2).serverOrWorld());
+        assertEquals("world/LinkcraftII", parsed.serverOrWorld());
     }
 
     @Test

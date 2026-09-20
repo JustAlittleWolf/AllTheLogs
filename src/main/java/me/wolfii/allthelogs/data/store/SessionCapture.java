@@ -37,7 +37,7 @@ public final class SessionCapture {
     }
 
     /**
-     * Starts a capture session at {@code startedAt} (whole seconds) and returns the created log, which carries a
+     * Starts a capture session at {@code startedAt} (milliseconds) and returns the created log, which carries a
      * unique {@link LogSource.Session#id()}. {@code minecraftUser} is stored on the session log and on later
      * chat lines. {@code serverOrWorld} is remembered for those lines only (a session can visit several).
      *
@@ -88,12 +88,13 @@ public final class SessionCapture {
     }
 
     /**
-     * Stores a chat line in the current session. Timestamps are truncated to whole seconds so a
-     * later file import of the same line can be recognised as a duplicate. Legacy {@code §} codes are
+     * Stores a chat line in the current session. Timestamps are truncated to milliseconds. Live rows are
+     * never dropped as duplicates; a later file import that repeats the same second and text is the copy
+     * that {@link LogWriter#deduplicate()} removes. Legacy {@code §} codes are
      * stripped like on file import; {@code formatting} is stored as packed runs, or parsed from the
      * message when {@code null}.
      *
-     * @return {@code true} if stored, {@code false} if dropped as a duplicate
+     * @return {@code true} if stored
      * @throws LogDataException if no session is active, or the entry cannot be written
      */
     public boolean importMessage(String message, LocalDateTime timestamp) {
@@ -123,7 +124,7 @@ public final class SessionCapture {
     }
 
     /**
-     * Updates the current session's end time without storing a chat line. Whole seconds only;
+     * Updates the current session's end time without storing a chat line. Truncated to milliseconds;
      * an earlier timestamp than the one already stored is ignored.
      *
      * @throws LogDataException if no session is active, or the update cannot be written

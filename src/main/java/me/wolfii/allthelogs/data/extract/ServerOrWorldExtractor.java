@@ -9,9 +9,12 @@ import java.util.regex.Pattern;
  * <p>
  * Remote servers use the address with the default port {@code 25565} dropped. Local worlds use
  * {@code world/{worldname}}. {@code Connecting to} and world-save lines set the current value.
- * Disconnect lines ({@code Stopping worker threads} / {@code Stopping [n] Worker Daemon threads})
- * clear it so later chat is not tagged with the previous server. {@link #current()} is what was in
- * effect at the latest line; {@link #last()} is the last non-null value seen in the file.
+ * World names are often only logged on save, after chat from that session, so
+ * {@link me.wolfii.allthelogs.data.parse.LogParser} backfills earlier untagged chat while
+ * {@link #inSession()} is true.
+ * Disconnect lines clear the current value so later chat is not tagged with the previous server.
+ * {@link #current()} is what was in effect at the latest line; {@link #last()} is the last non-null
+ * value seen in the file.
  */
 public final class ServerOrWorldExtractor {
     public static final String LOCAL_PREFIX = "world/";
@@ -25,9 +28,14 @@ public final class ServerOrWorldExtractor {
         "Loading dimension -?\\d+ \\(([^)]+)\\) \\(net\\.minecraft\\.server\\.integrated\\.IntegratedServer@");
     private static final Pattern WORKER_DAEMON_STOP = Pattern.compile(
         "Stopping \\[\\d+] Worker Daemon threads");
+    private static final Pattern CLIENT_STOP = Pattern.compile("]: Stopping!\\s*$");
+    private static final Pattern SINGLEPLAYER_STOP = Pattern.compile("Stopping singleplayer server");
+    private static final Pattern INTEGRATED_START = Pattern.compile("Starting integrated minecraft server");
+    private static final Pattern LOCAL_LOGIN = Pattern.compile("\\[local:E:[^]]+] logged in");
 
     private String current;
     private String last;
+    private boolean inSession;
 
     /**
      * Observes one log line: sets the current place, or clears it on disconnect.
@@ -35,12 +43,17 @@ public final class ServerOrWorldExtractor {
     public void accept(String line) {
         if (isLeave(line)) {
             current = null;
+            inSession = false;
             return;
+        }
+        if (isSessionStart(line)) {
+            inSession = true;
         }
         String found = find(line);
         if (found != null) {
             current = found;
             last = found;
+            inSession = true;
         }
     }
 
@@ -59,10 +72,32 @@ public final class ServerOrWorldExtractor {
     }
 
     /**
-     * Whether {@code line} is a client disconnect from a remote server.
+     * Whether the player is in a world or server session that may still learn a place name.
+     * Menu chat before this is true is not backfilled when a later world name appears.
+     */
+    public boolean inSession() {
+        return inSession;
+    }
+
+    /**
+     * Whether {@code line} is a disconnect from a remote server or a singleplayer shutdown.
      */
     public static boolean isLeave(String line) {
-        return line.contains("Stopping worker threads") || WORKER_DAEMON_STOP.matcher(line).find();
+        return line.contains("Stopping worker threads")
+            || WORKER_DAEMON_STOP.matcher(line).find()
+            || SINGLEPLAYER_STOP.matcher(line).find()
+            || CLIENT_STOP.matcher(line).find();
+    }
+
+    /**
+     * Whether {@code line} starts a multiplayer connect or an integrated-server session, even when
+     * the world name is not known yet.
+     */
+    public static boolean isSessionStart(String line) {
+        return CONNECTING.matcher(line).find()
+            || INTEGRATED_START.matcher(line).find()
+            || LOADING_DIMENSION.matcher(line).find()
+            || LOCAL_LOGIN.matcher(line).find();
     }
 
     static String find(String line) {

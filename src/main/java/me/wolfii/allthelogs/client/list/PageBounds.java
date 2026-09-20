@@ -5,6 +5,7 @@ import me.wolfii.allthelogs.api.MatchDay;
 import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.MatchSummary;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -36,6 +37,18 @@ public final class PageBounds {
             return time.plusNanos(CURSOR_STEP_NANOS);
         }
         return time.minusNanos(CURSOR_STEP_NANOS);
+    }
+
+    /**
+     * Whether the closest timestamp to {@code target} is {@code later} (at or after the cursor)
+     * rather than {@code earlier} (at or before). Equal distance prefers the later match.
+     */
+    public static boolean preferLater(LocalDateTime target, LocalDateTime later, LocalDateTime earlier) {
+        if (later == null) return false;
+        if (earlier == null) return true;
+        long laterDelta = Math.abs(Duration.between(target, later).toNanos());
+        long earlierDelta = Math.abs(Duration.between(target, earlier).toNanos());
+        return laterDelta <= earlierDelta;
     }
 
     /**

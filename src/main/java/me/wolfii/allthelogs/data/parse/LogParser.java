@@ -9,6 +9,7 @@ import me.wolfii.allthelogs.data.store.SessionMarker;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,13 +35,17 @@ public final class LogParser {
      */
     public static ParsedLog parse(BufferedReader reader) throws IOException {
         List<ParsedLog.Entry> entries = new ArrayList<>();
+        List<Integer> pendingPlace = new ArrayList<>();
         StringBuilder pending = null;
+        LocalDate pendingDate = null;
         LocalTime pendingTime = null;
         MinecraftVersionExtractor versions = new MinecraftVersionExtractor();
         MinecraftUserExtractor users = new MinecraftUserExtractor();
         ServerOrWorldExtractor places = new ServerOrWorldExtractor();
         boolean resourceManagerReloaded = false;
+        LocalDate firstLineDate = null;
         LocalTime firstLineTime = null;
+        LocalDate lastLineDate = null;
         LocalTime lastLineTime = null;
         String sessionId = null;
 
@@ -57,15 +62,20 @@ public final class LogParser {
             }
 
             if (pending != null) {
-                flushPending(entries, pendingTime, pending, users, places);
+                flushPending(entries, pendingPlace, pendingDate, pendingTime, pending, users, places);
                 pending = null;
+                pendingDate = null;
                 pendingTime = null;
             }
 
-            LocalTime lineTime = LogTimeExtractor.parse(start);
-            if (lineTime != null) {
-                if (firstLineTime == null) firstLineTime = lineTime;
-                lastLineTime = lineTime;
+            LogTimeExtractor.Stamp stamp = LogTimeExtractor.parse(start);
+            if (stamp != null) {
+                if (firstLineTime == null) {
+                    firstLineDate = stamp.date();
+                    firstLineTime = stamp.time();
+                }
+                lastLineDate = stamp.date();
+                lastLineTime = stamp.time();
             }
 
             if (sessionId == null) {
@@ -74,6 +84,11 @@ public final class LogParser {
 
             users.accept(line);
             places.accept(line);
+            if (places.current() != null) {
+                backfillPlace(entries, pendingPlace, places.current());
+            } else if (!places.inSession()) {
+                pendingPlace.clear();
+            }
 
             if (!resourceManagerReloaded && line.contains(RESOURCE_MANAGER_RELOAD_MARKER)) {
                 resourceManagerReloaded = true;
@@ -86,24 +101,40 @@ public final class LogParser {
                 if (!line.endsWith(EMPTY_CHAT_MARKER)) continue;
                 chat = line.length() - EMPTY_CHAT_MARKER.length();
             }
-            if (lineTime == null) continue;
-            pendingTime = lineTime;
+            if (stamp == null) continue;
+            pendingDate = stamp.date();
+            pendingTime = stamp.time();
             pending = new StringBuilder(line.substring(Math.min(chat + CHAT_MARKER.length(), line.length())));
         }
-        if (pending != null) flushPending(entries, pendingTime, pending, users, places);
+        if (pending != null) {
+            flushPending(entries, pendingPlace, pendingDate, pendingTime, pending, users, places);
+        }
 
         entries.replaceAll(entry -> {
             FormattingCodes.Parsed parsed = FormattingCodes.parse(entry.message());
-            return new ParsedLog.Entry(entry.time(), parsed.text(), parsed.formatting(),
+            return new ParsedLog.Entry(entry.date(), entry.time(), parsed.text(), parsed.formatting(),
                 entry.minecraftUser(), entry.serverOrWorld());
         });
         String version = versions.version();
         return new ParsedLog(version == null ? ChatLog.UNKNOWN_VERSION : version, users.user(), places.last(),
-            entries, resourceManagerReloaded, firstLineTime, lastLineTime, sessionId);
+            entries, resourceManagerReloaded, firstLineDate, firstLineTime, lastLineDate, lastLineTime, sessionId);
     }
 
-    private static void flushPending(List<ParsedLog.Entry> entries, LocalTime time, StringBuilder pending,
-                                     MinecraftUserExtractor users, ServerOrWorldExtractor places) {
-        entries.add(new ParsedLog.Entry(time, pending.toString(), null, users.user(), places.current()));
+    private static void flushPending(List<ParsedLog.Entry> entries, List<Integer> pendingPlace, LocalDate date,
+                                     LocalTime time, StringBuilder pending, MinecraftUserExtractor users,
+                                     ServerOrWorldExtractor places) {
+        entries.add(new ParsedLog.Entry(date, time, pending.toString(), null, users.user(), places.current()));
+        if (places.current() == null && places.inSession()) {
+            pendingPlace.add(entries.size() - 1);
+        }
+    }
+
+    private static void backfillPlace(List<ParsedLog.Entry> entries, List<Integer> pendingPlace, String place) {
+        for (int index : pendingPlace) {
+            ParsedLog.Entry entry = entries.get(index);
+            entries.set(index, new ParsedLog.Entry(entry.date(), entry.time(), entry.message(), entry.formatting(),
+                entry.minecraftUser(), place));
+        }
+        pendingPlace.clear();
     }
 }
