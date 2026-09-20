@@ -8,8 +8,7 @@ import java.util.Properties;
 
 /**
  * Maven coordinates and cache layout for the architecture-specific DuckDB JDBC native jar.
- * Cached under {@code <gameDir>/cache/allthelogs/duckdb/jdbc/<version>} for the current Minecraft instance.
- * Duplication across instances is acceptable.
+ * Cached under {@code <gameDir>/.allthelogs/duckdb/jdbc/<version>}, next to the log database.
  */
 public final class DuckDbJdbc {
     public static final String VERSION = readVersion();
@@ -21,7 +20,7 @@ public final class DuckDbJdbc {
     }
 
     public static Path cacheDirectory(Path gameDirectory) {
-        return gameDirectory.resolve("cache").resolve("allthelogs").resolve("duckdb").resolve("jdbc").resolve(VERSION);
+        return gameDirectory.resolve(".allthelogs").resolve("duckdb").resolve("jdbc").resolve(VERSION);
     }
 
     public static String classifier() {

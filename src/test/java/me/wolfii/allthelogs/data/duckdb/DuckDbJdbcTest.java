@@ -57,10 +57,10 @@ class DuckDbJdbcTest {
     }
 
     @Test
-    void cacheLivesUnderInstanceGameDir() {
+    void cacheLivesUnderInstanceAllTheLogsDir() {
         Path gameDir = tempDir.resolve("instance");
         assertEquals(
-            gameDir.resolve("cache").resolve("allthelogs").resolve("duckdb").resolve("jdbc").resolve(DuckDbJdbc.VERSION),
+            gameDir.resolve(".allthelogs").resolve("duckdb").resolve("jdbc").resolve(DuckDbJdbc.VERSION),
             DuckDbJdbc.cacheDirectory(gameDir));
     }
 
