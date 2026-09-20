@@ -1,6 +1,7 @@
 package me.wolfii.allthelogs.client;
 
-import me.wolfii.allthelogs.data.ImportOptions;
+import me.wolfii.allthelogs.client.config.AllTheLogsConfig;
+import me.wolfii.allthelogs.client.config.StartupLogImports;
 import me.wolfii.allthelogs.data.LogSource;
 import me.wolfii.allthelogs.data.store.SessionMarker;
 import net.fabricmc.api.ClientModInitializer;
@@ -14,15 +15,12 @@ import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Fabric client entry: opens the log store, imports this instance's {@code logs} folder, captures live
- * {@code [CHAT]} lines from {@code ChatComponent#logChatMessage}, and registers {@code /allthelogs gui},
- * {@code /allthelogs import}, and {@code /allthelogs scripts}.
+ * Fabric client entry: opens the log store, imports this instance's {@code logs} folder plus extra configured
+ * directories, captures live {@code [CHAT]} lines from {@code ChatComponent#logChatMessage}, and registers
+ * {@code /allthelogs} commands.
  */
 public final class AllTheLogsClient implements ClientModInitializer {
     public static final String MOD_ID = "allthelogs";
@@ -47,26 +45,6 @@ public final class AllTheLogsClient implements ClientModInitializer {
         worker.importSessionMessage(content);
     }
 
-    private static CompletableFuture<Void> importCurrentLogs() {
-        Path gameDir = AllTheLogsPaths.gameDirectory();
-        Path logs = gameDir.resolve("logs");
-        Path root;
-        ImportOptions options;
-        if (Files.isDirectory(logs)) {
-            root = logs;
-            options = ImportOptions.currentLogsDirectory();
-        } else if (Files.isDirectory(gameDir)) {
-            root = gameDir;
-            options = ImportOptions.currentGameDirectory();
-        } else {
-            return CompletableFuture.completedFuture(null);
-        }
-        return worker.importDirectory(root, options, null)
-            .thenAccept(result -> LOGGER.info(
-                "Imported instance logs: {} files, {} entries ({} skipped)",
-                result.importedFiles(), result.importedEntries(), result.skippedFiles()));
-    }
-
     private static String minecraftVersion() {
         return FabricLoader.getInstance().getModContainer("minecraft")
             .map(container -> container.getMetadata().getVersion().getFriendlyString())
@@ -88,7 +66,8 @@ public final class AllTheLogsClient implements ClientModInitializer {
     public static void onDriverReady() {
         if (worker == null || !storeStarted.compareAndSet(false, true)) return;
         worker.open(AllTheLogsPaths.database())
-            .thenCompose(ignored -> importCurrentLogs())
+            .thenCompose(ignored -> StartupLogImports.importOnBoot(
+                worker, AllTheLogsPaths.gameDirectory(), AllTheLogsConfig.get().extraImportDirectories()))
             .thenCompose(ignored -> worker.startSession(minecraftVersion(), currentUsername()))
             .whenComplete((log, error) -> {
                 if (error != null) {
@@ -104,6 +83,7 @@ public final class AllTheLogsClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         worker = new LogStoreWorker();
+        AllTheLogsConfig.loadDefault();
         DuckDbRuntime.ensure().thenRun(AllTheLogsClient::onDriverReady);
 
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->

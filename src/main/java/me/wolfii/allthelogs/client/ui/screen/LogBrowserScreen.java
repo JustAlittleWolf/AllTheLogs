@@ -8,6 +8,8 @@ import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.*;
+import me.wolfii.allthelogs.client.config.AllTheLogsConfig;
+import me.wolfii.allthelogs.client.config.BrowserFilterMemory;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
@@ -31,7 +33,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     private static final int SEARCH_DEBOUNCE_MS = 250;
 
     private final Screen parent;
-    private final LogBrowserQueries queries = new LogBrowserQueries();
+    private final LogBrowserQueries queries;
     private MessageTimeline list;
     private TextBoxComponent search;
     private ButtonComponent infoButton;
@@ -45,6 +47,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     public LogBrowserScreen(@Nullable Screen parent) {
         super(Component.translatable("allthelogs.screen.browser"));
         this.parent = parent;
+        this.queries = new LogBrowserQueries(BrowserFilterMemory.openingFilter());
     }
 
     @Override
@@ -64,6 +67,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
             .verticalAlignment(VerticalAlignment.TOP);
 
         list = new MessageTimeline();
+        list.setMessageFontSize(AllTheLogsConfig.get().messageFontSize());
         FlowLayout toolbar = buildToolbar();
         queries.attach(list, infoButton);
         filters = new FilterOverlay(overlays, () -> this.width, () -> this.height,
@@ -94,6 +98,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
 
     @Override
     public void onClose() {
+        BrowserFilterMemory.remember(queries.filter());
         Minecraft.getInstance().gui.setScreen(parent);
     }
 
@@ -128,11 +133,13 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
 
         bar.child(UIComponents.button(Component.translatable("allthelogs.filter"),
             button -> filters.toggle(button)));
-        bar.child(UIComponents.button(Component.translatable("allthelogs.import.button"),
-            button -> {
-                queries.markReload();
-                Minecraft.getInstance().gui.setScreen(new ImportScreen(this));
-            }));
+        if (!AllTheLogsConfig.get().hideImportButton()) {
+            bar.child(UIComponents.button(Component.translatable("allthelogs.import.button"),
+                button -> {
+                    queries.markReload();
+                    Minecraft.getInstance().gui.setScreen(new ImportScreen(this));
+                }));
+        }
 
         infoButton = UIComponents.button(Component.translatable("allthelogs.meta.marker"), button -> {
         });
@@ -145,6 +152,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     private void onSearchChanged(String text) {
         if (text.equals(queries.filter().text())) return;
         queries.updateFilter(queries.filter().withText(text));
+        BrowserFilterMemory.remember(queries.filter(), AllTheLogsConfig.get(), false);
         refreshSearchColor();
         if (!queries.filter().canQuery()) {
             queries.bumpGeneration();
@@ -160,6 +168,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
 
     private void applyFilter(SearchFilter next) {
         queries.setFilter(next);
+        BrowserFilterMemory.remember(next);
         refreshSearchColor();
         if (filters != null) filters.syncVersionButton();
     }

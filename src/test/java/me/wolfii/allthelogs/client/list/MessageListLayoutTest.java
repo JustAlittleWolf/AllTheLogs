@@ -187,4 +187,13 @@ class MessageListLayoutTest {
         assertEquals(0, layout.separators().size());
         assertEquals(layout.rowY(0) + MessageListLayout.ROW_HEIGHT, layout.rowY(1));
     }
+
+    @Test
+    void customRowHeightScalesWrappedLines() {
+        LocalDateTime time = LocalDateTime.of(2026, 8, 26, 10, 0);
+        ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), time.toLocalDate(), "26.2", time, time);
+        DisplayRow row = new DisplayRow(new ChatEntry(log, time, 0, "abcdefghij"), true, List.of());
+        MessageListLayout layout = MessageListLayout.of(List.of(row), 5, 4, charWidths(), 8);
+        assertEquals(3 * 8, layout.rowHeight(0));
+    }
 }
