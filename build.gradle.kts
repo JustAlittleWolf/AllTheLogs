@@ -43,12 +43,8 @@ dependencies {
     implementation(libs.fabric.api)
 
     implementation(libs.owo.lib)
-<<<<<<< HEAD
     implementation(libs.yacl)
-    compileOnly(libs.modmenu)
-=======
     implementation(libs.modmenu)
->>>>>>> origin/main
 
     implementation(libs.commons.compress)
     include(libs.commons.compress)
