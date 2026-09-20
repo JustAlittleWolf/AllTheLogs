@@ -6,7 +6,7 @@ import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.client.Minecraft;
 
 /**
- * Client commands: {@code /allthelogs gui} and {@code /allthelogs import}.
+ * Client commands: {@code /allthelogs gui}, {@code /allthelogs import}, and {@code /allthelogs scripts}.
  */
 public final class AllTheLogsCommands {
     private AllTheLogsCommands() {
@@ -20,6 +20,10 @@ public final class AllTheLogsCommands {
             }))
             .then(ClientCommands.literal("import").executes(context -> {
                 Minecraft.getInstance().execute(() -> AllTheLogsScreens.openImport(null));
+                return 1;
+            }))
+            .then(ClientCommands.literal("scripts").executes(context -> {
+                Minecraft.getInstance().execute(() -> AllTheLogsScreens.openScripts(null));
                 return 1;
             })));
     }

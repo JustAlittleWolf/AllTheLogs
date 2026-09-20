@@ -21,8 +21,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Fabric client entry: opens the log store, imports this instance's {@code logs} folder, captures live
- * {@code [CHAT]} lines from {@code ChatComponent#logChatMessage}, and registers {@code /allthelogs gui}
- * and {@code /allthelogs import}.
+ * {@code [CHAT]} lines from {@code ChatComponent#logChatMessage}, and registers {@code /allthelogs gui},
+ * {@code /allthelogs import}, and {@code /allthelogs scripts}.
  */
 public final class AllTheLogsClient implements ClientModInitializer {
     public static final String MOD_ID = "allthelogs";

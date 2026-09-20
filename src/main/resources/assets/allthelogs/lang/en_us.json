@@ -85,5 +85,18 @@
   "allthelogs.duckdb.failed": "Failed to load DuckDB",
   "allthelogs.duckdb.failed.detail": "AllTheLogs needs to download a database driver, make sure you are connected to the internet.\nError: %s",
   "allthelogs.duckdb.retry": "Try again",
-  "allthelogs.duckdb.quit": "Close game"
+  "allthelogs.duckdb.quit": "Close game",
+  "allthelogs.screen.scripts": "Scripts",
+  "allthelogs.scripts.open_folder": "Open folder",
+  "allthelogs.scripts.run": "Run",
+  "allthelogs.scripts.retry": "Try again",
+  "allthelogs.scripts.none": "No .ts or .js scripts in the scripts folder",
+  "allthelogs.scripts.count": "%s scripts",
+  "allthelogs.scripts.running": "Running %s...",
+  "allthelogs.scripts.output": "Output: %s",
+  "allthelogs.scripts.engine.ready": "Script engine ready",
+  "allthelogs.scripts.engine.loading": "Loading script engine...",
+  "allthelogs.scripts.engine.downloading": "Downloading script engine (%s%%)",
+  "allthelogs.scripts.engine.verifying": "Verifying script engine (%s%%)",
+  "allthelogs.scripts.engine.failed": "Failed to download the script engine. Connect to the internet and try again.\nError: %s"
 }
