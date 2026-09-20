@@ -2,73 +2,116 @@ package me.wolfii.allthelogs.client.config;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.JsonArray;
+import com.google.gson.JsonDeserializationContext;
+import com.google.gson.JsonDeserializer;
 import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import com.google.gson.JsonParseException;
+import com.google.gson.JsonSerializationContext;
+import com.google.gson.JsonSerializer;
+import dev.isxander.yacl3.config.v2.api.ConfigClassHandler;
+import dev.isxander.yacl3.config.v2.api.SerialEntry;
+import dev.isxander.yacl3.config.v2.api.autogen.AutoGen;
+import dev.isxander.yacl3.config.v2.api.autogen.Boolean;
+import dev.isxander.yacl3.config.v2.api.autogen.EnumCycler;
+import dev.isxander.yacl3.config.v2.api.autogen.IntSlider;
+import dev.isxander.yacl3.config.v2.api.autogen.ListGroup;
+import dev.isxander.yacl3.config.v2.api.serializer.GsonConfigSerializerBuilder;
 import me.wolfii.allthelogs.client.AllTheLogsClient;
 import me.wolfii.allthelogs.client.list.MessageListLayout;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.resources.Identifier;
 
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
+import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * User settings stored as {@code config/allthelogs.json}. The running instance directory is displayed in the
- * settings screen but is never written here.
+ * User settings stored as {@code config/allthelogs.json}. Extra import folders, browser chrome, and filter
+ * persistence are edited through a YACL autogen screen. The current instance directory is always scanned
+ * and is never written here.
  */
-public final class AllTheLogsConfig {
+public class AllTheLogsConfig {
     public static final String FILE_NAME = "allthelogs.json";
     public static final int DEFAULT_MESSAGE_FONT_SIZE = MessageListLayout.ROW_HEIGHT;
     public static final int MIN_MESSAGE_FONT_SIZE = 6;
     public static final int MAX_MESSAGE_FONT_SIZE = 24;
 
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
-    private static AllTheLogsConfig instance;
+    private static ConfigClassHandler<AllTheLogsConfig> handler;
 
-    private final Path file;
-    private List<String> extraImportDirectories = List.of();
-    private FilterPersistence filterPersistence = FilterPersistence.NOT_PERSISTED;
-    private boolean hideImportButton;
-    private int messageFontSize = DEFAULT_MESSAGE_FONT_SIZE;
-    private SearchFilter persistedFilter = SearchFilter.defaults();
+    private transient Path file;
 
-    AllTheLogsConfig(Path file) {
-        this.file = file;
-    }
+    @AutoGen(category = "import")
+    @ListGroup(valueFactory = StringListFactory.class, controllerFactory = StringListFactory.class)
+    @SerialEntry
+    public List<String> extraImportDirectories = new ArrayList<>();
+
+    @AutoGen(category = "browser")
+    @EnumCycler
+    @SerialEntry
+    public FilterPersistence filterPersistence = FilterPersistence.NOT_PERSISTED;
+
+    @AutoGen(category = "browser")
+    @Boolean(formatter = Boolean.Formatter.ON_OFF)
+    @SerialEntry
+    public boolean hideImportButton;
+
+    @AutoGen(category = "browser")
+    @IntSlider(min = MIN_MESSAGE_FONT_SIZE, max = MAX_MESSAGE_FONT_SIZE, step = 1)
+    @SerialEntry
+    public int messageFontSize = DEFAULT_MESSAGE_FONT_SIZE;
+
+    /**
+     * Last browser filter, written only when {@link FilterPersistence#ACROSS_RESTARTS} is selected.
+     */
+    @SerialEntry
+    public SearchFilter filter = SearchFilter.defaults();
 
     public static Path defaultPath() {
         return FabricLoader.getInstance().getConfigDir().resolve(FILE_NAME);
     }
 
     public static AllTheLogsConfig get() {
-        if (instance == null) instance = load(defaultPath());
-        return instance;
+        return handler().instance();
     }
 
     /**
      * Loads settings from {@code file}, or defaults when the file is missing or unreadable.
      */
     public static AllTheLogsConfig load(Path file) {
-        AllTheLogsConfig config = new AllTheLogsConfig(file);
-        if (file == null || !Files.isRegularFile(file)) return config;
+        AllTheLogsConfig config = new AllTheLogsConfig();
+        config.file = file;
+        if (file == null || !Files.isRegularFile(file)) {
+            config.normalize();
+            return config;
+        }
         try (Reader reader = Files.newBufferedReader(file)) {
-            JsonElement parsed = JsonParser.parseReader(reader);
-            if (parsed != null && parsed.isJsonObject()) config.read(parsed.getAsJsonObject());
+            AllTheLogsConfig loaded = gson().fromJson(reader, AllTheLogsConfig.class);
+            if (loaded != null) {
+                loaded.file = file;
+                loaded.normalize();
+                return loaded;
+            }
         } catch (RuntimeException | IOException error) {
             AllTheLogsClient.LOGGER.warn("Could not read {}", file, error);
         }
+        config.normalize();
         return config;
     }
 
     public static void loadDefault() {
-        instance = load(defaultPath());
+        handler().load();
+        get().normalize();
+    }
+
+    public static Screen createScreen(Screen parent) {
+        return handler().generateGui().generateScreen(parent);
     }
 
     public Path file() {
@@ -76,15 +119,15 @@ public final class AllTheLogsConfig {
     }
 
     public List<String> extraImportDirectories() {
-        return extraImportDirectories;
+        return extraImportDirectories == null ? List.of() : List.copyOf(extraImportDirectories);
     }
 
     public void setExtraImportDirectories(List<String> directories, Path instanceDir) {
-        extraImportDirectories = ExtraImportDirectories.persisted(directories, instanceDir);
+        extraImportDirectories = new ArrayList<>(ExtraImportDirectories.persisted(directories, instanceDir));
     }
 
     public FilterPersistence filterPersistence() {
-        return filterPersistence;
+        return filterPersistence == null ? FilterPersistence.NOT_PERSISTED : filterPersistence;
     }
 
     public void setFilterPersistence(FilterPersistence filterPersistence) {
@@ -108,11 +151,11 @@ public final class AllTheLogsConfig {
     }
 
     public SearchFilter persistedFilter() {
-        return persistedFilter;
+        return filter == null ? SearchFilter.defaults() : filter;
     }
 
-    public void setPersistedFilter(SearchFilter filter) {
-        this.persistedFilter = filter == null ? SearchFilter.defaults() : filter;
+    public void setPersistedFilter(SearchFilter next) {
+        this.filter = next == null ? SearchFilter.defaults() : next;
     }
 
     public static int clampFontSize(int fontSize) {
@@ -120,76 +163,69 @@ public final class AllTheLogsConfig {
     }
 
     public void save() {
+        normalize();
+        if (handler != null && this == handler.instance()) {
+            handler.save();
+            return;
+        }
         if (file == null) return;
         try {
             Path parent = file.getParent();
             if (parent != null) Files.createDirectories(parent);
             try (Writer writer = Files.newBufferedWriter(file)) {
-                GSON.toJson(toJson(), writer);
+                gson().toJson(this, writer);
             }
         } catch (IOException error) {
             AllTheLogsClient.LOGGER.warn("Could not write {}", file, error);
         }
     }
 
-    JsonObject toJson() {
-        JsonObject json = new JsonObject();
-        JsonArray extras = new JsonArray();
-        for (String directory : extraImportDirectories) extras.add(directory);
-        json.add("extraImportDirectories", extras);
-        json.addProperty("filterPersistence", filterPersistence.name());
-        json.addProperty("hideImportButton", hideImportButton);
-        json.addProperty("messageFontSize", messageFontSize);
-        json.add("filter", FilterPersistence.toJson(persistedFilter));
-        return json;
+    void normalize() {
+        extraImportDirectories = extraImportDirectories == null
+            ? new ArrayList<>()
+            : new ArrayList<>(ExtraImportDirectories.persisted(extraImportDirectories, null));
+        if (filterPersistence == null) filterPersistence = FilterPersistence.NOT_PERSISTED;
+        messageFontSize = clampFontSize(messageFontSize == 0 ? DEFAULT_MESSAGE_FONT_SIZE : messageFontSize);
+        if (filter == null) filter = SearchFilter.defaults();
     }
 
-    private void read(JsonObject json) {
-        extraImportDirectories = ExtraImportDirectories.persisted(strings(json, "extraImportDirectories"), null);
-        filterPersistence = FilterPersistence.fromConfig(string(json, "filterPersistence"));
-        hideImportButton = bool(json, "hideImportButton", false);
-        messageFontSize = clampFontSize(integer(json, "messageFontSize", DEFAULT_MESSAGE_FONT_SIZE));
-        if (json.has("filter") && json.get("filter").isJsonObject()) {
-            persistedFilter = FilterPersistence.fromJson(json.getAsJsonObject("filter"));
+    static Gson gson() {
+        return gsonBuilder().create();
+    }
+
+    private static GsonBuilder gsonBuilder() {
+        return new GsonBuilder()
+            .setPrettyPrinting()
+            .disableHtmlEscaping()
+            .registerTypeAdapter(SearchFilter.class, new SearchFilterJson());
+    }
+
+    private static ConfigClassHandler<AllTheLogsConfig> handler() {
+        if (handler == null) {
+            handler = ConfigClassHandler.createBuilder(AllTheLogsConfig.class)
+                .id(Identifier.parse("allthelogs"))
+                .serializer(config -> GsonConfigSerializerBuilder.create(config)
+                    .setPath(defaultPath())
+                    .appendGsonBuilder(builder -> builder
+                        .disableHtmlEscaping()
+                        .registerTypeAdapter(SearchFilter.class, new SearchFilterJson()))
+                    .build())
+                .build();
         }
+        return handler;
     }
 
-    private static List<String> strings(JsonObject json, String key) {
-        if (!json.has(key) || !json.get(key).isJsonArray()) return List.of();
-        List<String> values = new ArrayList<>();
-        for (JsonElement element : json.getAsJsonArray(key)) {
-            try {
-                values.add(element.getAsString());
-            } catch (RuntimeException ignored) {
-            }
+    private static final class SearchFilterJson implements JsonSerializer<SearchFilter>, JsonDeserializer<SearchFilter> {
+        @Override
+        public JsonElement serialize(SearchFilter src, Type typeOfSrc, JsonSerializationContext context) {
+            return FilterPersistence.toJson(src);
         }
-        return values;
-    }
 
-    private static String string(JsonObject json, String key) {
-        if (!json.has(key) || json.get(key).isJsonNull()) return "";
-        try {
-            return json.get(key).getAsString();
-        } catch (RuntimeException ignored) {
-            return "";
-        }
-    }
-
-    private static boolean bool(JsonObject json, String key, boolean fallback) {
-        if (!json.has(key)) return fallback;
-        try {
-            return json.get(key).getAsBoolean();
-        } catch (RuntimeException ignored) {
-            return fallback;
-        }
-    }
-
-    private static int integer(JsonObject json, String key, int fallback) {
-        if (!json.has(key)) return fallback;
-        try {
-            return json.get(key).getAsInt();
-        } catch (RuntimeException ignored) {
-            return fallback;
+        @Override
+        public SearchFilter deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context)
+            throws JsonParseException {
+            if (json == null || !json.isJsonObject()) return SearchFilter.defaults();
+            return FilterPersistence.fromJson(json.getAsJsonObject());
         }
     }
 }

@@ -5,6 +5,7 @@ fabric-loom = "1.17-SNAPSHOT"
 fabric-api = "0.158.0+26.2"
 owo = "0.13.1+26.2"
 modmenu = "20.0.1"
+yacl = "3.9.6+26.2-fabric"
 duckdb = "1.5.5.1"
 graaljs = "25.1.3"
 commons-compress = "1.28.0"
@@ -19,6 +20,7 @@ fabric-loader = { module = "net.fabricmc:fabric-loader", version.ref = "fabric-l
 fabric-api = { module = "net.fabricmc.fabric-api:fabric-api", version.ref = "fabric-api" }
 owo-lib = { module = "io.wispforest:owo-lib", version.ref = "owo" }
 modmenu = { module = "com.terraformersmc:modmenu", version.ref = "modmenu" }
+yacl = { module = "dev.isxander:yet-another-config-lib", version.ref = "yacl" }
 duckdb-jdbc = { module = "org.duckdb:duckdb_jdbc", version.ref = "duckdb" }
 commons-compress = { module = "org.apache.commons:commons-compress", version.ref = "commons-compress" }
 xz = { module = "org.tukaani:xz", version.ref = "xz" }
