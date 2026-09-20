@@ -156,6 +156,11 @@ public final class LogWriter implements AutoCloseable {
         } else {
             fileAppender.append(log.minecraftUser());
         }
+        if (log.serverPlace() == null) {
+            fileAppender.appendNull();
+        } else {
+            fileAppender.append(log.serverPlace());
+        }
         fileAppender.endRow();
 
         for (int i = 0; i < times.size(); i++) {

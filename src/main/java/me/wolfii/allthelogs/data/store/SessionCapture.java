@@ -36,11 +36,16 @@ public final class SessionCapture {
 
     /**
      * Starts a capture session at {@code startedAt} (whole seconds) and returns the created log, which carries a
-     * unique {@link LogSource.Session#id()}. {@code minecraftUser} is stored when known, or {@code null}.
+     * unique {@link LogSource.Session#id()}. {@code minecraftUser} and {@code serverPlace} are stored when known,
+     * or {@code null}.
      *
      * @throws LogDataException if the session cannot be written
      */
     public ChatLog start(String minecraftVersion, LocalDateTime startedAt, String minecraftUser) {
+        return start(minecraftVersion, startedAt, minecraftUser, null);
+    }
+
+    public ChatLog start(String minecraftVersion, LocalDateTime startedAt, String minecraftUser, String serverPlace) {
         Objects.requireNonNull(minecraftVersion, "minecraftVersion");
         Objects.requireNonNull(startedAt, "startedAt");
         LocalDateTime start = startedAt.truncatedTo(ChronoUnit.MILLIS);
@@ -52,8 +57,9 @@ public final class SessionCapture {
             Timestamp timestamp = Timestamp.valueOf(start);
             try (PreparedStatement insert = connection.prepareStatement("""
                 INSERT INTO log_file (id, file_name, source_kind, source_path, entry_path, log_date,
-                                      minecraft_version, start_time, end_time, entry_count, minecraft_user)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)""")) {
+                                      minecraft_version, start_time, end_time, entry_count, minecraft_user,
+                                      server_place)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)""")) {
                 insert.setLong(1, fileId);
                 insert.setString(2, "");
                 insert.setString(3, SourceKind.SESSION.name());
@@ -68,11 +74,17 @@ public final class SessionCapture {
                 } else {
                     insert.setString(10, minecraftUser);
                 }
+                if (serverPlace == null) {
+                    insert.setNull(11, Types.VARCHAR);
+                } else {
+                    insert.setString(11, serverPlace);
+                }
                 insert.execute();
             }
             sessionFileId = fileId;
             sessionLineIndex = 0;
-            return new ChatLog(new LogSource.Session(sessionId), date, minecraftVersion, start, start, minecraftUser);
+            return new ChatLog(new LogSource.Session(sessionId), date, minecraftVersion, start, start, minecraftUser,
+                serverPlace);
         } catch (SQLException e) {
             throw new LogDataException("could not start a client session", e);
         }
@@ -131,6 +143,24 @@ public final class SessionCapture {
             update.execute();
         } catch (SQLException e) {
             throw new LogDataException("could not update the session end time", e);
+        }
+    }
+
+    /**
+     * Stores {@code serverPlace} on the current session. A later, different place (for example the
+     * world name becoming known after singleplayer start) replaces the previous value.
+     */
+    public void updatePlace(String serverPlace) {
+        Objects.requireNonNull(serverPlace, "serverPlace");
+        requireActiveSession();
+        try (PreparedStatement update = connection.prepareStatement("""
+            UPDATE log_file SET server_place = ?
+            WHERE id = ?""")) {
+            update.setString(1, serverPlace);
+            update.setLong(2, sessionFileId);
+            update.execute();
+        } catch (SQLException e) {
+            throw new LogDataException("could not update the session server or world", e);
         }
     }
 

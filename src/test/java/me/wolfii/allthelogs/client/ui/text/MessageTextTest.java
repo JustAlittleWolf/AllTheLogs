@@ -51,17 +51,19 @@ class MessageTextTest {
     void messageInfoUsesMutedLabelsAndSplitsArchivePaths() {
         LocalDateTime time = LocalDateTime.of(2026, 8, 27, 19, 22, 14);
         ChatLog log = new ChatLog(new LogSource.File(Path.of("/home/wolf/logs/2026-08-27-1.log.gz")),
-            LocalDate.of(2026, 8, 27), "1.12.2", time, time, "Steve");
+            LocalDate.of(2026, 8, 27), "1.12.2", time, time, "Steve", "unicacity.eu");
         DisplayRow row = new DisplayRow(new ChatEntry(log, time, 0, "hi"), true, List.of());
         List<Component> info = MessageText.messageInfo(row, Integer.MAX_VALUE, String::length);
         assertEquals("2026-08-27 19:22:14", info.get(0).getString());
         assertEquals("allthelogs.info.version", key(info.get(1)));
         assertEquals("allthelogs.info.playing", key(info.get(2)));
-        assertEquals("allthelogs.info.path", key(info.get(3)));
+        assertEquals("allthelogs.info.playing_on", key(info.get(3)));
+        assertEquals("allthelogs.info.path", key(info.get(4)));
         assertEquals(Colors.META_LABEL & 0xFFFFFF, info.get(1).getStyle().getColor().getValue());
         assertEquals("1.12.2", ((Component) args(info.get(1))[0]).getString());
         assertEquals("Steve", ((Component) args(info.get(2))[0]).getString());
-        assertTrue(((Component) args(info.get(3))[0]).getString().contains("2026-08-27-1.log.gz"));
+        assertEquals("unicacity.eu", ((Component) args(info.get(3))[0]).getString());
+        assertTrue(((Component) args(info.get(4))[0]).getString().contains("2026-08-27-1.log.gz"));
         ChatLog archive = new ChatLog(new LogSource.Archive(Path.of("/tmp/logs.zip"), "instance/logs/latest.log"),
             LocalDate.of(2026, 8, 27), "26.2", time, time);
         List<Component> archiveInfo = MessageText.messageInfo(

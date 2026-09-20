@@ -23,7 +23,7 @@ public final class ChatQueries {
         ORDER BY e.line_index""";
     private static final String SELECT_LOGS = """
         SELECT id, file_name, source_kind, source_path, entry_path, log_date, minecraft_version,
-               start_time, end_time, minecraft_user
+               start_time, end_time, minecraft_user, server_place
         FROM log_file WHERE id IN (""";
 
     private final DuckDBConnection connection;

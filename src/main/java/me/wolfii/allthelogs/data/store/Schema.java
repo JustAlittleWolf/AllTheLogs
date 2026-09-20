@@ -11,7 +11,7 @@ import java.util.function.DoubleConsumer;
  * {@code chat_entry.formatting} is a {@code BIGINT[]} of packed runs (one {@code long} per range), or NULL.
  */
 public final class Schema {
-    public static final int CURRENT_VERSION = 4;
+    public static final int CURRENT_VERSION = 5;
     static final String META_TABLE = "allthelogs_meta";
     static final String VERSION_KEY = "schema_version";
     static final String CLUSTER_MARKER_KEY = "clustered_before_file_id";
@@ -32,7 +32,8 @@ public final class Schema {
                 start_time TIMESTAMP NOT NULL,
                 end_time TIMESTAMP NOT NULL,
                 entry_count BIGINT NOT NULL,
-                minecraft_user VARCHAR
+                minecraft_user VARCHAR,
+                server_place VARCHAR
             )""");
         statement.execute("""
             CREATE TABLE IF NOT EXISTS chat_entry (

@@ -25,7 +25,8 @@ public final class SchemaMigration {
     private static final Map<Integer, Migration> MIGRATIONS = Map.of(
         1, NO_OP,
         2, NO_OP,
-        3, SchemaMigration::migrate3To4SeedClusterMarker
+        3, SchemaMigration::migrate3To4SeedClusterMarker,
+        4, SchemaMigration::migrate4To5AddServerPlace
     );
 
     @FunctionalInterface
@@ -82,6 +83,14 @@ public final class SchemaMigration {
      */
     private static void migrate3To4SeedClusterMarker(Statement statement) throws SQLException {
         statement.execute("INSERT INTO " + Schema.META_TABLE + " VALUES ('" + Schema.CLUSTER_MARKER_KEY + "', '0')");
+    }
+
+    /**
+     * 4 → 5: adds {@code log_file.server_place} for the remote server or local world extracted from
+     * the log (or ingested live from the running game).
+     */
+    private static void migrate4To5AddServerPlace(Statement statement) throws SQLException {
+        statement.execute("ALTER TABLE log_file ADD COLUMN IF NOT EXISTS server_place VARCHAR");
     }
 
     static int readVersion(Statement statement) throws SQLException {

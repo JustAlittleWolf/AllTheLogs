@@ -7,7 +7,8 @@ import java.util.List;
  * The result of parsing one log file.
  *
  * @param minecraftVersion         the detected version, or {@link me.wolfii.allthelogs.data.ChatLog#UNKNOWN_VERSION}
- * @param minecraftUser            the player from a {@code Setting user:} line, or {@code null} if none
+ * @param minecraftUser            the player from a {@code Setting user:} line (or first LAN login), or {@code null}
+ * @param serverPlace              remote address or {@code world/{name}}, or {@code null} if none
  * @param entries                  chat lines in the order they appeared
  * @param resourceManagerReloaded  whether the file contains a {@code Reloading ResourceManager} line, which marks it
  *                                 as a log worth keeping even when it has no chat entries
@@ -18,6 +19,7 @@ import java.util.List;
 public record ParsedLog(
     String minecraftVersion,
     String minecraftUser,
+    String serverPlace,
     List<Entry> entries,
     boolean resourceManagerReloaded,
     LocalTime firstLineTime,
