@@ -1,6 +1,10 @@
 package me.wolfii.allthelogs.data.parse;
 
 import me.wolfii.allthelogs.data.ChatLog;
+import me.wolfii.allthelogs.data.extract.LogTimeExtractor;
+import me.wolfii.allthelogs.data.extract.MinecraftUserExtractor;
+import me.wolfii.allthelogs.data.extract.MinecraftVersionExtractor;
+import me.wolfii.allthelogs.data.extract.ServerOrWorldExtractor;
 import me.wolfii.allthelogs.data.store.SessionMarker;
 
 import java.io.BufferedReader;
@@ -34,7 +38,7 @@ public final class LogParser {
         LocalTime pendingTime = null;
         MinecraftVersionExtractor versions = new MinecraftVersionExtractor();
         MinecraftUserExtractor users = new MinecraftUserExtractor();
-        ServerPlaceExtractor places = new ServerPlaceExtractor();
+        ServerOrWorldExtractor places = new ServerOrWorldExtractor();
         boolean resourceManagerReloaded = false;
         LocalTime firstLineTime = null;
         LocalTime lastLineTime = null;
@@ -53,7 +57,7 @@ public final class LogParser {
             }
 
             if (pending != null) {
-                flushPending(entries, pendingTime, pending, places);
+                flushPending(entries, pendingTime, pending, users, places);
                 pending = null;
                 pendingTime = null;
             }
@@ -86,19 +90,20 @@ public final class LogParser {
             pendingTime = lineTime;
             pending = new StringBuilder(line.substring(Math.min(chat + CHAT_MARKER.length(), line.length())));
         }
-        if (pending != null) flushPending(entries, pendingTime, pending, places);
+        if (pending != null) flushPending(entries, pendingTime, pending, users, places);
 
         entries.replaceAll(entry -> {
             FormattingCodes.Parsed parsed = FormattingCodes.parse(entry.message());
-            return new ParsedLog.Entry(entry.time(), parsed.text(), parsed.formatting(), entry.serverPlace());
+            return new ParsedLog.Entry(entry.time(), parsed.text(), parsed.formatting(),
+                entry.minecraftUser(), entry.serverOrWorld());
         });
         String version = versions.version();
-        return new ParsedLog(version == null ? ChatLog.UNKNOWN_VERSION : version, users.user(), places.place(),
+        return new ParsedLog(version == null ? ChatLog.UNKNOWN_VERSION : version, users.user(), places.last(),
             entries, resourceManagerReloaded, firstLineTime, lastLineTime, sessionId);
     }
 
     private static void flushPending(List<ParsedLog.Entry> entries, LocalTime time, StringBuilder pending,
-                                     ServerPlaceExtractor places) {
-        entries.add(new ParsedLog.Entry(time, pending.toString(), null, places.current()));
+                                     MinecraftUserExtractor users, ServerOrWorldExtractor places) {
+        entries.add(new ParsedLog.Entry(time, pending.toString(), null, users.user(), places.current()));
     }
 }

@@ -27,7 +27,8 @@ public final class SchemaMigration {
         2, NO_OP,
         3, SchemaMigration::migrate3To4SeedClusterMarker,
         4, SchemaMigration::migrate4To5AddServerPlace,
-        5, SchemaMigration::migrate5To6AddEntryServerPlace
+        5, SchemaMigration::migrate5To6AddEntryServerPlace,
+        6, SchemaMigration::migrate6To7PerEntryMetadata
     );
 
     @FunctionalInterface
@@ -106,6 +107,25 @@ public final class SchemaMigration {
             SET server_place = f.server_place
             FROM log_file f
             WHERE e.file_id = f.id AND e.server_place IS NULL AND f.server_place IS NOT NULL""");
+    }
+
+    /**
+     * 6 → 7: server/world is per chat line ({@code chat_entry.server_or_world}), not per file, because one
+     * log can visit several servers. Minecraft user is stored on each line as well. File-level
+     * {@code log_file.server_place} is dropped.
+     */
+    private static void migrate6To7PerEntryMetadata(Statement statement) throws SQLException {
+        statement.execute("ALTER TABLE chat_entry RENAME COLUMN server_place TO server_or_world");
+        statement.execute("ALTER TABLE chat_entry ADD COLUMN IF NOT EXISTS minecraft_user VARCHAR");
+        statement.execute("""
+            UPDATE chat_entry e
+            SET minecraft_user = f.minecraft_user
+            FROM log_file f
+            WHERE e.file_id = f.id AND e.minecraft_user IS NULL AND f.minecraft_user IS NOT NULL""");
+        statement.execute("DROP INDEX IF EXISTS log_file_location");
+        statement.execute("ALTER TABLE log_file DROP COLUMN IF EXISTS server_place");
+        statement.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS log_file_location ON log_file (source_path, entry_path)");
     }
 
     static int readVersion(Statement statement) throws SQLException {

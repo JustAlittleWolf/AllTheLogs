@@ -45,7 +45,7 @@ class ScriptFilesTest {
         assertTrue(source.contains("```ts"));
         assertTrue(source.contains("interface ChatEntry"));
         assertTrue(source.contains("interface ChatLog"));
-        assertTrue(source.contains("serverPlace"));
+        assertTrue(source.contains("serverOrWorld"));
         assertTrue(source.contains("interface ChatQuery"));
         assertTrue(source.contains("interface LogDatabase"));
         assertTrue(source.contains("interface LogStoreMetadata"));

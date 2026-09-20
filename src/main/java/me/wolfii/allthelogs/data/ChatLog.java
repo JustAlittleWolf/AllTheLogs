@@ -16,7 +16,6 @@ import java.util.Objects;
  *                         timezone like chat entries. For a client session this is updated by
  *                         {@link LogStore#importSessionMessage(String, long[])}
  * @param minecraftUser    the player from a {@code Setting user:} line, or {@code null} if unknown
- * @param serverPlace      the remote server address or {@code world/{name}} local world, or {@code null} if unknown
  */
 public record ChatLog(
     LogSource source,
@@ -24,8 +23,7 @@ public record ChatLog(
     String minecraftVersion,
     LocalDateTime startTime,
     LocalDateTime endTime,
-    String minecraftUser,
-    String serverPlace
+    String minecraftUser
 ) implements me.wolfii.allthelogs.api.ChatLog {
     /**
      * Placeholder used when the Minecraft version could not be determined from the log contents.
@@ -42,19 +40,6 @@ public record ChatLog(
 
     public ChatLog(LogSource source, LocalDate date, String minecraftVersion, LocalDateTime startTime,
                    LocalDateTime endTime) {
-        this(source, date, minecraftVersion, startTime, endTime, null, null);
-    }
-
-    public ChatLog(LogSource source, LocalDate date, String minecraftVersion, LocalDateTime startTime,
-                   LocalDateTime endTime, String minecraftUser) {
-        this(source, date, minecraftVersion, startTime, endTime, minecraftUser, null);
-    }
-
-    /**
-     * Copy of this log with {@code serverPlace} on the hover/catalog fields. Used so a chat line can
-     * show the server or world that was in effect at that line rather than the file's last place.
-     */
-    public ChatLog withServerPlace(String serverPlace) {
-        return new ChatLog(source, date, minecraftVersion, startTime, endTime, minecraftUser, serverPlace);
+        this(source, date, minecraftVersion, startTime, endTime, null);
     }
 }

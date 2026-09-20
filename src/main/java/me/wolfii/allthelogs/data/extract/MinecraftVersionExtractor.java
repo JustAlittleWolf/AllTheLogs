@@ -1,4 +1,4 @@
-package me.wolfii.allthelogs.data.parse;
+package me.wolfii.allthelogs.data.extract;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;

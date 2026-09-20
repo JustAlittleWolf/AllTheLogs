@@ -53,8 +53,9 @@ class SchemaMigrationTest {
             assertTrue(tableExists(statement, "import_seen"));
             assertTrue(columnExists(statement, "import_seen", "content_hash"));
             assertTrue(columnExists(statement, "log_file", "minecraft_user"));
-            assertTrue(columnExists(statement, "log_file", "server_place"));
-            assertTrue(columnExists(statement, "chat_entry", "server_place"));
+            assertFalse(columnExists(statement, "log_file", "server_place"));
+            assertTrue(columnExists(statement, "chat_entry", "minecraft_user"));
+            assertTrue(columnExists(statement, "chat_entry", "server_or_world"));
         }
     }
 
@@ -105,6 +106,12 @@ class SchemaMigrationTest {
                     (0, 0, '2024-01-01 00:00:00', 'hello', NULL),
                     (0, 1, '2024-01-01 00:01:00', 'world', NULL)""");
 
+            statement.execute("DROP INDEX IF EXISTS log_file_location");
+            statement.execute("ALTER TABLE chat_entry DROP COLUMN IF EXISTS server_or_world");
+            statement.execute("ALTER TABLE chat_entry DROP COLUMN IF EXISTS minecraft_user");
+            statement.execute("ALTER TABLE chat_entry DROP COLUMN IF EXISTS server_place");
+            statement.execute("CREATE UNIQUE INDEX IF NOT EXISTS log_file_location ON log_file (source_path, entry_path)");
+
             // Simulate a real version-3 database: no cluster marker key yet.
             statement.execute("DELETE FROM " + Schema.META_TABLE
                 + " WHERE k = '" + Schema.CLUSTER_MARKER_KEY + "'");
@@ -137,32 +144,37 @@ class SchemaMigrationTest {
                 assertTrue(result.next());
                 assertEquals(2, result.getLong(1), "the pre-existing session's rows must survive the sweep");
             }
-            assertTrue(columnExists(statement, "log_file", "server_place"),
-                "4→5 should have added server_place while stepping through from version 3");
-            assertTrue(columnExists(statement, "chat_entry", "server_place"),
-                "5→6 should have added chat_entry.server_place while stepping through from version 3");
+            assertFalse(columnExists(statement, "log_file", "server_place"),
+                "6→7 should have dropped log_file.server_place");
+            assertTrue(columnExists(statement, "chat_entry", "server_or_world"),
+                "6→7 should have renamed chat_entry.server_place to server_or_world");
+            assertTrue(columnExists(statement, "chat_entry", "minecraft_user"),
+                "6→7 should have added chat_entry.minecraft_user");
         }
     }
 
     @Test
-    void migratesVersion4DatabasesByAddingServerPlace() throws SQLException {
+    void migratesVersion4DatabasesToPerEntryServerOrWorld() throws SQLException {
         Path database = tempDir.resolve("v4.duckdb");
         try (var connection = StoreConnections.openFile(database);
              Statement statement = connection.createStatement()) {
             statement.execute("DROP INDEX IF EXISTS log_file_location");
-            statement.execute("ALTER TABLE log_file DROP COLUMN server_place");
+            statement.execute("ALTER TABLE chat_entry DROP COLUMN IF EXISTS server_or_world");
+            statement.execute("ALTER TABLE chat_entry DROP COLUMN IF EXISTS minecraft_user");
             statement.execute("CREATE UNIQUE INDEX IF NOT EXISTS log_file_location ON log_file (source_path, entry_path)");
             statement.execute("DELETE FROM " + Schema.META_TABLE
                 + " WHERE k = '" + Schema.VERSION_KEY + "'");
             statement.execute("INSERT INTO " + Schema.META_TABLE + " VALUES ('"
                 + Schema.VERSION_KEY + "', '4')");
-            assertFalse(columnExists(statement, "log_file", "server_place"));
+            assertFalse(columnExists(statement, "chat_entry", "server_or_world"));
         }
 
         try (var connection = StoreConnections.openFile(database);
              Statement statement = connection.createStatement()) {
             assertEquals(Schema.CURRENT_VERSION, SchemaMigration.readVersion(statement));
-            assertTrue(columnExists(statement, "log_file", "server_place"));
+            assertFalse(columnExists(statement, "log_file", "server_place"));
+            assertTrue(columnExists(statement, "chat_entry", "server_or_world"));
+            assertTrue(columnExists(statement, "chat_entry", "minecraft_user"));
         }
     }
 

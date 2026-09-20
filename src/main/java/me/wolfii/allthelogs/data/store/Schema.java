@@ -11,7 +11,7 @@ import java.util.function.DoubleConsumer;
  * {@code chat_entry.formatting} is a {@code BIGINT[]} of packed runs (one {@code long} per range), or NULL.
  */
 public final class Schema {
-    public static final int CURRENT_VERSION = 6;
+    public static final int CURRENT_VERSION = 7;
     static final String META_TABLE = "allthelogs_meta";
     static final String VERSION_KEY = "schema_version";
     static final String CLUSTER_MARKER_KEY = "clustered_before_file_id";
@@ -32,8 +32,7 @@ public final class Schema {
                 start_time TIMESTAMP NOT NULL,
                 end_time TIMESTAMP NOT NULL,
                 entry_count BIGINT NOT NULL,
-                minecraft_user VARCHAR,
-                server_place VARCHAR
+                minecraft_user VARCHAR
             )""");
         statement.execute("""
             CREATE TABLE IF NOT EXISTS chat_entry (
@@ -42,7 +41,8 @@ public final class Schema {
                 entry_time TIMESTAMP NOT NULL,
                 message VARCHAR NOT NULL,
                 formatting BIGINT[],
-                server_place VARCHAR
+                minecraft_user VARCHAR,
+                server_or_world VARCHAR
             )""");
         statement.execute("CREATE UNIQUE INDEX IF NOT EXISTS log_file_location ON log_file (source_path, entry_path)");
         statement.execute("""
@@ -91,7 +91,7 @@ public final class Schema {
         statement.execute("DROP TABLE IF EXISTS chat_entry_sorted");
         statement.execute("""
             CREATE TABLE chat_entry_sorted AS
-            SELECT file_id, line_index, entry_time, message, formatting, server_place
+            SELECT file_id, line_index, entry_time, message, formatting, minecraft_user, server_or_world
             FROM chat_entry
             ORDER BY entry_time, file_id, line_index""");
         report.accept(0.75);
@@ -129,7 +129,7 @@ public final class Schema {
             statement.execute("DROP TABLE IF EXISTS chat_entry_tail");
             statement.execute("""
                 CREATE TEMP TABLE chat_entry_tail AS
-                SELECT file_id, line_index, entry_time, message, formatting, server_place
+                SELECT file_id, line_index, entry_time, message, formatting, minecraft_user, server_or_world
                 FROM chat_entry
                 WHERE file_id >= %d
                 ORDER BY entry_time, file_id, line_index""".formatted(marker));

@@ -241,6 +241,7 @@ class LogStoreTest {
         store.importDirectory(tempDir);
         ChatEntry entry = store.findEntries(ChatQuery.all().withSubstring("hi from wolf")).getFirst();
         assertEquals("JustAlittleWolf", entry.chatLog().minecraftUser());
+        assertEquals("JustAlittleWolf", entry.minecraftUser());
     }
 
     @Test
@@ -251,7 +252,7 @@ class LogStoreTest {
             """);
         store.importDirectory(tempDir);
         ChatEntry entry = store.findEntries(ChatQuery.all().withSubstring("hi from uni")).getFirst();
-        assertEquals("unicacity.eu", entry.chatLog().serverPlace());
+        assertEquals("unicacity.eu", entry.serverOrWorld());
     }
 
     @Test
@@ -265,10 +266,9 @@ class LogStoreTest {
             """);
         store.importDirectory(tempDir);
         assertEquals("unicacity.eu", store.findEntries(ChatQuery.all().withSubstring("on the server"))
-            .getFirst().chatLog().serverPlace());
+            .getFirst().serverOrWorld());
         assertNull(store.findEntries(ChatQuery.all().withSubstring("after leave"))
-            .getFirst().chatLog().serverPlace());
-        assertEquals("unicacity.eu", store.chatLogs().getFirst().serverPlace());
+            .getFirst().serverOrWorld());
     }
 
     @Test
@@ -1163,6 +1163,7 @@ class LogStoreTest {
         assertTrue(store.importSessionMessage("hello from live", startedAt.plusSeconds(1)));
         ChatEntry queried = store.findEntries(ChatQuery.all().withSubstring("hello from live")).getFirst();
         assertEquals("JustAlittleWolf", queried.chatLog().minecraftUser());
+        assertEquals("JustAlittleWolf", queried.minecraftUser());
     }
 
     @Test
@@ -1170,17 +1171,13 @@ class LogStoreTest {
         LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
 
         ChatLog file = store.startSession("26.2", startedAt, "JustAlittleWolf");
-        assertNull(file.serverPlace());
-
+        assertEquals("JustAlittleWolf", file.minecraftUser());
         store.updateSessionPlace("unicacity.eu");
-        assertEquals("unicacity.eu", store.chatLogs().getFirst().serverPlace());
-
         store.updateSessionPlace("world/Audio Test");
-        assertEquals("world/Audio Test", store.chatLogs().getFirst().serverPlace());
 
         assertTrue(store.importSessionMessage("hello from live", startedAt.plusSeconds(1)));
         ChatEntry queried = store.findEntries(ChatQuery.all().withSubstring("hello from live")).getFirst();
-        assertEquals("world/Audio Test", queried.chatLog().serverPlace());
+        assertEquals("world/Audio Test", queried.serverOrWorld());
     }
 
     @Test
@@ -1194,13 +1191,12 @@ class LogStoreTest {
         store.updateSessionPlace("localhost");
         assertTrue(store.importSessionMessage("on localhost", startedAt.plusSeconds(3)));
 
-        assertEquals("localhost", store.chatLogs().getFirst().serverPlace());
         assertEquals("unicacity.eu", store.findEntries(ChatQuery.all().withSubstring("on the server"))
-            .getFirst().chatLog().serverPlace());
+            .getFirst().serverOrWorld());
         assertNull(store.findEntries(ChatQuery.all().withSubstring("after leave"))
-            .getFirst().chatLog().serverPlace());
+            .getFirst().serverOrWorld());
         assertEquals("localhost", store.findEntries(ChatQuery.all().withSubstring("on localhost"))
-            .getFirst().chatLog().serverPlace());
+            .getFirst().serverOrWorld());
     }
 
     @Test

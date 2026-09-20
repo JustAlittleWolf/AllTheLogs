@@ -105,11 +105,11 @@ public final class MessageText {
         if (version != null) {
             lines.add(labeled("allthelogs.info.version", colored(version, Colors.INFO_VERSION)));
         }
-        String user = row.chatLog().minecraftUser();
+        String user = row.entry().minecraftUser();
         if (user != null && !user.isBlank()) {
             lines.add(labeled("allthelogs.info.playing", colored(user, Colors.INFO_VERSION)));
         }
-        String place = row.chatLog().serverPlace();
+        String place = row.entry().serverOrWorld();
         if (place != null && !place.isBlank()) {
             lines.add(labeled("allthelogs.info.playing_on", colored(place, Colors.INFO_VERSION)));
         }

@@ -1,4 +1,4 @@
-package me.wolfii.allthelogs.data.parse;
+package me.wolfii.allthelogs.data.extract;
 
 import java.time.LocalTime;
 import java.util.regex.Matcher;

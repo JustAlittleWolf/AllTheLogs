@@ -34,15 +34,15 @@ final class CatalogQueries {
             result.getString(offset + 5),
             result.getTimestamp(offset + 6).toLocalDateTime(),
             result.getTimestamp(offset + 7).toLocalDateTime(),
-            result.getString(offset + 8),
-            result.getString(offset + 9));
+            result.getString(offset + 8)
+        );
     }
 
     List<ChatLog> chatLogs() {
         List<ChatLog> logs = new ArrayList<>();
         String sql = """
             SELECT file_name, source_kind, source_path, entry_path, log_date, minecraft_version,
-                   start_time, end_time, minecraft_user, server_place
+                   start_time, end_time, minecraft_user
             FROM log_file ORDER BY log_date, entry_path""";
         try (Statement statement = connection.createStatement();
              ResultSet result = statement.executeQuery(sql)) {

@@ -173,17 +173,17 @@ class LogParserTest {
             [09:32:50] [Render thread/INFO]: Connecting to unicacity.eu, 25565
             [09:32:51] [Render thread/INFO]: [CHAT] hi
             """);
-        assertEquals("unicacity.eu", named.serverPlace());
+        assertEquals("unicacity.eu", named.serverOrWorld());
         ParsedLog local = parse("""
             [13:11:02] [Client thread/INFO]: Connecting to localhost, 25565
             [13:11:03] [Client thread/INFO]: [CHAT] hi
             """);
-        assertEquals("localhost", local.serverPlace());
+        assertEquals("localhost", local.serverOrWorld());
         ParsedLog ip = parse("""
             [24Feb2026 16:08:07.204] [Render thread/INFO] [net.minecraft.client.gui.screens.ConnectScreen/]: Connecting to 185.206.150.34, 25588
             [24Feb2026 16:08:08.000] [Render thread/INFO]: [CHAT] hi
             """);
-        assertEquals("185.206.150.34:25588", ip.serverPlace());
+        assertEquals("185.206.150.34:25588", ip.serverOrWorld());
     }
 
     @Test
@@ -203,7 +203,7 @@ class LogParserTest {
             [12:50:39] [Server thread/INFO]: Saving chunks for level 'ServerLevel[Audio Test]'/minecraft:overworld
             [12:50:39] [Render thread/INFO]: [CHAT] hi
             """);
-        assertEquals("world/Audio Test", parsed.serverPlace());
+        assertEquals("world/Audio Test", parsed.serverOrWorld());
         assertEquals(ChatLog.UNKNOWN_VERSION, parsed.minecraftVersion());
     }
 
@@ -214,7 +214,7 @@ class LogParserTest {
             [16:40:16] [Server thread/INFO]: Saving chunks for level 'LinkcraftII'/Overworld
             [16:52:38] [Client thread/INFO]: [CHAT] Given [Barrier] * 1 to JustAlittleWolf
             """);
-        assertEquals("world/LinkcraftII", parsed.serverPlace());
+        assertEquals("world/LinkcraftII", parsed.serverOrWorld());
         assertEquals(ChatLog.UNKNOWN_VERSION, parsed.minecraftVersion());
     }
 
@@ -224,7 +224,7 @@ class LogParserTest {
             [13:05:15] [Server thread/INFO]: Loading dimension 0 (Tick Rate Demonstration) (net.minecraft.server.integrated.IntegratedServer@760f883f)
             [13:05:16] [Client thread/INFO]: [CHAT] hi
             """);
-        assertEquals("world/Tick Rate Demonstration", parsed.serverPlace());
+        assertEquals("world/Tick Rate Demonstration", parsed.serverOrWorld());
     }
 
     @Test
@@ -258,10 +258,10 @@ class LogParserTest {
             [14:45:00] [Render thread/INFO]: Connecting to localhost, 25565
             [14:45:01] [Render thread/INFO]: [CHAT] on localhost
             """);
-        assertEquals("localhost", parsed.serverPlace());
-        assertEquals("unicacity.eu", parsed.entries().get(0).serverPlace());
-        assertNull(parsed.entries().get(1).serverPlace());
-        assertEquals("localhost", parsed.entries().get(2).serverPlace());
+        assertEquals("localhost", parsed.serverOrWorld());
+        assertEquals("unicacity.eu", parsed.entries().get(0).serverOrWorld());
+        assertNull(parsed.entries().get(1).serverOrWorld());
+        assertEquals("localhost", parsed.entries().get(2).serverOrWorld());
     }
 
     @Test

@@ -16,14 +16,14 @@ import java.util.*;
  */
 public final class ChatQueries {
     private static final String SELECT_AROUND = """
-        SELECT e.file_id, e.entry_time, e.line_index, e.message, to_json(e.formatting), e.server_place
+        SELECT e.file_id, e.entry_time, e.line_index, e.message, to_json(e.formatting), e.minecraft_user, e.server_or_world
         FROM chat_entry e
         JOIN log_file f ON f.id = e.file_id
         WHERE f.source_path = ? AND f.entry_path = ? AND e.line_index BETWEEN ? AND ?
         ORDER BY e.line_index""";
     private static final String SELECT_LOGS = """
         SELECT id, file_name, source_kind, source_path, entry_path, log_date, minecraft_version,
-               start_time, end_time, minecraft_user, server_place
+               start_time, end_time, minecraft_user
         FROM log_file WHERE id IN (""";
 
     private final DuckDBConnection connection;

@@ -8,7 +8,7 @@ import java.util.List;
  *
  * @param minecraftVersion         the detected version, or {@link me.wolfii.allthelogs.data.ChatLog#UNKNOWN_VERSION}
  * @param minecraftUser            the player from a {@code Setting user:} line (or first LAN login), or {@code null}
- * @param serverPlace              remote address or {@code world/{name}}, or {@code null} if none
+ * @param serverOrWorld            last remote address or {@code world/{name}} seen in the file, or {@code null}
  * @param entries                  chat lines in the order they appeared
  * @param resourceManagerReloaded  whether the file contains a {@code Reloading ResourceManager} line, which marks it
  *                                 as a log worth keeping even when it has no chat entries
@@ -19,7 +19,7 @@ import java.util.List;
 public record ParsedLog(
     String minecraftVersion,
     String minecraftUser,
-    String serverPlace,
+    String serverOrWorld,
     List<Entry> entries,
     boolean resourceManagerReloaded,
     LocalTime firstLineTime,
@@ -27,18 +27,19 @@ public record ParsedLog(
     String sessionId
 ) {
     /**
-     * @param time         the wall clock time of the log line
-     * @param message      everything after {@code [CHAT] }, without legacy {@code §} codes
-     * @param formatting   packed {@code (offset, count, format)} triples, or {@code null}
-     * @param serverPlace  remote address or {@code world/{name}} in effect at this line, or {@code null}
+     * @param time           the wall clock time of the log line
+     * @param message        everything after {@code [CHAT] }, without legacy {@code §} codes
+     * @param formatting     packed {@code (offset, count, format)} triples, or {@code null}
+     * @param minecraftUser  player in effect at this line, or {@code null}
+     * @param serverOrWorld  remote address or {@code world/{name}} in effect at this line, or {@code null}
      */
-    public record Entry(LocalTime time, String message, long[] formatting, String serverPlace) {
+    public record Entry(LocalTime time, String message, long[] formatting, String minecraftUser, String serverOrWorld) {
         public Entry(LocalTime time, String message) {
-            this(time, message, null, null);
+            this(time, message, null, null, null);
         }
 
         public Entry(LocalTime time, String message, long[] formatting) {
-            this(time, message, formatting, null);
+            this(time, message, formatting, null, null);
         }
     }
 }

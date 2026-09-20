@@ -65,6 +65,8 @@
  *   readonly lineIndex: number;
  *   readonly message: string;
  *   readonly formatting: number[] | null;
+ *   readonly minecraftUser: string | null;
+ *   readonly serverOrWorld: string | null;
  * }
  *
  * interface ChatLog {
@@ -74,7 +76,6 @@
  *   readonly startTime: string;
  *   readonly endTime: string;
  *   readonly minecraftUser: string | null;
- *   readonly serverPlace: string | null;
  * }
  *
  * type LogSource = LogSourceFile | LogSourceArchive | LogSourceSession;

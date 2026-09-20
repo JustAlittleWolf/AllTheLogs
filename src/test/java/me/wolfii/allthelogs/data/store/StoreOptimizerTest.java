@@ -60,10 +60,10 @@ class StoreOptimizerTest {
                 INSERT INTO log_file VALUES (
                     1, 'chat.log', 'FILE', '/tmp/chat.log', '/tmp/chat.log',
                     DATE '2026-08-24', '26.2',
-                    TIMESTAMP '2026-08-24 10:00:00', TIMESTAMP '2026-08-24 10:00:10', 1, NULL, NULL)""");
+                    TIMESTAMP '2026-08-24 10:00:00', TIMESTAMP '2026-08-24 10:00:10', 1, NULL)""");
             statement.execute("""
                 INSERT INTO chat_entry VALUES (
-                    1, 0, TIMESTAMP '2026-08-24 10:00:10', 'hello', NULL, NULL)""");
+                    1, 0, TIMESTAMP '2026-08-24 10:00:10', 'hello', NULL, NULL, NULL)""");
         }
         var compacted = StoreOptimizer.replaceWithCompactCopy(connection, database);
         try (Statement check = compacted.createStatement()) {

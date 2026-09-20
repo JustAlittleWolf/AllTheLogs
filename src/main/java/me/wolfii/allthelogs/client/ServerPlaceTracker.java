@@ -1,6 +1,6 @@
 package me.wolfii.allthelogs.client;
 
-import me.wolfii.allthelogs.data.parse.ServerPlaceExtractor;
+import me.wolfii.allthelogs.data.extract.ServerOrWorldExtractor;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
@@ -49,7 +49,7 @@ public final class ServerPlaceTracker {
             IntegratedServer server = client.getSingleplayerServer();
             if (server != null) {
                 String name = worldName(server);
-                if (name != null) return ServerPlaceExtractor.localWorld(name);
+                if (name != null) return ServerOrWorldExtractor.localWorld(name);
             }
         }
         String remote = remoteFrom(client.getCurrentServer());
@@ -77,7 +77,7 @@ public final class ServerPlaceTracker {
     private static String remoteFrom(ServerData remote) {
         if (remote == null) return null;
         String address = addressOf(remote);
-        return address == null ? null : ServerPlaceExtractor.remote(address);
+        return address == null ? null : ServerOrWorldExtractor.remote(address);
     }
 
     private static String addressOf(ServerData remote) {
@@ -92,9 +92,9 @@ public final class ServerPlaceTracker {
             String host = inet.getHostString();
             int port = inet.getPort();
             if (host == null || host.isBlank()) return null;
-            return port > 0 && port != ServerPlaceExtractor.DEFAULT_PORT
-                ? ServerPlaceExtractor.remote(host + ":" + port)
-                : ServerPlaceExtractor.remote(host);
+            return port > 0 && port != ServerOrWorldExtractor.DEFAULT_PORT
+                ? ServerOrWorldExtractor.remote(host + ":" + port)
+                : ServerOrWorldExtractor.remote(host);
         }
         return null;
     }

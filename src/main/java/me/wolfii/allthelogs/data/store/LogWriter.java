@@ -139,7 +139,8 @@ public final class LogWriter implements AutoCloseable {
         List<LocalDateTime> times = log.entryTimes();
         List<String> messages = log.messages();
         List<long[]> formattings = log.formattings();
-        List<String> places = log.entryPlaces();
+        List<String> users = log.entryUsers();
+        List<String> places = log.entryServerOrWorlds();
 
         fileAppender.beginRow();
         fileAppender.append(fileId);
@@ -157,11 +158,6 @@ public final class LogWriter implements AutoCloseable {
         } else {
             fileAppender.append(log.minecraftUser());
         }
-        if (log.serverPlace() == null) {
-            fileAppender.appendNull();
-        } else {
-            fileAppender.append(log.serverPlace());
-        }
         fileAppender.endRow();
 
         for (int i = 0; i < times.size(); i++) {
@@ -176,7 +172,13 @@ public final class LogWriter implements AutoCloseable {
             } else {
                 entryAppender.append(formatting);
             }
-            String place = places != null && i < places.size() ? places.get(i) : log.serverPlace();
+            String user = users != null && i < users.size() ? users.get(i) : log.minecraftUser();
+            if (user == null) {
+                entryAppender.appendNull();
+            } else {
+                entryAppender.append(user);
+            }
+            String place = places != null && i < places.size() ? places.get(i) : null;
             if (place == null) {
                 entryAppender.appendNull();
             } else {

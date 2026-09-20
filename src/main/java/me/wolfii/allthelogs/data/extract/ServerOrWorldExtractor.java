@@ -1,19 +1,19 @@
-package me.wolfii.allthelogs.data.parse;
+package me.wolfii.allthelogs.data.extract;
 
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Finds the remote server or local world a log was recorded on, and when the player left it.
+ * Finds the remote server or local world a log line was recorded on, and when the player left it.
  * <p>
  * Remote servers use the address with the default port {@code 25565} dropped. Local worlds use
- * {@code world/{worldname}}. {@code Connecting to} and world-save lines set the current place.
+ * {@code world/{worldname}}. {@code Connecting to} and world-save lines set the current value.
  * Disconnect lines ({@code Stopping worker threads} / {@code Stopping [n] Worker Daemon threads})
- * clear it so later chat is not tagged with the previous server. {@link #place()} is the last
- * non-null value (file-level metadata); {@link #current()} is what was in effect at the latest line.
+ * clear it so later chat is not tagged with the previous server. {@link #current()} is what was in
+ * effect at the latest line; {@link #last()} is the last non-null value seen in the file.
  */
-public final class ServerPlaceExtractor {
+public final class ServerOrWorldExtractor {
     public static final String LOCAL_PREFIX = "world/";
     public static final int DEFAULT_PORT = 25565;
     private static final String DEFAULT_PORT_SUFFIX = ":" + DEFAULT_PORT;
@@ -54,7 +54,7 @@ public final class ServerPlaceExtractor {
     /**
      * Last non-null place seen in the file, kept after disconnect for log-level metadata.
      */
-    public String place() {
+    public String last() {
         return last;
     }
 

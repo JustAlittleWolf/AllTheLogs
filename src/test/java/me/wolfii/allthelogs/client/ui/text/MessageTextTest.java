@@ -51,8 +51,8 @@ class MessageTextTest {
     void messageInfoUsesMutedLabelsAndSplitsArchivePaths() {
         LocalDateTime time = LocalDateTime.of(2026, 8, 27, 19, 22, 14);
         ChatLog log = new ChatLog(new LogSource.File(Path.of("/home/wolf/logs/2026-08-27-1.log.gz")),
-            LocalDate.of(2026, 8, 27), "1.12.2", time, time, "Steve", "unicacity.eu");
-        DisplayRow row = new DisplayRow(new ChatEntry(log, time, 0, "hi"), true, List.of());
+            LocalDate.of(2026, 8, 27), "1.12.2", time, time, "Steve");
+        DisplayRow row = new DisplayRow(new ChatEntry(log, time, 0, "hi", null, "Steve", "unicacity.eu"), true, List.of());
         List<Component> info = MessageText.messageInfo(row, Integer.MAX_VALUE, String::length);
         assertEquals("2026-08-27 19:22:14", info.get(0).getString());
         assertEquals("allthelogs.info.version", key(info.get(1)));
