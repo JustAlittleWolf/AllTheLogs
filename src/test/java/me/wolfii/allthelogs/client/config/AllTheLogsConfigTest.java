@@ -6,7 +6,6 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -19,11 +18,10 @@ class AllTheLogsConfigTest {
     void defaultsMatchCurrentBrowserBehavior() {
         AllTheLogsConfig config = AllTheLogsConfig.load(temp.resolve("missing.json"));
         assertTrue(config.extraImportDirectories().isEmpty());
-        assertEquals(FilterPersistence.NOT_PERSISTED, config.filterPersistence());
         assertFalse(config.hideImportButton());
         assertEquals(AllTheLogsConfig.DEFAULT_MESSAGE_FONT_SIZE, config.messageFontSize());
         assertEquals(12, config.messageFontSize());
-        assertEquals(SearchFilter.defaults(), config.persistedFilter());
+        assertEquals(SearchFilter.DEFAULT_CONTEXT_LINES, config.defaultContextLines());
     }
 
     @Test
@@ -32,45 +30,20 @@ class AllTheLogsConfigTest {
         Path instance = temp.resolve("instance");
         AllTheLogsConfig config = AllTheLogsConfig.load(file);
         config.setExtraImportDirectories(List.of(instance.toString(), temp.resolve("other").toString()), instance);
-        config.setFilterPersistence(FilterPersistence.SESSION);
         config.setHideImportButton(true);
         config.setMessageFontSize(8);
+        config.setDefaultContextLines(7);
         config.save();
 
         AllTheLogsConfig loaded = AllTheLogsConfig.load(file);
-        String other = temp.resolve("other").toAbsolutePath().normalize().toString();
-        assertEquals(List.of(other), loaded.extraImportDirectories());
+        String otherLogs = temp.resolve("other").resolve("logs").toAbsolutePath().normalize().toString();
+        assertEquals(List.of(otherLogs), loaded.extraImportDirectories());
         assertFalse(Files.readString(file).contains(instance.toAbsolutePath().normalize().toString()));
-        assertEquals(FilterPersistence.SESSION, loaded.filterPersistence());
         assertTrue(loaded.hideImportButton());
         assertEquals(8, loaded.messageFontSize());
-    }
-
-    @Test
-    void persistsTheSearchFilterAcrossRestarts() {
-        Path file = temp.resolve("allthelogs.json");
-        AllTheLogsConfig config = AllTheLogsConfig.load(file);
-        SearchFilter filter = SearchFilter.defaults()
-            .withText("hello")
-            .withRegex(true)
-            .withCaseSensitive(true)
-            .withContextLines(6)
-            .withStartingAt(LocalDateTime.of(2026, 1, 2, 3, 4))
-            .withVersion("26.2")
-            .withServerOrWorld("hypixel.net");
-        config.setPersistedFilter(filter);
-        config.setFilterPersistence(FilterPersistence.ACROSS_RESTARTS);
-        config.save();
-
-        AllTheLogsConfig loaded = AllTheLogsConfig.load(file);
-        assertEquals("hello", loaded.persistedFilter().text());
-        assertTrue(loaded.persistedFilter().regex());
-        assertTrue(loaded.persistedFilter().caseSensitive());
-        assertEquals(6, loaded.persistedFilter().contextLines());
-        assertEquals(LocalDateTime.of(2026, 1, 2, 3, 4), loaded.persistedFilter().startingAt());
-        assertEquals("26.2", loaded.persistedFilter().version());
-        assertEquals("hypixel.net", loaded.persistedFilter().serverOrWorld());
-        assertEquals(FilterPersistence.ACROSS_RESTARTS, loaded.filterPersistence());
+        assertEquals(7, loaded.defaultContextLines());
+        assertFalse(Files.readString(file).contains("filterPersistence"));
+        assertFalse(Files.readString(file).contains("\"filter\""));
     }
 
     @Test
@@ -83,7 +56,7 @@ class AllTheLogsConfigTest {
     }
 
     @Test
-    void roundTripsThePreviousJsonFieldNames() throws Exception {
+    void roundTripsKnownJsonFieldsAndIgnoresRemovedPersistenceKeys() throws Exception {
         Path file = temp.resolve("allthelogs.json");
         Files.writeString(file, """
             {
@@ -96,40 +69,25 @@ class AllTheLogsConfigTest {
               "filter": {
                 "text": "hello",
                 "regex": true,
-                "caseSensitive": false,
                 "contextLines": 2
               }
             }
             """.formatted(temp.resolve("other").toAbsolutePath().normalize().toString().replace("\\", "\\\\")));
 
         AllTheLogsConfig loaded = AllTheLogsConfig.load(file);
-        assertEquals(List.of(temp.resolve("other").toAbsolutePath().normalize().toString()),
-            loaded.extraImportDirectories());
-        assertEquals(FilterPersistence.ACROSS_RESTARTS, loaded.filterPersistence());
+        String otherLogs = temp.resolve("other").resolve("logs").toAbsolutePath().normalize().toString();
+        assertEquals(List.of(otherLogs), loaded.extraImportDirectories());
         assertTrue(loaded.hideImportButton());
         assertEquals(9, loaded.messageFontSize());
-        assertEquals("hello", loaded.persistedFilter().text());
-        assertTrue(loaded.persistedFilter().regex());
+        assertEquals(SearchFilter.DEFAULT_CONTEXT_LINES, loaded.defaultContextLines());
 
         loaded.save();
         String json = Files.readString(file);
         assertTrue(json.contains("\"extraImportDirectories\""));
-        assertTrue(json.contains("\"filterPersistence\": \"ACROSS_RESTARTS\""));
         assertTrue(json.contains("\"hideImportButton\": true"));
         assertTrue(json.contains("\"messageFontSize\": 9"));
-        assertTrue(json.contains("\"filter\""));
-        assertTrue(json.contains("\"text\": \"hello\""));
+        assertTrue(json.contains("\"defaultContextLines\""));
+        assertFalse(json.contains("filterPersistence"));
         assertFalse(json.contains("regexFlags"));
-    }
-
-    @Test
-    void unknownPersistenceFallsBackToNotPersisted() {
-        assertEquals(FilterPersistence.NOT_PERSISTED, FilterPersistence.fromConfig(null));
-        assertEquals(FilterPersistence.NOT_PERSISTED, FilterPersistence.fromConfig("nope"));
-        assertEquals(FilterPersistence.SESSION, FilterPersistence.fromConfig("session"));
-        assertEquals(FilterPersistence.ACROSS_RESTARTS, FilterPersistence.fromConfig("across-restarts"));
-        assertEquals(FilterPersistence.SESSION, FilterPersistence.NOT_PERSISTED.next());
-        assertEquals(FilterPersistence.ACROSS_RESTARTS, FilterPersistence.SESSION.next());
-        assertEquals(FilterPersistence.NOT_PERSISTED, FilterPersistence.ACROSS_RESTARTS.next());
     }
 }

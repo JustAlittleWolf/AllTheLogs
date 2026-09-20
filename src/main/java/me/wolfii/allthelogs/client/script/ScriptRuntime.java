@@ -15,8 +15,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * Loads GraalJS the first time the scripts screen opens. Users who never open it download nothing.
  */
 public final class ScriptRuntime {
-    private static final AtomicReference<Progress> PROGRESS = new AtomicReference<>(
-        new Progress(Progress.Stage.LOADING, 0, 0, "graaljs", null));
+    private static final AtomicReference<Progress> PROGRESS = new AtomicReference<>(Progress.idle());
     private static final Object LOCK = new Object();
     private static CompletableFuture<Void> inflight;
 

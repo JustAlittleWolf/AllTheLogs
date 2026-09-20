@@ -3,7 +3,6 @@ package me.wolfii.allthelogs.client.ui.screen;
 import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.DropdownComponent;
-import io.wispforest.owo.ui.component.LabelComponent;
 import io.wispforest.owo.ui.component.TextBoxComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
@@ -11,10 +10,10 @@ import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.*;
 import me.wolfii.allthelogs.client.config.AllTheLogsConfig;
-import me.wolfii.allthelogs.client.config.FilterPersistence;
+import me.wolfii.allthelogs.client.config.BrowserSession;
 import me.wolfii.allthelogs.client.list.DisplayRow;
 import me.wolfii.allthelogs.client.list.MessageSelection;
-import me.wolfii.allthelogs.client.search.RegexHighlight;
+import me.wolfii.allthelogs.client.search.SearchDecorations;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
@@ -24,7 +23,6 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -43,8 +41,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     private final LogBrowserQueries queries;
     private MessageTimeline list;
     private TextBoxComponent search;
-    private LabelComponent regexPrefix;
-    private LabelComponent regexSuffix;
+    private boolean syncingSearch;
     private ButtonComponent infoButton;
     private FilterOverlay filters;
     private StackLayout overlays;
@@ -57,9 +54,8 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     public LogBrowserScreen(@Nullable Screen parent) {
         super(Component.translatable("allthelogs.screen.browser"));
         this.parent = parent;
-        this.queries = new LogBrowserQueries(FilterPersistence.openingFilter());
-        this.queries.restoreSessionLocation(
-            AllTheLogsConfig.get().filterPersistence() != FilterPersistence.NOT_PERSISTED);
+        this.queries = new LogBrowserQueries(BrowserSession.openingFilter());
+        this.queries.restoreSessionLocation();
     }
 
     @Override
@@ -96,7 +92,13 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
             queries::filter, queries::versions, this::applyFilter);
         root.child(chrome);
         filters.restore();
-        refreshSearchDecorations();
+        syncSearchBox();
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        clampSearchCursor();
     }
 
     @Override
@@ -120,9 +122,8 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
 
     @Override
     public void onClose() {
-        FilterPersistence.remember(queries.filter());
-        queries.rememberSessionLocation(
-            AllTheLogsConfig.get().filterPersistence() != FilterPersistence.NOT_PERSISTED);
+        BrowserSession.remember(queries.filter());
+        queries.rememberSessionLocation();
         Minecraft.getInstance().gui.setScreen(parent);
     }
 
@@ -148,23 +149,17 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         FlowLayout bar = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
         bar.gap(4).verticalAlignment(VerticalAlignment.CENTER);
 
-        regexPrefix = UIComponents.label(Component.literal("/")).color(Color.ofRgb(Colors.REGEX_GROUP & 0xFFFFFF));
-        regexSuffix = UIComponents.label(Component.literal("/")).color(Color.ofRgb(Colors.REGEX_GROUP & 0xFFFFFF));
-
-        search = UIComponents.textBox(Sizing.expand(), queries.filter().text());
+        search = UIComponents.textBox(Sizing.expand(), SearchDecorations.wrap(queries.filter(), queries.filter().text()));
         search.setHint(Component.translatable("allthelogs.search.placeholder"));
         search.setMaxLength(256);
         search.addFormatter(this::formatSearch);
         search.onChanged().subscribe(this::onSearchChanged);
         refreshSearchColor();
 
-        bar.child(regexPrefix);
         bar.child(search);
-        bar.child(regexSuffix);
 
         bar.child(UIComponents.button(Component.translatable("allthelogs.filter"),
             button -> {
-                filters.toggle();
                 refreshSearchDecorations();
             }));
         if (!AllTheLogsConfig.get().hideImportButton()) {
@@ -184,18 +179,37 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     }
 
     private FormattedCharSequence formatSearch(String visible, int start) {
-        SearchFilter current = queries.filter();
-        if (!current.regex()) {
-            int color = current.invalidRegex() ? Colors.SEARCH_INVALID : Colors.SEARCH_TEXT;
-            return FormattedCharSequence.forward(visible, Style.EMPTY.withColor(color & 0xFFFFFF));
-        }
-        return RegexHighlight.sequence(visible);
+        return SearchDecorations.format(queries.filter(), visible, start);
     }
 
-    private void onSearchChanged(String text) {
+    private void onSearchChanged(String shown) {
+        if (syncingSearch) return;
+        SearchFilter current = queries.filter();
+        String expected = SearchDecorations.wrap(current, current.text());
+        if (!SearchDecorations.wraps(current)) {
+            applySearchText(shown);
+            return;
+        }
+        if (!shown.equals(expected)) {
+            String inner = SearchDecorations.unwrap(current, shown);
+            syncingSearch = true;
+            try {
+                search.setValue(SearchDecorations.wrap(current, inner));
+                search.setCursorPosition(SearchDecorations.clampCursor(current, search.getValue(),
+                    search.getCursorPosition()));
+            } finally {
+                syncingSearch = false;
+            }
+            applySearchText(inner);
+            return;
+        }
+        applySearchText(SearchDecorations.unwrap(current, shown));
+    }
+
+    private void applySearchText(String text) {
         if (text.equals(queries.filter().text())) return;
         queries.updateFilter(queries.filter().withText(text));
-        FilterPersistence.remember(queries.filter(), AllTheLogsConfig.get(), false);
+        BrowserSession.remember(queries.filter());
         refreshSearchColor();
         if (!queries.filter().canQuery()) {
             queries.bumpGeneration();
@@ -211,19 +225,38 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
 
     private void applyFilter(SearchFilter next) {
         queries.setFilter(next);
-        FilterPersistence.remember(next);
+        BrowserSession.remember(next);
         refreshSearchDecorations();
         if (filters != null) filters.syncFromFilter();
     }
 
     private void refreshSearchDecorations() {
+        syncSearchBox();
         refreshSearchColor();
-        boolean regex = queries.filter().regex();
-        if (regexPrefix != null) {
-            regexPrefix.text(regex ? Component.literal("/") : Component.empty());
+    }
+
+    private void syncSearchBox() {
+        if (search == null) return;
+        String shown = SearchDecorations.wrap(queries.filter(), queries.filter().text());
+        if (shown.equals(search.getValue())) {
+            clampSearchCursor();
+            return;
         }
-        if (regexSuffix != null) {
-            regexSuffix.text(regex ? Component.literal("/") : Component.empty());
+        syncingSearch = true;
+        try {
+            search.setValue(shown);
+        } finally {
+            syncingSearch = false;
+        }
+        clampSearchCursor();
+    }
+
+    private void clampSearchCursor() {
+        if (search == null || !SearchDecorations.wraps(queries.filter())) return;
+        int clamped = SearchDecorations.clampCursor(queries.filter(), search.getValue(), search.getCursorPosition());
+        if (clamped != search.getCursorPosition()) {
+            search.setCursorPosition(clamped);
+            search.setHighlightPos(clamped);
         }
     }
 

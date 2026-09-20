@@ -57,18 +57,9 @@ final class LogBrowserQueries {
     }
 
     /**
-     * Restores the last closed viewport when filter persistence is session or across-restarts.
-     * {@code NOT_PERSISTED} always starts empty so {@link #reload} jumps to the latest messages.
+     * Restores the last closed viewport for this Minecraft run.
      */
-    void restoreSessionLocation(boolean persistLocation) {
-        if (!persistLocation) {
-            sessionSnapshot = ListSnapshot.EMPTY;
-            sessionMatchSummary = MatchSummary.empty();
-            snapshot = ListSnapshot.EMPTY;
-            matchSummary = MatchSummary.empty();
-            reloadPending = true;
-            return;
-        }
+    void restoreSessionLocation() {
         if (sessionSnapshot.isEmpty()) return;
         snapshot = sessionSnapshot;
         matchSummary = sessionMatchSummary;
@@ -76,15 +67,10 @@ final class LogBrowserQueries {
     }
 
     /**
-     * Keeps the current viewport for the next browser open when persistence allows it.
+     * Keeps the current viewport for the next time the browser opens during this run.
      */
-    void rememberSessionLocation(boolean persistLocation) {
+    void rememberSessionLocation() {
         takeSnapshot();
-        if (!persistLocation) {
-            sessionSnapshot = ListSnapshot.EMPTY;
-            sessionMatchSummary = MatchSummary.empty();
-            return;
-        }
         sessionSnapshot = snapshot;
         sessionMatchSummary = matchSummary;
     }

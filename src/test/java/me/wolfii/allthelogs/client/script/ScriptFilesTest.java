@@ -29,6 +29,9 @@ class ScriptFilesTest {
         Files.writeString(scripts.resolve("extra.ts"), "console.log(1)");
         List<Path> listed = ScriptFiles.list(scripts);
         assertEquals(List.of(scripts.resolve("example.js"), scripts.resolve("extra.ts")), listed);
+        assertTrue(ScriptFiles.suggested(scripts.resolve("example.js")));
+        assertTrue(ScriptFiles.nameMatches(scripts.resolve("extra.ts"), "extra"));
+        assertFalse(ScriptFiles.nameMatches(scripts.resolve("extra.ts"), "example"));
         assertTrue(first.contains("ChatQuery.all()"));
         assertTrue(first.contains("findEntries"));
     }
