@@ -109,6 +109,7 @@
   "yacl3.config.minecraft:allthelogs.category.import": "Import",
   "yacl3.config.minecraft:allthelogs.category.import.desc": "The current instance is always scanned on start. Extra folders are imported the same way and stored as paths in the config.",
   "yacl3.config.minecraft:allthelogs.category.browser": "Messages",
+  "yacl3.config.minecraft:allthelogs.category.browser.desc": "How the messages screen looks and whether it remembers the last search.",
   "yacl3.config.minecraft:allthelogs.extraImportDirectories": "Extra import directories",
   "yacl3.config.minecraft:allthelogs.extraImportDirectories.desc": "Additional Minecraft instance folders scanned on start. The current instance is always imported and is not listed here.",
   "yacl3.config.minecraft:allthelogs.filterPersistence": "Filter persistence",

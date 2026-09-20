@@ -83,6 +83,46 @@ class AllTheLogsConfigTest {
     }
 
     @Test
+    void roundTripsThePreviousJsonFieldNames() throws Exception {
+        Path file = temp.resolve("allthelogs.json");
+        Files.writeString(file, """
+            {
+              "extraImportDirectories": [
+                "%s"
+              ],
+              "filterPersistence": "across-restarts",
+              "hideImportButton": true,
+              "messageFontSize": 9,
+              "filter": {
+                "text": "hello",
+                "regex": true,
+                "caseSensitive": false,
+                "contextLines": 2
+              }
+            }
+            """.formatted(temp.resolve("other").toAbsolutePath().normalize().toString().replace("\\", "\\\\")));
+
+        AllTheLogsConfig loaded = AllTheLogsConfig.load(file);
+        assertEquals(List.of(temp.resolve("other").toAbsolutePath().normalize().toString()),
+            loaded.extraImportDirectories());
+        assertEquals(FilterPersistence.ACROSS_RESTARTS, loaded.filterPersistence());
+        assertTrue(loaded.hideImportButton());
+        assertEquals(9, loaded.messageFontSize());
+        assertEquals("hello", loaded.persistedFilter().text());
+        assertTrue(loaded.persistedFilter().regex());
+
+        loaded.save();
+        String json = Files.readString(file);
+        assertTrue(json.contains("\"extraImportDirectories\""));
+        assertTrue(json.contains("\"filterPersistence\": \"ACROSS_RESTARTS\""));
+        assertTrue(json.contains("\"hideImportButton\": true"));
+        assertTrue(json.contains("\"messageFontSize\": 9"));
+        assertTrue(json.contains("\"filter\""));
+        assertTrue(json.contains("\"text\": \"hello\""));
+        assertFalse(json.contains("regexFlags"));
+    }
+
+    @Test
     void unknownPersistenceFallsBackToNotPersisted() {
         assertEquals(FilterPersistence.NOT_PERSISTED, FilterPersistence.fromConfig(null));
         assertEquals(FilterPersistence.NOT_PERSISTED, FilterPersistence.fromConfig("nope"));

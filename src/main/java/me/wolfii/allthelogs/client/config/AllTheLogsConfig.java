@@ -9,6 +9,9 @@ import com.google.gson.JsonParseException;
 import com.google.gson.JsonSerializationContext;
 import com.google.gson.JsonSerializer;
 import dev.isxander.yacl3.config.v2.api.ConfigClassHandler;
+import dev.isxander.yacl3.config.v2.api.ConfigField;
+import dev.isxander.yacl3.config.v2.api.ConfigSerializer;
+import dev.isxander.yacl3.config.v2.api.FieldAccess;
 import dev.isxander.yacl3.config.v2.api.SerialEntry;
 import dev.isxander.yacl3.config.v2.api.autogen.AutoGen;
 import dev.isxander.yacl3.config.v2.api.autogen.Boolean;
@@ -31,6 +34,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * User settings stored as {@code config/allthelogs.json}. Extra import folders, browser chrome, and filter
@@ -197,22 +201,65 @@ public class AllTheLogsConfig {
         return new GsonBuilder()
             .setPrettyPrinting()
             .disableHtmlEscaping()
-            .registerTypeAdapter(SearchFilter.class, new SearchFilterJson());
+            .registerTypeAdapter(SearchFilter.class, new SearchFilterJson())
+            .registerTypeAdapter(FilterPersistence.class, new FilterPersistenceJson());
     }
 
     private static ConfigClassHandler<AllTheLogsConfig> handler() {
         if (handler == null) {
             handler = ConfigClassHandler.createBuilder(AllTheLogsConfig.class)
                 .id(Identifier.parse("allthelogs"))
-                .serializer(config -> GsonConfigSerializerBuilder.create(config)
-                    .setPath(defaultPath())
-                    .appendGsonBuilder(builder -> builder
-                        .disableHtmlEscaping()
-                        .registerTypeAdapter(SearchFilter.class, new SearchFilterJson()))
-                    .build())
+                .serializer(AllTheLogsConfig::yaclSerializer)
                 .build();
         }
         return handler;
+    }
+
+    /**
+     * YACL writes through its own serializer, so normalize before save and after load the same way
+     * {@link #save()} does for tests and {@link FilterPersistence#remember}.
+     */
+    private static ConfigSerializer<AllTheLogsConfig> yaclSerializer(ConfigClassHandler<AllTheLogsConfig> config) {
+        ConfigSerializer<AllTheLogsConfig> gson = GsonConfigSerializerBuilder.create(config)
+            .setPath(defaultPath())
+            .appendGsonBuilder(builder -> builder
+                .disableHtmlEscaping()
+                .registerTypeAdapter(SearchFilter.class, new SearchFilterJson())
+                .registerTypeAdapter(FilterPersistence.class, new FilterPersistenceJson()))
+            .build();
+        return new ConfigSerializer<>(config) {
+            @Override
+            public void save() {
+                config.instance().normalize();
+                gson.save();
+            }
+
+            @Override
+            public LoadResult loadSafely(Map<ConfigField<?>, FieldAccess<?>> snapshot) {
+                LoadResult result = gson.loadSafely(snapshot);
+                config.instance().normalize();
+                return result;
+            }
+        };
+    }
+
+    private static final class FilterPersistenceJson
+        implements JsonSerializer<FilterPersistence>, JsonDeserializer<FilterPersistence> {
+        @Override
+        public JsonElement serialize(FilterPersistence src, Type typeOfSrc, JsonSerializationContext context) {
+            return context.serialize((src == null ? FilterPersistence.NOT_PERSISTED : src).name());
+        }
+
+        @Override
+        public FilterPersistence deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context)
+            throws JsonParseException {
+            if (json == null || json.isJsonNull()) return FilterPersistence.NOT_PERSISTED;
+            try {
+                return FilterPersistence.fromConfig(json.getAsString());
+            } catch (RuntimeException ignored) {
+                return FilterPersistence.NOT_PERSISTED;
+            }
+        }
     }
 
     private static final class SearchFilterJson implements JsonSerializer<SearchFilter>, JsonDeserializer<SearchFilter> {
