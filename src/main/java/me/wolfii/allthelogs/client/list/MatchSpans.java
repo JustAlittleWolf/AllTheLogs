@@ -20,7 +20,7 @@ public final class MatchSpans {
             return List.of();
         }
         if (filter.regex()) {
-            return regexSpans(message, filter.text(), filter.regexFlags());
+            return regexSpans(message, filter.text(), filter.caseSensitive());
         }
         return substringSpans(message, filter.text(), filter.caseSensitive());
     }
@@ -40,8 +40,8 @@ public final class MatchSpans {
         return List.copyOf(spans);
     }
 
-    static List<HighlightSpan> regexSpans(String message, String regex, String flags) {
-        Pattern pattern = SearchFilter.compiledRegex(regex, flags).orElse(null);
+    static List<HighlightSpan> regexSpans(String message, String regex, boolean caseSensitive) {
+        Pattern pattern = SearchFilter.compiledRegex(regex, caseSensitive).orElse(null);
         if (pattern == null) {
             return List.of();
         }
