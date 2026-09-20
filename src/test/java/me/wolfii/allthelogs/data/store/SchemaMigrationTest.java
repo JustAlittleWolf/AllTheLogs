@@ -146,7 +146,9 @@ class SchemaMigrationTest {
         Path database = tempDir.resolve("v4.duckdb");
         try (var connection = StoreConnections.openFile(database);
              Statement statement = connection.createStatement()) {
+            statement.execute("DROP INDEX IF EXISTS log_file_location");
             statement.execute("ALTER TABLE log_file DROP COLUMN server_place");
+            statement.execute("CREATE UNIQUE INDEX IF NOT EXISTS log_file_location ON log_file (source_path, entry_path)");
             statement.execute("DELETE FROM " + Schema.META_TABLE
                 + " WHERE k = '" + Schema.VERSION_KEY + "'");
             statement.execute("INSERT INTO " + Schema.META_TABLE + " VALUES ('"
