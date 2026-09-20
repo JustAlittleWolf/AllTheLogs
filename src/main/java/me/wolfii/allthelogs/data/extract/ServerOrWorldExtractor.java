@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
  */
 public final class ServerOrWorldExtractor {
     public static final String LOCAL_PREFIX = "world/";
-    public static final int DEFAULT_PORT = 25565;
+    private static final int DEFAULT_PORT = 25565;
     private static final String DEFAULT_PORT_SUFFIX = ":" + DEFAULT_PORT;
 
     private static final Pattern CONNECTING = Pattern.compile("Connecting to (.+), (\\d+)\\s*$");
