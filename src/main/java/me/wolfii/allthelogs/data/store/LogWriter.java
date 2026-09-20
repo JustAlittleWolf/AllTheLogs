@@ -139,6 +139,7 @@ public final class LogWriter implements AutoCloseable {
         List<LocalDateTime> times = log.entryTimes();
         List<String> messages = log.messages();
         List<long[]> formattings = log.formattings();
+        List<String> places = log.entryPlaces();
 
         fileAppender.beginRow();
         fileAppender.append(fileId);
@@ -174,6 +175,12 @@ public final class LogWriter implements AutoCloseable {
                 entryAppender.appendNull();
             } else {
                 entryAppender.append(formatting);
+            }
+            String place = places != null && i < places.size() ? places.get(i) : log.serverPlace();
+            if (place == null) {
+                entryAppender.appendNull();
+            } else {
+                entryAppender.append(place);
             }
             entryAppender.endRow();
         }

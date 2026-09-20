@@ -11,7 +11,7 @@ import java.util.function.DoubleConsumer;
  * {@code chat_entry.formatting} is a {@code BIGINT[]} of packed runs (one {@code long} per range), or NULL.
  */
 public final class Schema {
-    public static final int CURRENT_VERSION = 5;
+    public static final int CURRENT_VERSION = 6;
     static final String META_TABLE = "allthelogs_meta";
     static final String VERSION_KEY = "schema_version";
     static final String CLUSTER_MARKER_KEY = "clustered_before_file_id";
@@ -41,7 +41,8 @@ public final class Schema {
                 line_index INTEGER NOT NULL,
                 entry_time TIMESTAMP NOT NULL,
                 message VARCHAR NOT NULL,
-                formatting BIGINT[]
+                formatting BIGINT[],
+                server_place VARCHAR
             )""");
         statement.execute("CREATE UNIQUE INDEX IF NOT EXISTS log_file_location ON log_file (source_path, entry_path)");
         statement.execute("""
@@ -90,7 +91,7 @@ public final class Schema {
         statement.execute("DROP TABLE IF EXISTS chat_entry_sorted");
         statement.execute("""
             CREATE TABLE chat_entry_sorted AS
-            SELECT file_id, line_index, entry_time, message, formatting
+            SELECT file_id, line_index, entry_time, message, formatting, server_place
             FROM chat_entry
             ORDER BY entry_time, file_id, line_index""");
         report.accept(0.75);
@@ -128,7 +129,7 @@ public final class Schema {
             statement.execute("DROP TABLE IF EXISTS chat_entry_tail");
             statement.execute("""
                 CREATE TEMP TABLE chat_entry_tail AS
-                SELECT file_id, line_index, entry_time, message, formatting
+                SELECT file_id, line_index, entry_time, message, formatting, server_place
                 FROM chat_entry
                 WHERE file_id >= %d
                 ORDER BY entry_time, file_id, line_index""".formatted(marker));

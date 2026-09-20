@@ -300,8 +300,9 @@ public final class LogStore implements AutoCloseable {
     }
 
     /**
-     * Stores the remote server or local world on the current session. Call again when it becomes
-     * known later (for example the world name after singleplayer start).
+     * Sets the remote server or local world used for subsequent live chat. Pass {@code null} when
+     * the player leaves so later lines are not tagged with the previous place. Already stored lines
+     * keep the place they were captured with.
      *
      * @throws LogDataException if no session is active, or the update cannot be written
      */

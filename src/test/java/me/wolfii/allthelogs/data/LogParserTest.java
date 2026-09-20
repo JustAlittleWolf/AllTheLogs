@@ -248,6 +248,23 @@ class LogParserTest {
     }
 
     @Test
+    void leaveLinesClearTheCurrentPlaceSoLaterChatIsNotTagged() throws IOException {
+        ParsedLog parsed = parse("""
+            [14:44:40] [Render thread/INFO]: Connecting to unicacity.eu, 25565
+            [14:44:41] [Render thread/INFO]: [CHAT] on the server
+            [14:44:49] [Render thread/INFO]: Stopping [1] Worker Daemon threads
+            [14:44:50] [Render thread/INFO]: Stopping worker threads
+            [14:44:51] [Render thread/INFO]: [CHAT] after leave
+            [14:45:00] [Render thread/INFO]: Connecting to localhost, 25565
+            [14:45:01] [Render thread/INFO]: [CHAT] on localhost
+            """);
+        assertEquals("localhost", parsed.serverPlace());
+        assertEquals("unicacity.eu", parsed.entries().get(0).serverPlace());
+        assertNull(parsed.entries().get(1).serverPlace());
+        assertEquals("localhost", parsed.entries().get(2).serverPlace());
+    }
+
+    @Test
     void keepsEmbeddedNewlinesAndStripsFormattingCodes() throws IOException {
         ParsedLog parsed = parse("""
             [19:22:14] [Client thread/INFO] [net.labymod.core_implementation.mc18.gui.GuiChatAdapter]: [CHAT]\s\s

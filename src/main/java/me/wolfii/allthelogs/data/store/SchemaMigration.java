@@ -26,7 +26,8 @@ public final class SchemaMigration {
         1, NO_OP,
         2, NO_OP,
         3, SchemaMigration::migrate3To4SeedClusterMarker,
-        4, SchemaMigration::migrate4To5AddServerPlace
+        4, SchemaMigration::migrate4To5AddServerPlace,
+        5, SchemaMigration::migrate5To6AddEntryServerPlace
     );
 
     @FunctionalInterface
@@ -91,6 +92,20 @@ public final class SchemaMigration {
      */
     private static void migrate4To5AddServerPlace(Statement statement) throws SQLException {
         statement.execute("ALTER TABLE log_file ADD COLUMN IF NOT EXISTS server_place VARCHAR");
+    }
+
+    /**
+     * 5 → 6: stamps each chat line with the server or world in effect at that line, so a log that
+     * visits several servers (connect → leave → connect) keeps the right place on each message.
+     * Existing rows inherit {@code log_file.server_place}.
+     */
+    private static void migrate5To6AddEntryServerPlace(Statement statement) throws SQLException {
+        statement.execute("ALTER TABLE chat_entry ADD COLUMN IF NOT EXISTS server_place VARCHAR");
+        statement.execute("""
+            UPDATE chat_entry e
+            SET server_place = f.server_place
+            FROM log_file f
+            WHERE e.file_id = f.id AND e.server_place IS NULL AND f.server_place IS NOT NULL""");
     }
 
     static int readVersion(Statement statement) throws SQLException {

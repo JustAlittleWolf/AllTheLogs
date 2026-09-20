@@ -12,6 +12,7 @@ import net.minecraft.world.level.storage.WorldData;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.file.Path;
+import java.util.Objects;
 
 /**
  * Watches the running client for the current remote server or local world and stores it on the
@@ -33,7 +34,7 @@ public final class ServerPlaceTracker {
 
     private static void tick(Minecraft client) {
         String place = current(client);
-        if (place == null || place.equals(lastPlace)) return;
+        if (Objects.equals(place, lastPlace)) return;
         lastPlace = place;
         LogStoreWorker worker = AllTheLogsClient.worker();
         if (worker == null) return;

@@ -27,13 +27,18 @@ public record ParsedLog(
     String sessionId
 ) {
     /**
-     * @param time        the wall clock time of the log line
-     * @param message     everything after {@code [CHAT] }, without legacy {@code §} codes
-     * @param formatting  packed {@code (offset, count, format)} triples, or {@code null}
+     * @param time         the wall clock time of the log line
+     * @param message      everything after {@code [CHAT] }, without legacy {@code §} codes
+     * @param formatting   packed {@code (offset, count, format)} triples, or {@code null}
+     * @param serverPlace  remote address or {@code world/{name}} in effect at this line, or {@code null}
      */
-    public record Entry(LocalTime time, String message, long[] formatting) {
+    public record Entry(LocalTime time, String message, long[] formatting, String serverPlace) {
         public Entry(LocalTime time, String message) {
-            this(time, message, null);
+            this(time, message, null, null);
+        }
+
+        public Entry(LocalTime time, String message, long[] formatting) {
+            this(time, message, formatting, null);
         }
     }
 }

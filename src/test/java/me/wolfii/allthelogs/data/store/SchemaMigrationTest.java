@@ -54,6 +54,7 @@ class SchemaMigrationTest {
             assertTrue(columnExists(statement, "import_seen", "content_hash"));
             assertTrue(columnExists(statement, "log_file", "minecraft_user"));
             assertTrue(columnExists(statement, "log_file", "server_place"));
+            assertTrue(columnExists(statement, "chat_entry", "server_place"));
         }
     }
 
@@ -138,6 +139,8 @@ class SchemaMigrationTest {
             }
             assertTrue(columnExists(statement, "log_file", "server_place"),
                 "4→5 should have added server_place while stepping through from version 3");
+            assertTrue(columnExists(statement, "chat_entry", "server_place"),
+                "5→6 should have added chat_entry.server_place while stepping through from version 3");
         }
     }
 

@@ -49,4 +49,12 @@ public record ChatLog(
                    LocalDateTime endTime, String minecraftUser) {
         this(source, date, minecraftVersion, startTime, endTime, minecraftUser, null);
     }
+
+    /**
+     * Copy of this log with {@code serverPlace} on the hover/catalog fields. Used so a chat line can
+     * show the server or world that was in effect at that line rather than the file's last place.
+     */
+    public ChatLog withServerPlace(String serverPlace) {
+        return new ChatLog(source, date, minecraftVersion, startTime, endTime, minecraftUser, serverPlace);
+    }
 }

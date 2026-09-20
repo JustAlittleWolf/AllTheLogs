@@ -88,8 +88,7 @@ public final class LogStoreWorker implements AutoCloseable {
      * or no session is active.
      */
     public void updateSessionPlace(String serverPlace) {
-        if (serverPlace == null || serverPlace.isBlank()) return;
-        String place = serverPlace;
+        String place = serverPlace == null || serverPlace.isBlank() ? null : serverPlace;
         executor.execute(() -> {
             if (store == null) return;
             try {

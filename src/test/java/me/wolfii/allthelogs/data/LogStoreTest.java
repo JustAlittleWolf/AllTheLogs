@@ -255,6 +255,23 @@ class LogStoreTest {
     }
 
     @Test
+    void importedChatAfterLeaveIsNotTaggedWithThePreviousServer() throws IOException {
+        LogFixtures.writePlain(tempDir.resolve("logs"), "debug.log", """
+            [14:44:40] [Render thread/INFO]: Connecting to unicacity.eu, 25565
+            [14:44:41] [Render thread/INFO]: [CHAT] on the server
+            [14:44:49] [Render thread/INFO]: Stopping [1] Worker Daemon threads
+            [14:44:50] [Render thread/INFO]: Stopping worker threads
+            [14:44:51] [Render thread/INFO]: [CHAT] after leave
+            """);
+        store.importDirectory(tempDir);
+        assertEquals("unicacity.eu", store.findEntries(ChatQuery.all().withSubstring("on the server"))
+            .getFirst().chatLog().serverPlace());
+        assertNull(store.findEntries(ChatQuery.all().withSubstring("after leave"))
+            .getFirst().chatLog().serverPlace());
+        assertEquals("unicacity.eu", store.chatLogs().getFirst().serverPlace());
+    }
+
+    @Test
     void reusesTheSameChatLogInstanceForEntriesFromTheSameFile() throws IOException {
         store.importDirectory(logsDirectory());
 
@@ -1164,6 +1181,26 @@ class LogStoreTest {
         assertTrue(store.importSessionMessage("hello from live", startedAt.plusSeconds(1)));
         ChatEntry queried = store.findEntries(ChatQuery.all().withSubstring("hello from live")).getFirst();
         assertEquals("world/Audio Test", queried.chatLog().serverPlace());
+    }
+
+    @Test
+    void liveChatKeepsThePlaceCapturedAtThatLineAfterLeave() {
+        LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+        store.startSession("26.2", startedAt, "JustAlittleWolf");
+        store.updateSessionPlace("unicacity.eu");
+        assertTrue(store.importSessionMessage("on the server", startedAt.plusSeconds(1)));
+        store.updateSessionPlace(null);
+        assertTrue(store.importSessionMessage("after leave", startedAt.plusSeconds(2)));
+        store.updateSessionPlace("localhost");
+        assertTrue(store.importSessionMessage("on localhost", startedAt.plusSeconds(3)));
+
+        assertEquals("localhost", store.chatLogs().getFirst().serverPlace());
+        assertEquals("unicacity.eu", store.findEntries(ChatQuery.all().withSubstring("on the server"))
+            .getFirst().chatLog().serverPlace());
+        assertNull(store.findEntries(ChatQuery.all().withSubstring("after leave"))
+            .getFirst().chatLog().serverPlace());
+        assertEquals("localhost", store.findEntries(ChatQuery.all().withSubstring("on localhost"))
+            .getFirst().chatLog().serverPlace());
     }
 
     @Test

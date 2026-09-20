@@ -5,11 +5,13 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Finds the remote server or local world a log was recorded on.
+ * Finds the remote server or local world a log was recorded on, and when the player left it.
  * <p>
  * Remote servers use the address with the default port {@code 25565} dropped. Local worlds use
- * {@code world/{worldname}}. Later matching lines replace earlier ones so a world name that only
- * appears when saving still ends up on the log.
+ * {@code world/{worldname}}. {@code Connecting to} and world-save lines set the current place.
+ * Disconnect lines ({@code Stopping worker threads} / {@code Stopping [n] Worker Daemon threads})
+ * clear it so later chat is not tagged with the previous server. {@link #place()} is the last
+ * non-null value (file-level metadata); {@link #current()} is what was in effect at the latest line.
  */
 public final class ServerPlaceExtractor {
     public static final String LOCAL_PREFIX = "world/";
@@ -21,22 +23,46 @@ public final class ServerPlaceExtractor {
         "Saving chunks for level '(?:ServerLevel\\[([^]]+)]|([^']+))'");
     private static final Pattern LOADING_DIMENSION = Pattern.compile(
         "Loading dimension -?\\d+ \\(([^)]+)\\) \\(net\\.minecraft\\.server\\.integrated\\.IntegratedServer@");
+    private static final Pattern WORKER_DAEMON_STOP = Pattern.compile(
+        "Stopping \\[\\d+] Worker Daemon threads");
 
-    private String place;
+    private String current;
+    private String last;
 
     /**
-     * Observes one log line and replaces the stored place when this line names a server or world.
+     * Observes one log line: sets the current place, or clears it on disconnect.
      */
     public void accept(String line) {
+        if (isLeave(line)) {
+            current = null;
+            return;
+        }
         String found = find(line);
-        if (found != null) place = found;
+        if (found != null) {
+            current = found;
+            last = found;
+        }
     }
 
     /**
-     * @return {@code host}, {@code host:port}, or {@code world/{name}}, or {@code null} if unknown
+     * Place in effect after the latest {@link #accept}, or {@code null} after a disconnect (or if none).
+     */
+    public String current() {
+        return current;
+    }
+
+    /**
+     * Last non-null place seen in the file, kept after disconnect for log-level metadata.
      */
     public String place() {
-        return place;
+        return last;
+    }
+
+    /**
+     * Whether {@code line} is a client disconnect from a remote server.
+     */
+    public static boolean isLeave(String line) {
+        return line.contains("Stopping worker threads") || WORKER_DAEMON_STOP.matcher(line).find();
     }
 
     static String find(String line) {
