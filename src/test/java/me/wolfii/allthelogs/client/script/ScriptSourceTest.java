@@ -73,8 +73,11 @@ class GraalJsTest {
     }
 
     @Test
-    void cacheLivesUnderSharedAllTheLogsHome() {
-        assertTrue(GraalJs.cacheDirectory().endsWith(Path.of("allthelogs", "graaljs", GraalJs.VERSION)));
+    void cacheLivesUnderInstanceAllTheLogsDir() {
+        Path gameDir = Path.of("instance");
+        assertEquals(
+            gameDir.resolve(".allthelogs").resolve("graaljs").resolve(GraalJs.VERSION),
+            GraalJs.cacheDirectory(gameDir));
     }
 
     @Test

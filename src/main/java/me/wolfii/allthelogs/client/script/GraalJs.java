@@ -4,12 +4,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Locale;
 import java.util.Properties;
 
 /**
  * Maven coordinates and cache layout for the GraalJS engine, downloaded the first time the scripts
  * screen opens so the published mod jar stays small.
+ * Cached under {@code <gameDir>/.allthelogs/graaljs/<version>}, next to the log database.
  */
 public final class GraalJs {
     public static final String VERSION = readVersion();
@@ -33,8 +33,8 @@ public final class GraalJs {
     private GraalJs() {
     }
 
-    public static Path cacheDirectory() {
-        return cacheBase().resolve("allthelogs").resolve("graaljs").resolve(VERSION);
+    public static Path cacheDirectory(Path gameDirectory) {
+        return gameDirectory.resolve(".allthelogs").resolve("graaljs").resolve(VERSION);
     }
 
     public static boolean enginePresent() {
@@ -53,23 +53,6 @@ public final class GraalJs {
 
     private static Artifact artifact(String group, String name) {
         return new Artifact(group, name);
-    }
-
-    private static Path cacheBase() {
-        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
-        if (os.contains("win")) {
-            String localAppData = System.getenv("LOCALAPPDATA");
-            return localAppData != null && !localAppData.isBlank()
-                ? Path.of(localAppData)
-                : Path.of(System.getProperty("user.home"), "AppData", "Local");
-        }
-        if (os.contains("mac")) {
-            return Path.of(System.getProperty("user.home"), "Library", "Caches");
-        }
-        String xdgCache = System.getenv("XDG_CACHE_HOME");
-        return xdgCache != null && !xdgCache.isBlank()
-            ? Path.of(xdgCache)
-            : Path.of(System.getProperty("user.home"), ".cache");
     }
 
     private static String readVersion() {

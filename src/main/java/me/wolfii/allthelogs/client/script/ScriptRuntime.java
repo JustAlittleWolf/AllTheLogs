@@ -1,6 +1,7 @@
 package me.wolfii.allthelogs.client.script;
 
 import me.wolfii.allthelogs.client.AllTheLogsClient;
+import me.wolfii.allthelogs.client.AllTheLogsPaths;
 import me.wolfii.allthelogs.client.script.GraalJsInstaller.Progress;
 import me.wolfii.allthelogs.client.ui.screen.ScriptsScreen;
 import me.wolfii.allthelogs.data.duckdb.FabricClassPath;
@@ -73,6 +74,9 @@ public final class ScriptRuntime {
     }
 
     private static GraalJsInstaller installer() {
-        return new GraalJsInstaller(GraalJs.cacheDirectory(), GraalJs.MAVEN_REPO, new FabricClassPath()::add);
+        return new GraalJsInstaller(
+            GraalJs.cacheDirectory(AllTheLogsPaths.gameDirectory()),
+            GraalJs.MAVEN_REPO,
+            new FabricClassPath()::add);
     }
 }
