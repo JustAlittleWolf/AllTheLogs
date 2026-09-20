@@ -53,7 +53,7 @@ public final class LogParser {
             }
 
             if (pending != null) {
-                entries.add(new ParsedLog.Entry(pendingTime, pending.toString()));
+                flushPending(entries, pendingTime, pending, places);
                 pending = null;
                 pendingTime = null;
             }
@@ -86,14 +86,19 @@ public final class LogParser {
             pendingTime = lineTime;
             pending = new StringBuilder(line.substring(Math.min(chat + CHAT_MARKER.length(), line.length())));
         }
-        if (pending != null) entries.add(new ParsedLog.Entry(pendingTime, pending.toString()));
+        if (pending != null) flushPending(entries, pendingTime, pending, places);
 
         entries.replaceAll(entry -> {
             FormattingCodes.Parsed parsed = FormattingCodes.parse(entry.message());
-            return new ParsedLog.Entry(entry.time(), parsed.text(), parsed.formatting());
+            return new ParsedLog.Entry(entry.time(), parsed.text(), parsed.formatting(), entry.serverPlace());
         });
         String version = versions.version();
         return new ParsedLog(version == null ? ChatLog.UNKNOWN_VERSION : version, users.user(), places.place(),
             entries, resourceManagerReloaded, firstLineTime, lastLineTime, sessionId);
+    }
+
+    private static void flushPending(List<ParsedLog.Entry> entries, LocalTime time, StringBuilder pending,
+                                     ServerPlaceExtractor places) {
+        entries.add(new ParsedLog.Entry(time, pending.toString(), null, places.current()));
     }
 }

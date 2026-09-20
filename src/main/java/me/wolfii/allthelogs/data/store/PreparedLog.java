@@ -16,7 +16,8 @@ import java.util.List;
  * @param lastLineTime             timestamp of the last logged line of the file, not just chat entries
  * @param sessionId                id from an AllTheLogs session marker in the file, or {@code null}
  * @param minecraftUser            the player from a {@code Setting user:} line, or {@code null}
- * @param serverPlace              remote address or {@code world/{name}}, or {@code null}
+ * @param serverPlace              last remote address or {@code world/{name}} seen in the file, or {@code null}
+ * @param entryPlaces              place in effect for each chat line, parallel to {@link #messages()}
  * @param contentHash              SHA-256 of the discovered raw bytes, or {@code null}
  */
 public record PreparedLog(
@@ -35,6 +36,7 @@ public record PreparedLog(
     String sessionId,
     String minecraftUser,
     String serverPlace,
+    List<String> entryPlaces,
     String contentHash
 ) {
 }

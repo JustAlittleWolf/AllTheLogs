@@ -21,6 +21,7 @@ public final class SessionCapture {
     private DuckDBConnection connection;
     private long sessionFileId = -1;
     private int sessionLineIndex;
+    private String currentPlace;
 
     public SessionCapture(DuckDBConnection connection) {
         this.connection = connection;
@@ -83,6 +84,7 @@ public final class SessionCapture {
             }
             sessionFileId = fileId;
             sessionLineIndex = 0;
+            currentPlace = serverPlace;
             return new ChatLog(new LogSource.Session(sessionId), date, minecraftVersion, start, start, minecraftUser,
                 serverPlace);
         } catch (SQLException e) {
@@ -147,12 +149,14 @@ public final class SessionCapture {
     }
 
     /**
-     * Stores {@code serverPlace} on the current session. A later, different place (for example the
-     * world name becoming known after singleplayer start) replaces the previous value.
+     * Stores {@code serverPlace} on the current session. {@code null} means the player left;
+     * later chat lines are stored without a place until the next non-null update. The session
+     * log keeps the last non-null place for catalog metadata.
      */
     public void updatePlace(String serverPlace) {
-        Objects.requireNonNull(serverPlace, "serverPlace");
         requireActiveSession();
+        currentPlace = serverPlace;
+        if (serverPlace == null) return;
         try (PreparedStatement update = connection.prepareStatement("""
             UPDATE log_file SET server_place = ?
             WHERE id = ?""")) {
@@ -172,12 +176,17 @@ public final class SessionCapture {
 
     private boolean writeEntry(String message, long[] formatting, LocalDateTime timestamp) throws SQLException {
         try (PreparedStatement insert = connection.prepareStatement(
-            "INSERT INTO chat_entry (file_id, line_index, entry_time, message, formatting) VALUES (?, ?, ?, ?, CAST(? AS BIGINT[]))")) {
+            "INSERT INTO chat_entry (file_id, line_index, entry_time, message, formatting, server_place) VALUES (?, ?, ?, ?, CAST(? AS BIGINT[]), ?)")) {
             insert.setLong(1, sessionFileId);
             insert.setInt(2, sessionLineIndex);
             insert.setTimestamp(3, Timestamp.valueOf(timestamp));
             insert.setString(4, message);
             insert.setString(5, PackedFormatting.toSqlLiteral(formatting));
+            if (currentPlace == null) {
+                insert.setNull(6, Types.VARCHAR);
+            } else {
+                insert.setString(6, currentPlace);
+            }
             insert.execute();
         }
         sessionLineIndex++;

@@ -21,6 +21,7 @@ final class EntryRows {
     private final ArrayList<LocalDateTime> timestamps;
     private final ArrayList<String> messages;
     private final ArrayList<long[]> formattings;
+    private final ArrayList<String> places;
     private final Set<Long> referencedFileIds = new HashSet<>();
     private long[] fileIds;
     private int[] lineIndices;
@@ -33,6 +34,7 @@ final class EntryRows {
         this.timestamps = new ArrayList<>(capacity);
         this.messages = new ArrayList<>(capacity);
         this.formattings = new ArrayList<>(capacity);
+        this.places = new ArrayList<>(capacity);
     }
 
     int size() {
@@ -49,6 +51,7 @@ final class EntryRows {
         DuckDBReadableVector lines = chunk.vector(2);
         DuckDBReadableVector texts = chunk.vector(3);
         DuckDBReadableVector formats = chunk.vector(4);
+        DuckDBReadableVector serverPlaces = chunk.vector(5);
         int rows = Math.toIntExact(chunk.rowCount());
         ensureRoom(rows);
         long previousFileId = size == 0 ? Long.MIN_VALUE : fileIds[size - 1];
@@ -59,6 +62,7 @@ final class EntryRows {
             timestamps.add(times.getLocalDateTime(row));
             messages.add(texts.getString(row));
             formattings.add(formats.isNull(row) ? null : PackedFormatting.fromSqlLiteral(formats.getString(row)));
+            places.add(serverPlaces.isNull(row) ? null : serverPlaces.getString(row));
             if (fileId != previousFileId) {
                 referencedFileIds.add(fileId);
                 previousFileId = fileId;
@@ -79,7 +83,9 @@ final class EntryRows {
                 }
                 previousFileId = fileId;
             }
-            entries.add(new ChatEntry(log, timestamps.get(i), lineIndices[i], messages.get(i), formattings.get(i)));
+            String place = places.get(i);
+            ChatLog rowLog = Objects.equals(place, log.serverPlace()) ? log : log.withServerPlace(place);
+            entries.add(new ChatEntry(rowLog, timestamps.get(i), lineIndices[i], messages.get(i), formattings.get(i)));
         }
     }
 

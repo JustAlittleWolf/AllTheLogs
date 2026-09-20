@@ -63,7 +63,7 @@ class StoreOptimizerTest {
                     TIMESTAMP '2026-08-24 10:00:00', TIMESTAMP '2026-08-24 10:00:10', 1, NULL, NULL)""");
             statement.execute("""
                 INSERT INTO chat_entry VALUES (
-                    1, 0, TIMESTAMP '2026-08-24 10:00:10', 'hello', NULL)""");
+                    1, 0, TIMESTAMP '2026-08-24 10:00:10', 'hello', NULL, NULL)""");
         }
         var compacted = StoreOptimizer.replaceWithCompactCopy(connection, database);
         try (Statement check = compacted.createStatement()) {
