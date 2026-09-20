@@ -15,14 +15,14 @@ class ExtraImportDirectoriesTest {
     @Test
     void persistedListOmitsTheInstanceDirectoryAndItsLogsFolder() {
         Path instance = temp.resolve("instance").toAbsolutePath().normalize();
-        List<String> extra = ExtraImportDirectories.persisted(List.of(
-            instance.toString(),
-            instance.resolve("logs").toString(),
-            temp.resolve("other").toString(),
-            temp.resolve("other").toString(),
-            "  ",
-            null
-        ), instance);
+        java.util.ArrayList<String> configured = new java.util.ArrayList<>();
+        configured.add(instance.toString());
+        configured.add(instance.resolve("logs").toString());
+        configured.add(temp.resolve("other").toString());
+        configured.add(temp.resolve("other").toString());
+        configured.add("  ");
+        configured.add(null);
+        List<String> extra = ExtraImportDirectories.persisted(configured, instance);
         assertEquals(List.of(temp.resolve("other").toAbsolutePath().normalize().toString()), extra);
     }
 
