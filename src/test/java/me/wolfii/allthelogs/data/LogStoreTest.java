@@ -690,6 +690,31 @@ class LogStoreTest {
     }
 
     @Test
+    void serverFilterIsACaseInsensitiveContainsMatch() throws IOException {
+        LogFixtures.writePlain(tempDir.resolve("logs"), "debug.log", """
+            [14:44:40] [Render thread/INFO]: Connecting to AWDj.GOMMEHD.AWIDJ.com, 25565
+            [14:44:41] [Render thread/INFO]: [CHAT] on mixed
+            [14:44:49] [Render thread/INFO]: Stopping worker threads
+            [14:45:00] [Render thread/INFO]: Connecting to gommehd.de, 25565
+            [14:45:01] [Render thread/INFO]: [CHAT] on de
+            [14:45:10] [Render thread/INFO]: Stopping worker threads
+            [14:45:11] [Render thread/INFO]: Connecting to hypixel.net, 25565
+            [14:45:12] [Render thread/INFO]: [CHAT] on hypixel
+            """);
+        store.importDirectory(tempDir);
+
+        assertEquals(List.of("on mixed", "on de"),
+            store.findEntries(ChatQuery.all().withServerOrWorld("gommehd"))
+                .stream().map(ChatEntry::message).toList());
+        assertEquals(List.of("on mixed", "on de"),
+            store.findEntries(ChatQuery.all().withServerOrWorld("GOMMEHD"))
+                .stream().map(ChatEntry::message).toList());
+        assertEquals(List.of("on de"),
+            store.findEntries(ChatQuery.all().withServerOrWorld(".de"))
+                .stream().map(ChatEntry::message).toList());
+    }
+
+    @Test
     void serverFilterCombinesWithTextAndClipsContextToTheSameServer() throws IOException {
         LogFixtures.writePlain(tempDir.resolve("logs"), "debug.log", """
             [14:44:40] [Render thread/INFO]: Connecting to unicacity.eu, 25565

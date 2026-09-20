@@ -47,7 +47,8 @@ public interface ChatQuery {
     String version();
 
     /**
-     * Server or world the matching entries must have been on, or {@code null} for any.
+     * Server or world substring the matching entries must contain, or {@code null} for any.
+     * Compared case insensitively.
      */
     String serverOrWorld();
 
@@ -127,9 +128,9 @@ public interface ChatQuery {
     ChatQuery withVersion(String version);
 
     /**
-     * Keeps only entries whose {@link ChatEntry#serverOrWorld()} is {@code serverOrWorld}.
-     * Replaces any previously set server or world. Remote servers use the address; local worlds use
-     * {@code world/{name}}. Context lines are taken from the same server or world.
+     * Keeps only entries whose {@link ChatEntry#serverOrWorld()} contains {@code serverOrWorld},
+     * compared case insensitively. Replaces any previously set server or world. Remote servers use the
+     * address; local worlds use {@code world/{name}}. Context lines are taken from servers that also match.
      */
     ChatQuery withServerOrWorld(String serverOrWorld);
 

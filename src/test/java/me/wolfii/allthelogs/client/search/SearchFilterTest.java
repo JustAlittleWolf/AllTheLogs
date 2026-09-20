@@ -79,7 +79,7 @@ class SearchFilterTest {
     void serverFilterIsOmittedByDefaultAndAppliedWhenSet() {
         assertNull(SearchFilter.defaults().toQuery().serverOrWorld());
         assertEquals("hypixel.net", SearchFilter.defaults().withServerOrWorld("hypixel.net").toQuery().serverOrWorld());
-        assertNull(SearchFilter.defaults().withServerOrWorld("ALL").toQuery().serverOrWorld());
+        assertEquals("ALL", SearchFilter.defaults().withServerOrWorld("ALL").toQuery().serverOrWorld());
         assertNull(SearchFilter.defaults().withServerOrWorld("  ").serverOrWorld());
     }
 
@@ -124,7 +124,7 @@ class SearchFilterTest {
         assertTrue(SearchFilter.defaults().withUpUntil(LocalDateTime.of(2026, 1, 2, 0, 0)).isNarrowed());
         assertFalse(SearchFilter.defaults().withVersion("ALL").isNarrowed());
         assertTrue(SearchFilter.defaults().withServerOrWorld("hypixel.net").isNarrowed());
-        assertFalse(SearchFilter.defaults().withServerOrWorld("ALL").isNarrowed());
+        assertTrue(SearchFilter.defaults().withServerOrWorld("ALL").isNarrowed());
     }
 
     @Test

@@ -91,7 +91,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         chrome.child(content);
 
         filters = new FilterOverlay(chrome, overlays, () -> this.width, () -> this.height,
-            queries::filter, queries::versions, queries::servers, this::applyFilter);
+            queries::filter, queries::versions, this::applyFilter);
         root.child(chrome);
         filters.restore();
         refreshSearchDecorations();

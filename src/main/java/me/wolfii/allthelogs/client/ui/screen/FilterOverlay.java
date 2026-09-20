@@ -34,24 +34,23 @@ final class FilterOverlay {
     private final Supplier<SearchFilter> filter;
     private final Consumer<SearchFilter> onChange;
     private final VersionMenu versionsMenu;
-    private final ServerMenu serversMenu;
     private ParentUIComponent filterPanel;
     private CheckboxComponent regexBox;
     private CheckboxComponent caseBox;
     private TextBoxComponent flagsBox;
     private TextBoxComponent contextBox;
+    private TextBoxComponent serverBox;
     private TextBoxComponent fromBox;
     private TextBoxComponent untilBox;
     private boolean syncing;
 
     FilterOverlay(FlowLayout host, StackLayout overlays, IntSupplier screenWidth, IntSupplier screenHeight,
-                  Supplier<SearchFilter> filter, Supplier<List<String>> versions, Supplier<List<String>> servers,
+                  Supplier<SearchFilter> filter, Supplier<List<String>> versions,
                   Consumer<SearchFilter> onChange) {
         this.host = host;
         this.filter = filter;
         this.onChange = onChange;
         this.versionsMenu = new VersionMenu(overlays, screenWidth, screenHeight, filter, versions, onChange);
-        this.serversMenu = new ServerMenu(overlays, screenWidth, screenHeight, filter, servers, onChange);
     }
 
     boolean open() {
@@ -72,7 +71,6 @@ final class FilterOverlay {
 
     void close() {
         versionsMenu.close();
-        serversMenu.close();
         if (filterPanel != null) {
             host.removeChild(filterPanel);
             filterPanel = null;
@@ -107,8 +105,9 @@ final class FilterOverlay {
             if (fromBox != null && !fromBox.getValue().equals(from)) fromBox.setValue(from);
             String until = DateParser.formatUntil(current.upUntil());
             if (untilBox != null && !untilBox.getValue().equals(until)) untilBox.setValue(until);
+            String server = current.serverOrWorld() == null ? "" : current.serverOrWorld();
+            if (serverBox != null && !serverBox.getValue().equals(server)) serverBox.setValue(server);
             versionsMenu.syncButton();
-            serversMenu.syncButton();
         } finally {
             syncing = false;
         }
@@ -147,7 +146,7 @@ final class FilterOverlay {
         content.child(UIComponents.label(Component.translatable("allthelogs.filter.date_hint"))
             .color(Color.ofRgb(0x888888)));
         content.child(versionsMenu.row());
-        content.child(serversMenu.row());
+        content.child(serverField(current.serverOrWorld()));
 
         ScrollContainer<FlowLayout> panel = UIContainers.verticalScroll(
             Sizing.fixed(PANEL_WIDTH), Sizing.fill(), content);
@@ -168,6 +167,20 @@ final class FilterOverlay {
             if (!syncing) emit(filter.get().withRegexFlags(text));
         });
         row.child(flagsBox);
+        return row;
+    }
+
+    private FlowLayout serverField(String value) {
+        FlowLayout row = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
+        row.gap(2);
+        row.child(UIComponents.label(Component.translatable("allthelogs.filter.server")));
+        serverBox = UIComponents.textBox(Sizing.fill(), value == null ? "" : value);
+        serverBox.setMaxLength(256);
+        serverBox.setHint(Component.translatable("allthelogs.filter.server_hint"));
+        serverBox.onChanged().subscribe(text -> {
+            if (!syncing) emit(filter.get().withServerOrWorld(text));
+        });
+        row.child(serverBox);
         return row;
     }
 

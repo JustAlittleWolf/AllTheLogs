@@ -26,7 +26,7 @@ import java.util.regex.PatternSyntaxException;
  * @param limit        matches per page; negative means no cap
  * @param offset       exclusive timestamp cursor the current page starts after, or {@code null} for the first page
  * @param version      Minecraft version to restrict to, or {@code null} for all of them
- * @param serverOrWorld server or world to restrict to, or {@code null} for all of them
+ * @param serverOrWorld substring of the server or world to keep, case insensitive, or {@code null} for all
  */
 public record SearchFilter(
     String text,
@@ -49,10 +49,6 @@ public record SearchFilter(
      * Value the version menu uses for "every version", stored as no version filter at all.
      */
     public static final String ALL_VERSIONS = "ALL";
-    /**
-     * Value the server menu uses for "every server or world", stored as no server filter at all.
-     */
-    public static final String ALL_SERVERS = "ALL";
 
     public SearchFilter {
         Objects.requireNonNull(text, "text");
@@ -66,8 +62,10 @@ public record SearchFilter(
         if (limit == 0) throw new IllegalArgumentException("limit must not be zero");
         if (version != null && version.isBlank()) version = null;
         if (version != null && ALL_VERSIONS.equalsIgnoreCase(version)) version = null;
-        if (serverOrWorld != null && serverOrWorld.isBlank()) serverOrWorld = null;
-        if (serverOrWorld != null && ALL_SERVERS.equalsIgnoreCase(serverOrWorld)) serverOrWorld = null;
+        if (serverOrWorld != null) {
+            serverOrWorld = serverOrWorld.trim();
+            if (serverOrWorld.isEmpty()) serverOrWorld = null;
+        }
     }
 
     public static SearchFilter defaults() {

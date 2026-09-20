@@ -41,7 +41,6 @@ final class LogBrowserQueries {
     private MessageTimeline list;
     private ButtonComponent info;
     private List<String> versions = List.of();
-    private List<String> servers = List.of();
     private MatchSummary matchSummary = MatchSummary.empty();
     private boolean reloadPending = true;
     private boolean replaceOnJumpFailure;
@@ -104,10 +103,6 @@ final class LogBrowserQueries {
 
     List<String> versions() {
         return versions;
-    }
-
-    List<String> servers() {
-        return servers;
     }
 
     boolean consumeReload() {
@@ -226,7 +221,6 @@ final class LogBrowserQueries {
             }
             info.tooltip(StoreSummary.tooltip(metadata));
             versions = metadata.minecraftVersions();
-            servers = metadata.serverOrWorlds();
         });
     }
 

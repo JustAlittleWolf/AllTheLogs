@@ -105,9 +105,9 @@ public record ChatQuery(
     }
 
     /**
-     * Keeps only entries whose {@link ChatEntry#serverOrWorld()} is {@code serverOrWorld}.
-     * Replaces any previously set server or world. Remote servers use the address; local worlds use
-     * {@code world/{name}}. Context lines are taken from the same server or world.
+     * Keeps only entries whose {@link ChatEntry#serverOrWorld()} contains {@code serverOrWorld},
+     * compared case insensitively. Replaces any previously set server or world. Remote servers use the
+     * address; local worlds use {@code world/{name}}. Context lines are taken from servers that also match.
      */
     @Override
     public ChatQuery withServerOrWorld(String serverOrWorld) {
