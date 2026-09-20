@@ -666,6 +666,56 @@ class LogStoreTest {
     }
 
     @Test
+    void filtersByServerOrWorld() throws IOException {
+        LogFixtures.writePlain(tempDir.resolve("logs"), "debug.log", """
+            [14:44:40] [Render thread/INFO]: Connecting to unicacity.eu, 25565
+            [14:44:41] [Render thread/INFO]: [CHAT] on uni
+            [14:44:49] [Render thread/INFO]: Stopping [1] Worker Daemon threads
+            [14:44:50] [Render thread/INFO]: Stopping worker threads
+            [14:45:00] [Render thread/INFO]: Connecting to localhost, 25565
+            [14:45:01] [Render thread/INFO]: [CHAT] on local
+            [14:45:10] [Render thread/INFO]: Stopping worker threads
+            [14:45:11] [Render thread/INFO]: [CHAT] after leave
+            """);
+        store.importDirectory(tempDir);
+
+        assertEquals(List.of("on uni"),
+            store.findEntries(ChatQuery.all().withServerOrWorld("unicacity.eu"))
+                .stream().map(ChatEntry::message).toList());
+        assertEquals(List.of("on local"),
+            store.findEntries(ChatQuery.all().withServerOrWorld("localhost"))
+                .stream().map(ChatEntry::message).toList());
+        assertTrue(store.findEntries(ChatQuery.all().withServerOrWorld("hypixel.net")).isEmpty());
+        assertEquals(List.of("unicacity.eu", "localhost"), store.metadata().serverOrWorlds());
+    }
+
+    @Test
+    void serverFilterCombinesWithTextAndClipsContextToTheSameServer() throws IOException {
+        LogFixtures.writePlain(tempDir.resolve("logs"), "debug.log", """
+            [14:44:40] [Render thread/INFO]: Connecting to unicacity.eu, 25565
+            [14:44:41] [Render thread/INFO]: [CHAT] uni before
+            [14:44:42] [Render thread/INFO]: [CHAT] needle on uni
+            [14:44:43] [Render thread/INFO]: [CHAT] uni after
+            [14:44:49] [Render thread/INFO]: Stopping worker threads
+            [14:45:00] [Render thread/INFO]: Connecting to localhost, 25565
+            [14:45:01] [Render thread/INFO]: [CHAT] local before
+            [14:45:02] [Render thread/INFO]: [CHAT] needle on local
+            [14:45:03] [Render thread/INFO]: [CHAT] local after
+            """);
+        store.importDirectory(tempDir);
+
+        assertEquals(List.of("needle on uni"),
+            store.findEntries(ChatQuery.all().withSubstring("needle").withServerOrWorld("unicacity.eu"))
+                .stream().map(ChatEntry::message).toList());
+        assertEquals(List.of("uni before", "needle on uni", "uni after"),
+            store.findEntries(ChatQuery.all()
+                    .withSubstring("needle")
+                    .withServerOrWorld("unicacity.eu")
+                    .withContextLines(1))
+                .stream().map(ChatEntry::message).toList());
+    }
+
+    @Test
     void versionFilterCombinesWithTextAndContext() throws IOException {
         store.importDirectory(logsDirectory());
 
@@ -1009,6 +1059,7 @@ class LogStoreTest {
         LogStoreMetadata metadata = store.metadata();
 
         assertTrue(metadata.minecraftVersions().isEmpty());
+        assertTrue(metadata.serverOrWorlds().isEmpty());
         assertNull(metadata.firstLogDate());
         assertNull(metadata.lastLogDate());
         assertEquals(0, metadata.chatLogCount());

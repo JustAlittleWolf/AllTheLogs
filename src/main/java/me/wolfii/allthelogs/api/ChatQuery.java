@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
  * ChatQuery query = ChatQuery.all()
  *         .withRegex("(?i)welcome to")
  *         .withVersion("26.2")
+ *         .withServerOrWorld("hypixel.net")
  *         .startingAt(from)
  *         .upUntil(to)
  *         .withSort(Sort.DESCENDING)
@@ -44,6 +45,11 @@ public interface ChatQuery {
      * Minecraft version the matching entries' logs must have, or {@code null} for any.
      */
     String version();
+
+    /**
+     * Server or world the matching entries must have been on, or {@code null} for any.
+     */
+    String serverOrWorld();
 
     /**
      * Earliest timestamp to return, inclusive, or {@code null} for no lower bound.
@@ -119,6 +125,13 @@ public interface ChatQuery {
      * Replaces any previously set version. Context lines come from the same log, so they share this version.
      */
     ChatQuery withVersion(String version);
+
+    /**
+     * Keeps only entries whose {@link ChatEntry#serverOrWorld()} is {@code serverOrWorld}.
+     * Replaces any previously set server or world. Remote servers use the address; local worlds use
+     * {@code world/{name}}. Context lines are taken from the same server or world.
+     */
+    ChatQuery withServerOrWorld(String serverOrWorld);
 
     /**
      * Keeps only entries whose timestamp is at or after {@code startingAt}, inclusive.

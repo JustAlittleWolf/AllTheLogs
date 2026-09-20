@@ -14,6 +14,12 @@ public interface LogStoreMetadata {
     List<String> minecraftVersions();
 
     /**
+     * Distinct {@link ChatEntry#serverOrWorld()} values, ordered by the earliest matching entry time,
+     * then by name. Lines with no server or world are omitted.
+     */
+    List<String> serverOrWorlds();
+
+    /**
      * Earliest {@link ChatLog#date()} among stored logs, or {@code null} when the store is empty.
      */
     LocalDate firstLogDate();

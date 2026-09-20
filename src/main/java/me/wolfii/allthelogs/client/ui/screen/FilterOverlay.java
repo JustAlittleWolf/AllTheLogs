@@ -34,6 +34,7 @@ final class FilterOverlay {
     private final Supplier<SearchFilter> filter;
     private final Consumer<SearchFilter> onChange;
     private final VersionMenu versionsMenu;
+    private final ServerMenu serversMenu;
     private ParentUIComponent filterPanel;
     private CheckboxComponent regexBox;
     private CheckboxComponent caseBox;
@@ -44,12 +45,13 @@ final class FilterOverlay {
     private boolean syncing;
 
     FilterOverlay(FlowLayout host, StackLayout overlays, IntSupplier screenWidth, IntSupplier screenHeight,
-                  Supplier<SearchFilter> filter, Supplier<List<String>> versions,
+                  Supplier<SearchFilter> filter, Supplier<List<String>> versions, Supplier<List<String>> servers,
                   Consumer<SearchFilter> onChange) {
         this.host = host;
         this.filter = filter;
         this.onChange = onChange;
         this.versionsMenu = new VersionMenu(overlays, screenWidth, screenHeight, filter, versions, onChange);
+        this.serversMenu = new ServerMenu(overlays, screenWidth, screenHeight, filter, servers, onChange);
     }
 
     boolean open() {
@@ -70,6 +72,7 @@ final class FilterOverlay {
 
     void close() {
         versionsMenu.close();
+        serversMenu.close();
         if (filterPanel != null) {
             host.removeChild(filterPanel);
             filterPanel = null;
@@ -105,6 +108,7 @@ final class FilterOverlay {
             String until = DateParser.formatUntil(current.upUntil());
             if (untilBox != null && !untilBox.getValue().equals(until)) untilBox.setValue(until);
             versionsMenu.syncButton();
+            serversMenu.syncButton();
         } finally {
             syncing = false;
         }
@@ -143,6 +147,7 @@ final class FilterOverlay {
         content.child(UIComponents.label(Component.translatable("allthelogs.filter.date_hint"))
             .color(Color.ofRgb(0x888888)));
         content.child(versionsMenu.row());
+        content.child(serversMenu.row());
 
         ScrollContainer<FlowLayout> panel = UIContainers.verticalScroll(
             Sizing.fixed(PANEL_WIDTH), Sizing.fill(), content);

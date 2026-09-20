@@ -56,7 +56,8 @@ class AllTheLogsConfigTest {
             .withCaseSensitive(true)
             .withContextLines(6)
             .withStartingAt(LocalDateTime.of(2026, 1, 2, 3, 4))
-            .withVersion("26.2");
+            .withVersion("26.2")
+            .withServerOrWorld("hypixel.net");
         config.setPersistedFilter(filter);
         config.setFilterPersistence(FilterPersistence.ACROSS_RESTARTS);
         config.save();
@@ -68,6 +69,7 @@ class AllTheLogsConfigTest {
         assertEquals(6, loaded.persistedFilter().contextLines());
         assertEquals(LocalDateTime.of(2026, 1, 2, 3, 4), loaded.persistedFilter().startingAt());
         assertEquals("26.2", loaded.persistedFilter().version());
+        assertEquals("hypixel.net", loaded.persistedFilter().serverOrWorld());
         assertEquals(FilterPersistence.ACROSS_RESTARTS, loaded.filterPersistence());
     }
 

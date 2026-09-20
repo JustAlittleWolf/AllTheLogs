@@ -26,6 +26,7 @@ import java.util.regex.PatternSyntaxException;
  * @param limit        matches per page; negative means no cap
  * @param offset       exclusive timestamp cursor the current page starts after, or {@code null} for the first page
  * @param version      Minecraft version to restrict to, or {@code null} for all of them
+ * @param serverOrWorld server or world to restrict to, or {@code null} for all of them
  */
 public record SearchFilter(
     String text,
@@ -38,7 +39,8 @@ public record SearchFilter(
     LocalDateTime startingAt,
     LocalDateTime upUntil,
     LocalDateTime offset,
-    String version
+    String version,
+    String serverOrWorld
 ) {
     public static final int MAX_CONTEXT_LINES = 1000;
     public static final int DEFAULT_LIMIT = 100;
@@ -47,6 +49,10 @@ public record SearchFilter(
      * Value the version menu uses for "every version", stored as no version filter at all.
      */
     public static final String ALL_VERSIONS = "ALL";
+    /**
+     * Value the server menu uses for "every server or world", stored as no server filter at all.
+     */
+    public static final String ALL_SERVERS = "ALL";
 
     public SearchFilter {
         Objects.requireNonNull(text, "text");
@@ -60,11 +66,13 @@ public record SearchFilter(
         if (limit == 0) throw new IllegalArgumentException("limit must not be zero");
         if (version != null && version.isBlank()) version = null;
         if (version != null && ALL_VERSIONS.equalsIgnoreCase(version)) version = null;
+        if (serverOrWorld != null && serverOrWorld.isBlank()) serverOrWorld = null;
+        if (serverOrWorld != null && ALL_SERVERS.equalsIgnoreCase(serverOrWorld)) serverOrWorld = null;
     }
 
     public static SearchFilter defaults() {
         return new SearchFilter("", false, false, "i", DEFAULT_CONTEXT_LINES, DEFAULT_LIMIT, ChatQuery.Sort.ASCENDING,
-            null, null, null, null);
+            null, null, null, null, null);
     }
 
     /**
@@ -165,6 +173,10 @@ public record SearchFilter(
         return with(draft -> draft.version = version);
     }
 
+    public SearchFilter withServerOrWorld(String serverOrWorld) {
+        return with(draft -> draft.serverOrWorld = serverOrWorld);
+    }
+
     public SearchFilter withoutOffset() {
         return withOffset(null);
     }
@@ -194,11 +206,15 @@ public record SearchFilter(
         return version != null && !version.isEmpty();
     }
 
+    public boolean hasServerOrWorld() {
+        return serverOrWorld != null && !serverOrWorld.isEmpty();
+    }
+
     /**
      * Whether the user has narrowed the result set. Sort, paging, and context lines do not count.
      */
     public boolean isNarrowed() {
-        return hasText() || hasVersion() || startingAt != null || upUntil != null;
+        return hasText() || hasVersion() || hasServerOrWorld() || startingAt != null || upUntil != null;
     }
 
     /**
@@ -237,6 +253,7 @@ public record SearchFilter(
         if (upUntil != null) query = query.upUntil(upUntil);
         if (pageOffset != null) query = query.withOffset(pageOffset);
         if (hasVersion()) query = query.withVersion(version);
+        if (hasServerOrWorld()) query = query.withServerOrWorld(serverOrWorld);
         if (!hasText()) return query;
         if (regex) return query.withRegex(regexPattern(text, regexFlags));
         if (caseSensitive) return query.withSubstringCaseSensitive(text);
@@ -286,6 +303,7 @@ public record SearchFilter(
         private LocalDateTime upUntil;
         private LocalDateTime offset;
         private String version;
+        private String serverOrWorld;
 
         private Draft(SearchFilter filter) {
             this.text = filter.text;
@@ -299,11 +317,12 @@ public record SearchFilter(
             this.upUntil = filter.upUntil;
             this.offset = filter.offset;
             this.version = filter.version;
+            this.serverOrWorld = filter.serverOrWorld;
         }
 
         private SearchFilter build() {
             return new SearchFilter(text, regex, caseSensitive, regexFlags, contextLines, limit, sort, startingAt,
-                upUntil, offset, version);
+                upUntil, offset, version, serverOrWorld);
         }
     }
 }

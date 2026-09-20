@@ -26,6 +26,8 @@ import java.util.Locale;
  * requested, {@link ChatQuery#limit()} applies to the match set
  * before expansion, so a page of N matches still includes their surrounding lines.
  * {@link ChatQuery#withVersion} keeps matches whose log has that Minecraft version; context stays in the same log.
+ * {@link ChatQuery#withServerOrWorld} keeps matches on that server or world and also clips context lines, because
+ * one log can visit several servers.
  */
 public final class QueryBuilder {
     private static final String SELECT_COLUMNS = "SELECT e.file_id, e.entry_time, e.line_index, e.message, to_json(e.formatting), e.minecraft_user, e.server_or_world";
@@ -66,6 +68,10 @@ public final class QueryBuilder {
             if (query.upUntil() != null) {
                 contextFilters.add("e.entry_time < ?");
                 parameters.add(Timestamp.valueOf(query.upUntil()));
+            }
+            if (query.serverOrWorld() != null) {
+                contextFilters.add("e.server_or_world = ?");
+                parameters.add(query.serverOrWorld());
             }
             String contextWhere = contextFilters.isEmpty() ? "" : " WHERE " + String.join(" AND ", contextFilters);
             String matchOrder = orderBy(query, "entry_time", "file_id", "line_index");
@@ -136,6 +142,10 @@ public final class QueryBuilder {
         if (query.version() != null) {
             conditions.add("file_id IN (SELECT id FROM log_file WHERE minecraft_version = ?)");
             parameters.add(query.version());
+        }
+        if (query.serverOrWorld() != null) {
+            conditions.add("server_or_world = ?");
+            parameters.add(query.serverOrWorld());
         }
         if (query.substring() != null) {
             if (query.caseSensitive()) {

@@ -22,6 +22,7 @@ public final class PersistedSearchFilter {
         if (value.startingAt() != null) json.addProperty("startingAt", value.startingAt().toString());
         if (value.upUntil() != null) json.addProperty("upUntil", value.upUntil().toString());
         if (value.hasVersion()) json.addProperty("version", value.version());
+        if (value.hasServerOrWorld()) json.addProperty("serverOrWorld", value.serverOrWorld());
         return json;
     }
 
@@ -40,6 +41,7 @@ public final class PersistedSearchFilter {
         filter = filter.withStartingAt(dateTime(json, "startingAt"));
         filter = filter.withUpUntil(dateTime(json, "upUntil"));
         if (json.has("version")) filter = filter.withVersion(string(json, "version"));
+        if (json.has("serverOrWorld")) filter = filter.withServerOrWorld(string(json, "serverOrWorld"));
         return filter;
     }
 

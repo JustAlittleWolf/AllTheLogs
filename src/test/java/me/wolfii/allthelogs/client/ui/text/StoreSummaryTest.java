@@ -28,6 +28,7 @@ class StoreSummaryTest {
     void tooltipOmitsMinecraftVersionsAndUsesDateBounds() {
         LogStoreMetadata metadata = new LogStoreMetadata(
             List.of("1.8.9", "26.2"),
+            List.of("hypixel.net"),
             LocalDate.of(2020, 1, 1),
             LocalDate.of(2026, 8, 1),
             3, 40, 2048);
@@ -40,7 +41,7 @@ class StoreSummaryTest {
 
     @Test
     void emptyStoreHasASingleLine() {
-        LogStoreMetadata metadata = new LogStoreMetadata(List.of(), null, null, 0, 0, 0);
+        LogStoreMetadata metadata = new LogStoreMetadata(List.of(), List.of(), null, null, 0, 0, 0);
         assertEquals("allthelogs.meta.empty", key(StoreSummary.tooltip(metadata).getFirst()));
     }
 
@@ -48,6 +49,7 @@ class StoreSummaryTest {
     void tooltipValuesAreColoured() {
         LogStoreMetadata metadata = new LogStoreMetadata(
             List.of("1.8.9"),
+            List.of(),
             LocalDate.of(2020, 1, 1),
             LocalDate.of(2026, 8, 1),
             3, 40, 2048);

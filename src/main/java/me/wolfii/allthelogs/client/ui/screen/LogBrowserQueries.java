@@ -41,6 +41,7 @@ final class LogBrowserQueries {
     private MessageTimeline list;
     private ButtonComponent info;
     private List<String> versions = List.of();
+    private List<String> servers = List.of();
     private MatchSummary matchSummary = MatchSummary.empty();
     private boolean reloadPending = true;
     private boolean replaceOnJumpFailure;
@@ -103,6 +104,10 @@ final class LogBrowserQueries {
 
     List<String> versions() {
         return versions;
+    }
+
+    List<String> servers() {
+        return servers;
     }
 
     boolean consumeReload() {
@@ -221,6 +226,7 @@ final class LogBrowserQueries {
             }
             info.tooltip(StoreSummary.tooltip(metadata));
             versions = metadata.minecraftVersions();
+            servers = metadata.serverOrWorlds();
         });
     }
 
@@ -447,7 +453,8 @@ final class LogBrowserQueries {
         if (filter.hasText()) {
             return ContextPeeks.strip(rows, filter.contextLines(), true, oldestFirst);
         }
-        if (filter.hasVersion() || filter.startingAt() != null || filter.upUntil() != null) {
+        if (filter.hasVersion() || filter.hasServerOrWorld()
+            || filter.startingAt() != null || filter.upUntil() != null) {
             return ContextPeeks.markFileGaps(rows, oldestFirst);
         }
         return rows;
