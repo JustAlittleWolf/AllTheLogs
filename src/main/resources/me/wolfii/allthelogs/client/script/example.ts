@@ -74,6 +74,7 @@
  *   readonly startTime: string;
  *   readonly endTime: string;
  *   readonly minecraftUser: string | null;
+ *   readonly serverPlace: string | null;
  * }
  *
  * type LogSource = LogSourceFile | LogSourceArchive | LogSourceSession;
