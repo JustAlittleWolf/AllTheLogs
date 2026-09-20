@@ -3,6 +3,7 @@ package me.wolfii.allthelogs.client.search;
 import me.wolfii.allthelogs.api.ChatQuery;
 import me.wolfii.allthelogs.data.query.Re2Regex;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Locale;
 import java.util.Objects;
@@ -21,6 +22,7 @@ import java.util.regex.PatternSyntaxException;
  *
  * @param text         the search text, empty for no text filter
  * @param regex        whether {@code text} is a regular expression rather than a literal substring
+ * @param regexFlags   Java regex letters such as {@code ims}; {@code i} is tied to {@code caseSensitive}
  * @param limit        matches per page; negative means no cap
  * @param offset       exclusive timestamp cursor the current page starts after, or {@code null} for the first page
  * @param version      Minecraft version to restrict to, or {@code null} for all of them
@@ -29,6 +31,7 @@ public record SearchFilter(
     String text,
     boolean regex,
     boolean caseSensitive,
+    String regexFlags,
     int contextLines,
     long limit,
     ChatQuery.Sort sort,
@@ -48,6 +51,8 @@ public record SearchFilter(
     public SearchFilter {
         Objects.requireNonNull(text, "text");
         Objects.requireNonNull(sort, "sort");
+        regexFlags = regexFlags == null ? (caseSensitive ? "" : "i") : RegexFlags.sanitize(regexFlags);
+        caseSensitive = !RegexFlags.ignoreCase(regexFlags);
         if (contextLines < 0) throw new IllegalArgumentException("contextLines must not be negative");
         if (contextLines > MAX_CONTEXT_LINES) {
             throw new IllegalArgumentException("contextLines must be at most " + MAX_CONTEXT_LINES);
@@ -58,7 +63,7 @@ public record SearchFilter(
     }
 
     public static SearchFilter defaults() {
-        return new SearchFilter("", false, false, DEFAULT_CONTEXT_LINES, DEFAULT_LIMIT, ChatQuery.Sort.ASCENDING,
+        return new SearchFilter("", false, false, "i", DEFAULT_CONTEXT_LINES, DEFAULT_LIMIT, ChatQuery.Sort.ASCENDING,
             null, null, null, null);
     }
 
@@ -66,9 +71,15 @@ public record SearchFilter(
      * Compiles a search regex for Java-side matching, or empty when the pattern is malformed.
      */
     public static Optional<Pattern> compiledRegex(String regex, boolean caseSensitive) {
+        return compiledRegex(regex, caseSensitive ? "" : "i");
+    }
+
+    /**
+     * Compiles {@code regex} with {@link RegexFlags#toPatternFlags(String)}.
+     */
+    public static Optional<Pattern> compiledRegex(String regex, String flags) {
         try {
-            int flags = caseSensitive ? 0 : Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE;
-            return Optional.of(Pattern.compile(regex, flags));
+            return Optional.of(Pattern.compile(regex, RegexFlags.toPatternFlags(flags)));
         } catch (PatternSyntaxException e) {
             return Optional.empty();
         }
@@ -78,8 +89,18 @@ public record SearchFilter(
      * The same regex for DuckDB's RE2, which has no case-insensitive flag outside the pattern itself.
      */
     static String regexPattern(String regex, boolean caseSensitive) {
-        if (caseSensitive || hasInlineCaseFlag(regex)) return regex;
-        return "(?i)" + regex;
+        return regexPattern(regex, caseSensitive ? "" : "i");
+    }
+
+    static String regexPattern(String regex, String flags) {
+        String inline = RegexFlags.re2Inline(flags);
+        if (inline.isEmpty()) return regex;
+        if (hasInlineCaseFlag(regex)) {
+            String rest = inline.replace("i", "").replace("U", "");
+            if (rest.isEmpty()) return regex;
+            return "(?" + rest + ")" + regex;
+        }
+        return "(?" + inline + ")" + regex;
     }
 
     private static boolean hasInlineCaseFlag(String regex) {
@@ -95,7 +116,25 @@ public record SearchFilter(
     }
 
     public SearchFilter withCaseSensitive(boolean caseSensitive) {
-        return with(draft -> draft.caseSensitive = caseSensitive);
+        return with(draft -> {
+            draft.caseSensitive = caseSensitive;
+            draft.regexFlags = RegexFlags.withIgnoreCase(draft.regexFlags, !caseSensitive);
+        });
+    }
+
+    public SearchFilter withRegexFlags(String regexFlags) {
+        return with(draft -> {
+            draft.regexFlags = RegexFlags.sanitize(regexFlags);
+            draft.caseSensitive = !RegexFlags.ignoreCase(draft.regexFlags);
+        });
+    }
+
+    /**
+     * Inclusive calendar-day bounds: midnight of {@code date} through exclusive midnight of the next day.
+     */
+    public SearchFilter withDay(LocalDate date) {
+        if (date == null) return withStartingAt(null).withUpUntil(null);
+        return withStartingAt(date.atStartOfDay()).withUpUntil(date.plusDays(1).atStartOfDay());
     }
 
     public SearchFilter withContextLines(int contextLines) {
@@ -147,7 +186,7 @@ public record SearchFilter(
      * (lookarounds, backreferences, possessive quantifiers). Incomplete patterns while typing count too.
      */
     public boolean invalidRegex() {
-        return regex && hasText() && (compiledRegex(text, caseSensitive).isEmpty()
+        return regex && hasText() && (compiledRegex(text, regexFlags).isEmpty()
             || Re2Regex.unsupportedConstruct(text) != null);
     }
 
@@ -199,7 +238,7 @@ public record SearchFilter(
         if (pageOffset != null) query = query.withOffset(pageOffset);
         if (hasVersion()) query = query.withVersion(version);
         if (!hasText()) return query;
-        if (regex) return query.withRegex(regexPattern(text, caseSensitive));
+        if (regex) return query.withRegex(regexPattern(text, regexFlags));
         if (caseSensitive) return query.withSubstringCaseSensitive(text);
         return query.withSubstring(text);
     }
@@ -210,7 +249,7 @@ public record SearchFilter(
     public Predicate<String> messagePredicate() {
         if (!hasText()) return message -> true;
         if (regex) {
-            return compiledRegex(text, caseSensitive)
+            return compiledRegex(text, regexFlags)
                 .map(pattern -> (Predicate<String>) message -> pattern.matcher(message).find())
                 .orElse(message -> false);
         }
@@ -239,6 +278,7 @@ public record SearchFilter(
         private String text;
         private boolean regex;
         private boolean caseSensitive;
+        private String regexFlags;
         private int contextLines;
         private long limit;
         private ChatQuery.Sort sort;
@@ -251,6 +291,7 @@ public record SearchFilter(
             this.text = filter.text;
             this.regex = filter.regex;
             this.caseSensitive = filter.caseSensitive;
+            this.regexFlags = filter.regexFlags;
             this.contextLines = filter.contextLines;
             this.limit = filter.limit;
             this.sort = filter.sort;
@@ -261,8 +302,8 @@ public record SearchFilter(
         }
 
         private SearchFilter build() {
-            return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt, upUntil,
-                offset, version);
+            return new SearchFilter(text, regex, caseSensitive, regexFlags, contextLines, limit, sort, startingAt,
+                upUntil, offset, version);
         }
     }
 }

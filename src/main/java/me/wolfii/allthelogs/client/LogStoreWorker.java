@@ -83,6 +83,21 @@ public final class LogStoreWorker implements AutoCloseable {
         executor.execute(this::touchSessionEndTimeNow);
     }
 
+    /**
+     * Queues an update of the live session's server or world. No-op when the store is not open
+     * or no session is active.
+     */
+    public void updateSessionPlace(String serverPlace) {
+        String place = serverPlace == null || serverPlace.isBlank() ? null : serverPlace;
+        executor.execute(() -> {
+            if (store == null) return;
+            try {
+                store.updateSessionPlace(place);
+            } catch (LogDataException ignored) {
+            }
+        });
+    }
+
     public boolean isOpen() {
         return store != null;
     }

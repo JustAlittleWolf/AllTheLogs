@@ -40,7 +40,8 @@ public interface ChatLog {
     LocalDateTime endTime();
 
     /**
-     * The player from a {@code Setting user:} line, or {@code null} if unknown.
+     * The player from a {@code Setting user:} line, or {@code null} if unknown. Per-line values live on
+     * {@link ChatEntry#minecraftUser()}.
      */
     String minecraftUser();
 }

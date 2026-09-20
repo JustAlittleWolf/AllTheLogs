@@ -23,7 +23,7 @@ import java.util.List;
  * @param scrollY content-y currently at the top of the viewport
  */
 record ListView(int x, int y, int width, int height, double scrollY,
-                MessageListLayout layout, List<DisplayRow> rows, Font font) {
+                MessageListLayout layout, List<DisplayRow> rows, Font font, int rowHeight) {
     /** Padding between the list edge and the timestamp gutter. */
     static final int PAD = 4;
 
@@ -35,11 +35,19 @@ record ListView(int x, int y, int width, int height, double scrollY,
         return font.width(MessageText.TIMESTAMP_GUTTER);
     }
 
+    static float fontScale(int rowHeight) {
+        return rowHeight / (float) MessageListLayout.ROW_HEIGHT;
+    }
+
     /**
      * Pixel width available to message text, for a widget of {@code width}.
      */
     static int messageWidth(int width, Font font) {
-        return Math.max(16, listWidth(width) - PAD * 2 - timestampWidth(font));
+        return messageWidth(width, font, MessageListLayout.ROW_HEIGHT);
+    }
+
+    static int messageWidth(int width, Font font, int rowHeight) {
+        return Math.max(16, listWidth(width) - PAD * 2 - Math.round(timestampWidth(font) * fontScale(rowHeight)));
     }
 
     /** Width of the list, excluding the timeline track on the right. */
@@ -48,11 +56,15 @@ record ListView(int x, int y, int width, int height, double scrollY,
     }
 
     int timestampWidth() {
-        return timestampWidth(font);
+        return Math.round(timestampWidth(font) * fontScale());
     }
 
     int messageWidth() {
-        return messageWidth(width, font);
+        return messageWidth(width, font, rowHeight);
+    }
+
+    float fontScale() {
+        return fontScale(rowHeight);
     }
 
     /** Widget-local x where message text starts, after the timestamp gutter. */

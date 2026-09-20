@@ -1,27 +1,26 @@
 package me.wolfii.allthelogs.client;
 
-import me.wolfii.allthelogs.data.ImportOptions;
+import me.wolfii.allthelogs.client.config.AllTheLogsConfig;
+import me.wolfii.allthelogs.client.config.StartupLogImports;
 import me.wolfii.allthelogs.data.LogSource;
 import me.wolfii.allthelogs.data.store.SessionMarker;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.chat.GuiMessage;
 import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Fabric client entry: opens the log store, imports this instance's {@code logs} folder, captures live chat,
- * and registers {@code /allthelogs gui} and {@code /allthelogs import}.
+ * Fabric client entry: opens the log store, imports this instance's {@code logs} folder plus extra configured
+ * directories, captures live {@code [CHAT]} lines from {@code ChatComponent#logChatMessage}, and registers
+ * {@code /allthelogs} commands.
  */
 public final class AllTheLogsClient implements ClientModInitializer {
     public static final String MOD_ID = "allthelogs";
@@ -35,28 +34,15 @@ public final class AllTheLogsClient implements ClientModInitializer {
         return worker;
     }
 
-    private static void capture(Component message) {
-        worker.importSessionMessage(message);
-    }
-
-    private static CompletableFuture<Void> importCurrentLogs() {
-        Path gameDir = AllTheLogsPaths.gameDirectory();
-        Path logs = gameDir.resolve("logs");
-        Path root;
-        ImportOptions options;
-        if (Files.isDirectory(logs)) {
-            root = logs;
-            options = ImportOptions.currentLogsDirectory();
-        } else if (Files.isDirectory(gameDir)) {
-            root = gameDir;
-            options = ImportOptions.currentGameDirectory();
-        } else {
-            return CompletableFuture.completedFuture(null);
-        }
-        return worker.importDirectory(root, options, null)
-            .thenAccept(result -> LOGGER.info(
-                "Imported instance logs: {} files, {} entries ({} skipped)",
-                result.importedFiles(), result.importedEntries(), result.skippedFiles()));
+    /**
+     * Stores a line that Minecraft is about to write as {@code [CHAT]} in {@code latest.log}.
+     * Called from {@code ChatComponentMixin}; HUD-only chat that skips the logger is never passed in.
+     */
+    public static void captureLoggedChat(GuiMessage message) {
+        if (worker == null || message == null) return;
+        Component content = message.content();
+        if (content == null) return;
+        worker.importSessionMessage(content);
     }
 
     private static String minecraftVersion() {
@@ -80,7 +66,8 @@ public final class AllTheLogsClient implements ClientModInitializer {
     public static void onDriverReady() {
         if (worker == null || !storeStarted.compareAndSet(false, true)) return;
         worker.open(AllTheLogsPaths.database())
-            .thenCompose(ignored -> importCurrentLogs())
+            .thenCompose(ignored -> StartupLogImports.importOnBoot(
+                worker, AllTheLogsPaths.gameDirectory(), AllTheLogsConfig.get().extraImportDirectories()))
             .thenCompose(ignored -> worker.startSession(minecraftVersion(), currentUsername()))
             .whenComplete((log, error) -> {
                 if (error != null) {
@@ -96,15 +83,12 @@ public final class AllTheLogsClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         worker = new LogStoreWorker();
+        AllTheLogsConfig.loadDefault();
         DuckDbRuntime.ensure().thenRun(AllTheLogsClient::onDriverReady);
-
-        ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, timestamp) -> capture(message));
-        ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
-            if (!overlay) capture(message);
-        });
 
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
             AllTheLogsCommands.register(dispatcher));
+        ServerPlaceTracker.register();
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             long now = System.currentTimeMillis();

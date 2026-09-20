@@ -82,13 +82,14 @@ class LogParserTest {
     }
 
     @Test
-    void detectsVersionFromTheIntegratedServerWhenNoLoaderLineExists() throws IOException {
+    void doesNotInferVersionFromTheIntegratedServerLine() throws IOException {
         ParsedLog parsed = parse("""
             [18:26:25] [Client thread/INFO]: Setting user: JustAlittleWolf
-            [18:26:36] [Server thread/INFO]: Starting integrated minecraft server version 1.8.9
+            [18:26:36] [Server thread/INFO]: Starting integrated minecraft server version 1.9
             [18:26:40] [Client thread/INFO]: [CHAT] hi
             """);
-        assertEquals("1.8.9", parsed.minecraftVersion());
+        assertEquals(ChatLog.UNKNOWN_VERSION, parsed.minecraftVersion());
+        assertEquals("JustAlittleWolf", parsed.minecraftUser());
     }
 
     @Test
@@ -164,6 +165,103 @@ class LogParserTest {
             [11:21:54] [Render thread/INFO]: [CHAT] hi
             """);
         assertEquals("JustAlittleWolf", parsed.minecraftUser());
+    }
+
+    @Test
+    void extractsRemoteServersFromConnectingLinesAndDropsTheDefaultPort() throws IOException {
+        ParsedLog named = parse("""
+            [09:32:50] [Render thread/INFO]: Connecting to unicacity.eu, 25565
+            [09:32:51] [Render thread/INFO]: [CHAT] hi
+            """);
+        assertEquals("unicacity.eu", named.serverOrWorld());
+        ParsedLog local = parse("""
+            [13:11:02] [Client thread/INFO]: Connecting to localhost, 25565
+            [13:11:03] [Client thread/INFO]: [CHAT] hi
+            """);
+        assertEquals("localhost", local.serverOrWorld());
+        ParsedLog ip = parse("""
+            [24Feb2026 16:08:07.204] [Render thread/INFO] [net.minecraft.client.gui.screens.ConnectScreen/]: Connecting to 185.206.150.34, 25588
+            [24Feb2026 16:08:08.000] [Render thread/INFO]: [CHAT] hi
+            """);
+        assertEquals("185.206.150.34:25588", ip.serverOrWorld());
+    }
+
+    @Test
+    void acceptsDayMonthYearTimestampsAndStillParsesChat() throws IOException {
+        ParsedLog parsed = parse("""
+            [24Feb2026 16:09:48.421] [Render thread/INFO] [net.minecraft.client.gui.components.ChatComponent/]: [CHAT] <JustAlittleWolf> noch nicht mal fertig gejoined D:
+            """);
+        assertEquals(1, parsed.entries().size());
+        assertEquals(LocalTime.of(16, 9, 48), parsed.entries().getFirst().time());
+        assertEquals("<JustAlittleWolf> noch nicht mal fertig gejoined D:", parsed.entries().getFirst().message());
+    }
+
+    @Test
+    void extractsWorldNamesFromModernServerLevelSavingLines() throws IOException {
+        ParsedLog parsed = parse("""
+            [12:50:38] [Server thread/INFO]: Starting integrated minecraft server version 26.3 Snapshot 9
+            [12:50:39] [Server thread/INFO]: Saving chunks for level 'ServerLevel[Audio Test]'/minecraft:overworld
+            [12:50:39] [Render thread/INFO]: [CHAT] hi
+            """);
+        assertEquals("world/Audio Test", parsed.serverOrWorld());
+        assertEquals(ChatLog.UNKNOWN_VERSION, parsed.minecraftVersion());
+    }
+
+    @Test
+    void extractsWorldNamesFromOlderSavingLines() throws IOException {
+        ParsedLog parsed = parse("""
+            [16:38:57] [Server thread/INFO]: Starting integrated minecraft server version 1.9
+            [16:40:16] [Server thread/INFO]: Saving chunks for level 'LinkcraftII'/Overworld
+            [16:52:38] [Client thread/INFO]: [CHAT] Given [Barrier] * 1 to JustAlittleWolf
+            """);
+        assertEquals("world/LinkcraftII", parsed.serverOrWorld());
+        assertEquals(ChatLog.UNKNOWN_VERSION, parsed.minecraftVersion());
+    }
+
+    @Test
+    void extractsWorldNamesFromLoadingDimensionLines() throws IOException {
+        ParsedLog parsed = parse("""
+            [13:05:15] [Server thread/INFO]: Loading dimension 0 (Tick Rate Demonstration) (net.minecraft.server.integrated.IntegratedServer@760f883f)
+            [13:05:16] [Client thread/INFO]: [CHAT] hi
+            """);
+        assertEquals("world/Tick Rate Demonstration", parsed.serverOrWorld());
+    }
+
+    @Test
+    void settingUserWinsOverALaterLanLogin() throws IOException {
+        ParsedLog parsed = parse("""
+            [11:21:53] [Render thread/INFO]: Setting user: JustAlittleWolf
+            [12:50:39] [Server thread/INFO]: Guest[local:E:aaaaaaaa] logged in with entity id 2 at (0.0, 0.0, 0.0)
+            [12:50:40] [Render thread/INFO]: [CHAT] hi
+            """);
+        assertEquals("JustAlittleWolf", parsed.minecraftUser());
+    }
+
+    @Test
+    void firstLanLoginIsOnlyAFallbackUser() throws IOException {
+        ParsedLog parsed = parse("""
+            [12:50:39] [Server thread/INFO]: JustAlittleWolf[local:E:67563101] logged in with entity id 1 at (5.7, -60.0, 10.8)
+            [12:50:40] [Server thread/INFO]: Guest[local:E:aaaaaaaa] logged in with entity id 2 at (0.0, 0.0, 0.0)
+            [12:50:41] [Render thread/INFO]: [CHAT] hi
+            """);
+        assertEquals("JustAlittleWolf", parsed.minecraftUser());
+    }
+
+    @Test
+    void leaveLinesClearTheCurrentPlaceSoLaterChatIsNotTagged() throws IOException {
+        ParsedLog parsed = parse("""
+            [14:44:40] [Render thread/INFO]: Connecting to unicacity.eu, 25565
+            [14:44:41] [Render thread/INFO]: [CHAT] on the server
+            [14:44:49] [Render thread/INFO]: Stopping [1] Worker Daemon threads
+            [14:44:50] [Render thread/INFO]: Stopping worker threads
+            [14:44:51] [Render thread/INFO]: [CHAT] after leave
+            [14:45:00] [Render thread/INFO]: Connecting to localhost, 25565
+            [14:45:01] [Render thread/INFO]: [CHAT] on localhost
+            """);
+        assertEquals("localhost", parsed.serverOrWorld());
+        assertEquals("unicacity.eu", parsed.entries().get(0).serverOrWorld());
+        assertNull(parsed.entries().get(1).serverOrWorld());
+        assertEquals("localhost", parsed.entries().get(2).serverOrWorld());
     }
 
     @Test

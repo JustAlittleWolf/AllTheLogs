@@ -34,7 +34,8 @@ final class CatalogQueries {
             result.getString(offset + 5),
             result.getTimestamp(offset + 6).toLocalDateTime(),
             result.getTimestamp(offset + 7).toLocalDateTime(),
-            result.getString(offset + 8));
+            result.getString(offset + 8)
+        );
     }
 
     List<ChatLog> chatLogs() {

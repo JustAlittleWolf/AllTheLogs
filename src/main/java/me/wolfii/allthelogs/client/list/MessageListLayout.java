@@ -56,10 +56,16 @@ public final class MessageListLayout {
      */
     public static MessageListLayout of(List<DisplayRow> rows, int contextLines, int messageWidth,
                                        RowRangeWidth widthOf) {
-        return layout(rows, messageWidth, widthOf);
+        return of(rows, contextLines, messageWidth, widthOf, ROW_HEIGHT);
     }
 
-    private static MessageListLayout layout(List<DisplayRow> rows, int messageWidth, RowRangeWidth widthOf) {
+    public static MessageListLayout of(List<DisplayRow> rows, int contextLines, int messageWidth,
+                                       RowRangeWidth widthOf, int rowHeight) {
+        return layout(rows, messageWidth, widthOf, Math.max(1, rowHeight));
+    }
+
+    private static MessageListLayout layout(List<DisplayRow> rows, int messageWidth, RowRangeWidth widthOf,
+                                            int lineHeight) {
         if (rows.isEmpty()) {
             return new MessageListLayout(new int[0], new int[0], List.of(), List.of(), 0);
         }
@@ -98,7 +104,7 @@ public final class MessageListLayout {
             int lines = Math.max(1, MessageWrap.lineCount(row.message(), messageWidth,
                 (from, to) -> widthOf.width(row, from, to)));
             rowY[i] = y;
-            rowHeight[i] = lines * ROW_HEIGHT;
+            rowHeight[i] = lines * lineHeight;
             y += rowHeight[i];
         }
         if (rows.getLast().expandDown()) {
@@ -118,6 +124,14 @@ public final class MessageListLayout {
 
     public static int extraContextLines(boolean shift) {
         return shift ? SHIFT_EXPAND_LINES : EXPAND_LINES;
+    }
+
+    public static String expandClickHint() {
+        return "Click: +" + extraContextLines(false);
+    }
+
+    public static String expandShiftClickHint() {
+        return "Shift+Click: +" + extraContextLines(true);
     }
 
     /**

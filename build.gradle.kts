@@ -56,18 +56,26 @@ dependencies {
 
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
+
+    compileOnly(libs.graaljs.polyglot)
+    testImplementation(libs.graaljs.polyglot)
+    testImplementation(libs.graaljs.community)
 }
 
 tasks.processResources {
     val properties = mapOf(
         "version" to version,
-        "duckdbVersion" to libs.versions.duckdb.get()
+        "duckdbVersion" to libs.versions.duckdb.get(),
+        "graaljsVersion" to libs.versions.graaljs.get()
     )
     inputs.properties(properties)
     filesMatching("fabric.mod.json") {
         expand(properties)
     }
     filesMatching("**/duckdb/jdbc.properties") {
+        expand(properties)
+    }
+    filesMatching("**/script/graaljs.properties") {
         expand(properties)
     }
 }

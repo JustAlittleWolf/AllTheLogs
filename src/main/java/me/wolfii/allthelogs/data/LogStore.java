@@ -300,6 +300,17 @@ public final class LogStore implements AutoCloseable {
     }
 
     /**
+     * Sets the remote server or local world used for subsequent live chat. Pass {@code null} when
+     * the player leaves so later lines are not tagged with the previous place. Already stored lines
+     * keep the place they were captured with.
+     *
+     * @throws LogDataException if no session is active, or the update cannot be written
+     */
+    public void updateSessionPlace(String serverPlace) {
+        sessions.updatePlace(serverPlace);
+    }
+
+    /**
      * Returns every entry matching {@code query}, resolved into records with their chat log attached.
      * <p>
      * Only chat logs that appear in the result are loaded; the listing API {@link #chatLogs()} still reads every file.

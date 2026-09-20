@@ -91,7 +91,7 @@ public final class MessageText {
     }
 
     /**
-     * Compact hover card for a message timestamp: full date, labelled version/user, path and archive entry.
+     * Compact hover card for a message timestamp: full date, labelled version/user/place, path and archive entry.
      */
     public static List<Component> messageInfo(DisplayRow row, int maxWidth, ToIntFunction<String> widthOf) {
         List<Component> lines = new ArrayList<>();
@@ -105,9 +105,13 @@ public final class MessageText {
         if (version != null) {
             lines.add(labeled("allthelogs.info.version", colored(version, Colors.INFO_VERSION)));
         }
-        String user = row.chatLog().minecraftUser();
+        String user = row.entry().minecraftUser();
         if (user != null && !user.isBlank()) {
             lines.add(labeled("allthelogs.info.playing", colored(user, Colors.INFO_VERSION)));
+        }
+        String place = row.entry().serverOrWorld();
+        if (place != null && !place.isBlank()) {
+            lines.add(labeled("allthelogs.info.playing_on", colored(place, Colors.INFO_VERSION)));
         }
         int width = Math.max(16, maxWidth);
         switch (row.chatLog().source()) {
@@ -160,8 +164,8 @@ public final class MessageText {
     }
 
     /**
-     * Chat colour with context dimming and {@code \n} darkening multiplied in that order.
-     * Search hits are marked with a background fill, not a text tint.
+     * Chat colour with {@code \n} darkening multiplied in. Search hits are marked with a background fill,
+     * and context lines use a vertical bar rather than a text tint.
      */
     static int stackedColor(DisplayRow row, int index, boolean interpretEscapes) {
         return stackedColor(row, index, interpretEscapes, PackedFormatting.at(row.visualFormatting(), index));
@@ -179,9 +183,6 @@ public final class MessageText {
         int color = PackedFormatting.hasColor(format)
             ? 0xFF000000 | PackedFormatting.rgb(format)
             : Colors.MATCH_TEXT;
-        if (!row.match()) {
-            color = Colors.multiply(color, Colors.CONTEXT_TEXT);
-        }
         if (VisualMessage.escapeChar(row.message(), index, interpretEscapes)) {
             color = Colors.multiply(color, Colors.ESCAPE_TEXT);
         }

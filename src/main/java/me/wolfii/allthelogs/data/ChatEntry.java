@@ -5,22 +5,30 @@ import java.time.LocalDateTime;
 /**
  * A single chat line from a Minecraft log, stored with legacy {@code §} codes stripped.
  *
- * @param chatLog     the imported log or client session this line came from
- * @param timestamp   the date of the log combined with the time of the log line, converted from the import timezone to
- *                    the JVM default timezone
- * @param lineIndex   zero based position of this entry among the chat entries of its log; consecutive entries of one
- *                    log have consecutive indices, which is what makes retrieving surrounding lines cheap
- * @param message     the chat text with legacy {@code §} codes stripped
- * @param formatting  packed runs into {@code message} ({@code long} per range), or {@code null}
+ * @param chatLog        the imported log or client session this line came from
+ * @param timestamp      the date of the log combined with the time of the log line, converted from the import timezone
+ *                       to the JVM default timezone
+ * @param lineIndex      zero based position of this entry among the chat entries of its log; consecutive entries of one
+ *                       log have consecutive indices, which is what makes retrieving surrounding lines cheap
+ * @param message        the chat text with legacy {@code §} codes stripped
+ * @param formatting     packed runs into {@code message} ({@code long} per range), or {@code null}
+ * @param minecraftUser  the player in effect at this line, or {@code null} if unknown
+ * @param serverOrWorld  the remote server or {@code world/{name}} in effect at this line, or {@code null}
  */
 public record ChatEntry(
     ChatLog chatLog,
     LocalDateTime timestamp,
     int lineIndex,
     String message,
-    long[] formatting
+    long[] formatting,
+    String minecraftUser,
+    String serverOrWorld
 ) implements me.wolfii.allthelogs.api.ChatEntry {
     public ChatEntry(ChatLog chatLog, LocalDateTime timestamp, int lineIndex, String message) {
-        this(chatLog, timestamp, lineIndex, message, null);
+        this(chatLog, timestamp, lineIndex, message, null, null, null);
+    }
+
+    public ChatEntry(ChatLog chatLog, LocalDateTime timestamp, int lineIndex, String message, long[] formatting) {
+        this(chatLog, timestamp, lineIndex, message, formatting, null, null);
     }
 }

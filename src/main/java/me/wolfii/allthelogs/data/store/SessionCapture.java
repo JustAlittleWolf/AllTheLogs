@@ -21,6 +21,8 @@ public final class SessionCapture {
     private DuckDBConnection connection;
     private long sessionFileId = -1;
     private int sessionLineIndex;
+    private String currentPlace;
+    private String currentUser;
 
     public SessionCapture(DuckDBConnection connection) {
         this.connection = connection;
@@ -36,11 +38,16 @@ public final class SessionCapture {
 
     /**
      * Starts a capture session at {@code startedAt} (whole seconds) and returns the created log, which carries a
-     * unique {@link LogSource.Session#id()}. {@code minecraftUser} is stored when known, or {@code null}.
+     * unique {@link LogSource.Session#id()}. {@code minecraftUser} is stored on the session log and on later
+     * chat lines. {@code serverOrWorld} is remembered for those lines only (a session can visit several).
      *
      * @throws LogDataException if the session cannot be written
      */
     public ChatLog start(String minecraftVersion, LocalDateTime startedAt, String minecraftUser) {
+        return start(minecraftVersion, startedAt, minecraftUser, null);
+    }
+
+    public ChatLog start(String minecraftVersion, LocalDateTime startedAt, String minecraftUser, String serverOrWorld) {
         Objects.requireNonNull(minecraftVersion, "minecraftVersion");
         Objects.requireNonNull(startedAt, "startedAt");
         LocalDateTime start = startedAt.truncatedTo(ChronoUnit.MILLIS);
@@ -72,6 +79,8 @@ public final class SessionCapture {
             }
             sessionFileId = fileId;
             sessionLineIndex = 0;
+            currentUser = minecraftUser;
+            currentPlace = serverOrWorld;
             return new ChatLog(new LogSource.Session(sessionId), date, minecraftVersion, start, start, minecraftUser);
         } catch (SQLException e) {
             throw new LogDataException("could not start a client session", e);
@@ -134,6 +143,15 @@ public final class SessionCapture {
         }
     }
 
+    /**
+     * Remembers {@code serverOrWorld} for later chat lines in this session. {@code null} means the player
+     * left; later lines are stored without a server or world until the next non-null update.
+     */
+    public void updatePlace(String serverOrWorld) {
+        requireActiveSession();
+        currentPlace = serverOrWorld;
+    }
+
     private void requireActiveSession() {
         if (sessionFileId < 0) {
             throw new LogDataException("no client session is active; call startSession first");
@@ -142,12 +160,22 @@ public final class SessionCapture {
 
     private boolean writeEntry(String message, long[] formatting, LocalDateTime timestamp) throws SQLException {
         try (PreparedStatement insert = connection.prepareStatement(
-            "INSERT INTO chat_entry (file_id, line_index, entry_time, message, formatting) VALUES (?, ?, ?, ?, CAST(? AS BIGINT[]))")) {
+            "INSERT INTO chat_entry (file_id, line_index, entry_time, message, formatting, minecraft_user, server_or_world) VALUES (?, ?, ?, ?, CAST(? AS BIGINT[]), ?, ?)")) {
             insert.setLong(1, sessionFileId);
             insert.setInt(2, sessionLineIndex);
             insert.setTimestamp(3, Timestamp.valueOf(timestamp));
             insert.setString(4, message);
             insert.setString(5, PackedFormatting.toSqlLiteral(formatting));
+            if (currentUser == null) {
+                insert.setNull(6, Types.VARCHAR);
+            } else {
+                insert.setString(6, currentUser);
+            }
+            if (currentPlace == null) {
+                insert.setNull(7, Types.VARCHAR);
+            } else {
+                insert.setString(7, currentPlace);
+            }
             insert.execute();
         }
         sessionLineIndex++;

@@ -32,4 +32,15 @@ public interface ChatEntry {
      * Packed formatting runs into {@link #message()} ({@code long} per range), or {@code null}.
      */
     long[] formatting();
+
+    /**
+     * The player in effect at this line, or {@code null} if unknown.
+     */
+    String minecraftUser();
+
+    /**
+     * The remote server address or {@code world/{name}} local world in effect at this line, or {@code null}
+     * if unknown (including after leaving a server).
+     */
+    String serverOrWorld();
 }

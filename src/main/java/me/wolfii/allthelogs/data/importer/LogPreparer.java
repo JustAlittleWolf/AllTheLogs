@@ -36,10 +36,14 @@ public final class LogPreparer {
         List<LocalDateTime> times = new ArrayList<>(parsed.entries().size());
         List<String> messages = new ArrayList<>(parsed.entries().size());
         List<long[]> formattings = new ArrayList<>(parsed.entries().size());
+        List<String> users = new ArrayList<>(parsed.entries().size());
+        List<String> places = new ArrayList<>(parsed.entries().size());
         for (ParsedLog.Entry entry : parsed.entries()) {
             times.add(LogDates.toSystemLocal(date, entry.time(), timezone));
             messages.add(entry.message());
             formattings.add(entry.formatting());
+            users.add(entry.minecraftUser());
+            places.add(entry.serverOrWorld());
         }
         LocalDateTime firstLineTime = LogDates.toSystemLocal(date, parsed.firstLineTime(), timezone);
         LocalDateTime lastLineTime = LogDates.toSystemLocal(date, parsed.lastLineTime(), timezone);
@@ -47,7 +51,7 @@ public final class LogPreparer {
             candidate.entryPath(), date, parsed.minecraftVersion(),
             times, messages, formattings, parsed.resourceManagerReloaded(),
             firstLineTime, lastLineTime, parsed.sessionId(), parsed.minecraftUser(),
-            candidate.contentHash());
+            users, places, candidate.contentHash());
     }
 
     private static BufferedReader open(LogCandidate candidate) throws IOException {

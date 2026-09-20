@@ -241,6 +241,34 @@ class LogStoreTest {
         store.importDirectory(tempDir);
         ChatEntry entry = store.findEntries(ChatQuery.all().withSubstring("hi from wolf")).getFirst();
         assertEquals("JustAlittleWolf", entry.chatLog().minecraftUser());
+        assertEquals("JustAlittleWolf", entry.minecraftUser());
+    }
+
+    @Test
+    void storesTheServerPlaceFromTheLog() throws IOException {
+        LogFixtures.writePlain(tempDir.resolve("logs"), "debug.log", """
+            [09:32:50] [Render thread/INFO]: Connecting to unicacity.eu, 25565
+            [09:32:51] [Render thread/INFO]: [CHAT] hi from uni
+            """);
+        store.importDirectory(tempDir);
+        ChatEntry entry = store.findEntries(ChatQuery.all().withSubstring("hi from uni")).getFirst();
+        assertEquals("unicacity.eu", entry.serverOrWorld());
+    }
+
+    @Test
+    void importedChatAfterLeaveIsNotTaggedWithThePreviousServer() throws IOException {
+        LogFixtures.writePlain(tempDir.resolve("logs"), "debug.log", """
+            [14:44:40] [Render thread/INFO]: Connecting to unicacity.eu, 25565
+            [14:44:41] [Render thread/INFO]: [CHAT] on the server
+            [14:44:49] [Render thread/INFO]: Stopping [1] Worker Daemon threads
+            [14:44:50] [Render thread/INFO]: Stopping worker threads
+            [14:44:51] [Render thread/INFO]: [CHAT] after leave
+            """);
+        store.importDirectory(tempDir);
+        assertEquals("unicacity.eu", store.findEntries(ChatQuery.all().withSubstring("on the server"))
+            .getFirst().serverOrWorld());
+        assertNull(store.findEntries(ChatQuery.all().withSubstring("after leave"))
+            .getFirst().serverOrWorld());
     }
 
     @Test
@@ -1135,6 +1163,45 @@ class LogStoreTest {
         assertTrue(store.importSessionMessage("hello from live", startedAt.plusSeconds(1)));
         ChatEntry queried = store.findEntries(ChatQuery.all().withSubstring("hello from live")).getFirst();
         assertEquals("JustAlittleWolf", queried.chatLog().minecraftUser());
+        assertEquals("JustAlittleWolf", queried.minecraftUser());
+    }
+
+    @Test
+    void updateSessionPlaceStoresTheServerOrWorldAndCanChangeLater() {
+        LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+
+        ChatLog file = store.startSession("26.2", startedAt, "JustAlittleWolf");
+        assertEquals("JustAlittleWolf", file.minecraftUser());
+        store.updateSessionPlace("unicacity.eu");
+        store.updateSessionPlace("world/Audio Test");
+
+        assertTrue(store.importSessionMessage("hello from live", startedAt.plusSeconds(1)));
+        ChatEntry queried = store.findEntries(ChatQuery.all().withSubstring("hello from live")).getFirst();
+        assertEquals("world/Audio Test", queried.serverOrWorld());
+    }
+
+    @Test
+    void liveChatKeepsThePlaceCapturedAtThatLineAfterLeave() {
+        LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+        store.startSession("26.2", startedAt, "JustAlittleWolf");
+        store.updateSessionPlace("unicacity.eu");
+        assertTrue(store.importSessionMessage("on the server", startedAt.plusSeconds(1)));
+        store.updateSessionPlace(null);
+        assertTrue(store.importSessionMessage("after leave", startedAt.plusSeconds(2)));
+        store.updateSessionPlace("localhost");
+        assertTrue(store.importSessionMessage("on localhost", startedAt.plusSeconds(3)));
+
+        assertEquals("unicacity.eu", store.findEntries(ChatQuery.all().withSubstring("on the server"))
+            .getFirst().serverOrWorld());
+        assertNull(store.findEntries(ChatQuery.all().withSubstring("after leave"))
+            .getFirst().serverOrWorld());
+        assertEquals("localhost", store.findEntries(ChatQuery.all().withSubstring("on localhost"))
+            .getFirst().serverOrWorld());
+    }
+
+    @Test
+    void updateSessionPlaceRequiresAnActiveSession() {
+        assertThrows(LogDataException.class, () -> store.updateSessionPlace("unicacity.eu"));
     }
 
     @Test
