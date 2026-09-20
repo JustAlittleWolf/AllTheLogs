@@ -160,6 +160,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
 
         bar.child(UIComponents.button(Component.translatable("allthelogs.filter"),
             button -> {
+                filters.toggle();
                 refreshSearchDecorations();
             }));
         if (!AllTheLogsConfig.get().hideImportButton()) {
