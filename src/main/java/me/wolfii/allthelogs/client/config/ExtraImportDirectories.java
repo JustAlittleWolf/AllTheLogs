@@ -6,8 +6,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 
 /**
- * Extra Minecraft instance directories scanned on boot. The running instance is always imported, shown in
- * the settings list, and never written to the config file.
+ * Extra Minecraft instance directories scanned on boot. The running instance is always imported and
+ * never written to the config file.
  */
 public final class ExtraImportDirectories {
     private ExtraImportDirectories() {

@@ -245,16 +245,24 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         closeMessageMenu();
         messageMenu = DropdownComponent.openContextMenu(this, overlays, StackLayout::child, screenX, screenY, menu -> {
             if (!selection.isEmpty()) {
-                menu.button(Component.translatable("allthelogs.menu.copy_selection"), ignored ->
-                    Minecraft.getInstance().keyboardHandler.setClipboard(selection.copy(rows)));
+                menu.button(Component.translatable("allthelogs.menu.copy_selection"), ignored -> {
+                    closeMessageMenu();
+                    Minecraft.getInstance().keyboardHandler.setClipboard(selection.copy(rows));
+                });
             }
-            menu.button(Component.translatable("allthelogs.menu.copy_message"), ignored ->
-                Minecraft.getInstance().keyboardHandler.setClipboard(row.message()));
-            menu.button(Component.translatable("allthelogs.menu.filter_day"), ignored ->
-                applyFilter(queries.filter().withDay(row.entry().timestamp().toLocalDate())));
+            menu.button(Component.translatable("allthelogs.menu.copy_message"), ignored -> {
+                closeMessageMenu();
+                Minecraft.getInstance().keyboardHandler.setClipboard(row.message());
+            });
+            menu.button(Component.translatable("allthelogs.menu.filter_day"), ignored -> {
+                closeMessageMenu();
+                applyFilter(queries.filter().withDay(row.entry().timestamp().toLocalDate()));
+            });
             if (row.entry().serverOrWorld() != null) {
-                menu.button(Component.translatable("allthelogs.menu.filter_server"), ignored ->
-                    applyFilter(queries.filter().withServerOrWorld(row.entry().serverOrWorld())));
+                menu.button(Component.translatable("allthelogs.menu.filter_server"), ignored -> {
+                    closeMessageMenu();
+                    applyFilter(queries.filter().withServerOrWorld(row.entry().serverOrWorld()));
+                });
             }
         });
     }

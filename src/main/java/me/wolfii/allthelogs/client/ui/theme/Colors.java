@@ -17,7 +17,7 @@ public final class Colors {
     /**
      * Vertical bar that marks a context line between the timestamp and the message.
      */
-    public static final int CONTEXT_BAR = 0xFF6AA8C8;
+    public static final int CONTEXT_BAR = 0xFF9A9A9A;
     /**
      * Width of {@link #CONTEXT_BAR} in pixels.
      */

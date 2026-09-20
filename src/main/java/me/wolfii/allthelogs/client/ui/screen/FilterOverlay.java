@@ -122,7 +122,7 @@ final class FilterOverlay {
     private ParentUIComponent buildFilterPanel() {
         SearchFilter current = filter.get();
         FlowLayout content = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
-        content.padding(Insets.both(2, 6));
+        content.padding(Insets.of(6, 6, 2, 3));
         content.gap(4);
 
         regexBox = checkbox("allthelogs.filter.regex", current.regex(), value ->

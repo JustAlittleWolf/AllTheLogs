@@ -20,6 +20,9 @@ repositories {
     maven("https://maven.terraformersmc.com/") {
         name = "Terraformers"
     }
+    maven("https://maven.isxander.dev/releases") {
+        name = "Xander"
+    }
     maven("https://jitpack.io") {
         name = "JitPack"
     }
@@ -40,6 +43,7 @@ dependencies {
     implementation(libs.fabric.api)
 
     implementation(libs.owo.lib)
+    implementation(libs.yacl)
     implementation(libs.modmenu)
 
     implementation(libs.commons.compress)

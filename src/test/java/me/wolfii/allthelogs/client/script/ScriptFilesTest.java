@@ -18,7 +18,7 @@ class ScriptFilesTest {
     void writesExampleOnceAndListsTsAndJs() throws Exception {
         Path scripts = tempDir.resolve("scripts");
         ScriptFiles.ensureExample(scripts);
-        Path example = scripts.resolve("example.ts");
+        Path example = scripts.resolve("example.js");
         assertTrue(Files.isRegularFile(example));
         String first = Files.readString(example);
         Files.writeString(example, "changed");
@@ -26,9 +26,9 @@ class ScriptFilesTest {
         assertEquals("changed", Files.readString(example));
 
         Files.writeString(scripts.resolve("notes.txt"), "ignore");
-        Files.writeString(scripts.resolve("extra.js"), "console.log(1)");
+        Files.writeString(scripts.resolve("extra.ts"), "console.log(1)");
         List<Path> listed = ScriptFiles.list(scripts);
-        assertEquals(List.of(scripts.resolve("example.ts"), scripts.resolve("extra.js")), listed);
+        assertEquals(List.of(scripts.resolve("example.js"), scripts.resolve("extra.ts")), listed);
         assertTrue(first.contains("ChatQuery.all()"));
         assertTrue(first.contains("findEntries"));
     }
@@ -36,7 +36,7 @@ class ScriptFilesTest {
     @Test
     void exampleDocumentsTheApiInJsdocAndDoesNotImportLibraries() throws Exception {
         String source = Files.readString(
-            Path.of("src/main/resources/me/wolfii/allthelogs/client/script/example.ts"),
+            Path.of("src/main/resources/me/wolfii/allthelogs/client/script/example.js"),
             StandardCharsets.UTF_8);
         assertTrue(source.lines().noneMatch(line -> {
             String stripped = line.strip();
