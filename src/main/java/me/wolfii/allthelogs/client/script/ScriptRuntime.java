@@ -46,7 +46,8 @@ public final class ScriptRuntime {
             if (inflight != null && !inflight.isDone()) {
                 return inflight;
             }
-            PROGRESS.set(new Progress(Progress.Stage.LOADING, 0, 0, "graaljs", null));
+            PROGRESS.set(Progress.working(
+                Progress.Stage.LOADING, 0, GraalJs.ARTIFACTS.size(), 0, 0, "graaljs"));
             inflight = CompletableFuture.runAsync(() -> {
                 try {
                     installer().install(ScriptRuntime::setProgress);

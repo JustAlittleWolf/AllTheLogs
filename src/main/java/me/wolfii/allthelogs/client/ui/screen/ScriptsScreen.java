@@ -259,9 +259,9 @@ public final class ScriptsScreen extends BaseOwoScreen<FlowLayout> {
             engineStatus.text(engineStatusText());
         }
         if (progressFill != null) {
-            int percent = Math.max(1, ScriptRuntime.progress().percent());
-            if (ScriptRuntime.progress().stage() == Progress.Stage.LOADING) percent = Math.max(percent, 5);
+            int percent = ScriptRuntime.progress().percent();
             if (ScriptRuntime.hasFailed()) percent = 1;
+            else percent = Math.max(1, percent);
             progressFill.horizontalSizing(Sizing.fill(percent));
         }
         if (ScriptRuntime.hasFailed() && download != null) {
@@ -370,9 +370,16 @@ public final class ScriptsScreen extends BaseOwoScreen<FlowLayout> {
             case READY, IDLE -> Component.empty();
             case FAILED -> Component.translatable("allthelogs.scripts.engine.failed",
                 progress.error() == null ? "" : progress.error());
-            case DOWNLOADING -> Component.translatable("allthelogs.scripts.engine.downloading", progress.percent());
-            case VERIFYING -> Component.translatable("allthelogs.scripts.engine.verifying", progress.percent());
+            case DOWNLOADING -> Component.translatable("allthelogs.scripts.engine.downloading",
+                currentDownload(progress), progress.downloads(), progress.percent());
+            case VERIFYING -> Component.translatable("allthelogs.scripts.engine.verifying",
+                currentDownload(progress), progress.downloads(), progress.percent());
             case LOADING -> Component.translatable("allthelogs.scripts.engine.loading");
         };
+    }
+
+    private static int currentDownload(Progress progress) {
+        if (progress.downloads() <= 0) return 1;
+        return Math.min(progress.downloads(), progress.completed() + 1);
     }
 }
