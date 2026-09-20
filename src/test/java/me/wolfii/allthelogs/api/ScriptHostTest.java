@@ -51,8 +51,8 @@ class ScriptHostTest {
         assertEquals(output, result.outputFile());
         String written = Files.readString(output);
         assertTrue(written.contains("hello 26"));
+        assertTrue(written.contains("other"));
         assertFalse(written.contains("legacy"));
-        assertFalse(written.contains("other"));
     }
 
     @Test
