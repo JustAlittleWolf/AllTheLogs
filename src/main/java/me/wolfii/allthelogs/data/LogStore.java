@@ -395,6 +395,15 @@ public final class LogStore implements AutoCloseable {
         return queries.metadata(databaseSizeBytes());
     }
 
+    /**
+     * Counts, dates, and versions for the browser info button. Skips the distinct-server scan of
+     * {@code chat_entry}, which is not shown in that tooltip and made every screen open wait on a
+     * full table read.
+     */
+    public LogStoreMetadata browserMetadata() {
+        return queries.browserMetadata(databaseSizeBytes());
+    }
+
     private long databaseSizeBytes() {
         if (databasePath == null) {
             return queries.reportedDatabaseSize();

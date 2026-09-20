@@ -44,6 +44,7 @@
   "allthelogs.meta.marker": "?",
   "allthelogs.meta.hint": "Database Statistics",
   "allthelogs.meta.unavailable": "Log store is not ready",
+  "allthelogs.meta.loading": "Loading database statistics...",
   "allthelogs.meta.empty": "No logs imported yet",
   "allthelogs.meta.range": "Log dates: %s to %s",
   "allthelogs.meta.logs": "Chat logs: %s",

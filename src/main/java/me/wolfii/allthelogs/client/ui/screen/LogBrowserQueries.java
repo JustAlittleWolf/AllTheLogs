@@ -113,6 +113,7 @@ final class LogBrowserQueries {
         list.onJump(this::jumpTo);
         list.onExpand(this::expandAround);
         list.onScrubBegin(this::beginScrub);
+        refreshStats();
         if (reloadPending || snapshot.isEmpty()) return;
         list.restore(snapshot.rows(), snapshot.hasBefore(), snapshot.hasAfter(), snapshot.scrollY());
         list.setMatchSummary(matchSummary);
@@ -154,6 +155,7 @@ final class LogBrowserQueries {
     void reload() {
         if (list == null) return;
         reloadPending = false;
+        refreshStats();
         if (!filter.canQuery()) {
             generation.incrementAndGet();
             list.setLoading(false);
@@ -165,7 +167,6 @@ final class LogBrowserQueries {
             replaceOnJumpFailure = true;
             jumpTo(new ScrubJump(stayAt, -1, Double.NaN), false);
             loadMatchSummary(generation.get(), filter.withoutOffset(), startedAt);
-            refreshStats();
             return;
         }
         int gen = generation.incrementAndGet();
@@ -194,12 +195,11 @@ final class LogBrowserQueries {
             takeSnapshot();
             loadMatchSummary(gen, query, startedAt);
         });
-        refreshStats();
     }
 
     void refreshStats() {
         if (info == null) return;
-        onClient(AllTheLogsClient.worker().metadata(), (metadata, error) -> {
+        onClient(AllTheLogsClient.worker().browserMetadata(), (metadata, error) -> {
             if (info == null) return;
             if (error != null || metadata == null) {
                 info.tooltip(List.of(Component.translatable("allthelogs.meta.unavailable")));

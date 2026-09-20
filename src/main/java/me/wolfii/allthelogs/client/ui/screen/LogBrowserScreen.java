@@ -173,7 +173,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
 
         infoButton = UIComponents.button(Component.translatable("allthelogs.meta.marker"), button -> {
         });
-        infoButton.tooltip(List.of(Component.translatable("allthelogs.meta.unavailable")));
+        infoButton.tooltip(List.of(Component.translatable("allthelogs.meta.loading")));
         infoButton.horizontalSizing(Sizing.fixed(20));
         bar.child(infoButton);
         return bar;

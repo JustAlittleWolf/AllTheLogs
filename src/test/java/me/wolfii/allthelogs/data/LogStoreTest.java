@@ -1106,6 +1106,12 @@ class LogStoreTest {
         assertEquals(2, metadata.chatLogCount());
         assertEquals(3, metadata.chatEntryCount());
         assertTrue(metadata.databaseSizeBytes() > 0);
+        LogStoreMetadata browser = store.browserMetadata();
+        assertEquals(metadata.chatLogCount(), browser.chatLogCount());
+        assertEquals(metadata.chatEntryCount(), browser.chatEntryCount());
+        assertEquals(metadata.minecraftVersions(), browser.minecraftVersions());
+        assertTrue(browser.serverOrWorlds().isEmpty(),
+            "browser stats must not scan chat_entry for distinct servers");
     }
 
     @Test
