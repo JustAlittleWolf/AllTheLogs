@@ -4,6 +4,7 @@ import me.wolfii.allthelogs.api.ChatQuery;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -145,6 +146,11 @@ class SearchFilterTest {
             .toQuery().regex());
         assertFalse(RegexFlags.isLegal("g"));
         assertEquals("im", RegexFlags.sanitize("imm"));
+        assertEquals("i", RegexFlags.sanitize("iUx"));
+        Pattern highlighted = SearchFilter.compiledRegex("a.b", "s").orElseThrow();
+        assertEquals("(?s)a.b", highlighted.pattern());
+        assertTrue(highlighted.matcher("a\nb").find());
+        assertEquals("(?s)a.b", SearchFilter.regexPattern("a.b", "s"));
     }
 
     @Test

@@ -8,15 +8,23 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class RegexFlagsTest {
     @Test
-    void sanitizeKeepsUniqueValidLettersAndRejectsTheRest() {
+    void sanitizeKeepsUniqueDuckDbLettersAndRejectsTheRest() {
         assertEquals("ims", RegexFlags.sanitize("ims"));
         assertEquals("im", RegexFlags.sanitize("imm"));
         assertEquals("is", RegexFlags.sanitize("i!s g"));
+        assertEquals("i", RegexFlags.sanitize("ixUdu"));
         assertEquals("", RegexFlags.sanitize("ggg"));
-        assertTrue(RegexFlags.isLegal("imsU"));
+        assertTrue(RegexFlags.isLegal("ims"));
         assertFalse(RegexFlags.isLegal("ii"));
         assertFalse(RegexFlags.isLegal("g"));
-        assertTrue(RegexFlags.isValidLetter('U'));
+        assertFalse(RegexFlags.isLegal("imsU"));
+        assertTrue(RegexFlags.isValidLetter('i'));
+        assertTrue(RegexFlags.isValidLetter('m'));
+        assertTrue(RegexFlags.isValidLetter('s'));
+        assertFalse(RegexFlags.isValidLetter('U'));
+        assertFalse(RegexFlags.isValidLetter('d'));
+        assertFalse(RegexFlags.isValidLetter('u'));
+        assertFalse(RegexFlags.isValidLetter('x'));
         assertFalse(RegexFlags.isValidLetter('g'));
     }
 
@@ -32,11 +40,12 @@ class RegexFlagsTest {
     }
 
     @Test
-    void patternBitsMapJavaLetters() {
-        assertEquals(Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE, RegexFlags.toPatternFlags("i"));
-        assertEquals(Pattern.MULTILINE | Pattern.DOTALL, RegexFlags.toPatternFlags("ms"));
-        assertEquals("imsU", RegexFlags.re2Inline("Usimx"));
+    void duckDbInlineOmitsJavaOnlyLetters() {
+        assertEquals("ims", RegexFlags.re2Inline("smi"));
+        assertEquals("ims", RegexFlags.re2Inline("Usimx"));
         assertEquals("ms", RegexFlags.re2Inline("msx"));
-        assertEquals("", RegexFlags.re2Inline("dx"));
+        assertEquals("", RegexFlags.re2Inline("dxU"));
+        assertEquals(Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE, RegexFlags.highlightBits("i"));
+        assertEquals(0, RegexFlags.highlightBits("ms"));
     }
 }

@@ -22,7 +22,7 @@ import java.util.regex.PatternSyntaxException;
  *
  * @param text         the search text, empty for no text filter
  * @param regex        whether {@code text} is a regular expression rather than a literal substring
- * @param regexFlags   Java regex letters such as {@code ims}; {@code i} is tied to {@code caseSensitive}
+ * @param regexFlags   DuckDB RE2 letters {@code ims}; {@code i} is tied to {@code caseSensitive}
  * @param limit        matches per page; negative means no cap
  * @param offset       exclusive timestamp cursor the current page starts after, or {@code null} for the first page
  * @param version      Minecraft version to restrict to, or {@code null} for all of them
@@ -83,18 +83,18 @@ public record SearchFilter(
     }
 
     /**
-     * Compiles {@code regex} with {@link RegexFlags#toPatternFlags(String)}.
+     * Compiles the same pattern string DuckDB receives, so highlights match store hits.
      */
     public static Optional<Pattern> compiledRegex(String regex, String flags) {
         try {
-            return Optional.of(Pattern.compile(regex, RegexFlags.toPatternFlags(flags)));
+            return Optional.of(Pattern.compile(regexPattern(regex, flags), RegexFlags.highlightBits(flags)));
         } catch (PatternSyntaxException e) {
             return Optional.empty();
         }
     }
 
     /**
-     * The same regex for DuckDB's RE2, which has no case-insensitive flag outside the pattern itself.
+     * Pattern passed to DuckDB {@code regexp_matches}: the user text plus an inline {@code (?ims)} group.
      */
     static String regexPattern(String regex, boolean caseSensitive) {
         return regexPattern(regex, caseSensitive ? "" : "i");
@@ -104,7 +104,7 @@ public record SearchFilter(
         String inline = RegexFlags.re2Inline(flags);
         if (inline.isEmpty()) return regex;
         if (hasInlineCaseFlag(regex)) {
-            String rest = inline.replace("i", "").replace("U", "");
+            String rest = inline.replace("i", "");
             if (rest.isEmpty()) return regex;
             return "(?" + rest + ")" + regex;
         }
@@ -228,9 +228,9 @@ public record SearchFilter(
     }
 
     /**
-     * Store query for this filter. Empty text means every entry; regex uses DuckDB RE2 with an inline
-     * {@code (?i)} flag when the search is case insensitive. Lookarounds and other Java-only constructs are
-     * rejected by {@link #canQuery()} so they never reach DuckDB.
+     * Store query for this filter. Empty text means every entry; regex uses DuckDB RE2 with the same
+     * inline {@code (?ims)} group that highlighting compiles. Lookarounds and other Java-only constructs
+     * are rejected by {@link #canQuery()} so they never reach DuckDB.
      */
     public ChatQuery toQuery() {
         return toStoreQuery(queryContextLines(), limit, offset);
