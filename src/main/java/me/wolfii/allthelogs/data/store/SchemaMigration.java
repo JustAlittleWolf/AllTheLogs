@@ -26,9 +26,7 @@ public final class SchemaMigration {
         1, NO_OP,
         2, NO_OP,
         3, SchemaMigration::migrate3To4SeedClusterMarker,
-        4, SchemaMigration::migrate4To5AddServerPlace,
-        5, SchemaMigration::migrate5To6AddEntryServerPlace,
-        6, SchemaMigration::migrate6To7PerEntryMetadata
+        4, SchemaMigration::migrate4To5PerEntryMetadata
     );
 
     @FunctionalInterface
@@ -88,44 +86,19 @@ public final class SchemaMigration {
     }
 
     /**
-     * 4 → 5: adds {@code log_file.server_place} for the remote server or local world extracted from
-     * the log (or ingested live from the running game).
+     * 4 → 5: stamps each chat line with the Minecraft user and the server or world in effect at
+     * that line. Place is per message because one log can visit several servers
+     * (connect → leave → connect). Existing rows inherit {@code log_file.minecraft_user};
+     * {@code server_or_world} is null until those logs are imported again.
      */
-    private static void migrate4To5AddServerPlace(Statement statement) throws SQLException {
-        statement.execute("ALTER TABLE log_file ADD COLUMN IF NOT EXISTS server_place VARCHAR");
-    }
-
-    /**
-     * 5 → 6: stamps each chat line with the server or world in effect at that line, so a log that
-     * visits several servers (connect → leave → connect) keeps the right place on each message.
-     * Existing rows inherit {@code log_file.server_place}.
-     */
-    private static void migrate5To6AddEntryServerPlace(Statement statement) throws SQLException {
-        statement.execute("ALTER TABLE chat_entry ADD COLUMN IF NOT EXISTS server_place VARCHAR");
-        statement.execute("""
-            UPDATE chat_entry e
-            SET server_place = f.server_place
-            FROM log_file f
-            WHERE e.file_id = f.id AND e.server_place IS NULL AND f.server_place IS NOT NULL""");
-    }
-
-    /**
-     * 6 → 7: server/world is per chat line ({@code chat_entry.server_or_world}), not per file, because one
-     * log can visit several servers. Minecraft user is stored on each line as well. File-level
-     * {@code log_file.server_place} is dropped.
-     */
-    private static void migrate6To7PerEntryMetadata(Statement statement) throws SQLException {
-        statement.execute("ALTER TABLE chat_entry RENAME COLUMN server_place TO server_or_world");
+    private static void migrate4To5PerEntryMetadata(Statement statement) throws SQLException {
         statement.execute("ALTER TABLE chat_entry ADD COLUMN IF NOT EXISTS minecraft_user VARCHAR");
+        statement.execute("ALTER TABLE chat_entry ADD COLUMN IF NOT EXISTS server_or_world VARCHAR");
         statement.execute("""
             UPDATE chat_entry e
             SET minecraft_user = f.minecraft_user
             FROM log_file f
             WHERE e.file_id = f.id AND e.minecraft_user IS NULL AND f.minecraft_user IS NOT NULL""");
-        statement.execute("DROP INDEX IF EXISTS log_file_location");
-        statement.execute("ALTER TABLE log_file DROP COLUMN IF EXISTS server_place");
-        statement.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS log_file_location ON log_file (source_path, entry_path)");
     }
 
     static int readVersion(Statement statement) throws SQLException {

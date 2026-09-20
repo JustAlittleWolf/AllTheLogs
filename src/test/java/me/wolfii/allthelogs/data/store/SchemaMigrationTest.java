@@ -106,11 +106,8 @@ class SchemaMigrationTest {
                     (0, 0, '2024-01-01 00:00:00', 'hello', NULL),
                     (0, 1, '2024-01-01 00:01:00', 'world', NULL)""");
 
-            statement.execute("DROP INDEX IF EXISTS log_file_location");
             statement.execute("ALTER TABLE chat_entry DROP COLUMN IF EXISTS server_or_world");
             statement.execute("ALTER TABLE chat_entry DROP COLUMN IF EXISTS minecraft_user");
-            statement.execute("ALTER TABLE chat_entry DROP COLUMN IF EXISTS server_place");
-            statement.execute("CREATE UNIQUE INDEX IF NOT EXISTS log_file_location ON log_file (source_path, entry_path)");
 
             // Simulate a real version-3 database: no cluster marker key yet.
             statement.execute("DELETE FROM " + Schema.META_TABLE
@@ -145,11 +142,11 @@ class SchemaMigrationTest {
                 assertEquals(2, result.getLong(1), "the pre-existing session's rows must survive the sweep");
             }
             assertFalse(columnExists(statement, "log_file", "server_place"),
-                "6→7 should have dropped log_file.server_place");
+                "place is per chat line, not on log_file");
             assertTrue(columnExists(statement, "chat_entry", "server_or_world"),
-                "6→7 should have renamed chat_entry.server_place to server_or_world");
+                "4→5 should have added chat_entry.server_or_world");
             assertTrue(columnExists(statement, "chat_entry", "minecraft_user"),
-                "6→7 should have added chat_entry.minecraft_user");
+                "4→5 should have added chat_entry.minecraft_user");
         }
     }
 
@@ -158,10 +155,8 @@ class SchemaMigrationTest {
         Path database = tempDir.resolve("v4.duckdb");
         try (var connection = StoreConnections.openFile(database);
              Statement statement = connection.createStatement()) {
-            statement.execute("DROP INDEX IF EXISTS log_file_location");
             statement.execute("ALTER TABLE chat_entry DROP COLUMN IF EXISTS server_or_world");
             statement.execute("ALTER TABLE chat_entry DROP COLUMN IF EXISTS minecraft_user");
-            statement.execute("CREATE UNIQUE INDEX IF NOT EXISTS log_file_location ON log_file (source_path, entry_path)");
             statement.execute("DELETE FROM " + Schema.META_TABLE
                 + " WHERE k = '" + Schema.VERSION_KEY + "'");
             statement.execute("INSERT INTO " + Schema.META_TABLE + " VALUES ('"
