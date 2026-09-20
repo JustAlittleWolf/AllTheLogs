@@ -7,7 +7,7 @@ import net.minecraft.client.Minecraft;
 
 /**
  * Client commands: {@code /allthelogs gui}, {@code /allthelogs import}, {@code /allthelogs scripts},
- * and {@code /allthelogs settings}.
+ * {@code /allthelogs settings}, and {@code /allthelogs perf} (dump store-worker timings).
  */
 public final class AllTheLogsCommands {
     private AllTheLogsCommands() {
@@ -29,6 +29,13 @@ public final class AllTheLogsCommands {
             }))
             .then(ClientCommands.literal("settings").executes(context -> {
                 Minecraft.getInstance().execute(() -> AllTheLogsScreens.openSettings(null));
+                return 1;
+            }))
+            .then(ClientCommands.literal("perf").executes(context -> {
+                for (String line : me.wolfii.allthelogs.data.StoreAnalytics.INSTANCE.report()) {
+                    AllTheLogsClient.LOGGER.info("[store-perf] {}", line);
+                    context.getSource().sendFeedback(net.minecraft.network.chat.Component.literal(line));
+                }
                 return 1;
             })));
     }

@@ -60,4 +60,12 @@ class StoreSummaryTest {
         Object[] sizeArgs = ((TranslatableContents) lines.getLast().getContents()).getArgs();
         assertEquals("2.0 KB", ((Component) sizeArgs[0]).getString());
     }
+
+    @Test
+    void analyticsHeadingIsFollowedByTheWorkerSnapshot() {
+        me.wolfii.allthelogs.data.StoreAnalytics.INSTANCE.clear();
+        List<Component> lines = StoreSummary.analytics();
+        assertEquals("allthelogs.meta.perf", key(lines.getFirst()));
+        assertTrue(lines.get(1).getString().contains("Store worker"));
+    }
 }

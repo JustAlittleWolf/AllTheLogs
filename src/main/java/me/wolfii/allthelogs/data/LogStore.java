@@ -186,9 +186,16 @@ public final class LogStore implements AutoCloseable {
     private ImportResult importThenOptimize(Function<Consumer<ImportProgress>, ImportResult> importCall,
                                             Consumer<ImportProgress> progress, ImportOptions options) {
         ImportProgressTracker tracker = new ImportProgressTracker(progress);
-        ImportResult result = importCall.apply(tracker);
-        optimizeAfterImport(result, tracker, options);
-        return result;
+        try {
+            ImportResult result = StoreAnalytics.INSTANCE.measure("importFiles",
+                () -> importCall.apply(tracker));
+            optimizeAfterImport(result, tracker, options);
+            return result;
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new LogDataException("could not import logs", e);
+        }
     }
 
     /**
@@ -205,18 +212,29 @@ public final class LogStore implements AutoCloseable {
         try {
             tracker.phase(ImportPhase.CHUNKING, 0d);
             try (Statement statement = connection.createStatement()) {
-                Schema.clusterEntries(statement, fraction -> tracker.phase(ImportPhase.CHUNKING, fraction));
+                StoreAnalytics.INSTANCE.measure("clusterEntries", () -> {
+                    Schema.clusterEntries(statement, fraction -> tracker.phase(ImportPhase.CHUNKING, fraction));
+                    return null;
+                });
             }
             tracker.phase(ImportPhase.OPTIMIZING, 0d);
             try (Statement statement = connection.createStatement()) {
-                StoreOptimizer.analyzeAndCheckpoint(statement);
+                StoreAnalytics.INSTANCE.measure("analyzeAndCheckpoint", () -> {
+                    StoreOptimizer.analyzeAndCheckpoint(statement);
+                    return null;
+                });
             }
             tracker.phase(ImportPhase.OPTIMIZING, 0.3);
             if (databasePath != null) {
-                bind(StoreOptimizer.replaceWithCompactCopy(connection, databasePath));
+                StoreAnalytics.INSTANCE.measure("compact", () -> {
+                    bind(StoreOptimizer.replaceWithCompactCopy(connection, databasePath));
+                    return null;
+                });
             }
             tracker.complete();
         } catch (SQLException | IOException e) {
+            throw new LogDataException("could not optimize imported chat entries", e);
+        } catch (Exception e) {
             throw new LogDataException("could not optimize imported chat entries", e);
         }
     }
@@ -252,8 +270,13 @@ public final class LogStore implements AutoCloseable {
 
     ChatLog startSession(String minecraftVersion, LocalDateTime startedAt, String minecraftUser) {
         try (Statement statement = connection.createStatement()) {
-            Schema.clusterTail(statement);
+            StoreAnalytics.INSTANCE.measure("clusterTail", () -> {
+                Schema.clusterTail(statement);
+                return null;
+            });
         } catch (SQLException e) {
+            throw new LogDataException("could not chunk pending live-capture entries", e);
+        } catch (Exception e) {
             throw new LogDataException("could not chunk pending live-capture entries", e);
         }
         return sessions.start(minecraftVersion, startedAt, minecraftUser);

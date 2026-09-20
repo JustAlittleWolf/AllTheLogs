@@ -172,6 +172,9 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         }
 
         infoButton = UIComponents.button(Component.translatable("allthelogs.meta.marker"), button -> {
+            for (String line : me.wolfii.allthelogs.data.StoreAnalytics.INSTANCE.report()) {
+                AllTheLogsClient.LOGGER.info("[store-perf] {}", line);
+            }
         });
         infoButton.tooltip(List.of(Component.translatable("allthelogs.meta.loading")));
         infoButton.horizontalSizing(Sizing.fixed(20));

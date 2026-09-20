@@ -42,7 +42,7 @@ public final class LogStoreWorker implements AutoCloseable {
 
     public CompletableFuture<Void> open(Path databasePath) {
         Objects.requireNonNull(databasePath, "databasePath");
-        return submit(() -> {
+        return submit("open", () -> {
             closeStore();
             store = LogStore.open(databasePath);
         });
@@ -51,13 +51,15 @@ public final class LogStoreWorker implements AutoCloseable {
     public CompletableFuture<ImportResult> importDirectory(Path directory, ImportOptions options,
                                                            Consumer<ImportProgress> progress) {
         cancelImport.set(false);
-        return submit(() -> requireStore().importDirectory(directory, options, progress, cancelImport::get));
+        return submit("importDirectory",
+            () -> requireStore().importDirectory(directory, options, progress, cancelImport::get));
     }
 
     public CompletableFuture<ImportResult> importArchive(Path archive, ImportOptions options,
                                                          Consumer<ImportProgress> progress) {
         cancelImport.set(false);
-        return submit(() -> requireStore().importArchive(archive, options, progress, cancelImport::get));
+        return submit("importArchive",
+            () -> requireStore().importArchive(archive, options, progress, cancelImport::get));
     }
 
     public void cancelImport() {
@@ -65,7 +67,7 @@ public final class LogStoreWorker implements AutoCloseable {
     }
 
     public CompletableFuture<ChatLog> startSession(String minecraftVersion, String minecraftUser) {
-        return submit(() -> {
+        return submit("startSession", () -> {
             ChatLog log = requireStore().startSession(minecraftVersion, minecraftUser);
             sessionStarted = true;
             flushPendingLive();
@@ -85,11 +87,18 @@ public final class LogStoreWorker implements AutoCloseable {
         String place = serverOrWorld == null || serverOrWorld.isBlank() ? null : serverOrWorld;
         executor.execute(() -> {
             PendingLiveMessage pending = new PendingLiveMessage(text, formatting, user, place);
-            if (store == null || !sessionStarted) {
-                pendingLive.add(pending);
-                return;
+            try {
+                StoreAnalytics.INSTANCE.measureQuiet("liveChat", () -> {
+                    if (store == null || !sessionStarted) {
+                        pendingLive.add(pending);
+                        return null;
+                    }
+                    writeLive(pending);
+                    return null;
+                });
+            } catch (Exception e) {
+                AllTheLogsClient.LOGGER.warn("Could not store a live chat line", e);
             }
-            writeLive(pending);
         });
     }
 
@@ -98,7 +107,15 @@ public final class LogStoreWorker implements AutoCloseable {
      * or no session is active.
      */
     public void touchSessionEndTime() {
-        executor.execute(this::touchSessionEndTimeNow);
+        executor.execute(() -> {
+            try {
+                StoreAnalytics.INSTANCE.measureQuiet("touchSessionEnd", () -> {
+                    touchSessionEndTimeNow();
+                    return null;
+                });
+            } catch (Exception ignored) {
+            }
+        });
     }
 
     public boolean isOpen() {
@@ -107,51 +124,51 @@ public final class LogStoreWorker implements AutoCloseable {
 
     public CompletableFuture<List<ChatEntry>> findEntries(me.wolfii.allthelogs.api.ChatQuery query) {
         var copy = Objects.requireNonNull(query, "query");
-        return submit(() -> requireStore().findEntries(copy));
+        return submit("findEntries", () -> requireStore().findEntries(copy));
     }
 
     public CompletableFuture<MatchSummary> summarizeMatches(me.wolfii.allthelogs.api.ChatQuery query) {
         var copy = Objects.requireNonNull(query, "query");
-        return submit(() -> requireStore().summarizeMatches(copy));
+        return submit("summarizeMatches", () -> requireStore().summarizeMatches(copy));
     }
 
     public CompletableFuture<Long> countMatches(me.wolfii.allthelogs.api.ChatQuery query) {
         var copy = Objects.requireNonNull(query, "query");
-        return submit(() -> requireStore().countMatches(copy));
+        return submit("countMatches", () -> requireStore().countMatches(copy));
     }
 
     public CompletableFuture<List<ChatEntry>> entriesAround(ChatLog log, int lineIndex, int before, int after) {
         ChatLog copy = Objects.requireNonNull(log, "log");
         int beforeLines = Math.max(0, before);
         int afterLines = Math.max(0, after);
-        return submit(() -> requireStore().entriesAround(copy, lineIndex, beforeLines, afterLines));
+        return submit("entriesAround", () -> requireStore().entriesAround(copy, lineIndex, beforeLines, afterLines));
     }
 
     public CompletableFuture<List<ChatEntry>> allEntries() {
-        return submit(() -> requireStore().allEntries());
+        return submit("allEntries", () -> requireStore().allEntries());
     }
 
     public CompletableFuture<List<ChatLog>> chatLogs() {
-        return submit(() -> requireStore().chatLogs());
+        return submit("chatLogs", () -> requireStore().chatLogs());
     }
 
     public CompletableFuture<LogStoreMetadata> metadata() {
-        return submit(() -> requireStore().metadata());
+        return submit("metadata", () -> requireStore().metadata());
     }
 
     public CompletableFuture<LogStoreMetadata> browserMetadata() {
-        return submit(() -> requireStore().browserMetadata());
+        return submit("browserMetadata", () -> requireStore().browserMetadata());
     }
 
     public CompletableFuture<Optional<Path>> databasePath() {
-        return submit(() -> requireStore().databasePath());
+        return submit("databasePath", () -> requireStore().databasePath());
     }
 
     @Override
     public void close() {
         try {
-            submit(this::touchSessionEndTimeNow).join();
-            submit(this::closeStore).join();
+            submit("touchSessionEnd", this::touchSessionEndTimeNow).join();
+            submit("close", this::closeStore).join();
         } catch (CompletionException ignored) {
             touchSessionEndTimeNow();
             closeStore();
@@ -204,14 +221,16 @@ public final class LogStoreWorker implements AutoCloseable {
         }
     }
 
-    private CompletableFuture<Void> submit(Runnable task) {
-        return CompletableFuture.runAsync(task, executor);
+    private CompletableFuture<Void> submit(String name, Runnable task) {
+        StoreAnalytics.Job job = StoreAnalytics.INSTANCE.submit(name);
+        return CompletableFuture.runAsync(() -> job.run(task), executor);
     }
 
-    private <T> CompletableFuture<T> submit(Callable<T> task) {
+    private <T> CompletableFuture<T> submit(String name, Callable<T> task) {
+        StoreAnalytics.Job job = StoreAnalytics.INSTANCE.submit(name);
         return CompletableFuture.supplyAsync(() -> {
             try {
-                return task.call();
+                return job.run(task);
             } catch (Exception e) {
                 throw new CompletionException(e);
             }

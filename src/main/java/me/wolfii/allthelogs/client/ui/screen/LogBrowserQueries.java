@@ -15,6 +15,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -202,10 +203,15 @@ final class LogBrowserQueries {
         onClient(AllTheLogsClient.worker().browserMetadata(), (metadata, error) -> {
             if (info == null) return;
             if (error != null || metadata == null) {
-                info.tooltip(List.of(Component.translatable("allthelogs.meta.unavailable")));
+                List<Component> lines = new ArrayList<>();
+                lines.add(Component.translatable("allthelogs.meta.unavailable"));
+                lines.addAll(StoreSummary.analytics());
+                info.tooltip(lines);
                 return;
             }
-            info.tooltip(StoreSummary.tooltip(metadata));
+            List<Component> lines = new ArrayList<>(StoreSummary.tooltip(metadata));
+            lines.addAll(StoreSummary.analytics());
+            info.tooltip(lines);
             versions = metadata.minecraftVersions();
         });
     }

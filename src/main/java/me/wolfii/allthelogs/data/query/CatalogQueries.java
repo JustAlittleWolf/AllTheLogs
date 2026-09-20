@@ -3,6 +3,7 @@ package me.wolfii.allthelogs.data.query;
 import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.LogDataException;
 import me.wolfii.allthelogs.data.LogStoreMetadata;
+import me.wolfii.allthelogs.data.StoreAnalytics;
 import me.wolfii.allthelogs.data.store.StoredSources;
 import org.duckdb.DuckDBConnection;
 
@@ -62,39 +63,52 @@ final class CatalogQueries {
      */
     LogStoreMetadata metadata(long databaseSizeBytes, boolean includeServerOrWorlds) {
         try {
-            List<String> versions = new ArrayList<>();
-            try (Statement statement = connection.createStatement();
-                 ResultSet result = statement.executeQuery("""
-                     SELECT minecraft_version
-                     FROM log_file
-                     GROUP BY minecraft_version
-                     ORDER BY MIN(log_date), minecraft_version""")) {
-                while (result.next()) {
-                    versions.add(result.getString(1));
-                }
-            }
-            List<String> servers = includeServerOrWorlds ? serverOrWorlds() : List.of();
-            long chatLogCount;
-            long chatEntryCount;
-            LocalDate firstLogDate;
-            LocalDate lastLogDate;
-            try (Statement statement = connection.createStatement();
-                 ResultSet result = statement.executeQuery("""
-                     SELECT COUNT(*), MIN(log_date), MAX(log_date), COALESCE(SUM(entry_count), 0)
-                     FROM log_file""")) {
-                result.next();
-                chatLogCount = result.getLong(1);
-                Date first = result.getDate(2);
-                Date last = result.getDate(3);
-                firstLogDate = first == null ? null : first.toLocalDate();
-                lastLogDate = last == null ? null : last.toLocalDate();
-                chatEntryCount = result.getLong(4);
-            }
-            return new LogStoreMetadata(versions, servers, firstLogDate, lastLogDate, chatLogCount, chatEntryCount,
-                databaseSizeBytes);
+            List<String> versions = StoreAnalytics.INSTANCE.measure("metadata.versions", this::minecraftVersions);
+            List<String> servers = includeServerOrWorlds
+                ? StoreAnalytics.INSTANCE.measure("metadata.servers", this::serverOrWorlds)
+                : List.of();
+            LogFileStats stats = StoreAnalytics.INSTANCE.measure("metadata.logFileStats", this::logFileStats);
+            return new LogStoreMetadata(versions, servers, stats.firstLogDate, stats.lastLogDate, stats.chatLogCount,
+                stats.chatEntryCount, databaseSizeBytes);
         } catch (SQLException e) {
             throw new LogDataException("could not read store metadata", e);
+        } catch (Exception e) {
+            throw new LogDataException("could not read store metadata", e);
         }
+    }
+
+    private List<String> minecraftVersions() throws SQLException {
+        List<String> versions = new ArrayList<>();
+        try (Statement statement = connection.createStatement();
+             ResultSet result = statement.executeQuery("""
+                 SELECT minecraft_version
+                 FROM log_file
+                 GROUP BY minecraft_version
+                 ORDER BY MIN(log_date), minecraft_version""")) {
+            while (result.next()) {
+                versions.add(result.getString(1));
+            }
+        }
+        return versions;
+    }
+
+    private LogFileStats logFileStats() throws SQLException {
+        try (Statement statement = connection.createStatement();
+             ResultSet result = statement.executeQuery("""
+                 SELECT COUNT(*), MIN(log_date), MAX(log_date), COALESCE(SUM(entry_count), 0)
+                 FROM log_file""")) {
+            result.next();
+            Date first = result.getDate(2);
+            Date last = result.getDate(3);
+            return new LogFileStats(
+                result.getLong(1),
+                result.getLong(4),
+                first == null ? null : first.toLocalDate(),
+                last == null ? null : last.toLocalDate());
+        }
+    }
+
+    private record LogFileStats(long chatLogCount, long chatEntryCount, LocalDate firstLogDate, LocalDate lastLogDate) {
     }
 
     private List<String> serverOrWorlds() throws SQLException {

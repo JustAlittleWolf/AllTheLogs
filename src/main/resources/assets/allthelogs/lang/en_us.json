@@ -53,6 +53,7 @@
   "allthelogs.meta.logs": "Chat logs: %s",
   "allthelogs.meta.entries": "Chat messages: %s",
   "allthelogs.meta.size": "Database size: %s",
+  "allthelogs.meta.perf": "Store worker timings",
   "allthelogs.status.loading": "Loading...",
   "allthelogs.status.empty": "No log entries",
   "allthelogs.status.error": "Could not run query",

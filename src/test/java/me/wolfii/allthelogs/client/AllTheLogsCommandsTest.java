@@ -21,5 +21,6 @@ class AllTheLogsCommandsTest {
         assertNotNull(root.getChild("import"));
         assertNotNull(root.getChild("scripts"));
         assertNotNull(root.getChild("settings"));
+        assertNotNull(root.getChild("perf"));
     }
 }

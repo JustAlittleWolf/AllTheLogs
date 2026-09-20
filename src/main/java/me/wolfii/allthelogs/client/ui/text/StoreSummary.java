@@ -32,6 +32,18 @@ public final class StoreSummary {
         return lines;
     }
 
+    /**
+     * Recent worker jobs: queue wait versus run time. Appended to the "?" tooltip on the analytics branch.
+     */
+    public static List<Component> analytics() {
+        List<Component> lines = new ArrayList<>();
+        lines.add(muted(Component.translatable("allthelogs.meta.perf")));
+        for (String line : me.wolfii.allthelogs.data.StoreAnalytics.INSTANCE.report()) {
+            lines.add(muted(Component.literal(line)));
+        }
+        return lines;
+    }
+
     static String formatBytes(long bytes) {
         if (bytes < 1024) return bytes + " B";
         double value = bytes / 1024.0;

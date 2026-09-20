@@ -2,6 +2,7 @@ package me.wolfii.allthelogs.client;
 
 import me.wolfii.allthelogs.client.config.AllTheLogsConfig;
 import me.wolfii.allthelogs.data.LogSource;
+import me.wolfii.allthelogs.data.StoreAnalytics;
 import me.wolfii.allthelogs.data.store.SessionMarker;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
@@ -104,6 +105,7 @@ public final class AllTheLogsClient implements ClientModInitializer {
     public void onInitializeClient() {
         worker = new LogStoreWorker();
         AllTheLogsConfig.loadDefault();
+        StoreAnalytics.INSTANCE.setLog(message -> LOGGER.info("{}", message));
         DuckDbRuntime.ensure().whenComplete((ignored, error) -> {
             if (error != null || DuckDbRuntime.hasFailed()) {
                 boot.markSettled();
