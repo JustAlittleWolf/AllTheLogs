@@ -13,9 +13,10 @@ import me.wolfii.allthelogs.client.AllTheLogsClient;
  *                 System.out.println(entry.timestamp() + " " + entry.message())));
  *}
  * <p>
- * The database is opened asynchronously during client startup. {@link LogDatabase#isOpen()} is
- * {@code false} until that finishes (and after the client shuts down). Queries issued while the
- * store is not ready complete exceptionally with {@link IllegalStateException}.
+ * The database is opened asynchronously during client startup, while the vanilla loading overlay
+ * is still up. {@link LogDatabase#isOpen()} is {@code false} until that finishes (and after the
+ * client shuts down). Queries issued while the store is not ready complete exceptionally with
+ * {@link IllegalStateException}.
  */
 public final class AllTheLogs {
     private AllTheLogs() {
