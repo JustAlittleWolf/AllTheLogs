@@ -2,12 +2,8 @@ package me.wolfii.allthelogs.client.config;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.JsonDeserializationContext;
-import com.google.gson.JsonDeserializer;
 import com.google.gson.JsonElement;
-import com.google.gson.JsonParseException;
-import com.google.gson.JsonSerializationContext;
-import com.google.gson.JsonSerializer;
+import com.google.gson.JsonParser;
 import dev.isxander.yacl3.config.v2.api.ConfigClassHandler;
 import dev.isxander.yacl3.config.v2.api.ConfigField;
 import dev.isxander.yacl3.config.v2.api.ConfigSerializer;
@@ -15,7 +11,7 @@ import dev.isxander.yacl3.config.v2.api.FieldAccess;
 import dev.isxander.yacl3.config.v2.api.SerialEntry;
 import dev.isxander.yacl3.config.v2.api.autogen.AutoGen;
 import dev.isxander.yacl3.config.v2.api.autogen.Boolean;
-import dev.isxander.yacl3.config.v2.api.autogen.EnumCycler;
+import dev.isxander.yacl3.config.v2.api.autogen.IntField;
 import dev.isxander.yacl3.config.v2.api.autogen.IntSlider;
 import dev.isxander.yacl3.config.v2.api.autogen.ListGroup;
 import dev.isxander.yacl3.config.v2.api.serializer.GsonConfigSerializerBuilder;
@@ -29,7 +25,6 @@ import net.minecraft.resources.Identifier;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
-import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -37,9 +32,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * User settings stored as {@code config/allthelogs.json}. Extra import folders, browser chrome, and filter
- * persistence are edited through a YACL autogen screen. The current instance directory is always scanned
- * and is never written here.
+ * User settings stored as {@code config/allthelogs.json}. Extra logs folders and browser chrome are
+ * edited through a YACL autogen screen. The current instance is always scanned and is never written here.
  */
 public class AllTheLogsConfig {
     public static final String FILE_NAME = "allthelogs.json";
@@ -57,9 +51,9 @@ public class AllTheLogsConfig {
     public List<String> extraImportDirectories = new ArrayList<>();
 
     @AutoGen(category = "browser")
-    @EnumCycler
-    @SerialEntry
-    public FilterPersistence filterPersistence = FilterPersistence.NOT_PERSISTED;
+    @IntField(min = 0, max = SearchFilter.MAX_CONTEXT_LINES, format = "%d lines")
+    @SerialEntry(required = false)
+    public int defaultContextLines = SearchFilter.DEFAULT_CONTEXT_LINES;
 
     @AutoGen(category = "browser")
     @Boolean(formatter = Boolean.Formatter.ON_OFF)
@@ -70,12 +64,6 @@ public class AllTheLogsConfig {
     @IntSlider(min = MIN_MESSAGE_FONT_SIZE, max = MAX_MESSAGE_FONT_SIZE, step = 1)
     @SerialEntry
     public int messageFontSize = DEFAULT_MESSAGE_FONT_SIZE;
-
-    /**
-     * Last browser filter, written only when {@link FilterPersistence#ACROSS_RESTARTS} is selected.
-     */
-    @SerialEntry
-    public SearchFilter filter = SearchFilter.defaults();
 
     public static Path defaultPath() {
         return FabricLoader.getInstance().getConfigDir().resolve(FILE_NAME);
@@ -96,9 +84,14 @@ public class AllTheLogsConfig {
             return config;
         }
         try (Reader reader = Files.newBufferedReader(file)) {
-            AllTheLogsConfig loaded = gson().fromJson(reader, AllTheLogsConfig.class);
+            JsonElement parsed = JsonParser.parseReader(reader);
+            AllTheLogsConfig loaded = gson().fromJson(parsed, AllTheLogsConfig.class);
             if (loaded != null) {
                 loaded.file = file;
+                if (parsed == null || !parsed.isJsonObject()
+                    || !parsed.getAsJsonObject().has("defaultContextLines")) {
+                    loaded.defaultContextLines = SearchFilter.DEFAULT_CONTEXT_LINES;
+                }
                 loaded.normalize();
                 return loaded;
             }
@@ -130,12 +123,12 @@ public class AllTheLogsConfig {
         extraImportDirectories = new ArrayList<>(ExtraImportDirectories.persisted(directories, instanceDir));
     }
 
-    public FilterPersistence filterPersistence() {
-        return filterPersistence == null ? FilterPersistence.NOT_PERSISTED : filterPersistence;
+    public int defaultContextLines() {
+        return clampContextLines(defaultContextLines);
     }
 
-    public void setFilterPersistence(FilterPersistence filterPersistence) {
-        this.filterPersistence = filterPersistence == null ? FilterPersistence.NOT_PERSISTED : filterPersistence;
+    public void setDefaultContextLines(int defaultContextLines) {
+        this.defaultContextLines = clampContextLines(defaultContextLines);
     }
 
     public boolean hideImportButton() {
@@ -154,16 +147,12 @@ public class AllTheLogsConfig {
         this.messageFontSize = clampFontSize(messageFontSize);
     }
 
-    public SearchFilter persistedFilter() {
-        return filter == null ? SearchFilter.defaults() : filter;
-    }
-
-    public void setPersistedFilter(SearchFilter next) {
-        this.filter = next == null ? SearchFilter.defaults() : next;
-    }
-
     public static int clampFontSize(int fontSize) {
         return Math.clamp(fontSize, MIN_MESSAGE_FONT_SIZE, MAX_MESSAGE_FONT_SIZE);
+    }
+
+    public static int clampContextLines(int contextLines) {
+        return Math.clamp(contextLines, 0, SearchFilter.MAX_CONTEXT_LINES);
     }
 
     public void save() {
@@ -188,21 +177,15 @@ public class AllTheLogsConfig {
         extraImportDirectories = extraImportDirectories == null
             ? new ArrayList<>()
             : new ArrayList<>(ExtraImportDirectories.persisted(extraImportDirectories, null));
-        if (filterPersistence == null) filterPersistence = FilterPersistence.NOT_PERSISTED;
+        defaultContextLines = clampContextLines(defaultContextLines);
         messageFontSize = clampFontSize(messageFontSize == 0 ? DEFAULT_MESSAGE_FONT_SIZE : messageFontSize);
-        if (filter == null) filter = SearchFilter.defaults();
     }
 
     static Gson gson() {
-        return gsonBuilder().create();
-    }
-
-    private static GsonBuilder gsonBuilder() {
         return new GsonBuilder()
             .setPrettyPrinting()
             .disableHtmlEscaping()
-            .registerTypeAdapter(SearchFilter.class, new SearchFilterJson())
-            .registerTypeAdapter(FilterPersistence.class, new FilterPersistenceJson());
+            .create();
     }
 
     private static ConfigClassHandler<AllTheLogsConfig> handler() {
@@ -216,16 +199,12 @@ public class AllTheLogsConfig {
     }
 
     /**
-     * YACL writes through its own serializer, so normalize before save and after load the same way
-     * {@link #save()} does for tests and {@link FilterPersistence#remember}.
+     * YACL writes through its own serializer, so normalize extra logs paths before save and after load.
      */
     private static ConfigSerializer<AllTheLogsConfig> yaclSerializer(ConfigClassHandler<AllTheLogsConfig> config) {
         ConfigSerializer<AllTheLogsConfig> gson = GsonConfigSerializerBuilder.create(config)
             .setPath(defaultPath())
-            .appendGsonBuilder(builder -> builder
-                .disableHtmlEscaping()
-                .registerTypeAdapter(SearchFilter.class, new SearchFilterJson())
-                .registerTypeAdapter(FilterPersistence.class, new FilterPersistenceJson()))
+            .appendGsonBuilder(builder -> builder.disableHtmlEscaping())
             .build();
         return new ConfigSerializer<>(config) {
             @Override
@@ -241,38 +220,5 @@ public class AllTheLogsConfig {
                 return result;
             }
         };
-    }
-
-    private static final class FilterPersistenceJson
-        implements JsonSerializer<FilterPersistence>, JsonDeserializer<FilterPersistence> {
-        @Override
-        public JsonElement serialize(FilterPersistence src, Type typeOfSrc, JsonSerializationContext context) {
-            return context.serialize((src == null ? FilterPersistence.NOT_PERSISTED : src).name());
-        }
-
-        @Override
-        public FilterPersistence deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context)
-            throws JsonParseException {
-            if (json == null || json.isJsonNull()) return FilterPersistence.NOT_PERSISTED;
-            try {
-                return FilterPersistence.fromConfig(json.getAsString());
-            } catch (RuntimeException ignored) {
-                return FilterPersistence.NOT_PERSISTED;
-            }
-        }
-    }
-
-    private static final class SearchFilterJson implements JsonSerializer<SearchFilter>, JsonDeserializer<SearchFilter> {
-        @Override
-        public JsonElement serialize(SearchFilter src, Type typeOfSrc, JsonSerializationContext context) {
-            return FilterPersistence.toJson(src);
-        }
-
-        @Override
-        public SearchFilter deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context)
-            throws JsonParseException {
-            if (json == null || !json.isJsonObject()) return SearchFilter.defaults();
-            return FilterPersistence.fromJson(json.getAsJsonObject());
-        }
     }
 }

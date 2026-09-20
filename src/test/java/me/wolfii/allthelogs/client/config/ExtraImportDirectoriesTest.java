@@ -13,17 +13,17 @@ class ExtraImportDirectoriesTest {
     Path temp;
 
     @Test
-    void persistedListOmitsTheInstanceDirectoryAndItsLogsFolder() {
+    void persistedListStoresLogsFoldersAndOmitsTheCurrentInstance() {
         Path instance = temp.resolve("instance").toAbsolutePath().normalize();
         java.util.ArrayList<String> configured = new java.util.ArrayList<>();
         configured.add(instance.toString());
         configured.add(instance.resolve("logs").toString());
         configured.add(temp.resolve("other").toString());
-        configured.add(temp.resolve("other").toString());
+        configured.add(temp.resolve("other").resolve("logs").toString());
         configured.add("  ");
         configured.add(null);
         List<String> extra = ExtraImportDirectories.persisted(configured, instance);
-        assertEquals(List.of(temp.resolve("other").toAbsolutePath().normalize().toString()), extra);
+        assertEquals(List.of(temp.resolve("other").resolve("logs").toAbsolutePath().normalize().toString()), extra);
     }
 
     @Test
@@ -34,7 +34,7 @@ class ExtraImportDirectoriesTest {
             List.of(extra.toString(), instance.toString()));
         assertEquals(instance, display.getFirst());
         assertEquals(2, display.size());
-        assertEquals(extra.toAbsolutePath().normalize(), display.get(1));
+        assertEquals(extra.resolve("logs").toAbsolutePath().normalize(), display.get(1));
     }
 
     @Test
@@ -44,5 +44,12 @@ class ExtraImportDirectoriesTest {
         assertTrue(ExtraImportDirectories.isInstanceDirectory(instance, instance));
         assertTrue(ExtraImportDirectories.isInstanceDirectory(instance.resolve("logs"), instance));
         assertFalse(ExtraImportDirectories.isInstanceDirectory(temp.resolve("other"), instance));
+    }
+
+    @Test
+    void toLogsFolderKeepsALogsDirectoryAndAppendsOtherwise() {
+        Path logs = temp.resolve("pack").resolve("logs");
+        assertEquals(logs.toAbsolutePath().normalize(), ExtraImportDirectories.toLogsFolder(logs));
+        assertEquals(logs.toAbsolutePath().normalize(), ExtraImportDirectories.toLogsFolder(temp.resolve("pack")));
     }
 }

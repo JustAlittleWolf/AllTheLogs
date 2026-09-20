@@ -69,6 +69,16 @@ public final class ScriptFiles {
         return outputDirectory.resolve(stem + "-" + LocalDateTime.now().format(OUTPUT_STAMP) + ".txt");
     }
 
+    public static boolean nameMatches(Path script, String query) {
+        if (query == null || query.isBlank()) return true;
+        return script.getFileName().toString().toLowerCase(Locale.ROOT)
+            .contains(query.strip().toLowerCase(Locale.ROOT));
+    }
+
+    public static boolean suggested(Path script) {
+        return script.getFileName().toString().equalsIgnoreCase(EXAMPLE);
+    }
+
     private static boolean isScript(Path path) {
         String name = path.getFileName().toString().toLowerCase(Locale.ROOT);
         return name.endsWith(".ts") || name.endsWith(".js");

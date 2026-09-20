@@ -52,9 +52,10 @@ public final class GraalJsInstaller {
             .build();
     }
 
-    private static String sha256(Path file, Consumer<Progress> progress, String artifact, long total, long done)
+    private static String sha256(Path file, Consumer<Progress> progress, int index, int downloads, String artifact)
         throws Exception {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        long size = Files.size(file);
         long copied = 0;
         try (InputStream in = Files.newInputStream(file)) {
             byte[] buffer = new byte[64 * 1024];
@@ -63,7 +64,7 @@ public final class GraalJsInstaller {
                 if (read == 0) continue;
                 digest.update(buffer, 0, read);
                 copied += read;
-                notify(progress, new Progress(Progress.Stage.VERIFYING, done + copied, total, artifact, null));
+                notify(progress, Progress.working(Progress.Stage.VERIFYING, index, downloads, copied, size, artifact));
             }
         }
         return HexFormat.of().formatHex(digest.digest());
@@ -88,22 +89,15 @@ public final class GraalJsInstaller {
             return;
         }
         Files.createDirectories(cacheDirectory);
-        long total = 0;
-        for (GraalJs.Artifact artifact : GraalJs.ARTIFACTS) {
+        int downloads = GraalJs.ARTIFACTS.size();
+        notify(progress, Progress.working(Progress.Stage.LOADING, 0, downloads, 0, 0, "graaljs"));
+        for (int index = 0; index < downloads; index++) {
+            GraalJs.Artifact artifact = GraalJs.ARTIFACTS.get(index);
             Path jar = cacheDirectory.resolve(artifact.jarFileName());
-            if (Files.isRegularFile(jar)) {
-                total += Files.size(jar);
+            if (!isValidCache(jar, artifact.name(), progress, index, downloads)) {
+                download(jar, artifact, progress, index, downloads);
             }
-        }
-        long done = 0;
-        for (GraalJs.Artifact artifact : GraalJs.ARTIFACTS) {
-            Path jar = cacheDirectory.resolve(artifact.jarFileName());
-            if (!isValidCache(jar, artifact.name(), progress, total, done)) {
-                download(jar, artifact, progress);
-            }
-            done += Files.size(jar);
-            total = Math.max(total, done);
-            notify(progress, new Progress(Progress.Stage.LOADING, done, total, artifact.name(), null));
+            notify(progress, Progress.working(Progress.Stage.LOADING, index + 1, downloads, 0, 0, artifact.name()));
             classPath.add(jar);
         }
         if (!alreadyPresent.getAsBoolean()) {
@@ -113,14 +107,14 @@ public final class GraalJsInstaller {
         notify(progress, Progress.ready());
     }
 
-    private boolean isValidCache(Path jar, String artifact, Consumer<Progress> progress, long total, long done) {
+    private boolean isValidCache(Path jar, String artifact, Consumer<Progress> progress, int index, int downloads) {
         try {
             Path shaFile = shaPath(jar);
             if (!Files.isRegularFile(jar) || !Files.isRegularFile(shaFile)) {
                 return false;
             }
             String expected = Files.readString(shaFile, StandardCharsets.UTF_8).trim();
-            String actual = sha256(jar, progress, artifact, Math.max(total, done + Files.size(jar)), done);
+            String actual = sha256(jar, progress, index, downloads, artifact);
             if (!expected.equalsIgnoreCase(actual)) {
                 Files.deleteIfExists(jar);
                 Files.deleteIfExists(shaFile);
@@ -132,9 +126,11 @@ public final class GraalJsInstaller {
         }
     }
 
-    private void download(Path jar, GraalJs.Artifact artifact, Consumer<Progress> progress) throws Exception {
+    private void download(Path jar, GraalJs.Artifact artifact, Consumer<Progress> progress, int index, int downloads)
+        throws Exception {
         LOGGER.info("Downloading GraalJS jar {}", artifact.jarFileName());
         String jarUrl = GraalJs.mavenJarUrl(repository, artifact);
+        notify(progress, Progress.working(Progress.Stage.DOWNLOADING, index, downloads, 0, 1, artifact.name()));
         String expectedSha = fetchSha256(jarUrl + ".sha256");
         Path part = jar.resolveSibling(jar.getFileName() + ".part");
         Files.deleteIfExists(part);
@@ -158,7 +154,8 @@ public final class GraalJsInstaller {
                 if (read == 0) continue;
                 out.write(buffer, 0, read);
                 copied += read;
-                notify(progress, new Progress(Progress.Stage.DOWNLOADING, copied, total, artifact.name(), null));
+                notify(progress, Progress.working(
+                    Progress.Stage.DOWNLOADING, index, downloads, copied, total, artifact.name()));
             }
         } catch (Exception e) {
             Files.deleteIfExists(part);
@@ -197,21 +194,41 @@ public final class GraalJsInstaller {
         void add(Path jar) throws Exception;
     }
 
-    public record Progress(Stage stage, long bytes, long total, String artifact, String error) {
+    /**
+     * {@code completed} is how many of {@code downloads} artifacts are already finished.
+     * {@code bytes}/{@code total} fill the current artifact's slice of the overall bar.
+     */
+    public record Progress(Stage stage, int completed, int downloads, long bytes, long total, String artifact,
+                           String error) {
         public static Progress ready() {
-            return new Progress(Stage.READY, 0, 0, "graaljs", null);
+            return new Progress(Stage.READY, 1, 1, 1, 1, "graaljs", null);
+        }
+
+        public static Progress idle() {
+            return new Progress(Stage.IDLE, 0, 0, 0, 0, "graaljs", null);
         }
 
         public static Progress failed(String message) {
-            return new Progress(Stage.FAILED, 0, 0, "graaljs", message);
+            return new Progress(Stage.FAILED, 0, 0, 0, 0, "graaljs", message);
         }
 
+        static Progress working(Stage stage, int completed, int downloads, long bytes, long total, String artifact) {
+            return new Progress(stage, completed, downloads, bytes, total, artifact, null);
+        }
+
+        /**
+         * Overall percent across every artifact. Each download is one equal slice; known
+         * Content-Length fills the current slice.
+         */
         public int percent() {
-            if (total <= 0) return 0;
-            return (int) Math.min(100, Math.round(bytes * 100.0 / total));
+            if (stage == Stage.READY) return 100;
+            if (downloads <= 0) return 0;
+            double intra = total > 0 ? Math.min(1.0, bytes / (double) total) : 0.0;
+            return (int) Math.min(100, Math.round((completed + intra) * 100.0 / downloads));
         }
 
         public enum Stage {
+            IDLE,
             DOWNLOADING,
             VERIFYING,
             LOADING,

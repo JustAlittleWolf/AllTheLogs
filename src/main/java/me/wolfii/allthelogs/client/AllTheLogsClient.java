@@ -1,7 +1,6 @@
 package me.wolfii.allthelogs.client;
 
 import me.wolfii.allthelogs.client.config.AllTheLogsConfig;
-import me.wolfii.allthelogs.client.config.StartupLogImports;
 import me.wolfii.allthelogs.data.LogSource;
 import me.wolfii.allthelogs.data.store.SessionMarker;
 import net.fabricmc.api.ClientModInitializer;
@@ -15,8 +14,6 @@ import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.atomic.AtomicBoolean;
-
 /**
  * Fabric client entry: opens the log store, imports this instance's {@code logs} folder plus extra configured
  * directories, captures live {@code [CHAT]} lines from {@code ChatComponent#logChatMessage}, and registers
@@ -26,12 +23,21 @@ public final class AllTheLogsClient implements ClientModInitializer {
     public static final String MOD_ID = "allthelogs";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
     private static final long SESSION_END_TOUCH_INTERVAL_MS = 60_000L;
-    private static final AtomicBoolean storeStarted = new AtomicBoolean();
+    private static final LogStoreBoot boot = new LogStoreBoot();
     private static LogStoreWorker worker;
     private static long lastSessionEndTouchMs;
 
     public static LogStoreWorker worker() {
         return worker;
+    }
+
+    /**
+     * Whether startup has finished far enough for the vanilla loading overlay to fade: DuckDB failed
+     * to load, or the store is open, boot import (and its optimizations) have run, and the live
+     * session has started.
+     */
+    public static boolean isBootSettled() {
+        return boot.isSettled();
     }
 
     /**
@@ -72,14 +78,17 @@ public final class AllTheLogsClient implements ClientModInitializer {
     }
 
     /**
-     * Opens the log store after the DuckDB native library is on the classpath.
+     * Opens the log store after the DuckDB native library is on the classpath, then imports and
+     * starts a session. The loading overlay waits until that pipeline settles.
      */
     public static void onDriverReady() {
-        if (worker == null || !storeStarted.compareAndSet(false, true)) return;
-        worker.open(AllTheLogsPaths.database())
-            .thenCompose(ignored -> StartupLogImports.importOnBoot(
-                worker, AllTheLogsPaths.gameDirectory(), AllTheLogsConfig.get().extraImportDirectories()))
-            .thenCompose(ignored -> worker.startSession(minecraftVersion(), currentUsername()))
+        boot.start(
+                worker,
+                AllTheLogsPaths.database(),
+                AllTheLogsPaths.gameDirectory(),
+                AllTheLogsConfig.get().extraImportDirectories(),
+                minecraftVersion(),
+                currentUsername())
             .whenComplete((log, error) -> {
                 if (error != null) {
                     LOGGER.error("AllTheLogs failed to start", error);
@@ -95,7 +104,13 @@ public final class AllTheLogsClient implements ClientModInitializer {
     public void onInitializeClient() {
         worker = new LogStoreWorker();
         AllTheLogsConfig.loadDefault();
-        DuckDbRuntime.ensure().thenRun(AllTheLogsClient::onDriverReady);
+        DuckDbRuntime.ensure().whenComplete((ignored, error) -> {
+            if (error != null || DuckDbRuntime.hasFailed()) {
+                boot.markSettled();
+                return;
+            }
+            onDriverReady();
+        });
 
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
             AllTheLogsCommands.register(dispatcher));

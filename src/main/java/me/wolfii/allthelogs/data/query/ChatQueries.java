@@ -130,7 +130,15 @@ public final class ChatQueries {
      * report on-disk size including the write-ahead log.
      */
     public LogStoreMetadata metadata(long databaseSizeBytes) {
-        return catalog.metadata(databaseSizeBytes);
+        return catalog.metadata(databaseSizeBytes, true);
+    }
+
+    /**
+     * Same counts and versions as {@link #metadata(long)}, without scanning {@code chat_entry} for
+     * distinct servers. Used by the browser "?" tooltip on every open.
+     */
+    public LogStoreMetadata browserMetadata(long databaseSizeBytes) {
+        return catalog.metadata(databaseSizeBytes, false);
     }
 
     /**

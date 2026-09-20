@@ -57,18 +57,9 @@ final class LogBrowserQueries {
     }
 
     /**
-     * Restores the last closed viewport when filter persistence is session or across-restarts.
-     * {@code NOT_PERSISTED} always starts empty so {@link #reload} jumps to the latest messages.
+     * Restores the last closed viewport for this Minecraft run.
      */
-    void restoreSessionLocation(boolean persistLocation) {
-        if (!persistLocation) {
-            sessionSnapshot = ListSnapshot.EMPTY;
-            sessionMatchSummary = MatchSummary.empty();
-            snapshot = ListSnapshot.EMPTY;
-            matchSummary = MatchSummary.empty();
-            reloadPending = true;
-            return;
-        }
+    void restoreSessionLocation() {
         if (sessionSnapshot.isEmpty()) return;
         snapshot = sessionSnapshot;
         matchSummary = sessionMatchSummary;
@@ -76,15 +67,10 @@ final class LogBrowserQueries {
     }
 
     /**
-     * Keeps the current viewport for the next browser open when persistence allows it.
+     * Keeps the current viewport for the next time the browser opens during this run.
      */
-    void rememberSessionLocation(boolean persistLocation) {
+    void rememberSessionLocation() {
         takeSnapshot();
-        if (!persistLocation) {
-            sessionSnapshot = ListSnapshot.EMPTY;
-            sessionMatchSummary = MatchSummary.empty();
-            return;
-        }
         sessionSnapshot = snapshot;
         sessionMatchSummary = matchSummary;
     }
@@ -127,6 +113,7 @@ final class LogBrowserQueries {
         list.onJump(this::jumpTo);
         list.onExpand(this::expandAround);
         list.onScrubBegin(this::beginScrub);
+        refreshStats();
         if (reloadPending || snapshot.isEmpty()) return;
         list.restore(snapshot.rows(), snapshot.hasBefore(), snapshot.hasAfter(), snapshot.scrollY());
         list.setMatchSummary(matchSummary);
@@ -168,6 +155,7 @@ final class LogBrowserQueries {
     void reload() {
         if (list == null) return;
         reloadPending = false;
+        refreshStats();
         if (!filter.canQuery()) {
             generation.incrementAndGet();
             list.setLoading(false);
@@ -179,7 +167,6 @@ final class LogBrowserQueries {
             replaceOnJumpFailure = true;
             jumpTo(new ScrubJump(stayAt, -1, Double.NaN), false);
             loadMatchSummary(generation.get(), filter.withoutOffset(), startedAt);
-            refreshStats();
             return;
         }
         int gen = generation.incrementAndGet();
@@ -208,12 +195,11 @@ final class LogBrowserQueries {
             takeSnapshot();
             loadMatchSummary(gen, query, startedAt);
         });
-        refreshStats();
     }
 
     void refreshStats() {
         if (info == null) return;
-        onClient(AllTheLogsClient.worker().metadata(), (metadata, error) -> {
+        onClient(AllTheLogsClient.worker().browserMetadata(), (metadata, error) -> {
             if (info == null) return;
             if (error != null || metadata == null) {
                 info.tooltip(List.of(Component.translatable("allthelogs.meta.unavailable")));

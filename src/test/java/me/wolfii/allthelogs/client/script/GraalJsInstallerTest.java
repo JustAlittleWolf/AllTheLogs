@@ -64,10 +64,11 @@ class GraalJsInstallerTest {
                 }
             }, () -> ready.get() > 0);
 
-            installer.install(progress -> {
-            });
+            List<Integer> percents = new ArrayList<>();
+            installer.install(progress -> percents.add(progress.percent()));
             assertEquals(GraalJs.ARTIFACTS.size(), added.size());
             assertEquals(GraalJs.ARTIFACTS.size(), hits.get());
+            assertOverallProgressSpansEveryDownload(percents);
             for (GraalJs.Artifact artifact : GraalJs.ARTIFACTS) {
                 assertTrue(Files.isRegularFile(cache.resolve(artifact.jarFileName())));
             }
@@ -108,5 +109,30 @@ class GraalJsInstallerTest {
         } finally {
             server.stop(0);
         }
+    }
+
+    @Test
+    void percentTreatsEachArtifactAsAnEqualSlice() {
+        int downloads = GraalJs.ARTIFACTS.size();
+        GraalJsInstaller.Progress firstHalf = GraalJsInstaller.Progress.working(
+            GraalJsInstaller.Progress.Stage.DOWNLOADING, 0, downloads, 50, 100, "polyglot");
+        GraalJsInstaller.Progress lastHalf = GraalJsInstaller.Progress.working(
+            GraalJsInstaller.Progress.Stage.DOWNLOADING, downloads - 1, downloads, 50, 100, "js-language");
+        assertTrue(firstHalf.percent() < 100 / downloads + 2, firstHalf.percent() + " should stay in the first slice");
+        assertTrue(lastHalf.percent() > 90, lastHalf.percent() + " should be near the end of the overall bar");
+        assertTrue(lastHalf.percent() > firstHalf.percent());
+        assertEquals(100, GraalJsInstaller.Progress.ready().percent());
+    }
+
+    private static void assertOverallProgressSpansEveryDownload(List<Integer> percents) {
+        assertFalse(percents.isEmpty());
+        for (int i = 1; i < percents.size(); i++) {
+            assertTrue(percents.get(i) >= percents.get(i - 1),
+                "overall progress reset at index " + i + ": " + percents);
+        }
+        assertTrue(percents.getLast() >= 90, "install should finish near 100%: " + percents);
+        int firstDownload = percents.stream().filter(percent -> percent > 0).findFirst().orElse(0);
+        assertTrue(firstDownload <= 100 / GraalJs.ARTIFACTS.size() + 2,
+            "first download should only fill its own slice: " + percents);
     }
 }

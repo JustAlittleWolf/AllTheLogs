@@ -2,7 +2,6 @@ package me.wolfii.allthelogs.client;
 
 import me.wolfii.allthelogs.client.config.AllTheLogsConfig;
 import me.wolfii.allthelogs.client.script.ScriptFiles;
-import me.wolfii.allthelogs.client.script.ScriptRuntime;
 import me.wolfii.allthelogs.client.ui.screen.ImportScreen;
 import me.wolfii.allthelogs.client.ui.screen.LogBrowserScreen;
 import me.wolfii.allthelogs.client.ui.screen.ScriptsScreen;
@@ -41,7 +40,6 @@ public final class AllTheLogsScreens {
     public static void openScripts(@Nullable Screen parent) {
         ScriptFiles.ensureExample(AllTheLogsPaths.scripts());
         Minecraft.getInstance().gui.setScreen(new ScriptsScreen(parent));
-        ScriptRuntime.ensure();
     }
 
     public static void openSettings(@Nullable Screen parent) {

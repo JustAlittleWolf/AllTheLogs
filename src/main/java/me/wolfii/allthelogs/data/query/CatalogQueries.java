@@ -55,7 +55,12 @@ final class CatalogQueries {
         return logs;
     }
 
-    LogStoreMetadata metadata(long databaseSizeBytes) {
+    /**
+     * Store-wide facts. Counts and dates come from {@code log_file} so opening the browser does not
+     * scan {@code chat_entry}. Distinct servers still require that table; pass {@code includeServerOrWorlds}
+     * only for the public metadata API, not the "?" tooltip.
+     */
+    LogStoreMetadata metadata(long databaseSizeBytes, boolean includeServerOrWorlds) {
         try {
             List<String> versions = new ArrayList<>();
             try (Statement statement = connection.createStatement();
@@ -68,41 +73,44 @@ final class CatalogQueries {
                     versions.add(result.getString(1));
                 }
             }
-            List<String> servers = new ArrayList<>();
-            try (Statement statement = connection.createStatement();
-                 ResultSet result = statement.executeQuery("""
-                     SELECT server_or_world
-                     FROM chat_entry
-                     WHERE server_or_world IS NOT NULL
-                     GROUP BY server_or_world
-                     ORDER BY MIN(entry_time), server_or_world""")) {
-                while (result.next()) {
-                    servers.add(result.getString(1));
-                }
-            }
+            List<String> servers = includeServerOrWorlds ? serverOrWorlds() : List.of();
             long chatLogCount;
+            long chatEntryCount;
             LocalDate firstLogDate;
             LocalDate lastLogDate;
             try (Statement statement = connection.createStatement();
-                 ResultSet result = statement.executeQuery("SELECT COUNT(*), MIN(log_date), MAX(log_date) FROM log_file")) {
+                 ResultSet result = statement.executeQuery("""
+                     SELECT COUNT(*), MIN(log_date), MAX(log_date), COALESCE(SUM(entry_count), 0)
+                     FROM log_file""")) {
                 result.next();
                 chatLogCount = result.getLong(1);
                 Date first = result.getDate(2);
                 Date last = result.getDate(3);
                 firstLogDate = first == null ? null : first.toLocalDate();
                 lastLogDate = last == null ? null : last.toLocalDate();
-            }
-            long chatEntryCount;
-            try (Statement statement = connection.createStatement();
-                 ResultSet result = statement.executeQuery("SELECT COUNT(*) FROM chat_entry")) {
-                result.next();
-                chatEntryCount = result.getLong(1);
+                chatEntryCount = result.getLong(4);
             }
             return new LogStoreMetadata(versions, servers, firstLogDate, lastLogDate, chatLogCount, chatEntryCount,
                 databaseSizeBytes);
         } catch (SQLException e) {
             throw new LogDataException("could not read store metadata", e);
         }
+    }
+
+    private List<String> serverOrWorlds() throws SQLException {
+        List<String> servers = new ArrayList<>();
+        try (Statement statement = connection.createStatement();
+             ResultSet result = statement.executeQuery("""
+                 SELECT server_or_world
+                 FROM chat_entry
+                 WHERE server_or_world IS NOT NULL
+                 GROUP BY server_or_world
+                 ORDER BY MIN(entry_time), server_or_world""")) {
+            while (result.next()) {
+                servers.add(result.getString(1));
+            }
+        }
+        return servers;
     }
 
     long reportedDatabaseSize() {

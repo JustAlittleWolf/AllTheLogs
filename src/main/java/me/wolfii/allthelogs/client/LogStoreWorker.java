@@ -6,21 +6,27 @@ import net.minecraft.network.chat.Component;
 
 import java.nio.file.Path;
 import java.time.LocalDateTime;
+import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Queue;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
  * Serialises every {@link LogStore} call onto one worker thread. The store is not safe for concurrent use, and
- * imports plus queries must not run on the Minecraft client thread.
+ * imports plus queries must not run on the Minecraft client thread. Live chat that arrives before
+ * {@link #startSession(String, String)} is queued and flushed when the session starts, so boot import
+ * cannot drop those lines.
  */
 public final class LogStoreWorker implements AutoCloseable {
     private final ExecutorService executor;
     private final AtomicBoolean cancelImport = new AtomicBoolean();
+    private final Queue<PendingLiveMessage> pendingLive = new ArrayDeque<>();
     private volatile LogStore store;
+    private boolean sessionStarted;
 
     public LogStoreWorker() {
         this.executor = Executors.newSingleThreadExecutor(daemonFactory());
@@ -59,7 +65,12 @@ public final class LogStoreWorker implements AutoCloseable {
     }
 
     public CompletableFuture<ChatLog> startSession(String minecraftVersion, String minecraftUser) {
-        return submit(() -> requireStore().startSession(minecraftVersion, minecraftUser));
+        return submit(() -> {
+            ChatLog log = requireStore().startSession(minecraftVersion, minecraftUser);
+            sessionStarted = true;
+            flushPendingLive();
+            return log;
+        });
     }
 
     /**
@@ -73,8 +84,12 @@ public final class LogStoreWorker implements AutoCloseable {
         String user = minecraftUser == null || minecraftUser.isBlank() ? null : minecraftUser;
         String place = serverOrWorld == null || serverOrWorld.isBlank() ? null : serverOrWorld;
         executor.execute(() -> {
-            if (store == null) return;
-            store.importSessionMessage(text, formatting, user, place);
+            PendingLiveMessage pending = new PendingLiveMessage(text, formatting, user, place);
+            if (store == null || !sessionStarted) {
+                pendingLive.add(pending);
+                return;
+            }
+            writeLive(pending);
         });
     }
 
@@ -124,6 +139,10 @@ public final class LogStoreWorker implements AutoCloseable {
         return submit(() -> requireStore().metadata());
     }
 
+    public CompletableFuture<LogStoreMetadata> browserMetadata() {
+        return submit(() -> requireStore().browserMetadata());
+    }
+
     public CompletableFuture<Optional<Path>> databasePath() {
         return submit(() -> requireStore().databasePath());
     }
@@ -149,10 +168,32 @@ public final class LogStoreWorker implements AutoCloseable {
     }
 
     private void closeStore() {
+        pendingLive.clear();
+        sessionStarted = false;
         if (store != null) {
             store.close();
             store = null;
         }
+    }
+
+    private void flushPendingLive() {
+        PendingLiveMessage pending;
+        while ((pending = pendingLive.poll()) != null) {
+            writeLive(pending);
+        }
+    }
+
+    private void writeLive(PendingLiveMessage pending) {
+        if (store == null) return;
+        try {
+            store.importSessionMessage(pending.text, pending.formatting, pending.minecraftUser,
+                pending.serverOrWorld);
+        } catch (LogDataException e) {
+            AllTheLogsClient.LOGGER.warn("Could not store a live chat line", e);
+        }
+    }
+
+    private record PendingLiveMessage(String text, long[] formatting, String minecraftUser, String serverOrWorld) {
     }
 
     private void touchSessionEndTimeNow() {
