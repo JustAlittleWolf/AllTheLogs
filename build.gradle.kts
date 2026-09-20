@@ -40,7 +40,7 @@ dependencies {
     implementation(libs.fabric.api)
 
     implementation(libs.owo.lib)
-    compileOnly(libs.modmenu)
+    implementation(libs.modmenu)
 
     implementation(libs.commons.compress)
     include(libs.commons.compress)
