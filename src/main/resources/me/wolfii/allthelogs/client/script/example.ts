@@ -119,9 +119,17 @@
  * ```
  */
 
-allEntries().forEach((entry) => {
-    console.log(entry.message);
-    if (entry.chatLog.minecraftVersion == "26.2") {
-        writeToOutputFile(entry.timestamp + ": " + entry.message);
-    }
+const stats = database.metadata;
+console.log(stats.chatLogCount + " logs, " + stats.chatEntryCount + " entries");
+
+const query = ChatQuery.all()
+    .withRegex("(?i)\\bwelcome\\b")
+    .withSort(Sort.DESCENDING)
+    .withLimit(50);
+
+const summary = database.summarizeMatches(query);
+console.log(summary.matches + " messages matching /welcome/i (writing up to 50 newest)");
+
+database.findEntries(query).forEach((entry) => {
+    writeToOutputFile(entry.timestamp + " [" + entry.chatLog.minecraftVersion + "] " + entry.message);
 });

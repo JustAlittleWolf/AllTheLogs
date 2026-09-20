@@ -25,6 +25,7 @@ class ScriptHostTest {
     void setUp() {
         store = LogStore.open(tempDir.resolve("logs.duckdb"));
         store.startSession("26.2", null);
+        store.importSessionMessage("Welcome to the server", null);
         store.importSessionMessage("hello 26", null);
         store.importSessionMessage("other", null);
         store.startSession("1.21.1", null);
@@ -38,20 +39,22 @@ class ScriptHostTest {
     }
 
     @Test
-    void exampleScriptLogsEveryMessageAndWritesVersionHits() throws Exception {
+    void exampleScriptQueriesWelcomeMatchesWithoutDumpingTheStore() throws Exception {
         String source = Files.readString(
             Path.of("src/main/resources/me/wolfii/allthelogs/client/script/example.ts"),
             StandardCharsets.UTF_8);
         Path output = tempDir.resolve("output").resolve("example.txt");
         ScriptHost.Result result = ScriptHost.execute(source, ScriptFiles.EXAMPLE, database, output);
         assertTrue(result.succeeded(), () -> result.console() + " / " + result.error());
-        assertTrue(result.console().contains("hello 26"));
-        assertTrue(result.console().contains("other"));
-        assertTrue(result.console().contains("legacy"));
+        assertTrue(result.console().contains("4 entries"));
+        assertTrue(result.console().contains("1 messages matching"));
+        assertFalse(result.console().contains("Welcome to the server"));
+        assertFalse(result.console().contains("hello 26"));
+        assertFalse(result.console().contains("legacy"));
         assertEquals(output, result.outputFile());
         String written = Files.readString(output);
-        assertTrue(written.contains("hello 26"));
-        assertTrue(written.contains("other"));
+        assertTrue(written.contains("Welcome to the server"));
+        assertFalse(written.contains("hello 26"));
         assertFalse(written.contains("legacy"));
     }
 
@@ -65,7 +68,8 @@ class ScriptHostTest {
             """, "query.js", database, output);
         assertTrue(result.succeeded(), () -> result.console() + " / " + result.error());
         String written = Files.readString(output);
-        assertTrue(written.contains("count=2"));
+        assertTrue(written.contains("count=3"));
+        assertTrue(written.contains("Welcome to the server"));
         assertTrue(written.contains("hello 26"));
         assertTrue(written.contains("other"));
         assertFalse(written.contains("legacy"));
@@ -80,6 +84,6 @@ class ScriptHostTest {
             writeToOutputFile("count=" + hits.length);
             """, "range.js", database, output);
         assertTrue(result.succeeded(), () -> result.console() + " / " + result.error());
-        assertTrue(Files.readString(output).contains("count=3"));
+        assertTrue(Files.readString(output).contains("count=4"));
     }
 }

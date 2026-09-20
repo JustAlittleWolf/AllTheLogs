@@ -29,7 +29,8 @@ class ScriptFilesTest {
         Files.writeString(scripts.resolve("extra.js"), "console.log(1)");
         List<Path> listed = ScriptFiles.list(scripts);
         assertEquals(List.of(scripts.resolve("example.ts"), scripts.resolve("extra.js")), listed);
-        assertTrue(first.contains("allEntries()"));
+        assertTrue(first.contains("ChatQuery.all()"));
+        assertTrue(first.contains("findEntries"));
     }
 
     @Test
@@ -52,7 +53,11 @@ class ScriptFilesTest {
         assertTrue(source.contains("type LogSource"));
         assertTrue(source.contains("declare function allEntries()"));
         assertTrue(source.contains("declare function writeToOutputFile"));
-        assertTrue(source.contains("allEntries().forEach((entry) =>"));
+        assertTrue(source.contains("ChatQuery.all()"));
+        assertTrue(source.contains("withRegex"));
+        assertTrue(source.contains("withLimit(50)"));
+        assertTrue(source.contains("findEntries(query)"));
+        assertFalse(source.contains("allEntries().forEach"));
     }
 }
 
