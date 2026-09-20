@@ -15,7 +15,7 @@ import java.util.Objects;
  * @param endTime          timestamp of the last logged line, not just chat entries; converted from the import
  *                         timezone like chat entries. For a client session this is updated by
  *                         {@link LogStore#importSessionMessage(String, long[])}
- * @param minecraftUser    the player from a {@code Setting user:} line, or {@code null} if unknown
+ * @param minecraftUser    the player from a {@code Setting user:} or IAS login line, or {@code null} if unknown
  */
 public record ChatLog(
     LogSource source,

@@ -83,14 +83,25 @@ class LogParserTest {
     }
 
     @Test
-    void doesNotInferVersionFromTheIntegratedServerLine() throws IOException {
+    void doesNotInferVersionFromTheIntegratedServerLineWhenABetterSourceExists() throws IOException {
         ParsedLog parsed = parse("""
             [18:26:25] [Client thread/INFO]: Setting user: JustAlittleWolf
+            [18:26:26] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
             [18:26:36] [Server thread/INFO]: Starting integrated minecraft server version 1.9
             [18:26:40] [Client thread/INFO]: [CHAT] hi
             """);
-        assertEquals(ChatLog.UNKNOWN_VERSION, parsed.minecraftVersion());
+        assertEquals("26.2", parsed.minecraftVersion());
         assertEquals("JustAlittleWolf", parsed.minecraftUser());
+    }
+
+    @Test
+    void usesTheIntegratedServerVersionWhenNoLoaderLineExists() throws IOException {
+        ParsedLog parsed = parse("""
+            [21:19:45] [Render thread/INFO]: Setting user: JustAlittleWolf
+            [21:20:01] [Server thread/INFO]: Starting integrated minecraft server version 26.1 Snapshot 2
+            [21:20:02] [Render thread/INFO]: [CHAT] hi
+            """);
+        assertEquals("26.1 Snapshot 2", parsed.minecraftVersion());
     }
 
     @Test
@@ -170,6 +181,72 @@ class LogParserTest {
     }
 
     @Test
+    void detectsOldFabricVersionFromLoadingForGame() throws IOException {
+        ParsedLog parsed = parse("""
+            [23:15:40] [main/INFO]: Loading for game Minecraft 1.16.5
+            [23:15:50] [main/INFO]: [FabricLoader] Loading 3 mods: minecraft@1.16.5, java@8, fabricloader@0.11.3
+            [23:16:03] [Render thread/INFO]: [CHAT] hi
+            """);
+        assertEquals("1.16.5", parsed.minecraftVersion());
+    }
+
+    @Test
+    void iasLoginUpdatesTheUserAfterSettingUser() throws IOException {
+        ParsedLog parsed = parse("""
+            [11:21:53] [Render thread/INFO]: Setting user: JustAlittleWolf
+            [11:22:00] [Render thread/INFO]: [CHAT] as wolf
+            [12:00:00] [IAS/INFO]: IAS: Logging (Microsoft) as 8bfd1b6f-0d35-48e4-bacf-bd99a8ec4fe0/JustAlittlePanda
+            [12:00:01] [Render thread/INFO]: [CHAT] as panda
+            """);
+        assertEquals("JustAlittleWolf", parsed.entries().get(0).minecraftUser());
+        assertEquals("JustAlittlePanda", parsed.entries().get(1).minecraftUser());
+        assertEquals("JustAlittlePanda", parsed.minecraftUser());
+    }
+
+    @Test
+    void extractsRemoteServersAndDropsTrailingFqdnDots() throws IOException {
+        ParsedLog gomme = parse("""
+            [09:32:50] [Render thread/INFO]: Connecting to mc.gommehd.net., 25565
+            [09:32:51] [Render thread/INFO]: [CHAT] hi
+            """);
+        assertEquals("mc.gommehd.net", gomme.serverOrWorld());
+        ParsedLog hypixel = parse("""
+            [09:32:50] [Render thread/INFO]: Connecting to mc.hypixel.net., 25565
+            [09:32:51] [Render thread/INFO]: [CHAT] hi
+            """);
+        assertEquals("mc.hypixel.net", hypixel.serverOrWorld());
+    }
+
+    @Test
+    void vanillaDisconnectClearsTheServerBeforeMenuChat() throws IOException {
+        ParsedLog parsed = parse("""
+            [15:45:53] [Render thread/INFO]: Connecting to mc.hypixel.net., 25565
+            [15:45:54] [Render thread/INFO]: [CHAT] on hypixel
+            [15:46:00] [Render thread/WARN]: Client disconnected with reason: Disconnected
+            [15:46:01] [Render thread/INFO]: [CHAT] in the menu
+            [15:46:02] [Render thread/INFO]: Connecting to mc.gommehd.net., 25565
+            [15:46:03] [Render thread/INFO]: [CHAT] on gomme
+            """);
+        assertEquals("mc.hypixel.net", parsed.entries().get(0).serverOrWorld());
+        assertNull(parsed.entries().get(1).serverOrWorld());
+        assertEquals("mc.gommehd.net", parsed.entries().get(2).serverOrWorld());
+    }
+
+    @Test
+    void worldSavesAfterSingleplayerLeaveDoNotRetagMenuChat() throws IOException {
+        ParsedLog parsed = parse("""
+            [12:50:38] [Server thread/INFO]: Starting integrated minecraft server version 26.2
+            [12:50:39] [Server thread/INFO]: Saving chunks for level 'ServerLevel[New World]'/minecraft:overworld
+            [12:50:40] [Render thread/INFO]: [CHAT] in new world
+            [12:50:41] [Server thread/INFO]: Stopping singleplayer server as player logged out
+            [12:50:41] [Server thread/INFO]: Saving chunks for level 'ServerLevel[New World]'/minecraft:overworld
+            [12:50:42] [Render thread/INFO]: [CHAT] in the menu
+            """);
+        assertEquals("world/New World", parsed.entries().get(0).serverOrWorld());
+        assertNull(parsed.entries().get(1).serverOrWorld());
+    }
+
+    @Test
     void storesTheMinecraftUserFromTheSettingUserLine() throws IOException {
         ParsedLog parsed = parse("""
             [11:21:53] [Render thread/INFO]: Setting user: JustAlittleWolf
@@ -216,7 +293,7 @@ class LogParserTest {
             [12:50:39] [Render thread/INFO]: [CHAT] hi
             """);
         assertEquals("world/Audio Test", parsed.serverOrWorld());
-        assertEquals(ChatLog.UNKNOWN_VERSION, parsed.minecraftVersion());
+        assertEquals("26.3 Snapshot 9", parsed.minecraftVersion());
     }
 
     @Test
@@ -227,7 +304,7 @@ class LogParserTest {
             [16:52:38] [Client thread/INFO]: [CHAT] Given [Barrier] * 1 to JustAlittleWolf
             """);
         assertEquals("world/LinkcraftII", parsed.serverOrWorld());
-        assertEquals(ChatLog.UNKNOWN_VERSION, parsed.minecraftVersion());
+        assertEquals("1.9", parsed.minecraftVersion());
     }
 
     @Test
