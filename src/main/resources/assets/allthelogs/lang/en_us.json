@@ -30,9 +30,9 @@
   "allthelogs.import.nested_archives": "Nested archives",
   "allthelogs.import.nested_archives.hint": "Open zip, 7z, and tar files found while importing, including archives inside other archives.",
   "allthelogs.import.skip_imported": "Skip already imported",
-  "allthelogs.import.skip_imported.hint": "Leave out files that are already in the database instead of importing them again. Turn this off together with Update metadata only to re-read files that match a stored hash or a live session.",
+  "allthelogs.import.skip_imported.hint": "Leave out files that are already in the database instead of importing them again.",
   "allthelogs.import.update_metadata": "Update metadata only",
-  "allthelogs.import.update_metadata.hint": "Do not store new messages. Fill selected fields on messages that are already in the database. Turn off Skip already imported so previously stored files, matching hashes, and session-tagged logs are parsed again.",
+  "allthelogs.import.update_metadata.hint": "Do not store new messages. Fill selected fields on messages that are already in the database.",
   "allthelogs.import.update_metadata.formatting": "Formatting",
   "allthelogs.import.update_metadata.formatting.hint": "Write formatting onto stored messages that have none, when the log line has formatting.",
   "allthelogs.import.update_metadata.user": "Minecraft user",
@@ -126,13 +126,12 @@
   "yacl3.config.minecraft:allthelogs.category.import": "Import",
   "yacl3.config.minecraft:allthelogs.category.browser": "Messages",
   "yacl3.config.minecraft:allthelogs.extraImportDirectories": "Auto import logs folders",
-  "yacl3.config.minecraft:allthelogs.extraImportDirectories.desc": "Extra Minecraft logs folders scanned on start. Pick the logs directory itself, not the instance root. The current instance is always imported and is not listed here.",
+  "yacl3.config.minecraft:allthelogs.extraImportDirectories.desc": "Extra Minecraft logs folders scanned on start. Pick the logs directory itself, not the instance root. The current instance is always imported.",
   "yacl3.config.minecraft:allthelogs.defaultContextLines": "Default context lines",
-  "yacl3.config.minecraft:allthelogs.defaultContextLines.desc": "How many neighbouring chat lines to load around each search match when the messages screen is first opened this session.",
   "yacl3.config.minecraft:allthelogs.hideImportButton": "Hide import button",
   "yacl3.config.minecraft:allthelogs.hideImportButton.desc": "Remove the Import button from the messages screen. You can still open import with /allthelogs import.",
   "yacl3.config.minecraft:allthelogs.messageFontSize": "Message font size",
   "yacl3.config.minecraft:allthelogs.messageFontSize.desc": "Size of chat lines.",
   "yacl3.config.minecraft:allthelogs.contextMessageBrightness": "Context message brightness",
-  "yacl3.config.minecraft:allthelogs.contextMessageBrightness.desc": "How bright neighbouring context lines are. 100% is full brightness (no darkening); 50% is half as bright."
+  "yacl3.config.minecraft:allthelogs.contextMessageBrightness.desc": "How bright context lines are. 100% keeps the original colorin, 50% is makes context messages appear half as bright."
 }
