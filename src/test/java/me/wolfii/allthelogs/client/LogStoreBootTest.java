@@ -8,8 +8,13 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.zip.GZIPOutputStream;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -94,13 +99,40 @@ class LogStoreWorkerLiveQueueTest {
             var importFuture = worker.importDirectory(logs, me.wolfii.allthelogs.data.ImportOptions.currentLogsDirectory(),
                 null);
             worker.importSessionMessage(Component.literal("while importing"), "Tester", "world/overworld");
+            LocalDateTime queuedAt = LocalDateTime.now();
+            Thread.sleep(50);
             importFuture.join();
             worker.startSession("26.2", "Tester").join();
 
-            List<String> messages = worker.allEntries().join().stream().map(ChatEntry::message).toList();
+            List<ChatEntry> entries = worker.allEntries().join();
+            List<String> messages = entries.stream().map(ChatEntry::message).toList();
             assertTrue(messages.contains("from file"));
             assertTrue(messages.contains("while importing"),
                 "live lines queued during import must flush when the session starts");
+            ChatEntry live = entries.stream().filter(entry -> entry.message().equals("while importing")).findFirst()
+                .orElseThrow();
+            assertFalse(live.timestamp().isAfter(queuedAt),
+                "flushing after import must not move the timestamp past ingest: " + live.timestamp()
+                    + " queued by " + queuedAt);
+        }
+    }
+
+    @Test
+    void liveChatKeepsTheCaptureTimeEvenWhenTheStoreWritesLater() throws Exception {
+        try (LogStoreWorker worker = new LogStoreWorker()) {
+            worker.open(temp.resolve("logs.duckdb")).join();
+            worker.importSessionMessage(Component.literal("first"), "Tester", "world/overworld");
+            Thread.sleep(50);
+            worker.importSessionMessage(Component.literal("second"), "Tester", "world/overworld");
+            worker.startSession("26.2", "Tester").join();
+
+            Map<String, ChatEntry> byMessage = worker.allEntries().join().stream()
+                .collect(Collectors.toMap(ChatEntry::message, Function.identity()));
+            LocalDateTime first = byMessage.get("first").timestamp();
+            LocalDateTime second = byMessage.get("second").timestamp();
+            assertTrue(Duration.between(first, second).toMillis() >= 20,
+                "queued live lines must keep the clock from ingest, not the later insert: first="
+                    + first + " second=" + second);
         }
     }
 }
