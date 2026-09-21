@@ -275,17 +275,22 @@ public final class LogWriter implements AutoCloseable {
 
     /**
      * Applies every queued {@link #updateMetadata} row in one pass over {@code chat_entry}.
+     * <p>
+     * Path matches and near-in-time text matches are separate equijoins. An {@code OR} of those
+     * predicates nested-loops the whole {@code chat_entry} table against every patch row, which is
+     * what made metadata-only imports sit on "Optimizing database..." until they timed out.
      */
     public void applyMetadataPatches(ImportOptions options) throws SQLException {
         if (!metadataPatchReady || metadataPatchFiles == 0 || !options.updatesAnyMetadata()) {
             return;
         }
-        String window = String.valueOf(LIVE_DUPLICATE_WINDOW_SECONDS);
         String formattingFlag = options.updateFormatting() ? "true" : "false";
         String userFlag = options.updateMinecraftUser() ? "true" : "false";
         String serverFlag = options.updateMinecraftServer() ? "true" : "false";
         String session = SourceKind.SESSION.name();
+        int window = LIVE_DUPLICATE_WINDOW_SECONDS;
         try (Statement update = connection.createStatement()) {
+            prepareNormalizedPatches(update, window);
             int updated = update.executeUpdate("""
                 UPDATE chat_entry
                 SET
@@ -303,36 +308,58 @@ public final class LogWriter implements AutoCloseable {
                 FROM (
                     SELECT rid, kind, new_formatting, new_user, new_place FROM (
                         SELECT
-                            e.rowid AS rid,
-                            f.source_kind AS kind,
-                            p.formatting AS new_formatting,
-                            p.minecraft_user AS new_user,
-                            p.server_or_world AS new_place,
+                            rid,
+                            kind,
+                            new_formatting,
+                            new_user,
+                            new_place,
                             row_number() OVER (
-                                PARTITION BY e.rowid
-                                ORDER BY
-                                    CASE WHEN f.source_path = p.source_path AND f.entry_path = p.entry_path
-                                        AND e.line_index = p.seq
-                                        THEN 0 ELSE 1 END,
-                                    abs(date_diff('millisecond', e.entry_time, p.entry_time)),
-                                    p.seq
+                                PARTITION BY rid
+                                ORDER BY pref, dt, seq
                             ) AS rn
-                        FROM chat_entry e
-                        JOIN log_file f ON f.id = e.file_id
-                        JOIN metadata_patch p
-                          ON (f.source_path = p.source_path AND f.entry_path = p.entry_path
-                              AND e.line_index = p.seq)
-                          OR (%s
-                              AND abs(date_diff('millisecond', e.entry_time, p.entry_time)) <= %s * 1000)
+                        FROM (
+                            SELECT
+                                e.rowid AS rid,
+                                f.source_kind AS kind,
+                                p.formatting AS new_formatting,
+                                p.minecraft_user AS new_user,
+                                p.server_or_world AS new_place,
+                                0 AS pref,
+                                abs(date_diff('millisecond', e.entry_time, p.entry_time)) AS dt,
+                                p.seq
+                            FROM metadata_patch_norm p
+                            JOIN log_file f
+                              ON f.source_path = p.source_path AND f.entry_path = p.entry_path
+                            JOIN chat_entry e ON e.file_id = f.id AND e.line_index = p.seq
+                            UNION ALL
+                            SELECT
+                                e.rowid,
+                                f.source_kind,
+                                p.formatting,
+                                p.minecraft_user,
+                                p.server_or_world,
+                                1,
+                                abs(date_diff('millisecond', e.entry_time, p.entry_time)),
+                                p.seq
+                            FROM metadata_patch_seconds p
+                            JOIN chat_entry e
+                              ON date_trunc('second', e.entry_time) = p.join_second
+                             AND %s
+                            JOIN log_file f ON f.id = e.file_id
+                            WHERE abs(date_diff('millisecond', e.entry_time, p.entry_time))
+                                <= %d * 1000
+                        ) hits
                     ) ranked
                     WHERE rn = 1
                 ) m
                 WHERE chat_entry.rowid = m.rid
                 """.formatted(formattingFlag, userFlag, session, serverFlag, session,
-                    sameChatText("e.message", "p.message"), window));
+                    sameChatText("e.message", "p.text"), window));
             if (updated > 0 && options.updateMinecraftUser()) {
                 updateLogFileUsers();
             }
+            update.execute("DROP TABLE IF EXISTS metadata_patch_seconds");
+            update.execute("DROP TABLE IF EXISTS metadata_patch_norm");
             if (updated > 0) {
                 writtenFiles += metadataPatchFiles;
                 writtenEntries += updated;
@@ -360,6 +387,29 @@ public final class LogWriter implements AutoCloseable {
         metadataPatchReady = true;
     }
 
+    private static void prepareNormalizedPatches(Statement statement, int window) throws SQLException {
+        statement.execute("""
+            CREATE OR REPLACE TEMP TABLE metadata_patch_norm AS
+            SELECT
+                source_path,
+                entry_path,
+                seq,
+                entry_time,
+                date_trunc('second', entry_time) AS entry_second,
+                replace(message, chr(92) || 'n', chr(10)) AS text,
+                formatting,
+                minecraft_user,
+                server_or_world
+            FROM metadata_patch
+            """);
+        statement.execute("""
+            CREATE OR REPLACE TEMP TABLE metadata_patch_seconds AS
+            SELECT p.*, p.entry_second + (delta * INTERVAL 1 SECOND) AS join_second
+            FROM metadata_patch_norm p
+            CROSS JOIN range(%d, %d) t(delta)
+            """.formatted(-window, window + 1));
+    }
+
     private void updateLogFileUsers() throws SQLException {
         String session = SourceKind.SESSION.name();
         try (Statement statement = connection.createStatement()) {
@@ -370,7 +420,7 @@ public final class LogWriter implements AutoCloseable {
                 END
                 FROM (
                     SELECT source_path, entry_path, minecraft_user
-                    FROM metadata_patch
+                    FROM metadata_patch_norm
                     WHERE minecraft_user IS NOT NULL
                     QUALIFY row_number() OVER (PARTITION BY source_path, entry_path ORDER BY seq) = 1
                 ) p
@@ -380,9 +430,13 @@ public final class LogWriter implements AutoCloseable {
                 UPDATE log_file SET minecraft_user = coalesce(log_file.minecraft_user, p.minecraft_user)
                 FROM (
                     SELECT e.file_id, p.minecraft_user
-                    FROM chat_entry e
-                    JOIN metadata_patch p ON %s
+                    FROM metadata_patch_seconds p
+                    JOIN chat_entry e
+                      ON date_trunc('second', e.entry_time) = p.join_second
+                     AND %s
+                    JOIN log_file f ON f.id = e.file_id
                     WHERE p.minecraft_user IS NOT NULL
+                      AND f.source_kind = '%s'
                       AND abs(date_diff('millisecond', e.entry_time, p.entry_time))
                           <= %d * 1000
                     QUALIFY row_number() OVER (PARTITION BY e.file_id ORDER BY p.seq) = 1
@@ -390,7 +444,7 @@ public final class LogWriter implements AutoCloseable {
                 WHERE log_file.id = p.file_id
                   AND log_file.source_kind = '%s'
                   AND log_file.minecraft_user IS NULL
-                """.formatted(sameChatText("e.message", "p.message"), LIVE_DUPLICATE_WINDOW_SECONDS, session));
+                """.formatted(sameChatText("e.message", "p.text"), session, LIVE_DUPLICATE_WINDOW_SECONDS, session));
         }
     }
 
