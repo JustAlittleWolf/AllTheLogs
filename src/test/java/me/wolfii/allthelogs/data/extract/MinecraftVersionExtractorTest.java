@@ -43,4 +43,26 @@ class MinecraftVersionExtractorTest {
         versions.accept("[21:20:01] [Server thread/INFO]: Starting integrated minecraft server version 26.1 Snapshot 2");
         assertEquals("26.1 Snapshot 2", versions.version());
     }
+
+    @Test
+    void quiltAndCrashReportAndDashVersionAreRecognised() {
+        MinecraftVersionExtractor quilt = new MinecraftVersionExtractor();
+        quilt.accept("[10:00:00] [main/INFO]: Loading Minecraft 1.20.1 with Quilt Loader 0.20.0");
+        assertEquals("1.20.1", quilt.version());
+
+        MinecraftVersionExtractor crash = new MinecraftVersionExtractor();
+        crash.accept("Minecraft Version: 1.18.2");
+        assertEquals("1.18.2", crash.version());
+
+        MinecraftVersionExtractor dash = new MinecraftVersionExtractor();
+        dash.accept("Completely ignored arguments: [--username, x, --version, 1.20.1]");
+        assertEquals("1.20.1", dash.version());
+    }
+
+    @Test
+    void mixinMinecraftMentionsAreNotVersions() {
+        MinecraftVersionExtractor versions = new MinecraftVersionExtractor();
+        versions.accept("[10:00:03] [main/INFO]: Loading mixin minecraft/client/renderer/chunk0 from fabric-rendering");
+        assertNull(versions.version());
+    }
 }

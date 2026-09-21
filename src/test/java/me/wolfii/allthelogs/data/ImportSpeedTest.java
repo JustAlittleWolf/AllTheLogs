@@ -97,6 +97,30 @@ class ImportSpeedTest {
             "import took " + elapsed + " ns");
     }
 
+    @Test
+    void skipsVersionRegexesOnUnrelatedMinecraftMentions() throws IOException {
+        StringBuilder log = new StringBuilder(20_000 * 90);
+        log.append("[10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3\n");
+        log.append("[10:00:01] [Render thread/INFO]: Setting user: JustAlittleWolf\n");
+        log.append("[10:00:02] [Render thread/INFO]: Connecting to unicacity.eu, 25565\n");
+        for (int i = 0; i < 20_000; i++) {
+            log.append("[10:00:03] [main/INFO]: Loading mixin minecraft/client/renderer/chunk");
+            log.append(i);
+            log.append(" from fabric-rendering\n");
+        }
+        log.append("[10:00:10] [Render thread/INFO]: [CHAT] hello\n");
+        String text = log.toString();
+        parse(text);
+        long started = System.nanoTime();
+        ParsedLog parsed = parse(text);
+        long elapsed = System.nanoTime() - started;
+        System.out.printf("parsed 20000 mixin lines in %.1fms%n", elapsed / 1_000_000.0);
+        assertEquals("26.2", parsed.minecraftVersion());
+        assertEquals(1, parsed.entries().size());
+        assertTrue(elapsed < TimeUnit.MILLISECONDS.toNanos(400),
+            "unrelated minecraft mentions took " + elapsed + " ns");
+    }
+
     private static long timePattern(Pattern pattern, String line, int repeats) {
         long started = System.nanoTime();
         boolean matched = false;
