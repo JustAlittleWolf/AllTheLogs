@@ -186,7 +186,7 @@ class MessageTextTest {
             MessageText.timestamp(context).getStyle().getColor().getValue());
         int contextMessage = drawn(context).getStyle().getColor().getValue();
         int matchMessage = drawn(match).getStyle().getColor().getValue();
-        assertTrue(contextMessage < (Colors.CONTEXT_TIMESTAMP & 0xFFFFFF));
+        assertTrue(contextMessage < matchMessage);
         assertEquals(Colors.MATCH_TEXT & 0xFFFFFF, matchMessage);
     }
 }
