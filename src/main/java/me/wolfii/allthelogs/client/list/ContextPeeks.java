@@ -18,6 +18,23 @@ public final class ContextPeeks {
     }
 
     /**
+     * Marks expand carets for a result page. Text search peeks around hits. Date and version filters
+     * can still grow into same-day holes in a file. A server-only filter does not: those holes are
+     * other places, and context stays on a matching server or world.
+     */
+    public static List<DisplayRow> forSearchPage(List<DisplayRow> rows, boolean hasText, int contextLines,
+                                                 boolean oldestFirst, boolean markDateOrVersionGaps) {
+        if (rows == null) return List.of();
+        if (hasText) {
+            return strip(rows, contextLines, true, oldestFirst);
+        }
+        if (markDateOrVersionGaps) {
+            return markFileGaps(rows, oldestFirst);
+        }
+        return List.copyOf(rows);
+    }
+
+    /**
      * Drops lines that are only there to detect more content, and marks the visible edges that can expand.
      */
     public static List<DisplayRow> strip(List<DisplayRow> rows, int contextLines, boolean hasText,
@@ -64,7 +81,8 @@ public final class ContextPeeks {
     /**
      * Marks same-day, same-log holes in a date- or version-filtered page so those edges can expand.
      * Unfiltered pages do not call this: every stored line is already in the result, and a line-index
-     * gap is missing file numbers, not hidden chat.
+     * gap is missing file numbers, not hidden chat. Server-only pages also skip it: the gap is another
+     * place, and expand would load messages that fail the filter.
      */
     public static List<DisplayRow> markFileGaps(List<DisplayRow> rows, boolean oldestFirst) {
         if (rows == null || rows.size() < 2) {
