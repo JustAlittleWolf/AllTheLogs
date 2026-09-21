@@ -33,8 +33,9 @@ public final class LogCharset {
         if (bytes.length >= 2 && bytes[0] == (byte) 0xFE && bytes[1] == (byte) 0xFF) {
             return new String(bytes, 2, bytes.length - 2, StandardCharsets.UTF_16BE);
         }
-        if (isStrictUtf8(bytes)) {
-            return new String(bytes, StandardCharsets.UTF_8);
+        String utf8 = decodeStrictUtf8(bytes);
+        if (utf8 != null) {
+            return utf8;
         }
         Charset detected = detect(bytes);
         if (detected != null && isUtf16(detected)) {
@@ -57,15 +58,14 @@ public final class LogCharset {
             || name.equalsIgnoreCase("UTF-16BE");
     }
 
-    private static boolean isStrictUtf8(byte[] bytes) {
+    private static String decodeStrictUtf8(byte[] bytes) {
         CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder()
             .onMalformedInput(CodingErrorAction.REPORT)
             .onUnmappableCharacter(CodingErrorAction.REPORT);
         try {
-            decoder.decode(ByteBuffer.wrap(bytes));
-            return true;
+            return decoder.decode(ByteBuffer.wrap(bytes)).toString();
         } catch (CharacterCodingException e) {
-            return false;
+            return null;
         }
     }
 

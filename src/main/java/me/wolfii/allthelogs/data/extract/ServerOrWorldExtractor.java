@@ -26,7 +26,8 @@ public final class ServerOrWorldExtractor {
     private static final int DEFAULT_PORT = 25565;
     private static final String DEFAULT_PORT_SUFFIX = ":" + DEFAULT_PORT;
 
-    private static final Pattern CONNECTING = Pattern.compile("Connecting to (.+), (\\d+)\\s*$");
+    /** Host cannot contain a comma; a greedy {@code .+} backtracks badly on chat that mentions connecting. */
+    private static final Pattern CONNECTING = Pattern.compile("Connecting to ([^,]+), (\\d+)\\s*$");
     private static final Pattern SAVING_LEVEL = Pattern.compile(
         "Saving chunks for level '(?:ServerLevel\\[([^]]+)]|([^']+))'");
     private static final Pattern LOADING_DIMENSION = Pattern.compile(
@@ -108,9 +109,9 @@ public final class ServerOrWorldExtractor {
      * reloads are not leaves.
      */
     public static boolean isLeave(String line) {
-        return SINGLEPLAYER_STOP.matcher(line).find()
-            || CLIENT_STOP.matcher(line).find()
-            || CLIENT_DISCONNECTED.matcher(line).find();
+        return containsAndFinds(line, "Stopping singleplayer server", SINGLEPLAYER_STOP)
+            || containsAndFinds(line, "]: Stopping!", CLIENT_STOP)
+            || containsAndFinds(line, "Client disconnected with reason:", CLIENT_DISCONNECTED);
     }
 
     /**
@@ -118,7 +119,7 @@ public final class ServerOrWorldExtractor {
      * the world name is not known yet.
      */
     public static boolean isSessionStart(String line) {
-        return CONNECTING.matcher(line).find() || isSingleplayerJoin(line);
+        return containsAndFinds(line, "Connecting to", CONNECTING) || isSingleplayerJoin(line);
     }
 
     /**
@@ -126,15 +127,15 @@ public final class ServerOrWorldExtractor {
      * only later on save.
      */
     public static boolean isSingleplayerJoin(String line) {
-        return INTEGRATED_START.matcher(line).find()
-            || LOADING_DIMENSION.matcher(line).find()
-            || LOCAL_LOGIN.matcher(line).find()
-            || GENERATING_KEYPAIR.matcher(line).find();
+        return containsAndFinds(line, "Starting integrated minecraft server", INTEGRATED_START)
+            || containsAndFinds(line, "Loading dimension", LOADING_DIMENSION)
+            || containsAndFinds(line, "[local:E:", LOCAL_LOGIN)
+            || containsAndFinds(line, "Generating keypair", GENERATING_KEYPAIR);
     }
 
     static String find(String line) {
-        Matcher connecting = CONNECTING.matcher(line);
-        if (connecting.find()) {
+        Matcher connecting = line.indexOf("Connecting to") >= 0 ? CONNECTING.matcher(line) : null;
+        if (connecting != null && connecting.find()) {
             String host = stripTrailingDots(connecting.group(1).strip());
             int port;
             try {
@@ -144,14 +145,22 @@ public final class ServerOrWorldExtractor {
             }
             return port > 0 && port != DEFAULT_PORT ? remote(host + ":" + port) : remote(host);
         }
-        Matcher saving = SAVING_LEVEL.matcher(line);
-        if (saving.find()) {
-            String name = saving.group(1) != null ? saving.group(1) : saving.group(2);
-            return localWorld(name);
+        if (line.indexOf("Saving chunks for level") >= 0) {
+            Matcher saving = SAVING_LEVEL.matcher(line);
+            if (saving.find()) {
+                String name = saving.group(1) != null ? saving.group(1) : saving.group(2);
+                return localWorld(name);
+            }
         }
-        Matcher loading = LOADING_DIMENSION.matcher(line);
-        if (loading.find()) return localWorld(loading.group(1));
+        if (line.indexOf("Loading dimension") >= 0) {
+            Matcher loading = LOADING_DIMENSION.matcher(line);
+            if (loading.find()) return localWorld(loading.group(1));
+        }
         return null;
+    }
+
+    private static boolean containsAndFinds(String line, String needle, Pattern pattern) {
+        return line.indexOf(needle) >= 0 && pattern.matcher(line).find();
     }
 
     /**

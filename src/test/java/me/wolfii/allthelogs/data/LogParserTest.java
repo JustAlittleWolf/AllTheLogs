@@ -448,4 +448,14 @@ class LogParserTest {
         assertTrue(message.contains("\u2588"));
         assertEquals(-1, message.indexOf('\u00a7'));
     }
+
+    @Test
+    void chatThatMentionsConnectingDoesNotChangeThePlace() throws IOException {
+        ParsedLog parsed = parse("""
+            [14:44:40] [Render thread/INFO]: Connecting to unicacity.eu, 25565
+            [14:44:41] [Render thread/INFO]: [CHAT] Connecting to foo, bar, baz, and never the real server, 25565
+            """);
+        assertEquals("unicacity.eu", parsed.entries().getFirst().serverOrWorld());
+        assertEquals("unicacity.eu", parsed.serverOrWorld());
+    }
 }

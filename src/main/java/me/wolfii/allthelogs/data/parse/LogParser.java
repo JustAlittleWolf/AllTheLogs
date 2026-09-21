@@ -13,14 +13,15 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Matcher;
 
 /**
  * Extracts chat lines and log metadata from a log file.
  * <p>
  * Lines start with a bracketed timestamp, optionally prefixed by a date. Chat lines are identified by the
  * {@code [CHAT] } marker. A line that does not start with a timestamp is treated as a continuation of the previous
- * chat line. Time, user, server/world, and version each have their own extractor.
+ * chat line. Time, user, server/world, and version each have their own extractor. Those metadata
+ * extractors skip {@code [CHAT]} lines so player text cannot look like a connect, disconnect, or
+ * version line, and so import does not run those regexes on every chat message.
  */
 public final class LogParser {
     private static final String CHAT_MARKER = "[CHAT] ";
@@ -51,8 +52,8 @@ public final class LogParser {
 
         String line;
         while ((line = reader.readLine()) != null) {
-            Matcher start = LogTimeExtractor.LINE_START.matcher(line);
-            if (!start.find()) {
+            LogTimeExtractor.Prefix prefix = LogTimeExtractor.match(line);
+            if (prefix == null) {
                 if (pending != null) {
                     pending.append('\n').append(line);
                 } else {
@@ -68,7 +69,7 @@ public final class LogParser {
                 pendingTime = null;
             }
 
-            LogTimeExtractor.Stamp stamp = LogTimeExtractor.parse(start);
+            LogTimeExtractor.Stamp stamp = prefix.stamp();
             if (stamp != null) {
                 if (firstLineTime == null) {
                     firstLineDate = stamp.date();
@@ -78,29 +79,28 @@ public final class LogParser {
                 lastLineTime = stamp.time();
             }
 
-            if (sessionId == null) {
-                sessionId = SessionMarker.find(line).orElse(null);
+            int chat = line.indexOf(CHAT_MARKER, prefix.end());
+            if (chat < 0 && line.endsWith(EMPTY_CHAT_MARKER)) {
+                chat = line.length() - EMPTY_CHAT_MARKER.length();
             }
-
-            users.accept(line);
-            places.accept(line);
-            if (places.current() != null) {
-                backfillPlace(entries, pendingPlace, places.current());
-            } else if (!places.inSession()) {
-                pendingPlace.clear();
-            }
-
             if (!resourceManagerReloaded && line.contains(RESOURCE_MANAGER_RELOAD_MARKER)) {
                 resourceManagerReloaded = true;
             }
-
-            versions.accept(line);
-
-            int chat = line.indexOf(CHAT_MARKER, start.end());
             if (chat < 0) {
-                if (!line.endsWith(EMPTY_CHAT_MARKER)) continue;
-                chat = line.length() - EMPTY_CHAT_MARKER.length();
+                if (sessionId == null) {
+                    sessionId = SessionMarker.find(line).orElse(null);
+                }
+                users.accept(line);
+                places.accept(line);
+                if (places.current() != null) {
+                    backfillPlace(entries, pendingPlace, places.current());
+                } else if (!places.inSession()) {
+                    pendingPlace.clear();
+                }
+                versions.accept(line);
+                continue;
             }
+
             if (stamp == null) continue;
             pendingDate = stamp.date();
             pendingTime = stamp.time();
@@ -110,11 +110,6 @@ public final class LogParser {
             flushPending(entries, pendingPlace, pendingDate, pendingTime, pending, users, places);
         }
 
-        entries.replaceAll(entry -> {
-            FormattingCodes.Parsed parsed = FormattingCodes.parse(entry.message());
-            return new ParsedLog.Entry(entry.date(), entry.time(), parsed.text(), parsed.formatting(),
-                entry.minecraftUser(), entry.serverOrWorld());
-        });
         String version = versions.version();
         return new ParsedLog(version == null ? ChatLog.UNKNOWN_VERSION : version, users.user(), places.last(),
             entries, resourceManagerReloaded, firstLineDate, firstLineTime, lastLineDate, lastLineTime, sessionId);
@@ -123,7 +118,9 @@ public final class LogParser {
     private static void flushPending(List<ParsedLog.Entry> entries, List<Integer> pendingPlace, LocalDate date,
                                      LocalTime time, StringBuilder pending, MinecraftUserExtractor users,
                                      ServerOrWorldExtractor places) {
-        entries.add(new ParsedLog.Entry(date, time, pending.toString(), null, users.user(), places.current()));
+        FormattingCodes.Parsed parsed = FormattingCodes.parse(pending.toString());
+        entries.add(new ParsedLog.Entry(date, time, parsed.text(), parsed.formatting(), users.user(),
+            places.current()));
         if (places.current() == null && places.inSession()) {
             pendingPlace.add(entries.size() - 1);
         }
