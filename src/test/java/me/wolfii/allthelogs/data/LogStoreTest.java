@@ -260,8 +260,7 @@ class LogStoreTest {
         LogFixtures.writePlain(tempDir.resolve("logs"), "debug.log", """
             [14:44:40] [Render thread/INFO]: Connecting to unicacity.eu, 25565
             [14:44:41] [Render thread/INFO]: [CHAT] on the server
-            [14:44:49] [Render thread/INFO]: Stopping [1] Worker Daemon threads
-            [14:44:50] [Render thread/INFO]: Stopping worker threads
+            [14:44:49] [Render thread/WARN]: Client disconnected with reason: Disconnected
             [14:44:51] [Render thread/INFO]: [CHAT] after leave
             """);
         store.importDirectory(tempDir);
@@ -670,11 +669,9 @@ class LogStoreTest {
         LogFixtures.writePlain(tempDir.resolve("logs"), "debug.log", """
             [14:44:40] [Render thread/INFO]: Connecting to unicacity.eu, 25565
             [14:44:41] [Render thread/INFO]: [CHAT] on uni
-            [14:44:49] [Render thread/INFO]: Stopping [1] Worker Daemon threads
-            [14:44:50] [Render thread/INFO]: Stopping worker threads
             [14:45:00] [Render thread/INFO]: Connecting to localhost, 25565
             [14:45:01] [Render thread/INFO]: [CHAT] on local
-            [14:45:10] [Render thread/INFO]: Stopping worker threads
+            [14:45:10] [Render thread/WARN]: Client disconnected with reason: Disconnected
             [14:45:11] [Render thread/INFO]: [CHAT] after leave
             """);
         store.importDirectory(tempDir);
@@ -694,10 +691,8 @@ class LogStoreTest {
         LogFixtures.writePlain(tempDir.resolve("logs"), "debug.log", """
             [14:44:40] [Render thread/INFO]: Connecting to AWDj.GOMMEHD.AWIDJ.com, 25565
             [14:44:41] [Render thread/INFO]: [CHAT] on mixed
-            [14:44:49] [Render thread/INFO]: Stopping worker threads
             [14:45:00] [Render thread/INFO]: Connecting to gommehd.de, 25565
             [14:45:01] [Render thread/INFO]: [CHAT] on de
-            [14:45:10] [Render thread/INFO]: Stopping worker threads
             [14:45:11] [Render thread/INFO]: Connecting to hypixel.net, 25565
             [14:45:12] [Render thread/INFO]: [CHAT] on hypixel
             """);
@@ -721,7 +716,6 @@ class LogStoreTest {
             [14:44:41] [Render thread/INFO]: [CHAT] uni before
             [14:44:42] [Render thread/INFO]: [CHAT] needle on uni
             [14:44:43] [Render thread/INFO]: [CHAT] uni after
-            [14:44:49] [Render thread/INFO]: Stopping worker threads
             [14:45:00] [Render thread/INFO]: Connecting to localhost, 25565
             [14:45:01] [Render thread/INFO]: [CHAT] local before
             [14:45:02] [Render thread/INFO]: [CHAT] needle on local
