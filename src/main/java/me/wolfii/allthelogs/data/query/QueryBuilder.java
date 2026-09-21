@@ -15,8 +15,8 @@ import java.util.Locale;
  * Turns a {@link ChatQuery} into SQL.
  * <p>
  * Queries select entry columns; log metadata is loaded separately and joined in Java by
- * {@code file_id}. Context lines expand each match into concrete {@code (file_id, line_index)} keys and hash-join
- * them back, rather than using a range predicate that DuckDB cannot hash.
+ * {@code file_id}. Context lines take the next {@code n} stored chat lines before and after each match
+ * in that file that still pass the date window and server filter, skipping neighbours that do not.
  * <p>
  * A timestamp {@link ChatQuery#offset()} filters which rows count as matches, in the sort direction. A row
  * cursor ({@link ChatQuery#offsetSource()}) is exclusive on {@code (entry_time, file_id, line_index)} so
@@ -57,34 +57,48 @@ public final class QueryBuilder {
                 + " " + order + limit;
         } else {
             int context = query.contextLines();
-            List<String> contextFilters = new ArrayList<>();
-            // The time window must also constrain the context rows, otherwise a match at the edge of the range would
-            // pull in neighbours from outside it. The timestamp offset does not: it is a pagination cursor, and
-            // context is allowed to extend beyond it.
-            if (query.startingAt() != null) {
-                contextFilters.add("e.entry_time >= ?");
-                parameters.add(Timestamp.valueOf(query.startingAt()));
-            }
-            if (query.upUntil() != null) {
-                contextFilters.add("e.entry_time < ?");
-                parameters.add(Timestamp.valueOf(query.upUntil()));
-            }
-            if (query.serverOrWorld() != null) {
-                contextFilters.add("contains(lower(e.server_or_world), ?)");
-                parameters.add(query.serverOrWorld().toLowerCase(Locale.ROOT));
-            }
-            String contextWhere = contextFilters.isEmpty() ? "" : " WHERE " + String.join(" AND ", contextFilters);
             String matchOrder = orderBy(query, "entry_time", "file_id", "line_index");
             String matchLimit = query.limit() < 0 ? "" : " " + matchOrder + " LIMIT " + query.limit() + offsetSql(query);
+            String beforeSql = lateralContextSql(query, parameters, "<", "DESC", context);
+            String afterSql = lateralContextSql(query, parameters, ">", "ASC", context);
             sql = "WITH matches AS (SELECT file_id, line_index FROM chat_entry" + where + matchLimit + "), "
-                + "wanted AS (SELECT DISTINCT m.file_id, m.line_index + o.offset AS line_index FROM matches m, "
-                + "(SELECT unnest(range(-" + context + ", " + context + " + 1)) AS offset) o) "
+                + "wanted AS ("
+                + "SELECT file_id, line_index FROM matches "
+                + "UNION SELECT lat.file_id, lat.line_index FROM matches m, LATERAL (" + beforeSql + ") lat "
+                + "UNION SELECT lat.file_id, lat.line_index FROM matches m, LATERAL (" + afterSql + ") lat"
+                + ") "
                 + SELECT_COLUMNS
                 + " FROM wanted w INNER JOIN chat_entry e ON e.file_id = w.file_id AND e.line_index = w.line_index"
-                + contextWhere
                 + " " + order;
         }
         return new QueryBuilder(sql, parameters);
+    }
+
+    /**
+     * Next {@code context} chat lines on one side of a match that still pass the date window and server
+     * filter. The timestamp offset does not apply: it is a pagination cursor, and context may extend
+     * beyond it.
+     */
+    private static String lateralContextSql(ChatQuery query, List<Object> parameters, String lineCmp,
+                                            String lineOrder, int context) {
+        List<String> filters = new ArrayList<>();
+        filters.add("e.file_id = m.file_id");
+        filters.add("e.line_index " + lineCmp + " m.line_index");
+        if (query.startingAt() != null) {
+            filters.add("e.entry_time >= ?");
+            parameters.add(Timestamp.valueOf(query.startingAt()));
+        }
+        if (query.upUntil() != null) {
+            filters.add("e.entry_time < ?");
+            parameters.add(Timestamp.valueOf(query.upUntil()));
+        }
+        if (query.serverOrWorld() != null) {
+            filters.add("contains(lower(e.server_or_world), ?)");
+            parameters.add(query.serverOrWorld().toLowerCase(Locale.ROOT));
+        }
+        return "SELECT e.file_id, e.line_index FROM chat_entry e WHERE "
+            + String.join(" AND ", filters)
+            + " ORDER BY e.line_index " + lineOrder + " LIMIT " + context;
     }
 
     /**

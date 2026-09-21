@@ -15,6 +15,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -284,18 +285,20 @@ final class LogBrowserQueries {
         if (list == null) return;
         boolean older = MessageListLayout.expandOlderMessages(
             side == TimelineEdge.BEFORE, filter.sort() == ChatQuery.Sort.ASCENDING);
-        int before = older ? extra + 1 : 0;
-        int after = older ? 0 : extra + 1;
         DisplayRow.RowKey anchor = row.key();
         boolean oldestFirst = filter.sort() == ChatQuery.Sort.ASCENDING;
-        onClient(AllTheLogsClient.worker().entriesAround(row.chatLog(), row.lineIndex(), before, after),
+        onClient(AllTheLogsClient.worker().matchingContextToward(
+                row.chatLog(), row.lineIndex(), older, extra + 1,
+                filter.toFilterBarQuery(), row.entry().timestamp().toLocalDate()),
             (entries, error) -> {
                 if (error != null || list == null) {
                     if (error != null) logQueryFailure("AllTheLogs expand query failed", error);
                     return;
                 }
-                List<ChatEntry> allowed = entries.stream().filter(filter::allowsContext).toList();
-                List<DisplayRow> fetched = ContextPeeks.forExpand(displayRows(allowed), row, older, extra,
+                List<ChatEntry> withAnchor = new ArrayList<>(entries.size() + 1);
+                withAnchor.add(row.entry());
+                withAnchor.addAll(entries);
+                List<DisplayRow> fetched = ContextPeeks.forExpand(displayRows(withAnchor), row, older, extra,
                     oldestFirst);
                 List<DisplayRow> merged = ContextPeeks.mergeAfterExpand(
                     list.window().rows(), fetched, row, older, filter.sort());
@@ -491,10 +494,8 @@ final class LogBrowserQueries {
     }
 
     private List<DisplayRow> displaySearchRows(List<ChatEntry> entries) {
-        boolean markDateOrVersionGaps = !filter.hasServerOrWorld()
-            && (filter.hasVersion() || filter.startingAt() != null || filter.upUntil() != null);
         return ContextPeeks.forSearchPage(displayRows(entries), filter.hasText(), filter.contextLines(),
-            filter.sort() == ChatQuery.Sort.ASCENDING, markDateOrVersionGaps);
+            filter.sort() == ChatQuery.Sort.ASCENDING);
     }
 
     private List<DisplayRow> displayRows(List<ChatEntry> entries) {

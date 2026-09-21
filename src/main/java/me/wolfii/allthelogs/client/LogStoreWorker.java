@@ -5,6 +5,7 @@ import me.wolfii.allthelogs.data.parse.FormattingCodes;
 import net.minecraft.network.chat.Component;
 
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayDeque;
 import java.util.List;
@@ -125,6 +126,16 @@ public final class LogStoreWorker implements AutoCloseable {
         int beforeLines = Math.max(0, before);
         int afterLines = Math.max(0, after);
         return submit(() -> requireStore().entriesAround(copy, lineIndex, beforeLines, afterLines));
+    }
+
+    public CompletableFuture<List<ChatEntry>> matchingContextToward(ChatLog log, int lineIndex, boolean olderInFile,
+                                                                    int limit, me.wolfii.allthelogs.api.ChatQuery query,
+                                                                    LocalDate day) {
+        ChatLog copy = Objects.requireNonNull(log, "log");
+        int cap = Math.max(0, limit);
+        var filter = query;
+        var stayOn = day;
+        return submit(() -> requireStore().matchingContextToward(copy, lineIndex, olderInFile, cap, filter, stayOn));
     }
 
     public CompletableFuture<List<ChatEntry>> allEntries() {

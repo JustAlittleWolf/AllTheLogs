@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
@@ -371,6 +372,16 @@ public final class LogStore implements AutoCloseable {
     public List<ChatEntry> entriesAround(ChatLog log, int lineIndex, int before, int after) {
         Objects.requireNonNull(log, "log");
         return queries.entriesAround(log, lineIndex, before, after);
+    }
+
+    /**
+     * Next {@code limit} chat lines in {@code log} on one side of {@code lineIndex} that still pass the
+     * date window and server filter. Stays on {@code day}. Ignores the search text.
+     */
+    public List<ChatEntry> matchingContextToward(ChatLog log, int lineIndex, boolean olderInFile, int limit,
+                                                 me.wolfii.allthelogs.api.ChatQuery query, LocalDate day) {
+        Objects.requireNonNull(log, "log");
+        return queries.matchingContextToward(log, lineIndex, olderInFile, limit, query, day);
     }
 
     /**

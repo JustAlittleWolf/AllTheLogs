@@ -9,14 +9,17 @@ import org.duckdb.DuckDBPreparedStatement;
 
 import java.sql.*;
 import java.sql.Date;
+import java.time.LocalDate;
 import java.util.*;
 
 /**
  * Runs {@link ChatQuery} against an open store and maps rows to {@link ChatEntry} / {@link ChatLog}.
  */
 public final class ChatQueries {
-    private static final String SELECT_AROUND = """
-        SELECT e.file_id, e.entry_time, e.line_index, e.message, to_json(e.formatting), e.minecraft_user, e.server_or_world
+    private static final String SELECT_COLUMNS_AROUND = """
+        SELECT e.file_id, e.entry_time, e.line_index, e.message, to_json(e.formatting), e.minecraft_user, e.server_or_world""";
+    private static final String SELECT_AROUND = SELECT_COLUMNS_AROUND + """
+        
         FROM chat_entry e
         JOIN log_file f ON f.id = e.file_id
         WHERE f.source_path = ? AND f.entry_path = ? AND e.line_index BETWEEN ? AND ?
@@ -72,6 +75,61 @@ public final class ChatQueries {
             }, Math.max(16, to - from + 1));
         } catch (SQLException | RuntimeException e) {
             throw new LogDataException("could not read lines around " + lineIndex + " in " + log.source(), e);
+        }
+    }
+
+    /**
+     * Next {@code limit} stored chat lines in {@code log} on one side of {@code lineIndex} that still
+     * pass the date window and server filter. Stays on {@code day}. Does not apply the search text.
+     */
+    public List<ChatEntry> matchingContextToward(ChatLog log, int lineIndex, boolean olderInFile, int limit,
+                                                 ChatQuery query, LocalDate day) {
+        if (limit <= 0 || log == null || day == null) return List.of();
+        String sourcePath = StoredSources.sourcePath(log.source());
+        String entryPath = StoredSources.entryPath(log.source());
+        String cmp = olderInFile ? "<" : ">";
+        String order = olderInFile ? "DESC" : "ASC";
+        List<String> filters = new ArrayList<>();
+        filters.add("f.source_path = ?");
+        filters.add("f.entry_path = ?");
+        filters.add("e.line_index " + cmp + " ?");
+        filters.add("CAST(e.entry_time AS DATE) = ?");
+        List<Object> parameters = new ArrayList<>();
+        parameters.add(sourcePath);
+        parameters.add(entryPath);
+        parameters.add(lineIndex);
+        parameters.add(Date.valueOf(day));
+        if (query != null && query.startingAt() != null) {
+            filters.add("e.entry_time >= ?");
+            parameters.add(Timestamp.valueOf(query.startingAt()));
+        }
+        if (query != null && query.upUntil() != null) {
+            filters.add("e.entry_time < ?");
+            parameters.add(Timestamp.valueOf(query.upUntil()));
+        }
+        if (query != null && query.serverOrWorld() != null) {
+            filters.add("contains(lower(e.server_or_world), ?)");
+            parameters.add(query.serverOrWorld().toLowerCase(Locale.ROOT));
+        }
+        String sql = SELECT_COLUMNS_AROUND + " FROM chat_entry e JOIN log_file f ON f.id = e.file_id WHERE "
+            + String.join(" AND ", filters) + " ORDER BY e.line_index " + order + " LIMIT " + limit;
+        try {
+            return readEntries(sql, statement -> {
+                for (int i = 0; i < parameters.size(); i++) {
+                    Object parameter = parameters.get(i);
+                    if (parameter instanceof Timestamp timestamp) {
+                        statement.setTimestamp(i + 1, timestamp);
+                    } else if (parameter instanceof Integer integer) {
+                        statement.setInt(i + 1, integer);
+                    } else if (parameter instanceof Date date) {
+                        statement.setDate(i + 1, date);
+                    } else {
+                        statement.setString(i + 1, (String) parameter);
+                    }
+                }
+            }, limit);
+        } catch (SQLException | RuntimeException e) {
+            throw new LogDataException("could not read matching context around " + lineIndex + " in " + log.source(), e);
         }
     }
 
