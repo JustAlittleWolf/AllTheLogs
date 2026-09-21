@@ -137,8 +137,6 @@ final class FilterOverlay {
             DateParser::parse, parsed -> emit(filter.get().withStartingAt(parsed)), true));
         content.child(dateField("allthelogs.filter.until", DateParser.formatUntil(current.upUntil()),
             DateParser::parseUntil, parsed -> emit(filter.get().withUpUntil(parsed)), false));
-        content.child(UIComponents.label(Component.translatable("allthelogs.filter.date_hint"))
-            .color(Color.ofRgb(0x888888)));
         content.child(versionsMenu.row());
         content.child(serverField(current.serverOrWorld()));
 
@@ -190,8 +188,10 @@ final class FilterOverlay {
             if (!DateParser.isBlankOrValid(text)) return;
             onParsed.accept(parse.apply(text).orElse(null));
         }, false);
-        if (from) fromBox = lastBox(row);
-        else untilBox = lastBox(row);
+        TextBoxComponent box = lastBox(row);
+        box.setHint(Component.translatable("allthelogs.filter.date_hint"));
+        if (from) fromBox = box;
+        else untilBox = box;
         return row;
     }
 

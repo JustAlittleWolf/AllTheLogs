@@ -156,6 +156,7 @@ final class LogBrowserQueries {
     void reload() {
         if (list == null) return;
         reloadPending = false;
+        list.beginNewSearchCount();
         refreshStats();
         if (!filter.canQuery()) {
             generation.incrementAndGet();
@@ -192,7 +193,7 @@ final class LogBrowserQueries {
             boolean full = PageBounds.isFull(rows, query.limit());
             list.reset(rows, chronological && full, !chronological && full);
             if (chronological) list.scrollToEnd();
-            list.showMatchCount(DisplayRows.matchCount(rows), elapsedMs(startedAt), filter.isNarrowed());
+            list.offerPageMatchCount(DisplayRows.matchCount(rows), elapsedMs(startedAt), filter.isNarrowed());
             takeSnapshot();
             loadMatchSummary(gen, query, startedAt);
         });
@@ -208,6 +209,10 @@ final class LogBrowserQueries {
             }
             info.tooltip(StoreSummary.tooltip(metadata));
             versions = metadata.minecraftVersions();
+            if (list != null && !filter.isNarrowed()) {
+                list.setTotalMatchCount(metadata.chatEntryCount());
+                takeSnapshot();
+            }
         });
     }
 
@@ -488,7 +493,7 @@ final class LogBrowserQueries {
         list.showAt(target, rows, hasBefore, hasAfter, progress);
         if (!preview) list.finishScrub();
         if (fromSearch) {
-            list.showMatchCount(DisplayRows.matchCount(rows), 0, filter.isNarrowed());
+            list.offerPageMatchCount(DisplayRows.matchCount(rows), 0, filter.isNarrowed());
         }
         takeSnapshot();
     }
