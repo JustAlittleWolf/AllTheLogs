@@ -21,6 +21,15 @@ class ImportOptionsTest {
     }
 
     @Test
+    void defaultParallelismIsHalfTheCpus() {
+        int cores = Runtime.getRuntime().availableProcessors();
+        assertEquals(Math.max(1, cores / 2), ImportOptions.defaultParallelism());
+        assertEquals(ImportOptions.defaultParallelism(), ImportOptions.defaults().parallelism());
+        assertTrue(ImportOptions.defaults().parallelism() >= 1);
+        assertTrue(ImportOptions.defaults().parallelism() <= cores);
+    }
+
+    @Test
     void defaultsOptimizeAfterImport() {
         assertTrue(ImportOptions.defaults().optimize());
         assertEquals(0, ImportOptions.defaults().optimizeIfImportedFilesExceed());

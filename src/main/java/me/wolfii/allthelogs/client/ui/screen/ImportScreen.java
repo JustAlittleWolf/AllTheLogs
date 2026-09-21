@@ -52,7 +52,7 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
     private String pathMatcher = "";
     private ZoneId timezone = ZoneId.systemDefault();
     private boolean summerTime = ImportTimezones.observesDaylightSaving(timezone);
-    private int parallelism = Math.max(MIN_PARALLELISM, Runtime.getRuntime().availableProcessors());
+    private int parallelism = ImportOptions.defaultParallelism();
     private CheckboxComponent recursiveBox;
     private CheckboxComponent nestedBox;
     private CheckboxComponent skipBox;
