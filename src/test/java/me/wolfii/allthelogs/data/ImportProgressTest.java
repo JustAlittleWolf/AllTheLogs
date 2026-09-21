@@ -318,4 +318,31 @@ class ImportProgressTest {
         assertEquals(16, result.importedFiles());
         assertTrue(updates.stream().anyMatch(progress -> progress.phase() == ImportPhase.CHUNKING));
     }
+
+    @Test
+    void clusteringStartsOnlyAfterEveryFileHasBeenImported() throws IOException {
+        Path root = logsDirectory();
+        List<ImportProgress> updates = new CopyOnWriteArrayList<>();
+
+        store.importDirectory(root, updates::add);
+
+        List<ImportProgress> chunking = updates.stream()
+            .filter(progress -> progress.phase() == ImportPhase.CHUNKING)
+            .toList();
+        assertFalse(chunking.isEmpty());
+        assertTrue(chunking.stream().allMatch(progress ->
+            progress.discoveryComplete()
+                && progress.completedFiles() == progress.discoveredFiles()
+                && progress.completedFiles() == 3));
+        int firstChunking = -1;
+        for (int i = 0; i < updates.size(); i++) {
+            if (updates.get(i).phase() == ImportPhase.CHUNKING) {
+                firstChunking = i;
+                break;
+            }
+        }
+        assertTrue(firstChunking > 0);
+        assertTrue(updates.subList(0, firstChunking).stream()
+            .allMatch(progress -> progress.phase() == ImportPhase.IMPORT));
+    }
 }

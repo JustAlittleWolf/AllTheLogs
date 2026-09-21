@@ -221,6 +221,8 @@ public final class LogImporter {
 
             if (!options.updateMetadataOnly()) {
                 writer.deduplicate();
+            } else {
+                writer.applyMetadataPatches(options);
             }
 
             List<ImportResult.Failure> failures = new ArrayList<>(discovery.failures());
