@@ -49,6 +49,11 @@ public final class MessageTimeline extends BaseUIComponent {
     private static final int MULTI_CLICK_SLOP = 4;
     /** Rows from either end of the buffer at which the next page is requested. */
     private static final int EDGE_ROWS = 3;
+    /**
+     * Viewport height fraction used to keep a message still when search results are replaced.
+     * Below centre so the line the user is reading (usually a little down the list) does not jump.
+     */
+    public static final double VIEWPORT_STAY_FRACTION = 2.0 / 3.0;
 
     private final ResultWindow window = new ResultWindow();
     private final MessageSelection selection = new MessageSelection();
@@ -188,7 +193,7 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     public DisplayRow.RowKey visibleAnchor() {
-        return window.keyAt(firstVisibleIndex());
+        return window.keyAt(view().rowAtViewportFraction(VIEWPORT_STAY_FRACTION));
     }
 
     public long matchCount() {
@@ -280,9 +285,19 @@ public final class MessageTimeline extends BaseUIComponent {
      */
     public void showAt(LocalDateTime time, List<DisplayRow> rows, boolean hasBefore, boolean hasAfter,
                        double progress) {
+        showAt(time, rows, hasBefore, hasAfter, progress, 0);
+    }
+
+    /**
+     * Like {@link #showAt(LocalDateTime, List, boolean, boolean, double)}, and when {@code progress} is
+     * not a scrub position the target row is placed at {@code viewFraction} of the viewport instead of
+     * the top. Search reloads use {@link #VIEWPORT_STAY_FRACTION} so the message that was mid-list stays.
+     */
+    public void showAt(LocalDateTime time, List<DisplayRow> rows, boolean hasBefore, boolean hasAfter,
+                       double progress, double viewFraction) {
         replacePage(rows, hasBefore, hasAfter);
         if (Double.isNaN(progress)) {
-            scrollToTime(time);
+            scrollToTime(time, viewFraction);
         } else {
             scrollToScrubProgress(progress);
         }
@@ -294,10 +309,17 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     public void scrollToTime(LocalDateTime time) {
+        scrollToTime(time, 0);
+    }
+
+    public void scrollToTime(LocalDateTime time, double viewFraction) {
         int index = window.nearestIndex(time);
         if (index < 0) return;
-        int header = contentOrigin() > 0 ? 0 : MessageListLayout.DATE_HEIGHT;
-        setScrollY(ScrubberGeometry.scrollToRow(layout.rowY(index) - header, layout.contentHeight(), height));
+        int rowTop = layout.rowY(index);
+        if (viewFraction <= 0 && contentOrigin() == 0) {
+            rowTop -= MessageListLayout.DATE_HEIGHT;
+        }
+        setScrollY(ScrubberGeometry.scrollToRow(rowTop, layout.contentHeight(), height, viewFraction));
     }
 
     /**
@@ -613,10 +635,25 @@ public final class MessageTimeline extends BaseUIComponent {
      * Timestamp of the row at the top of the viewport, which is what the thumb tracks.
      */
     public LocalDateTime visibleTime() {
+        return visibleTimeAt(0, true);
+    }
+
+    /**
+     * Timestamp of the row at {@link #VIEWPORT_STAY_FRACTION} of the viewport. Search reloads jump
+     * back to this time so the message the user is looking at stays put instead of the topmost one.
+     */
+    public LocalDateTime stayVisibleTime() {
+        return visibleTimeAt(VIEWPORT_STAY_FRACTION, false);
+    }
+
+    private LocalDateTime visibleTimeAt(double viewFraction, boolean skipDateHeader) {
         List<DisplayRow> rows = window.rows();
         if (rows.isEmpty()) return null;
-        int header = contentOrigin() > 0 ? 0 : MessageListLayout.DATE_HEIGHT;
-        int index = Math.clamp(layout.rowAtY(scrollY - contentOrigin() + header), 0, rows.size() - 1);
+        double contentY = ListView.contentYAtFraction(scrollY, contentOrigin(), height, viewFraction);
+        if (skipDateHeader && contentOrigin() == 0) {
+            contentY += MessageListLayout.DATE_HEIGHT;
+        }
+        int index = Math.clamp(layout.rowAtY(contentY), 0, rows.size() - 1);
         return rows.get(index).entry().timestamp();
     }
 

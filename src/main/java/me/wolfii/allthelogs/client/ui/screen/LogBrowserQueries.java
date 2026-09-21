@@ -151,7 +151,8 @@ final class LogBrowserQueries {
      * <p>
      * An oldest-first search still fetches its newest page first, then reverses it, because that is the page
      * the user sees: the list starts scrolled to the bottom. If the list already has a location, clearing the
-     * query or searching again keeps that place: a new term jumps to the closest match in either direction.
+     * query or searching again keeps that place: a new term jumps to the closest match in either direction
+     * of the message two-thirds down the viewport, and that message stays at the same screen position.
      */
     void reload() {
         if (list == null) return;
@@ -163,7 +164,7 @@ final class LogBrowserQueries {
             list.setLoading(false);
             return;
         }
-        LocalDateTime stayAt = list.visibleTime();
+        LocalDateTime stayAt = list.stayVisibleTime();
         if (keepViewport(stayAt, !list.window().rows().isEmpty())) {
             long startedAt = System.nanoTime();
             replaceOnJumpFailure = true;
@@ -490,7 +491,8 @@ final class LogBrowserQueries {
         boolean fromSearch = replaceOnJumpFailure;
         replaceOnJumpFailure = false;
         list.setLoading(false);
-        list.showAt(target, rows, hasBefore, hasAfter, progress);
+        list.showAt(target, rows, hasBefore, hasAfter, progress,
+            fromSearch ? MessageTimeline.VIEWPORT_STAY_FRACTION : 0);
         if (!preview) list.finishScrub();
         if (fromSearch) {
             list.offerPageMatchCount(DisplayRows.matchCount(rows), 0, filter.isNarrowed());
