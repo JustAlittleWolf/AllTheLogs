@@ -99,15 +99,16 @@ class ImportSpeedTest {
 
     @Test
     void skipsVersionRegexesOnUnrelatedMinecraftMentions() throws IOException {
+        // Version is still unknown, so every mixin line used to run all nine version regexes.
         StringBuilder log = new StringBuilder(20_000 * 90);
-        log.append("[10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3\n");
-        log.append("[10:00:01] [Render thread/INFO]: Setting user: JustAlittleWolf\n");
-        log.append("[10:00:02] [Render thread/INFO]: Connecting to unicacity.eu, 25565\n");
         for (int i = 0; i < 20_000; i++) {
             log.append("[10:00:03] [main/INFO]: Loading mixin minecraft/client/renderer/chunk");
             log.append(i);
             log.append(" from fabric-rendering\n");
         }
+        log.append("[10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3\n");
+        log.append("[10:00:01] [Render thread/INFO]: Setting user: JustAlittleWolf\n");
+        log.append("[10:00:02] [Render thread/INFO]: Connecting to unicacity.eu, 25565\n");
         log.append("[10:00:10] [Render thread/INFO]: [CHAT] hello\n");
         String text = log.toString();
         parse(text);
