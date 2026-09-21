@@ -43,6 +43,7 @@ public final class LogWriter implements AutoCloseable {
     private long writtenEntries;
     private int writtenFiles;
     private boolean metadataPatchReady;
+    private int metadataPatchFiles;
 
     public LogWriter(DuckDBConnection connection) throws SQLException {
         this.connection = connection;
@@ -204,13 +205,14 @@ public final class LogWriter implements AutoCloseable {
     }
 
     /**
-     * Patches metadata on already stored chat lines that match this parsed log. No new {@code log_file} or
-     * {@code chat_entry} rows are inserted. Matching prefers the same source path and line index, and
-     * otherwise the same message text within {@link #LIVE_DUPLICATE_WINDOW_SECONDS}.
+     * Queues metadata from a parsed log for already stored chat lines. No new {@code log_file} or
+     * {@code chat_entry} rows are inserted. Call {@link #applyMetadataPatches(ImportOptions)} once after
+     * every file in the import has been queued so the store is not rewritten per file.
      * <p>
-     * Formatting is written only when the stored line has none and the log line has some. Username and
-     * server/world are written only when the log value is non-null. Live session fields that already have
-     * a value are left unchanged.
+     * Matching prefers the same source path and line index, and otherwise the same message text within
+     * {@link #LIVE_DUPLICATE_WINDOW_SECONDS}. Formatting is written only when the stored line has none
+     * and the log line has some. Username and server/world are written only when the log value is
+     * non-null. Live session fields that already have a value are left unchanged.
      */
     public void updateMetadata(PreparedLog log, ImportOptions options) throws SQLException {
         markConsidered(log.sourcePath(), log.entryPath(), log.contentHash());
@@ -219,105 +221,111 @@ public final class LogWriter implements AutoCloseable {
         }
         flushAppenders();
         ensureMetadataPatchTable();
-        try (Statement statement = connection.createStatement()) {
-            statement.execute("DELETE FROM metadata_patch");
-        }
         List<LocalDateTime> times = log.entryTimes();
         List<String> messages = log.messages();
         List<long[]> formattings = log.formattings();
         List<String> users = log.entryUsers();
         List<String> places = log.entryServerOrWorlds();
         try (PreparedStatement insert = connection.prepareStatement("""
-            INSERT INTO metadata_patch (seq, entry_time, message, formatting, minecraft_user, server_or_world)
-            VALUES (?, ?, ?, CAST(? AS BIGINT[]), ?, ?)
+            INSERT INTO metadata_patch (source_path, entry_path, seq, entry_time, message, formatting,
+                minecraft_user, server_or_world)
+            VALUES (?, ?, ?, ?, ?, CAST(? AS BIGINT[]), ?, ?)
             """)) {
             for (int i = 0; i < times.size(); i++) {
-                LocalDateTime time = times.get(i);
-                insert.setInt(1, i);
-                insert.setTimestamp(2, Timestamp.valueOf(time));
-                insert.setString(3, messages.get(i));
+                insert.setString(1, log.sourcePath());
+                insert.setString(2, log.entryPath());
+                insert.setInt(3, i);
+                insert.setTimestamp(4, Timestamp.valueOf(times.get(i)));
+                insert.setString(5, messages.get(i));
                 long[] formatting = formattings != null && i < formattings.size() ? formattings.get(i) : null;
                 String literal = PackedFormatting.toSqlLiteral(formatting);
                 if (literal == null) {
-                    insert.setNull(4, Types.VARCHAR);
+                    insert.setNull(6, Types.VARCHAR);
                 } else {
-                    insert.setString(4, literal);
+                    insert.setString(6, literal);
                 }
                 String user = users != null && i < users.size() ? users.get(i) : log.minecraftUser();
                 if (user == null) {
-                    insert.setNull(5, Types.VARCHAR);
+                    insert.setNull(7, Types.VARCHAR);
                 } else {
-                    insert.setString(5, user);
+                    insert.setString(7, user);
                 }
                 String place = places != null && i < places.size() ? places.get(i) : null;
                 if (place == null) {
-                    insert.setNull(6, Types.VARCHAR);
+                    insert.setNull(8, Types.VARCHAR);
                 } else {
-                    insert.setString(6, place);
+                    insert.setString(8, place);
                 }
                 insert.execute();
             }
         }
+        metadataPatchFiles++;
+    }
 
+    /**
+     * Applies every queued {@link #updateMetadata} row in one pass over {@code chat_entry}.
+     */
+    public void applyMetadataPatches(ImportOptions options) throws SQLException {
+        if (!metadataPatchReady || metadataPatchFiles == 0 || !options.updatesAnyMetadata()) {
+            return;
+        }
         String window = String.valueOf(LIVE_DUPLICATE_WINDOW_SECONDS);
         String formattingFlag = options.updateFormatting() ? "true" : "false";
         String userFlag = options.updateMinecraftUser() ? "true" : "false";
         String serverFlag = options.updateMinecraftServer() ? "true" : "false";
         String session = SourceKind.SESSION.name();
-        try (PreparedStatement update = connection.prepareStatement("""
-            UPDATE chat_entry
-            SET
-                formatting = CASE
-                    WHEN %s AND chat_entry.formatting IS NULL AND m.new_formatting IS NOT NULL
-                    THEN m.new_formatting ELSE chat_entry.formatting END,
-                minecraft_user = CASE
-                    WHEN %s AND m.new_user IS NOT NULL
-                         AND (m.kind <> '%s' OR chat_entry.minecraft_user IS NULL)
-                    THEN m.new_user ELSE chat_entry.minecraft_user END,
-                server_or_world = CASE
-                    WHEN %s AND m.new_place IS NOT NULL
-                         AND (m.kind <> '%s' OR chat_entry.server_or_world IS NULL)
-                    THEN m.new_place ELSE chat_entry.server_or_world END
-            FROM (
-                SELECT rid, kind, new_formatting, new_user, new_place FROM (
-                    SELECT
-                        e.rowid AS rid,
-                        e.file_id AS file_id,
-                        f.source_kind AS kind,
-                        p.formatting AS new_formatting,
-                        p.minecraft_user AS new_user,
-                        p.server_or_world AS new_place,
-                        row_number() OVER (
-                            PARTITION BY e.rowid
-                            ORDER BY
-                                CASE WHEN f.source_path = ? AND f.entry_path = ? AND e.line_index = p.seq
-                                    THEN 0 ELSE 1 END,
-                                abs(date_diff('millisecond', e.entry_time, p.entry_time)),
-                                p.seq
-                        ) AS rn
-                    FROM chat_entry e
-                    JOIN log_file f ON f.id = e.file_id
-                    JOIN metadata_patch p ON e.message = p.message
-                    WHERE (f.source_path = ? AND f.entry_path = ? AND e.line_index = p.seq)
-                       OR abs(date_diff('millisecond', e.entry_time, p.entry_time)) <= %s * 1000
-                ) ranked
-                WHERE rn = 1
-            ) m
-            WHERE chat_entry.rowid = m.rid
-            """.formatted(formattingFlag, userFlag, session, serverFlag, session, window))) {
-            update.setString(1, log.sourcePath());
-            update.setString(2, log.entryPath());
-            update.setString(3, log.sourcePath());
-            update.setString(4, log.entryPath());
-            int updated = update.executeUpdate();
-            if (updated > 0 && options.updateMinecraftUser() && log.minecraftUser() != null) {
-                updateLogFileUsers(log);
+        try (Statement update = connection.createStatement()) {
+            int updated = update.executeUpdate("""
+                UPDATE chat_entry
+                SET
+                    formatting = CASE
+                        WHEN %s AND chat_entry.formatting IS NULL AND m.new_formatting IS NOT NULL
+                        THEN m.new_formatting ELSE chat_entry.formatting END,
+                    minecraft_user = CASE
+                        WHEN %s AND m.new_user IS NOT NULL
+                             AND (m.kind <> '%s' OR chat_entry.minecraft_user IS NULL)
+                        THEN m.new_user ELSE chat_entry.minecraft_user END,
+                    server_or_world = CASE
+                        WHEN %s AND m.new_place IS NOT NULL
+                             AND (m.kind <> '%s' OR chat_entry.server_or_world IS NULL)
+                        THEN m.new_place ELSE chat_entry.server_or_world END
+                FROM (
+                    SELECT rid, kind, new_formatting, new_user, new_place FROM (
+                        SELECT
+                            e.rowid AS rid,
+                            f.source_kind AS kind,
+                            p.formatting AS new_formatting,
+                            p.minecraft_user AS new_user,
+                            p.server_or_world AS new_place,
+                            row_number() OVER (
+                                PARTITION BY e.rowid
+                                ORDER BY
+                                    CASE WHEN f.source_path = p.source_path AND f.entry_path = p.entry_path
+                                        AND e.line_index = p.seq
+                                        THEN 0 ELSE 1 END,
+                                    abs(date_diff('millisecond', e.entry_time, p.entry_time)),
+                                    p.seq
+                            ) AS rn
+                        FROM chat_entry e
+                        JOIN log_file f ON f.id = e.file_id
+                        JOIN metadata_patch p ON e.message = p.message
+                        WHERE (f.source_path = p.source_path AND f.entry_path = p.entry_path
+                                AND e.line_index = p.seq)
+                           OR abs(date_diff('millisecond', e.entry_time, p.entry_time)) <= %s * 1000
+                    ) ranked
+                    WHERE rn = 1
+                ) m
+                WHERE chat_entry.rowid = m.rid
+                """.formatted(formattingFlag, userFlag, session, serverFlag, session, window));
+            if (updated > 0 && options.updateMinecraftUser()) {
+                updateLogFileUsers();
             }
             if (updated > 0) {
-                writtenFiles++;
+                writtenFiles += metadataPatchFiles;
                 writtenEntries += updated;
             }
         }
+        metadataPatchFiles = 0;
     }
 
     private void ensureMetadataPatchTable() throws SQLException {
@@ -325,6 +333,8 @@ public final class LogWriter implements AutoCloseable {
         try (Statement statement = connection.createStatement()) {
             statement.execute("""
                 CREATE TEMP TABLE IF NOT EXISTS metadata_patch (
+                    source_path VARCHAR,
+                    entry_path VARCHAR,
                     seq INTEGER,
                     entry_time TIMESTAMP,
                     message VARCHAR,
@@ -337,28 +347,37 @@ public final class LogWriter implements AutoCloseable {
         metadataPatchReady = true;
     }
 
-    private void updateLogFileUsers(PreparedLog log) throws SQLException {
-        try (PreparedStatement update = connection.prepareStatement("""
-            UPDATE log_file SET minecraft_user = CASE
-                WHEN source_kind = ? THEN coalesce(minecraft_user, ?)
-                ELSE ?
-            END
-            WHERE (source_path = ? AND entry_path = ?)
-               OR (source_kind = ? AND minecraft_user IS NULL AND id IN (
-                    SELECT DISTINCT e.file_id
+    private void updateLogFileUsers() throws SQLException {
+        String session = SourceKind.SESSION.name();
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("""
+                UPDATE log_file SET minecraft_user = CASE
+                    WHEN log_file.source_kind = '%s' THEN coalesce(log_file.minecraft_user, p.minecraft_user)
+                    ELSE p.minecraft_user
+                END
+                FROM (
+                    SELECT source_path, entry_path, minecraft_user
+                    FROM metadata_patch
+                    WHERE minecraft_user IS NOT NULL
+                    QUALIFY row_number() OVER (PARTITION BY source_path, entry_path ORDER BY seq) = 1
+                ) p
+                WHERE log_file.source_path = p.source_path AND log_file.entry_path = p.entry_path
+                """.formatted(session));
+            statement.execute("""
+                UPDATE log_file SET minecraft_user = coalesce(log_file.minecraft_user, p.minecraft_user)
+                FROM (
+                    SELECT e.file_id, p.minecraft_user
                     FROM chat_entry e
                     JOIN metadata_patch p ON e.message = p.message
-                    WHERE abs(date_diff('millisecond', e.entry_time, p.entry_time)) <= ? * 1000
-               ))
-            """)) {
-            update.setString(1, SourceKind.SESSION.name());
-            update.setString(2, log.minecraftUser());
-            update.setString(3, log.minecraftUser());
-            update.setString(4, log.sourcePath());
-            update.setString(5, log.entryPath());
-            update.setString(6, SourceKind.SESSION.name());
-            update.setInt(7, LIVE_DUPLICATE_WINDOW_SECONDS);
-            update.execute();
+                    WHERE p.minecraft_user IS NOT NULL
+                      AND abs(date_diff('millisecond', e.entry_time, p.entry_time))
+                          <= %d * 1000
+                    QUALIFY row_number() OVER (PARTITION BY e.file_id ORDER BY p.seq) = 1
+                ) p
+                WHERE log_file.id = p.file_id
+                  AND log_file.source_kind = '%s'
+                  AND log_file.minecraft_user IS NULL
+                """.formatted(LIVE_DUPLICATE_WINDOW_SECONDS, session));
         }
     }
 

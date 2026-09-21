@@ -1999,6 +1999,42 @@ class LogStoreTest {
     }
 
     @Test
+    void metadataOnlyPatchesSeveralFilesInOnePass() throws IOException {
+        Path logs = tempDir.resolve("logs");
+        LogFixtures.writePlain(logs, "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:10] [Render thread/INFO]: [CHAT] first
+            """);
+        LogFixtures.writePlain(logs, "2026-08-27-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:10] [Render thread/INFO]: [CHAT] second
+            """);
+        store.importDirectory(tempDir, ImportOptions.defaults().withOptimize(false));
+        LogFixtures.writePlain(logs, "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:05] [Render thread/INFO]: Setting user: Alpha
+            [10:00:06] [Render thread/INFO]: Connecting to alpha.example, 25565
+            [10:00:10] [Render thread/INFO]: [CHAT] first
+            """);
+        LogFixtures.writePlain(logs, "2026-08-27-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:05] [Render thread/INFO]: Setting user: Beta
+            [10:00:06] [Render thread/INFO]: Connecting to beta.example, 25565
+            [10:00:10] [Render thread/INFO]: [CHAT] second
+            """);
+
+        store.importDirectory(tempDir, metadataOnly(false, true, true));
+
+        List<ChatEntry> entries = store.allEntries();
+        ChatEntry first = entries.stream().filter(entry -> entry.message().equals("first")).findFirst().orElseThrow();
+        ChatEntry second = entries.stream().filter(entry -> entry.message().equals("second")).findFirst().orElseThrow();
+        assertEquals("Alpha", first.minecraftUser());
+        assertEquals("alpha.example", first.serverOrWorld());
+        assertEquals("Beta", second.minecraftUser());
+        assertEquals("beta.example", second.serverOrWorld());
+    }
+
+    @Test
     void metadataOnlyDoesNotClearUserOrServerWithNull() throws IOException {
         Path logs = tempDir.resolve("logs");
         LogFixtures.writePlain(logs, "2026-08-26-1.log", """
