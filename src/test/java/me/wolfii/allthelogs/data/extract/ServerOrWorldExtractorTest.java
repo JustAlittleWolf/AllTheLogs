@@ -10,7 +10,7 @@ class ServerOrWorldExtractorTest {
         ServerOrWorldExtractor places = new ServerOrWorldExtractor();
         places.accept("[14:44:40] [Render thread/INFO]: Connecting to unicacity.eu, 25565");
         assertEquals("unicacity.eu", places.current());
-        places.accept("[14:44:49] [Render thread/INFO]: Stopping [1] Worker Daemon threads");
+        places.accept("[14:44:49] [Render thread/WARN]: Client disconnected with reason: Disconnected");
         assertNull(places.current());
         assertEquals("unicacity.eu", places.last());
         places.accept("[14:44:50] [Render thread/INFO]: Stopping worker threads");
@@ -21,13 +21,15 @@ class ServerOrWorldExtractorTest {
     }
 
     @Test
-    void isLeaveRecognisesWorkerStopLines() {
-        assertTrue(ServerOrWorldExtractor.isLeave(
+    void workerThreadStopsAreNotLeaves() {
+        assertFalse(ServerOrWorldExtractor.isLeave(
             "[14:44:49] [Render thread/INFO]: Stopping [1] Worker Daemon threads"));
-        assertTrue(ServerOrWorldExtractor.isLeave(
+        assertFalse(ServerOrWorldExtractor.isLeave(
             "[14:44:50] [Render thread/INFO]: Stopping worker threads"));
         assertFalse(ServerOrWorldExtractor.isLeave(
             "[14:44:40] [Render thread/INFO]: Connecting to unicacity.eu, 25565"));
+        assertFalse(ServerOrWorldExtractor.isLeave(
+            "[12:50:40] [Server thread/INFO]: Saving chunks for level 'ServerLevel[New World]'/minecraft:overworld"));
     }
 
     @Test

@@ -26,8 +26,6 @@ public final class ServerOrWorldExtractor {
         "Saving chunks for level '(?:ServerLevel\\[([^]]+)]|([^']+))'");
     private static final Pattern LOADING_DIMENSION = Pattern.compile(
         "Loading dimension -?\\d+ \\(([^)]+)\\) \\(net\\.minecraft\\.server\\.integrated\\.IntegratedServer@");
-    private static final Pattern WORKER_DAEMON_STOP = Pattern.compile(
-        "Stopping \\[\\d+] Worker Daemon threads");
     private static final Pattern CLIENT_STOP = Pattern.compile("]: Stopping!\\s*$");
     private static final Pattern CLIENT_DISCONNECTED = Pattern.compile("]: Client disconnected with reason:");
     private static final Pattern SINGLEPLAYER_STOP = Pattern.compile("Stopping singleplayer server");
@@ -85,12 +83,12 @@ public final class ServerOrWorldExtractor {
     }
 
     /**
-     * Whether {@code line} is a disconnect from a remote server or a singleplayer shutdown.
+     * Whether {@code line} is a real disconnect: client shutdown, vanilla disconnect, or
+     * singleplayer logout. Chunk/renderer lines such as {@code Stopping worker threads} are not
+     * leaves — they fire on resource-pack reloads while still connected.
      */
     public static boolean isLeave(String line) {
-        return line.contains("Stopping worker threads")
-            || WORKER_DAEMON_STOP.matcher(line).find()
-            || SINGLEPLAYER_STOP.matcher(line).find()
+        return SINGLEPLAYER_STOP.matcher(line).find()
             || CLIENT_STOP.matcher(line).find()
             || CLIENT_DISCONNECTED.matcher(line).find();
     }

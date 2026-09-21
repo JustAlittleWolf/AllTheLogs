@@ -385,8 +385,7 @@ class LogParserTest {
         ParsedLog parsed = parse("""
             [14:44:40] [Render thread/INFO]: Connecting to unicacity.eu, 25565
             [14:44:41] [Render thread/INFO]: [CHAT] on the server
-            [14:44:49] [Render thread/INFO]: Stopping [1] Worker Daemon threads
-            [14:44:50] [Render thread/INFO]: Stopping worker threads
+            [14:44:49] [Render thread/WARN]: Client disconnected with reason: Disconnected
             [14:44:51] [Render thread/INFO]: [CHAT] after leave
             [14:45:00] [Render thread/INFO]: Connecting to localhost, 25565
             [14:45:01] [Render thread/INFO]: [CHAT] on localhost
@@ -395,6 +394,20 @@ class LogParserTest {
         assertEquals("unicacity.eu", parsed.entries().get(0).serverOrWorld());
         assertNull(parsed.entries().get(1).serverOrWorld());
         assertEquals("localhost", parsed.entries().get(2).serverOrWorld());
+    }
+
+    @Test
+    void resourceReloadWhileConnectedKeepsTheServerOnLaterChat() throws IOException {
+        ParsedLog parsed = parse("""
+            [16:00:32] [Render thread/INFO]: Connecting to unicacity.eu, 25565
+            [16:00:36] [Render thread/INFO]: [CHAT] [Job des Tages] Mehr mit /tagesjob
+            [16:00:36] [Render thread/INFO]: Stopping worker threads
+            [16:00:36] [Render thread/INFO]: Started 10 worker threads
+            [16:00:37] [Render thread/INFO]: Reloading ResourceManager: vanilla, server/00000000/pack
+            [16:00:38] [Render thread/INFO]: [CHAT] [Tutorial] In /guide warten noch Aufgaben aus Eduards Stadtprogramm auf dich — mit Geld und EXP als Belohnung!
+            """);
+        assertEquals("unicacity.eu", parsed.entries().get(0).serverOrWorld());
+        assertEquals("unicacity.eu", parsed.entries().get(1).serverOrWorld());
     }
 
     @Test
