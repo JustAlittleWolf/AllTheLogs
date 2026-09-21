@@ -132,6 +132,7 @@ public final class Schema {
     public static void clusterEntries(Statement statement, DoubleConsumer progress) throws SQLException {
         DoubleConsumer report = progress == null ? ignored -> {
         } : progress;
+        report.accept(0d);
         long count;
         try (ResultSet result = statement.executeQuery("SELECT count(*) FROM chat_entry")) {
             result.next();

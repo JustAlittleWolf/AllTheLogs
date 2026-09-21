@@ -273,10 +273,7 @@ class ImportProgressTest {
             updates::add);
 
         assertTrue(first.importedFiles() > 0);
-        assertTrue(updates.stream()
-            .filter(progress -> progress.phase() == ImportPhase.CHUNKING)
-            .allMatch(progress -> progress.phaseFraction() == 0d),
-            "optimize(false) should not rewrite chat_entry; only the post-file phase switch is allowed");
+        assertTrue(updates.stream().noneMatch(progress -> progress.phase() == ImportPhase.CHUNKING));
         ImportProgress last = updates.getLast();
         assertEquals(1.0, last.fraction());
         assertEquals(ImportPhase.OPTIMIZING, last.phase());
@@ -304,10 +301,7 @@ class ImportProgressTest {
         ImportResult result = store.importDirectory(logs, ImportOptions.currentLogsDirectory(), updates::add);
 
         assertEquals(15, result.importedFiles());
-        assertTrue(updates.stream()
-            .filter(progress -> progress.phase() == ImportPhase.CHUNKING)
-            .allMatch(progress -> progress.phaseFraction() == 0d),
-            "startup imports of 15 files should not cluster; only the post-file phase switch is allowed");
+        assertTrue(updates.stream().noneMatch(progress -> progress.phase() == ImportPhase.CHUNKING));
     }
 
     @Test
@@ -354,18 +348,38 @@ class ImportProgressTest {
     }
 
     @Test
-    void postFileWorkLeavesTheFileCountPhaseImmediately() throws IOException {
+    void leavesFileCountsOnTheNextSnapshotSoDedupIsNotShownAsNOfN() throws IOException {
         Path root = logsDirectory();
         List<ImportProgress> updates = new CopyOnWriteArrayList<>();
 
         store.importDirectory(root, updates::add);
 
-        int lastImport = -1;
+        int finishedImport = -1;
         for (int i = 0; i < updates.size(); i++) {
-            if (updates.get(i).phase() == ImportPhase.IMPORT) lastImport = i;
+            ImportProgress progress = updates.get(i);
+            if (progress.phase() == ImportPhase.IMPORT
+                && progress.discoveryComplete()
+                && progress.current() == null
+                && progress.completedFiles() == progress.discoveredFiles()
+                && progress.discoveredFiles() > 0) {
+                finishedImport = i;
+            }
         }
-        assertTrue(lastImport >= 0);
-        assertTrue(lastImport + 1 < updates.size());
-        assertEquals(ImportPhase.CHUNKING, updates.get(lastImport + 1).phase());
+        assertTrue(finishedImport >= 0);
+        assertTrue(finishedImport + 1 < updates.size());
+        assertNotEquals(ImportPhase.IMPORT, updates.get(finishedImport + 1).phase());
+    }
+
+    @Test
+    void optimizeFalseReportsOptimizingZeroBeforeTheFinalSnapshot() throws IOException {
+        Path root = logsDirectory();
+        List<ImportProgress> updates = new CopyOnWriteArrayList<>();
+
+        store.importDirectory(root, ImportOptions.defaults().withOptimize(false), updates::add);
+
+        assertTrue(updates.stream().anyMatch(progress ->
+            progress.phase() == ImportPhase.OPTIMIZING && progress.phaseFraction() == 0d));
+        assertEquals(ImportPhase.OPTIMIZING, updates.getLast().phase());
+        assertEquals(1.0, updates.getLast().fraction());
     }
 }
