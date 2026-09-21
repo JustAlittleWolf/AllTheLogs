@@ -7,6 +7,7 @@ import net.minecraft.network.chat.Style;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Human-readable log-store facts for the browser info button.
@@ -44,7 +45,7 @@ public final class StoreSummary {
             value /= 1024;
             unit = "GB";
         }
-        return "%.1f %s".formatted(value, unit);
+        return String.format(Locale.ROOT, "%.1f %s", value, unit);
     }
 
     private static Component labeled(String key, Component... args) {
