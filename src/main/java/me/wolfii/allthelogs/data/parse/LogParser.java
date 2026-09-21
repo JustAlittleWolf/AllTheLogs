@@ -50,15 +50,10 @@ public final class LogParser {
         LocalTime lastLineTime = null;
         String sessionId = null;
 
-        Matcher start = LogTimeExtractor.LINE_START.matcher("");
         String line;
         while ((line = reader.readLine()) != null) {
-<<<<<<< HEAD
             LogTimeExtractor.Prefix prefix = LogTimeExtractor.match(line);
             if (prefix == null) {
-=======
-            if (!start.reset(line).find()) {
->>>>>>> origin/main
                 if (pending != null) {
                     pending.append('\n').append(line);
                 } else {
@@ -84,7 +79,6 @@ public final class LogParser {
                 lastLineTime = stamp.time();
             }
 
-<<<<<<< HEAD
             int chat = line.indexOf(CHAT_MARKER, prefix.end());
             if (chat < 0 && line.endsWith(EMPTY_CHAT_MARKER)) {
                 chat = line.length() - EMPTY_CHAT_MARKER.length();
@@ -106,29 +100,6 @@ public final class LogParser {
                 versions.accept(line);
                 continue;
             }
-=======
-            int chat = line.indexOf(CHAT_MARKER, start.end());
-            if (chat < 0 && line.endsWith(EMPTY_CHAT_MARKER)) {
-                chat = line.length() - EMPTY_CHAT_MARKER.length();
-            }
-            if (chat < 0) {
-                if (sessionId == null) {
-                    sessionId = SessionMarker.find(line).orElse(null);
-                }
-                users.accept(line);
-                places.accept(line);
-                if (places.current() != null) {
-                    backfillPlace(entries, pendingPlace, places.current());
-                } else if (!places.inSession()) {
-                    pendingPlace.clear();
-                }
-                if (!resourceManagerReloaded && line.contains(RESOURCE_MANAGER_RELOAD_MARKER)) {
-                    resourceManagerReloaded = true;
-                }
-                versions.accept(line);
-                continue;
-            }
->>>>>>> origin/main
 
             if (stamp == null) continue;
             pendingDate = stamp.date();
