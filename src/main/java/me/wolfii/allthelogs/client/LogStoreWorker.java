@@ -20,7 +20,7 @@ import java.util.function.Consumer;
  * Serialises every {@link LogStore} call onto one worker thread. The store is not safe for concurrent use, and
  * imports plus queries must not run on the Minecraft client thread. Live chat that arrives before
  * {@link #startSession(String, String)} is queued and flushed when the session starts, so boot import
- * cannot drop those lines.
+ * cannot drop those lines. Capture time is recorded when the line is queued, not when DuckDB inserts it.
  */
 public final class LogStoreWorker implements AutoCloseable {
     private final ExecutorService executor;
@@ -75,17 +75,19 @@ public final class LogStoreWorker implements AutoCloseable {
     }
 
     /**
-     * Queues a live chat line stamped with the player and server/world read on the client thread.
-     * Returns immediately; the insert runs on the worker.
+     * Queues a live chat line stamped with the player, server/world, and clock time from this call.
+     * Returns immediately; the insert runs on the worker so a busy DuckDB write cannot delay the
+     * stored timestamp.
      */
     public void importSessionMessage(Component message, String minecraftUser, String serverOrWorld) {
+        LocalDateTime capturedAt = LocalDateTime.now();
         FormattingCodes.Parsed flat = ComponentFormatting.flatten(message);
         String text = flat.text();
         long[] formatting = flat.formatting() == null ? null : flat.formatting().clone();
         String user = minecraftUser == null || minecraftUser.isBlank() ? null : minecraftUser;
         String place = serverOrWorld == null || serverOrWorld.isBlank() ? null : serverOrWorld;
+        PendingLiveMessage pending = new PendingLiveMessage(text, formatting, user, place, capturedAt);
         executor.execute(() -> {
-            PendingLiveMessage pending = new PendingLiveMessage(text, formatting, user, place);
             if (store == null || !sessionStarted) {
                 pendingLive.add(pending);
                 return;
@@ -197,14 +199,15 @@ public final class LogStoreWorker implements AutoCloseable {
     private void writeLive(PendingLiveMessage pending) {
         if (store == null) return;
         try {
-            store.importSessionMessage(pending.text, pending.formatting, pending.minecraftUser,
-                pending.serverOrWorld);
+            store.importSessionMessage(pending.text, pending.formatting, pending.capturedAt,
+                pending.minecraftUser, pending.serverOrWorld);
         } catch (LogDataException e) {
             AllTheLogsClient.LOGGER.warn("Could not store a live chat line", e);
         }
     }
 
-    private record PendingLiveMessage(String text, long[] formatting, String minecraftUser, String serverOrWorld) {
+    private record PendingLiveMessage(String text, long[] formatting, String minecraftUser, String serverOrWorld,
+                                      LocalDateTime capturedAt) {
     }
 
     private void touchSessionEndTimeNow() {
