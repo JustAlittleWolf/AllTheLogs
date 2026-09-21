@@ -193,8 +193,11 @@ public final class LogStore implements AutoCloseable {
     }
 
     /**
-     * After a batch import, rewrite {@code chat_entry} oldest-first (chunking) and compact the on-disk
-     * file. Live session inserts already arrive in time order, so this stays off the hot path.
+     * After a batch import, cluster newly stored {@code chat_entry} rows. Newer files that sit
+     * after the clustered prefix use a tail rewrite. A full table rewrite runs on the first import
+     * or when new files interleave older timestamps; compact follows only the latter, when a
+     * previous clustered copy was dropped. Live session inserts already arrive in time order, so
+     * this stays off the hot path.
      * User imports pass {@link ImportOptions#optimize()} as {@code true}. Startup refreshes compact
      * only when more than {@link ImportOptions#STARTUP_OPTIMIZE_AFTER_MORE_THAN} files were newly stored.
      */
@@ -205,15 +208,17 @@ public final class LogStore implements AutoCloseable {
         }
         try {
             tracker.phase(ImportPhase.CHUNKING, 0d);
+            boolean rewritten;
             try (Statement statement = connection.createStatement()) {
-                Schema.clusterEntries(statement, fraction -> tracker.phase(ImportPhase.CHUNKING, fraction));
+                rewritten = Schema.clusterAfterImport(statement,
+                    fraction -> tracker.phase(ImportPhase.CHUNKING, fraction));
             }
             tracker.phase(ImportPhase.OPTIMIZING, 0d);
             try (Statement statement = connection.createStatement()) {
                 StoreOptimizer.analyzeAndCheckpoint(statement);
             }
             tracker.phase(ImportPhase.OPTIMIZING, 0.3);
-            if (databasePath != null) {
+            if (rewritten && databasePath != null) {
                 bind(StoreOptimizer.replaceWithCompactCopy(connection, databasePath));
             }
             tracker.complete();

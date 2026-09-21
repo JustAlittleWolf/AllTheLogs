@@ -435,7 +435,8 @@ public final class LogWriter implements AutoCloseable {
                     SELECT e.rowid
                     FROM chat_entry e
                     JOIN log_file f ON f.id = e.file_id
-                    WHERE f.source_kind <> '%s'
+                    WHERE e.file_id >= %d
+                      AND f.source_kind <> '%s'
                       AND EXISTS (
                           SELECT 1
                           FROM chat_entry s
@@ -445,7 +446,7 @@ public final class LogWriter implements AutoCloseable {
                             AND abs(date_diff('millisecond', s.entry_time, e.entry_time))
                                 <= %s * 1000
                       )
-                ) RETURNING file_id""".formatted(SourceKind.SESSION.name(), SourceKind.SESSION.name(),
+                ) RETURNING file_id""".formatted(sessionStartId, SourceKind.SESSION.name(), SourceKind.SESSION.name(),
                 sameChatText("s.message", "e.message"), LIVE_DUPLICATE_WINDOW_SECONDS));
             removed = sameSecond[0] + nearLive[0];
             removedFromThisImport = sameSecond[1] + nearLive[1];
