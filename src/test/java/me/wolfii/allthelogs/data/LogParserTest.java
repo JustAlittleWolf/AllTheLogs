@@ -405,38 +405,28 @@ class LogParserTest {
             [16:00:36] [Render thread/INFO]: Started 10 worker threads
             [16:00:37] [Render thread/INFO]: Reloading ResourceManager: vanilla, server/00000000/pack
             [16:00:38] [Render thread/INFO]: [CHAT] [Tutorial] In /guide warten noch Aufgaben aus Eduards Stadtprogramm auf dich — mit Geld und EXP als Belohnung!
+            [16:10:00] [Render thread/INFO]: Reloading ResourceManager: vanilla, fabric-api
+            [16:10:01] [Render thread/INFO]: [CHAT] still on unicacity after a pack reload
             """);
         assertEquals("unicacity.eu", parsed.entries().get(0).serverOrWorld());
         assertEquals("unicacity.eu", parsed.entries().get(1).serverOrWorld());
+        assertEquals("unicacity.eu", parsed.entries().get(2).serverOrWorld());
     }
 
     @Test
-    void packlessReloadAfterAServerPackUntagsMenuChatWithoutClientDisconnected() throws IOException {
+    void joiningSingleplayerAfterARemoteServerRetagsChatWithTheWorld() throws IOException {
         ParsedLog parsed = parse("""
-            [16:00:32] [Render thread/INFO]: Connecting to unicacity.eu, 25565
-            [16:00:37] [Render thread/INFO]: Reloading ResourceManager: vanilla, server/00000000/pack
-            [16:00:38] [Render thread/INFO]: [CHAT] still on unicacity
-            [16:48:28] [Render thread/INFO]: Reloading ResourceManager: vanilla, fabric-api
-            [16:48:29] [Render thread/INFO]: [CHAT] in the menu
-            [16:49:53] [Render thread/INFO]: Connecting to localhost, 25565
-            [16:49:54] [Render thread/INFO]: [CHAT] on localhost
+            [09:32:50] [Render thread/INFO]: Connecting to unicacity.eu, 25565
+            [09:32:51] [Render thread/INFO]: [CHAT] on unicacity
+            [12:49:12] [Render thread/INFO]: Reloading ResourceManager: vanilla, fabric-api
+            [12:49:19] [Server thread/INFO]: Starting integrated minecraft server version 26.2
+            [12:49:19] [Server thread/INFO]: Generating keypair
+            [12:49:20] [Render thread/INFO]: [CHAT] in the world before the save
+            [12:49:21] [Server thread/INFO]: Saving chunks for level 'ServerLevel[New World]'/minecraft:overworld
             """);
         assertEquals("unicacity.eu", parsed.entries().get(0).serverOrWorld());
-        assertNull(parsed.entries().get(1).serverOrWorld());
-        assertEquals("localhost", parsed.entries().get(2).serverOrWorld());
-    }
-
-    @Test
-    void packlessReloadKeepsServersThatNeverAppliedAServerPack() throws IOException {
-        ParsedLog parsed = parse("""
-            [14:44:40] [Render thread/INFO]: Connecting to mc.hypixel.net, 25565
-            [14:44:41] [Render thread/INFO]: Reloading ResourceManager: vanilla, fabric-api
-            [14:44:42] [Render thread/INFO]: [CHAT] lobby
-            [14:50:00] [Render thread/INFO]: Reloading ResourceManager: vanilla, fabric-api
-            [14:50:01] [Render thread/INFO]: [CHAT] still on hypixel
-            """);
-        assertEquals("mc.hypixel.net", parsed.entries().get(0).serverOrWorld());
-        assertEquals("mc.hypixel.net", parsed.entries().get(1).serverOrWorld());
+        assertEquals("world/New World", parsed.entries().get(1).serverOrWorld());
+        assertEquals("world/New World", parsed.serverOrWorld());
     }
 
     @Test

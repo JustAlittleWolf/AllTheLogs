@@ -8,13 +8,18 @@ import java.util.regex.Pattern;
  * Finds the remote server or local world a log line was recorded on, and when the player left it.
  * <p>
  * Remote servers use the address with the default port {@code 25565} dropped. Local worlds use
- * {@code world/{worldname}}. {@code Connecting to} and world-save lines set the current value.
+ * {@code world/{worldname}}. Place switches when the player <em>joins</em> something: {@code Connecting to}
+ * for multiplayer, or an integrated-server start for singleplayer. Chat only arrives while in a
+ * server or world, so resource-pack reloads (including {@code Reloading ResourceManager} without a
+ * {@code server/} pack) are not treated as leaves.
+ * <p>
  * World names are often only logged on save, after chat from that session, so
  * {@link me.wolfii.allthelogs.data.parse.LogParser} backfills earlier untagged chat while
- * {@link #inSession()} is true.
- * Disconnect lines clear the current value so later chat is not tagged with the previous server.
- * {@link #current()} is what was in effect at the latest line; {@link #last()} is the last non-null
- * value seen in the file.
+ * {@link #inSession()} is true. Joining singleplayer while still tagged with a remote host drops
+ * that host immediately so the next chat is not stuck on the previous server. World-save lines do
+ * not override a remote place (a leftover integrated-server save after disconnect).
+ * Disconnect lines still clear the current value when they appear. {@link #current()} is what was
+ * in effect at the latest line; {@link #last()} is the last non-null value seen in the file.
  */
 public final class ServerOrWorldExtractor {
     public static final String LOCAL_PREFIX = "world/";
@@ -31,47 +36,33 @@ public final class ServerOrWorldExtractor {
     private static final Pattern SINGLEPLAYER_STOP = Pattern.compile("Stopping singleplayer server");
     private static final Pattern INTEGRATED_START = Pattern.compile("Starting integrated minecraft server");
     private static final Pattern LOCAL_LOGIN = Pattern.compile("\\[local:E:[^]]+] logged in");
-    private static final String RESOURCE_RELOAD = "Reloading ResourceManager:";
-    private static final String SERVER_PACK = "server/";
+    private static final Pattern GENERATING_KEYPAIR = Pattern.compile("]: Generating keypair\\s*$");
 
     private String current;
     private String last;
     private boolean inSession;
     /** After a leave, ignore world-save lines until a new connect / integrated-server start. */
     private boolean placeAllowed = true;
-    /**
-     * Whether this remote session applied a {@code server/} resource pack. A later reload without
-     * that pack is how Fabric logs leaving to the menu (vanilla {@code Client disconnected} is rare).
-     */
-    private boolean sawServerResourcePack;
 
     /**
      * Observes one log line: sets the current place, or clears it on disconnect.
      */
     public void accept(String line) {
         if (isLeave(line)) {
-            clearCurrent(false);
+            clearCurrent();
             return;
         }
-        if (line.contains(RESOURCE_RELOAD)) {
-            if (line.contains(SERVER_PACK)) {
-                sawServerResourcePack = true;
-            } else if (sawServerResourcePack && isRemote(current)) {
-                clearCurrent(false);
-                return;
-            }
-        }
-        if (isRemote(current) && INTEGRATED_START.matcher(line).find()) {
-            clearCurrent(true);
-        }
-        if (CONNECTING.matcher(line).find()) {
-            sawServerResourcePack = false;
+        if (isSingleplayerJoin(line) && isRemote(current)) {
+            current = null;
         }
         if (isSessionStart(line)) {
             inSession = true;
             placeAllowed = true;
         }
         String found = find(line);
+        if (found != null && found.startsWith(LOCAL_PREFIX) && isRemote(current)) {
+            found = null;
+        }
         if (found != null && (inSession || placeAllowed)) {
             current = found;
             last = found;
@@ -79,11 +70,10 @@ public final class ServerOrWorldExtractor {
         }
     }
 
-    private void clearCurrent(boolean stayInSession) {
+    private void clearCurrent() {
         current = null;
-        inSession = stayInSession;
-        placeAllowed = stayInSession;
-        sawServerResourcePack = false;
+        inSession = false;
+        placeAllowed = false;
     }
 
     private static boolean isRemote(String place) {
@@ -114,9 +104,8 @@ public final class ServerOrWorldExtractor {
 
     /**
      * Whether {@code line} is a real disconnect: client shutdown, vanilla disconnect, or
-     * singleplayer logout. Chunk/renderer {@code Stopping worker threads} lines are not leaves.
-     * Fabric's usual leave-to-menu is a resource reload without a {@code server/} pack after this
-     * session had one; that is handled in {@link #accept(String)}.
+     * singleplayer logout. Chunk/renderer {@code Stopping worker threads} and resource-pack
+     * reloads are not leaves.
      */
     public static boolean isLeave(String line) {
         return SINGLEPLAYER_STOP.matcher(line).find()
@@ -129,10 +118,18 @@ public final class ServerOrWorldExtractor {
      * the world name is not known yet.
      */
     public static boolean isSessionStart(String line) {
-        return CONNECTING.matcher(line).find()
-            || INTEGRATED_START.matcher(line).find()
+        return CONNECTING.matcher(line).find() || isSingleplayerJoin(line);
+    }
+
+    /**
+     * Integrated-server join: the client is now in a local world, even if the world name is logged
+     * only later on save.
+     */
+    public static boolean isSingleplayerJoin(String line) {
+        return INTEGRATED_START.matcher(line).find()
             || LOADING_DIMENSION.matcher(line).find()
-            || LOCAL_LOGIN.matcher(line).find();
+            || LOCAL_LOGIN.matcher(line).find()
+            || GENERATING_KEYPAIR.matcher(line).find();
     }
 
     static String find(String line) {
