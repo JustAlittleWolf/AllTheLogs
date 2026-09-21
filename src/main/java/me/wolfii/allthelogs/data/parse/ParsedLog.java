@@ -8,7 +8,7 @@ import java.util.List;
  * The result of parsing one log file.
  *
  * @param minecraftVersion         the detected version, or {@link me.wolfii.allthelogs.data.ChatLog#UNKNOWN_VERSION}
- * @param minecraftUser            the player from a {@code Setting user:} line (or first LAN login), or {@code null}
+ * @param minecraftUser            the player from a {@code Setting user:} / IAS login line (or first LAN login), or {@code null}
  * @param serverOrWorld            last remote address or {@code world/{name}} seen in the file, or {@code null}
  * @param entries                  chat lines in the order they appeared
  * @param resourceManagerReloaded  whether the file contains a {@code Reloading ResourceManager} line, which marks it

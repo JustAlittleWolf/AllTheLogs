@@ -40,6 +40,25 @@ class ServerOrWorldExtractorTest {
             "[12:50:40] [Render thread/INFO]: [CHAT] Stopping!"));
         assertFalse(ServerOrWorldExtractor.isLeave(
             "[12:50:40] [Server thread/INFO]: Saving and pausing game..."));
+        assertTrue(ServerOrWorldExtractor.isLeave(
+            "[15:46:00] [Render thread/WARN]: Client disconnected with reason: Disconnected"));
+        assertFalse(ServerOrWorldExtractor.isLeave(
+            "[15:46:00] [Render thread/ERROR]: Can't ping hypixel.net: Disconnected"));
+    }
+
+    @Test
+    void dropsTrailingDotsOnFqdnConnectsAndIgnoresSavesAfterLeave() {
+        ServerOrWorldExtractor places = new ServerOrWorldExtractor();
+        places.accept("[14:44:40] [Render thread/INFO]: Connecting to mc.gommehd.net., 25565");
+        assertEquals("mc.gommehd.net", places.current());
+        places.accept("[14:44:49] [Render thread/WARN]: Client disconnected with reason: Connection reset");
+        assertNull(places.current());
+        places.accept("[14:44:50] [Server thread/INFO]: Saving chunks for level 'ServerLevel[New World]'/minecraft:overworld");
+        assertNull(places.current());
+        assertEquals("mc.gommehd.net", places.last());
+        places.accept("[14:45:00] [Server thread/INFO]: Starting integrated minecraft server version 26.2");
+        places.accept("[14:45:01] [Server thread/INFO]: Saving chunks for level 'ServerLevel[New World]'/minecraft:overworld");
+        assertEquals("world/New World", places.current());
     }
 
     @Test

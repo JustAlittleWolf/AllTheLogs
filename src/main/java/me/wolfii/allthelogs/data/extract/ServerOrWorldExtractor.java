@@ -29,6 +29,7 @@ public final class ServerOrWorldExtractor {
     private static final Pattern WORKER_DAEMON_STOP = Pattern.compile(
         "Stopping \\[\\d+] Worker Daemon threads");
     private static final Pattern CLIENT_STOP = Pattern.compile("]: Stopping!\\s*$");
+    private static final Pattern CLIENT_DISCONNECTED = Pattern.compile("]: Client disconnected with reason:");
     private static final Pattern SINGLEPLAYER_STOP = Pattern.compile("Stopping singleplayer server");
     private static final Pattern INTEGRATED_START = Pattern.compile("Starting integrated minecraft server");
     private static final Pattern LOCAL_LOGIN = Pattern.compile("\\[local:E:[^]]+] logged in");
@@ -36,6 +37,8 @@ public final class ServerOrWorldExtractor {
     private String current;
     private String last;
     private boolean inSession;
+    /** After a leave, ignore world-save lines until a new connect / integrated-server start. */
+    private boolean placeAllowed = true;
 
     /**
      * Observes one log line: sets the current place, or clears it on disconnect.
@@ -44,13 +47,15 @@ public final class ServerOrWorldExtractor {
         if (isLeave(line)) {
             current = null;
             inSession = false;
+            placeAllowed = false;
             return;
         }
         if (isSessionStart(line)) {
             inSession = true;
+            placeAllowed = true;
         }
         String found = find(line);
-        if (found != null) {
+        if (found != null && (inSession || placeAllowed)) {
             current = found;
             last = found;
             inSession = true;
@@ -86,7 +91,8 @@ public final class ServerOrWorldExtractor {
         return line.contains("Stopping worker threads")
             || WORKER_DAEMON_STOP.matcher(line).find()
             || SINGLEPLAYER_STOP.matcher(line).find()
-            || CLIENT_STOP.matcher(line).find();
+            || CLIENT_STOP.matcher(line).find()
+            || CLIENT_DISCONNECTED.matcher(line).find();
     }
 
     /**
@@ -103,7 +109,7 @@ public final class ServerOrWorldExtractor {
     static String find(String line) {
         Matcher connecting = CONNECTING.matcher(line);
         if (connecting.find()) {
-            String host = connecting.group(1).strip();
+            String host = stripTrailingDots(connecting.group(1).strip());
             int port;
             try {
                 port = Integer.parseInt(connecting.group(2));
@@ -150,15 +156,21 @@ public final class ServerOrWorldExtractor {
         }
         int colon = trimmed.lastIndexOf(':');
         if (colon > 0 && trimmed.indexOf(':') == colon) {
-            String host = trimmed.substring(0, colon).toLowerCase(Locale.ROOT);
+            String host = stripTrailingDots(trimmed.substring(0, colon).toLowerCase(Locale.ROOT));
             String port = trimmed.substring(colon);
             return DEFAULT_PORT_SUFFIX.equals(port) ? host : host + port;
         }
-        return trimmed.toLowerCase(Locale.ROOT);
+        return stripTrailingDots(trimmed.toLowerCase(Locale.ROOT));
     }
 
     private static String sanitize(String value) {
         if (value == null) return "";
         return value.replace('\t', ' ').replace('\n', ' ').replace('\r', ' ').strip();
+    }
+
+    private static String stripTrailingDots(String value) {
+        int end = value.length();
+        while (end > 0 && value.charAt(end - 1) == '.') end--;
+        return end == value.length() ? value : value.substring(0, end);
     }
 }

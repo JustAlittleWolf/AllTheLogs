@@ -21,6 +21,8 @@ class ServerIdTest {
         assertEquals("play.example.com:25566", ServerId.remote("play.example.com:25566"));
         assertEquals("[::1]", ServerId.remote("[::1]:25565"));
         assertEquals("[::1]:25566", ServerId.remote("[::1]:25566"));
+        assertEquals("mc.gommehd.net", ServerId.remote("mc.gommehd.net."));
+        assertEquals("mc.hypixel.net", ServerId.remote("mc.hypixel.net.:25565"));
         assertNull(ServerId.remote(" "));
     }
 }
