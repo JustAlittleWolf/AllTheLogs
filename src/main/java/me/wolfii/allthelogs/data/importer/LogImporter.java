@@ -215,6 +215,9 @@ public final class LogImporter {
             }
 
             observer.finished();
+            observer.enterPhase(options.shouldOptimize(writer.writtenFiles())
+                ? ImportPhase.CHUNKING
+                : ImportPhase.OPTIMIZING, 0d);
 
             RuntimeException discoveryFailure = failureRef.get();
             if (discoveryFailure != null && !stop.getAsBoolean()) throw discoveryFailure;
