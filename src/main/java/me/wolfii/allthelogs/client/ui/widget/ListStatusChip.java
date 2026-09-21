@@ -52,6 +52,14 @@ final class ListStatusChip {
     }
 
     /**
+     * Drops a previous search's exact total so the next page can show {@code >99} until the new total arrives.
+     */
+    void beginNewSearchCount() {
+        exactMatchCount = false;
+        showMatchCount = false;
+    }
+
+    /**
      * Shows the count of the page that just arrived. Counts above 99 read as {@code >99} until
      * {@link #showTotalMatchCount} supplies the unpaged total.
      */
@@ -59,6 +67,15 @@ final class ListStatusChip {
         this.narrowed = narrowed;
         show(matches, matches <= 99, elapsedMs);
         this.overlay = Component.empty();
+    }
+
+    /**
+     * Page-sized counts must not replace an exact total. Clearing the search bar keeps the viewport and
+     * applies the jump after {@link #showTotalMatchCount}, which would otherwise leave {@code >99} on screen.
+     */
+    void offerPageMatchCount(long matches, long elapsedMs, boolean narrowed) {
+        if (exactMatchCount) return;
+        showMatchCount(matches, elapsedMs, narrowed);
     }
 
     /**

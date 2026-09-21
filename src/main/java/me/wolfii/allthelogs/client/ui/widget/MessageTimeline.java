@@ -204,11 +204,25 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     /**
+     * Forgets the previous search's exact total so a new query can show {@code >99} until it resolves.
+     */
+    public void beginNewSearchCount() {
+        status.beginNewSearchCount();
+    }
+
+    /**
      * Shows {@code N message(s)} or {@code N match(es)} over the list for a moment after a search.
      * Counts above 99 read as {@code >99} until {@link #setTotalMatchCount} supplies the exact total.
      */
     public void showMatchCount(long matches, long elapsedMs, boolean narrowed) {
         status.showMatchCount(matches, elapsedMs, narrowed);
+    }
+
+    /**
+     * Same as {@link #showMatchCount} unless the exact total is already known for this search.
+     */
+    public void offerPageMatchCount(long matches, long elapsedMs, boolean narrowed) {
+        status.offerPageMatchCount(matches, elapsedMs, narrowed);
     }
 
     public void setTotalMatchCount(long total) {
