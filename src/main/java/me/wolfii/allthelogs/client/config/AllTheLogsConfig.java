@@ -42,7 +42,7 @@ public class AllTheLogsConfig {
     public static final int MAX_MESSAGE_FONT_SIZE = 24;
     public static final int MIN_CONTEXT_MESSAGE_BRIGHTNESS = 10;
     public static final int MAX_CONTEXT_MESSAGE_BRIGHTNESS = 100;
-    public static final int DEFAULT_CONTEXT_MESSAGE_BRIGHTNESS = 40;
+    public static final int DEFAULT_CONTEXT_MESSAGE_BRIGHTNESS = 92;
 
     private static ConfigClassHandler<AllTheLogsConfig> handler;
 
