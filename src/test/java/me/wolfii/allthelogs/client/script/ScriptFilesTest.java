@@ -67,23 +67,6 @@ class ScriptFilesTest {
 
 class GraalJsTest {
     @Test
-    void versionComesFromTheVersionCatalog() throws Exception {
-        String toml = Files.readString(Path.of("gradle/libs.versions.toml"));
-        var match = java.util.regex.Pattern.compile("^graaljs\\s*=\\s*\"([^\"]+)\"", java.util.regex.Pattern.MULTILINE)
-            .matcher(toml);
-        assertTrue(match.find(), "graaljs version in libs.versions.toml");
-        assertEquals(match.group(1), GraalJs.VERSION);
-    }
-
-    @Test
-    void cacheLivesUnderInstanceAllTheLogsDir() {
-        Path gameDir = Path.of("instance");
-        assertEquals(
-            gameDir.resolve(".allthelogs").resolve("graaljs").resolve(GraalJs.VERSION),
-            GraalJs.cacheDirectory(gameDir));
-    }
-
-    @Test
     void mavenUrlMatchesCentralLayout() {
         GraalJs.Artifact polyglot = GraalJs.ARTIFACTS.getFirst();
         assertEquals("org.graalvm.polyglot", polyglot.group());

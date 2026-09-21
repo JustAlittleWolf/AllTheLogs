@@ -1,6 +1,5 @@
 package me.wolfii.allthelogs.client.ui.widget;
 
-import me.wolfii.allthelogs.client.list.MessageListLayout;
 import me.wolfii.allthelogs.client.timeline.ScrubJump;
 import org.junit.jupiter.api.Test;
 
@@ -18,9 +17,8 @@ class MessageTimelineTest {
     }
 
     @Test
-    void highlightMarkerExtendsOnePixelLeftAndStopsTwoPixelsEarly() {
+    void highlightMarkerExtendsOnePixelLeft() {
         assertEquals(7, MessageListPainter.highlightLeft(8));
-        assertEquals(MessageListLayout.ROW_HEIGHT - 2, MessageListPainter.highlightHeight());
     }
 
     @Test

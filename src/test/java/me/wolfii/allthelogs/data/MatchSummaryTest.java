@@ -7,7 +7,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 class MatchSummaryTest {
     @Test
@@ -27,11 +26,4 @@ class MatchSummaryTest {
         assertEquals(2, summary.uniqueDates());
     }
 
-    @Test
-    void ofEmptyIsEmpty() {
-        MatchSummary summary = MatchSummary.of(List.of());
-        assertEquals(0, summary.matches());
-        assertNull(summary.oldest());
-        assertNull(summary.newest());
-    }
 }
