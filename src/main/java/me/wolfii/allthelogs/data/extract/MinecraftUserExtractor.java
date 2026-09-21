@@ -27,13 +27,16 @@ public final class MinecraftUserExtractor {
      * Observes one log line and updates the detected user when this line is more trustworthy.
      */
     public void accept(String line) {
-        String authoritative = authoritativeUser(line);
-        if (authoritative != null) {
-            user = authoritative;
-            fromAuthoritative = true;
-            return;
+        if (line.indexOf("Setting user:") >= 0 || line.indexOf("IAS:") >= 0) {
+            String authoritative = authoritativeUser(line);
+            if (authoritative != null) {
+                user = authoritative;
+                fromAuthoritative = true;
+                return;
+            }
         }
         if (fromAuthoritative || user != null) return;
+        if (line.indexOf("[local:E:") < 0) return;
         Matcher login = LOCAL_LOGIN.matcher(line);
         if (login.find()) user = login.group(1);
     }
@@ -46,8 +49,11 @@ public final class MinecraftUserExtractor {
     }
 
     private static String authoritativeUser(String line) {
-        Matcher setting = SETTING_USER.matcher(line);
-        if (setting.find()) return setting.group(1);
+        if (line.indexOf("Setting user:") >= 0) {
+            Matcher setting = SETTING_USER.matcher(line);
+            if (setting.find()) return setting.group(1);
+        }
+        if (line.indexOf("IAS:") < 0) return null;
         Matcher iasLogging = IAS_LOGGING.matcher(line);
         if (iasLogging.find()) return iasLogging.group(1);
         Matcher iasSuccess = IAS_SUCCESS.matcher(line);
