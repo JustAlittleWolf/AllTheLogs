@@ -2252,4 +2252,28 @@ class LogStoreTest {
         assertEquals(1, store.allEntries().size());
         assertInstanceOf(LogSource.Session.class, store.allEntries().getFirst().chatLog().source());
     }
+
+    @Test
+    void metadataOnlyMatchesByTimeWhenTheLogWasCopiedToANewPath() throws IOException {
+        Path logs = tempDir.resolve("logs");
+        LogFixtures.writePlain(logs, "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:10] [Render thread/INFO]: [CHAT] hello
+            """);
+        store.importDirectory(tempDir, ImportOptions.defaults().withOptimize(false));
+
+        Path relocated = tempDir.resolve("relocated/logs");
+        LogFixtures.writePlain(relocated, "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:05] [Render thread/INFO]: Setting user: RelocatedUser
+            [10:00:06] [Render thread/INFO]: Connecting to relocated.example, 25565
+            [10:00:10] [Render thread/INFO]: [CHAT] hello
+            """);
+
+        store.importDirectory(tempDir.resolve("relocated"), metadataOnly(false, true, true));
+        ChatEntry entry = store.allEntries().getFirst();
+        assertEquals("RelocatedUser", entry.minecraftUser());
+        assertEquals("relocated.example", entry.serverOrWorld());
+        assertEquals(1, store.chatLogs().size());
+    }
 }
