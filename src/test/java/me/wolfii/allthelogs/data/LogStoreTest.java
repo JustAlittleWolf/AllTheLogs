@@ -1673,6 +1673,32 @@ class LogStoreTest {
     }
 
     @Test
+    void laterImportOfOlderLogsStillOrdersByTime() throws IOException {
+        LogFixtures.writeGzipped(tempDir.resolve("logs"), "2026-08-25-1.log.gz",
+            LogFixtures.modernLog("26.2", "august"));
+        store.importDirectory(tempDir);
+        LogFixtures.writeGzipped(tempDir.resolve("older/logs"), "2026-01-02-1.log.gz",
+            LogFixtures.modernLog("26.2", "january"));
+        store.importDirectory(tempDir.resolve("older"));
+
+        assertEquals(List.of("january", "august"),
+            store.allEntries().stream().map(ChatEntry::message).toList());
+    }
+
+    @Test
+    void laterImportOfNewerLogsStillOrdersByTime() throws IOException {
+        LogFixtures.writeGzipped(tempDir.resolve("logs"), "2026-01-02-1.log.gz",
+            LogFixtures.modernLog("26.2", "january"));
+        store.importDirectory(tempDir);
+        LogFixtures.writeGzipped(tempDir.resolve("newer/logs"), "2026-08-25-1.log.gz",
+            LogFixtures.modernLog("26.2", "august"));
+        store.importDirectory(tempDir.resolve("newer"));
+
+        assertEquals(List.of("january", "august"),
+            store.allEntries().stream().map(ChatEntry::message).toList());
+    }
+
+    @Test
     void duplicatesAreAlsoRemovedAcrossSeparateImports() throws IOException {
         LogFixtures.writeGzipped(tempDir.resolve("a/logs"), "2026-06-01-1.log.gz",
             LogFixtures.modernLog("26.2", "shared line"));
