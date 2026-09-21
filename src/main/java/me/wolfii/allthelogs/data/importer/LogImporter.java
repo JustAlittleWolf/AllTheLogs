@@ -125,7 +125,8 @@ public final class LogImporter {
                                 observer.fileCompleted();
                                 return;
                             }
-                            if (prepared.sessionId() != null && writer.hasSession(prepared.sessionId())) {
+                            if (!options.reparseExistingLogs()
+                                && prepared.sessionId() != null && writer.hasSession(prepared.sessionId())) {
                                 skipped.incrementAndGet();
                                 writer.markConsidered(candidate.sourcePath(), candidate.entryPath(),
                                     candidate.contentHash());
@@ -154,7 +155,9 @@ public final class LogImporter {
                 new ContentTracker() {
                     @Override
                     public boolean skipHash(String contentHash) {
-                        return options.skipAlreadyImported() && writer.hasContentHash(contentHash);
+                        return !options.reparseExistingLogs()
+                            && options.skipAlreadyImported()
+                            && writer.hasContentHash(contentHash);
                     }
 
                     @Override
@@ -200,7 +203,11 @@ public final class LogImporter {
                     PreparedLog log = queue.poll(50, TimeUnit.MILLISECONDS);
                     if (log == null) continue;
                     if (log == END_OF_STREAM) break;
-                    writer.write(log);
+                    if (options.updateMetadataOnly()) {
+                        writer.updateMetadata(log, options);
+                    } else {
+                        writer.write(log);
+                    }
                     observer.fileCompleted(sourceOf(log));
                 }
             } finally {
@@ -212,7 +219,9 @@ public final class LogImporter {
             RuntimeException discoveryFailure = failureRef.get();
             if (discoveryFailure != null && !stop.getAsBoolean()) throw discoveryFailure;
 
-            writer.deduplicate();
+            if (!options.updateMetadataOnly()) {
+                writer.deduplicate();
+            }
 
             List<ImportResult.Failure> failures = new ArrayList<>(discovery.failures());
             failures.addAll(parseFailures);

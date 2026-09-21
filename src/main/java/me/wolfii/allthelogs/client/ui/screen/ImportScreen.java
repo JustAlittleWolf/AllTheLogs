@@ -45,6 +45,10 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
     private boolean recursive = true;
     private boolean nestedArchives = true;
     private boolean skipAlreadyImported = true;
+    private boolean updateMetadataOnly;
+    private boolean updateFormatting;
+    private boolean updateMinecraftUser;
+    private boolean updateMinecraftServer;
     private String pathMatcher = "";
     private ZoneId timezone = ZoneId.systemDefault();
     private boolean summerTime = ImportTimezones.observesDaylightSaving(timezone);
@@ -52,6 +56,12 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
     private CheckboxComponent recursiveBox;
     private CheckboxComponent nestedBox;
     private CheckboxComponent skipBox;
+    private CheckboxComponent updateMetadataBox;
+    private CheckboxComponent updateFormattingBox;
+    private CheckboxComponent updateMinecraftUserBox;
+    private CheckboxComponent updateMinecraftServerBox;
+    private FlowLayout advancedOptions;
+    private FlowLayout metadataFields;
     private CheckboxComponent summerTimeBox;
     private TextBoxComponent pathMatcherBox;
     private DiscreteSliderComponent parallelismSlider;
@@ -135,27 +145,63 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
     }
 
     private FlowLayout buildAdvanced(StackLayout overlays) {
-        FlowLayout advanced = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
-        advanced.gap(4).padding(Insets.of(4));
+        advancedOptions = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
+        advancedOptions.gap(4).padding(Insets.of(4));
 
         recursiveBox = optionCheckbox("allthelogs.import.recursive", recursive, value -> recursive = value);
-        advanced.child(recursiveBox);
+        advancedOptions.child(recursiveBox);
 
         nestedBox = optionCheckbox("allthelogs.import.nested_archives", nestedArchives, value -> nestedArchives = value);
-        advanced.child(nestedBox);
+        advancedOptions.child(nestedBox);
 
         skipBox = optionCheckbox("allthelogs.import.skip_imported", skipAlreadyImported,
             value -> skipAlreadyImported = value);
-        advanced.child(skipBox);
+        advancedOptions.child(skipBox);
 
-        advanced.child(pathMatcherField());
+        updateMetadataBox = optionCheckbox("allthelogs.import.update_metadata", updateMetadataOnly,
+            this::setUpdateMetadataOnly);
+        advancedOptions.child(updateMetadataBox);
+        metadataFields = metadataFieldSelect();
+        if (updateMetadataOnly) advancedOptions.child(metadataFields);
+
+        advancedOptions.child(pathMatcherField());
 
         summerTimeBox = optionCheckbox("allthelogs.import.summer_time", summerTime, value -> summerTime = value);
         timezones = new TimezonePicker(overlays, () -> this.width, () -> this.height, this::selectTimezone);
-        advanced.child(timezones.row(timezone, summerTimeBox));
+        advancedOptions.child(timezones.row(timezone, summerTimeBox));
 
-        advanced.child(threadsSlider());
-        return advanced;
+        advancedOptions.child(threadsSlider());
+        return advancedOptions;
+    }
+
+    private void setUpdateMetadataOnly(boolean value) {
+        updateMetadataOnly = value;
+        if (advancedOptions == null || metadataFields == null) return;
+        boolean present = advancedOptions.children().contains(metadataFields);
+        if (value && !present) {
+            int index = advancedOptions.children().indexOf(updateMetadataBox) + 1;
+            advancedOptions.child(index, metadataFields);
+        } else if (!value && present) {
+            advancedOptions.removeChild(metadataFields);
+        }
+    }
+
+    private FlowLayout metadataFieldSelect() {
+        FlowLayout fields = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
+        fields.gap(4).padding(Insets.left(16));
+        FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
+        row.gap(12).verticalAlignment(VerticalAlignment.CENTER);
+        updateFormattingBox = optionCheckbox("allthelogs.import.update_metadata.formatting", updateFormatting,
+            value -> updateFormatting = value);
+        updateMinecraftUserBox = optionCheckbox("allthelogs.import.update_metadata.user", updateMinecraftUser,
+            value -> updateMinecraftUser = value);
+        updateMinecraftServerBox = optionCheckbox("allthelogs.import.update_metadata.server", updateMinecraftServer,
+            value -> updateMinecraftServer = value);
+        row.child(updateFormattingBox);
+        row.child(updateMinecraftUserBox);
+        row.child(updateMinecraftServerBox);
+        fields.child(row);
+        return fields;
     }
 
     private CheckboxComponent optionCheckbox(String key, boolean checked, Consumer<Boolean> onChanged) {
@@ -222,10 +268,19 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
         recursive = options.recursive();
         nestedArchives = options.nestedArchives();
         skipAlreadyImported = options.skipAlreadyImported();
+        updateMetadataOnly = options.updateMetadataOnly();
+        updateFormatting = options.updateFormatting();
+        updateMinecraftUser = options.updateMinecraftUser();
+        updateMinecraftServer = options.updateMinecraftServer();
         pathMatcher = options.pathMatcher() == null ? "" : options.pathMatcher();
         if (recursiveBox != null) recursiveBox.checked(recursive);
         if (nestedBox != null) nestedBox.checked(nestedArchives);
         if (skipBox != null) skipBox.checked(skipAlreadyImported);
+        if (updateFormattingBox != null) updateFormattingBox.checked(updateFormatting);
+        if (updateMinecraftUserBox != null) updateMinecraftUserBox.checked(updateMinecraftUser);
+        if (updateMinecraftServerBox != null) updateMinecraftServerBox.checked(updateMinecraftServer);
+        if (updateMetadataBox != null) updateMetadataBox.checked(updateMetadataOnly);
+        setUpdateMetadataOnly(updateMetadataOnly);
         if (pathMatcherBox != null) pathMatcherBox.text(pathMatcher);
     }
 
@@ -254,6 +309,10 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
             .withRecursive(recursive)
             .withNestedArchives(nestedArchives)
             .withSkipAlreadyImported(skipAlreadyImported)
+            .withUpdateMetadataOnly(updateMetadataOnly)
+            .withUpdateFormatting(updateFormatting)
+            .withUpdateMinecraftUser(updateMinecraftUser)
+            .withUpdateMinecraftServer(updateMinecraftServer)
             .withParallelism(parallelism)
             .withTimezone(ImportTimezones.forImport(zone, summerTime));
         if (!pathMatcher.isBlank()) {
