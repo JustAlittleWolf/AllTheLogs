@@ -99,6 +99,20 @@ public final class ImportObserver {
         }
     }
 
+    /**
+     * Leaves the file-count phase so the UI can show chunking or optimization while post-file work
+     * (flush, deduplicate, commit) still runs. File totals stay as they were at {@link #finished()}.
+     */
+    public void enterPhase(ImportPhase phase, double phaseFraction) {
+        if (callback == null || phase == null || phase == ImportPhase.IMPORT) return;
+        synchronized (this) {
+            current = null;
+            discoveryComplete = true;
+            callback.accept(new ImportProgress(completedFiles, discoveredFiles, estimatedFiles, true, null,
+                phase, phaseFraction));
+        }
+    }
+
     private void setCurrent(LogSource source) {
         if (callback == null) return;
         synchronized (this) {

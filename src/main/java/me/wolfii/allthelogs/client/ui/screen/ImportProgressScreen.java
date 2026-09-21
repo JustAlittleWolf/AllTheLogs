@@ -21,10 +21,14 @@ import org.jetbrains.annotations.NotNull;
 
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 /**
  * Full-screen import progress: a bar, file counts, and the log currently being read.
+ * Worker snapshots are stored and applied on the client tick so the phase (chunking /
+ * optimizing) is never stuck behind a queue of per-file {@code execute} updates.
  */
 public final class ImportProgressScreen extends BaseOwoScreen<FlowLayout> {
     private final Screen parent;
@@ -39,6 +43,8 @@ public final class ImportProgressScreen extends BaseOwoScreen<FlowLayout> {
     private ButtonComponent cancel;
     private boolean finished;
     private boolean cancelled;
+    private final AtomicReference<ImportProgress> latestProgress = new AtomicReference<>();
+    private final AtomicBoolean progressScheduled = new AtomicBoolean();
 
     public ImportProgressScreen(Screen parent, Path path, ImportOptions options, boolean archive) {
         super(Component.translatable("allthelogs.screen.import.progress"));
@@ -106,8 +112,12 @@ public final class ImportProgressScreen extends BaseOwoScreen<FlowLayout> {
     private void start() {
         AllTheLogsClient.LOGGER.info("Starting user import from {} ({})",
             path, archive ? "archive" : "directory");
-        Consumer<ImportProgress> progress = snapshot ->
-            Minecraft.getInstance().execute(() -> applyProgress(snapshot));
+        Consumer<ImportProgress> progress = snapshot -> {
+            latestProgress.set(snapshot);
+            if (progressScheduled.compareAndSet(false, true)) {
+                Minecraft.getInstance().execute(this::drainProgress);
+            }
+        };
         CompletableFuture<ImportResult> future = archive
             ? AllTheLogsClient.worker().importArchive(path, options, progress)
             : AllTheLogsClient.worker().importDirectory(path, options, progress);
@@ -162,6 +172,20 @@ public final class ImportProgressScreen extends BaseOwoScreen<FlowLayout> {
         heading.text(Component.translatable("allthelogs.import.progress.cancelling"));
     }
 
+    @Override
+    public void tick() {
+        super.tick();
+        drainProgress();
+    }
+
+    private void drainProgress() {
+        progressScheduled.set(false);
+        ImportProgress snapshot = latestProgress.getAndSet(null);
+        if (snapshot != null) {
+            applyProgress(snapshot);
+        }
+    }
+
     private void applyProgress(ImportProgress snapshot) {
         if (finished) return;
         int percent = ImportProgressText.percent(snapshot);
@@ -178,6 +202,7 @@ public final class ImportProgressScreen extends BaseOwoScreen<FlowLayout> {
                 current.text(Component.empty());
             }
             case IMPORT -> {
+                heading.text(Component.translatable("allthelogs.status.importing"));
                 if (snapshot.discoveryComplete()) {
                     counts.text(Component.translatable("allthelogs.import.progress.counts",
                         Integer.toString(snapshot.completedFiles()),

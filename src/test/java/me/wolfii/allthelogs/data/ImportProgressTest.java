@@ -345,4 +345,40 @@ class ImportProgressTest {
         assertTrue(updates.subList(0, firstChunking).stream()
             .allMatch(progress -> progress.phase() == ImportPhase.IMPORT));
     }
+
+    @Test
+    void leavesFileCountsOnTheNextSnapshotSoDedupIsNotShownAsNOfN() throws IOException {
+        Path root = logsDirectory();
+        List<ImportProgress> updates = new CopyOnWriteArrayList<>();
+
+        store.importDirectory(root, updates::add);
+
+        int finishedImport = -1;
+        for (int i = 0; i < updates.size(); i++) {
+            ImportProgress progress = updates.get(i);
+            if (progress.phase() == ImportPhase.IMPORT
+                && progress.discoveryComplete()
+                && progress.current() == null
+                && progress.completedFiles() == progress.discoveredFiles()
+                && progress.discoveredFiles() > 0) {
+                finishedImport = i;
+            }
+        }
+        assertTrue(finishedImport >= 0);
+        assertTrue(finishedImport + 1 < updates.size());
+        assertNotEquals(ImportPhase.IMPORT, updates.get(finishedImport + 1).phase());
+    }
+
+    @Test
+    void optimizeFalseReportsOptimizingZeroBeforeTheFinalSnapshot() throws IOException {
+        Path root = logsDirectory();
+        List<ImportProgress> updates = new CopyOnWriteArrayList<>();
+
+        store.importDirectory(root, ImportOptions.defaults().withOptimize(false), updates::add);
+
+        assertTrue(updates.stream().anyMatch(progress ->
+            progress.phase() == ImportPhase.OPTIMIZING && progress.phaseFraction() == 0d));
+        assertEquals(ImportPhase.OPTIMIZING, updates.getLast().phase());
+        assertEquals(1.0, updates.getLast().fraction());
+    }
 }
