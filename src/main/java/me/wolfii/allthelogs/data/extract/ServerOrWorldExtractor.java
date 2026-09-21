@@ -31,22 +31,41 @@ public final class ServerOrWorldExtractor {
     private static final Pattern SINGLEPLAYER_STOP = Pattern.compile("Stopping singleplayer server");
     private static final Pattern INTEGRATED_START = Pattern.compile("Starting integrated minecraft server");
     private static final Pattern LOCAL_LOGIN = Pattern.compile("\\[local:E:[^]]+] logged in");
+    private static final String RESOURCE_RELOAD = "Reloading ResourceManager:";
+    private static final String SERVER_PACK = "server/";
 
     private String current;
     private String last;
     private boolean inSession;
     /** After a leave, ignore world-save lines until a new connect / integrated-server start. */
     private boolean placeAllowed = true;
+    /**
+     * Whether this remote session applied a {@code server/} resource pack. A later reload without
+     * that pack is how Fabric logs leaving to the menu (vanilla {@code Client disconnected} is rare).
+     */
+    private boolean sawServerResourcePack;
 
     /**
      * Observes one log line: sets the current place, or clears it on disconnect.
      */
     public void accept(String line) {
         if (isLeave(line)) {
-            current = null;
-            inSession = false;
-            placeAllowed = false;
+            clearCurrent(false);
             return;
+        }
+        if (line.contains(RESOURCE_RELOAD)) {
+            if (line.contains(SERVER_PACK)) {
+                sawServerResourcePack = true;
+            } else if (sawServerResourcePack && isRemote(current)) {
+                clearCurrent(false);
+                return;
+            }
+        }
+        if (isRemote(current) && INTEGRATED_START.matcher(line).find()) {
+            clearCurrent(true);
+        }
+        if (CONNECTING.matcher(line).find()) {
+            sawServerResourcePack = false;
         }
         if (isSessionStart(line)) {
             inSession = true;
@@ -58,6 +77,17 @@ public final class ServerOrWorldExtractor {
             last = found;
             inSession = true;
         }
+    }
+
+    private void clearCurrent(boolean stayInSession) {
+        current = null;
+        inSession = stayInSession;
+        placeAllowed = stayInSession;
+        sawServerResourcePack = false;
+    }
+
+    private static boolean isRemote(String place) {
+        return place != null && !place.startsWith(LOCAL_PREFIX);
     }
 
     /**
@@ -84,8 +114,9 @@ public final class ServerOrWorldExtractor {
 
     /**
      * Whether {@code line} is a real disconnect: client shutdown, vanilla disconnect, or
-     * singleplayer logout. Chunk/renderer lines such as {@code Stopping worker threads} are not
-     * leaves — they fire on resource-pack reloads while still connected.
+     * singleplayer logout. Chunk/renderer {@code Stopping worker threads} lines are not leaves.
+     * Fabric's usual leave-to-menu is a resource reload without a {@code server/} pack after this
+     * session had one; that is handled in {@link #accept(String)}.
      */
     public static boolean isLeave(String line) {
         return SINGLEPLAYER_STOP.matcher(line).find()

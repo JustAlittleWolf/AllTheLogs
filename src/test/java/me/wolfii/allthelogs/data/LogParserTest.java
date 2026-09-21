@@ -411,6 +411,35 @@ class LogParserTest {
     }
 
     @Test
+    void packlessReloadAfterAServerPackUntagsMenuChatWithoutClientDisconnected() throws IOException {
+        ParsedLog parsed = parse("""
+            [16:00:32] [Render thread/INFO]: Connecting to unicacity.eu, 25565
+            [16:00:37] [Render thread/INFO]: Reloading ResourceManager: vanilla, server/00000000/pack
+            [16:00:38] [Render thread/INFO]: [CHAT] still on unicacity
+            [16:48:28] [Render thread/INFO]: Reloading ResourceManager: vanilla, fabric-api
+            [16:48:29] [Render thread/INFO]: [CHAT] in the menu
+            [16:49:53] [Render thread/INFO]: Connecting to localhost, 25565
+            [16:49:54] [Render thread/INFO]: [CHAT] on localhost
+            """);
+        assertEquals("unicacity.eu", parsed.entries().get(0).serverOrWorld());
+        assertNull(parsed.entries().get(1).serverOrWorld());
+        assertEquals("localhost", parsed.entries().get(2).serverOrWorld());
+    }
+
+    @Test
+    void packlessReloadKeepsServersThatNeverAppliedAServerPack() throws IOException {
+        ParsedLog parsed = parse("""
+            [14:44:40] [Render thread/INFO]: Connecting to mc.hypixel.net, 25565
+            [14:44:41] [Render thread/INFO]: Reloading ResourceManager: vanilla, fabric-api
+            [14:44:42] [Render thread/INFO]: [CHAT] lobby
+            [14:50:00] [Render thread/INFO]: Reloading ResourceManager: vanilla, fabric-api
+            [14:50:01] [Render thread/INFO]: [CHAT] still on hypixel
+            """);
+        assertEquals("mc.hypixel.net", parsed.entries().get(0).serverOrWorld());
+        assertEquals("mc.hypixel.net", parsed.entries().get(1).serverOrWorld());
+    }
+
+    @Test
     void keepsEmbeddedNewlinesAndStripsFormattingCodes() throws IOException {
         ParsedLog parsed = parse("""
             [19:22:14] [Client thread/INFO] [net.labymod.core_implementation.mc18.gui.GuiChatAdapter]: [CHAT]\s\s
