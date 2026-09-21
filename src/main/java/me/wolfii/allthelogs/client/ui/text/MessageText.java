@@ -58,7 +58,7 @@ public final class MessageText {
     static String searchDurationText(long elapsedMs) {
         double seconds = Math.round(Math.max(0, elapsedMs) / 100.0) / 10.0;
         if (seconds < 0.1) return "";
-        return "%.1f".formatted(seconds);
+        return String.format(Locale.ROOT, "%.1f", seconds);
     }
 
     /**
