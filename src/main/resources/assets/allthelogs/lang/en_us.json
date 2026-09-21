@@ -10,7 +10,7 @@
   "allthelogs.filter.version": "Minecraft version",
   "allthelogs.filter.version.all": "ALL",
   "allthelogs.filter.server": "Server or world",
-  "allthelogs.filter.server_hint": "Contains, case insensitive",
+  "allthelogs.filter.server_hint": "hypixel.net or world/Survival",
   "allthelogs.filter.from": "No earlier than",
   "allthelogs.filter.until": "No later than",
   "allthelogs.filter.date_hint": "YYYY-MM-DD [HH:MM]",
