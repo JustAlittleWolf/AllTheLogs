@@ -20,7 +20,9 @@ import java.util.regex.Matcher;
  * <p>
  * Lines start with a bracketed timestamp, optionally prefixed by a date. Chat lines are identified by the
  * {@code [CHAT] } marker. A line that does not start with a timestamp is treated as a continuation of the previous
- * chat line. Time, user, server/world, and version each have their own extractor.
+ * chat line. Time, user, server/world, and version each have their own extractor. Those metadata
+ * extractors skip {@code [CHAT]} lines so player text cannot look like a connect, disconnect, or
+ * version line, and so import does not run those regexes on every chat message.
  */
 public final class LogParser {
     private static final String CHAT_MARKER = "[CHAT] ";
@@ -49,10 +51,10 @@ public final class LogParser {
         LocalTime lastLineTime = null;
         String sessionId = null;
 
+        Matcher start = LogTimeExtractor.LINE_START.matcher("");
         String line;
         while ((line = reader.readLine()) != null) {
-            Matcher start = LogTimeExtractor.LINE_START.matcher(line);
-            if (!start.find()) {
+            if (!start.reset(line).find()) {
                 if (pending != null) {
                     pending.append('\n').append(line);
                 } else {
@@ -78,29 +80,28 @@ public final class LogParser {
                 lastLineTime = stamp.time();
             }
 
-            if (sessionId == null) {
-                sessionId = SessionMarker.find(line).orElse(null);
-            }
-
-            users.accept(line);
-            places.accept(line);
-            if (places.current() != null) {
-                backfillPlace(entries, pendingPlace, places.current());
-            } else if (!places.inSession()) {
-                pendingPlace.clear();
-            }
-
-            if (!resourceManagerReloaded && line.contains(RESOURCE_MANAGER_RELOAD_MARKER)) {
-                resourceManagerReloaded = true;
-            }
-
-            versions.accept(line);
-
             int chat = line.indexOf(CHAT_MARKER, start.end());
-            if (chat < 0) {
-                if (!line.endsWith(EMPTY_CHAT_MARKER)) continue;
+            if (chat < 0 && line.endsWith(EMPTY_CHAT_MARKER)) {
                 chat = line.length() - EMPTY_CHAT_MARKER.length();
             }
+            if (chat < 0) {
+                if (sessionId == null) {
+                    sessionId = SessionMarker.find(line).orElse(null);
+                }
+                users.accept(line);
+                places.accept(line);
+                if (places.current() != null) {
+                    backfillPlace(entries, pendingPlace, places.current());
+                } else if (!places.inSession()) {
+                    pendingPlace.clear();
+                }
+                if (!resourceManagerReloaded && line.contains(RESOURCE_MANAGER_RELOAD_MARKER)) {
+                    resourceManagerReloaded = true;
+                }
+                versions.accept(line);
+                continue;
+            }
+
             if (stamp == null) continue;
             pendingDate = stamp.date();
             pendingTime = stamp.time();

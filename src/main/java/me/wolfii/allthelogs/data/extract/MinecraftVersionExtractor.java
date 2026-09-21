@@ -20,7 +20,7 @@ public final class MinecraftVersionExtractor {
         Pattern.compile("(?:^|[\\s,])minecraft@([^,\\s]+)"),
         Pattern.compile("Minecraft Version: (\\S+)"),
         Pattern.compile("--version,? (\\S+)"),
-        Pattern.compile("Starting integrated minecraft server version (.+?)\\s*$")
+        Pattern.compile("Starting integrated minecraft server version (.+)\\s*$")
     };
 
     private String version;
@@ -31,6 +31,9 @@ public final class MinecraftVersionExtractor {
      */
     public void accept(String line) {
         if (priority <= 0) return;
+        if (line.indexOf("inecraft") < 0 && line.indexOf("ptiFine") < 0 && line.indexOf("--version") < 0) {
+            return;
+        }
         for (int i = 0; i < PATTERNS.length && i < priority; i++) {
             Matcher versionMatcher = PATTERNS[i].matcher(line);
             if (versionMatcher.find()) {

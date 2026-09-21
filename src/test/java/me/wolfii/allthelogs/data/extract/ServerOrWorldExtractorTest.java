@@ -123,4 +123,14 @@ class ServerOrWorldExtractorTest {
         places.accept("[13:05:15] [Server thread/INFO]: Loading dimension 0 (Tick Rate Demonstration) (net.minecraft.server.integrated.IntegratedServer@760f883f)");
         assertEquals("world/Tick Rate Demonstration", places.current());
     }
+
+    @Test
+    void connectingPatternDoesNotBacktrackOnCommaFilledChat() {
+        String chat = "[12:00:00] [Render thread/INFO]: [CHAT] Connecting to "
+            + "hello, world, ".repeat(500) + "the end";
+        ServerOrWorldExtractor places = new ServerOrWorldExtractor();
+        places.accept(chat);
+        assertNull(places.current());
+        assertFalse(ServerOrWorldExtractor.isSessionStart(chat));
+    }
 }
