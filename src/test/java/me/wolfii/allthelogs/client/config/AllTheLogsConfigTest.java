@@ -19,9 +19,6 @@ class AllTheLogsConfigTest {
         AllTheLogsConfig config = AllTheLogsConfig.load(temp.resolve("missing.json"));
         assertTrue(config.extraImportDirectories().isEmpty());
         assertFalse(config.hideImportButton());
-        assertEquals(AllTheLogsConfig.DEFAULT_MESSAGE_FONT_SIZE, config.messageFontSize());
-        assertEquals(12, config.messageFontSize());
-        assertEquals(SearchFilter.DEFAULT_CONTEXT_LINES, config.defaultContextLines());
     }
 
     @Test

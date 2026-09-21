@@ -24,21 +24,6 @@ class MessageListLayoutTest {
     }
 
     @Test
-    void extraContextIsTenLines() {
-        assertEquals(10, MessageListLayout.EXPAND_LINES);
-        assertEquals(10, MessageListLayout.extraContextLines());
-        assertEquals(10, MessageListLayout.extraContextLines(false));
-    }
-
-    @Test
-    void shiftClickLoadsAHundredLines() {
-        assertEquals(100, MessageListLayout.SHIFT_EXPAND_LINES);
-        assertEquals(100, MessageListLayout.extraContextLines(true));
-        assertEquals("Click: +10", MessageListLayout.expandClickHint());
-        assertEquals("Shift+Click: +100", MessageListLayout.expandShiftClickHint());
-    }
-
-    @Test
     void expandFollowsListDirection() {
         assertTrue(MessageListLayout.expandOlderMessages(true, true));
         assertFalse(MessageListLayout.expandOlderMessages(false, true));

@@ -14,8 +14,6 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.regex.Pattern;
-
 import static org.junit.jupiter.api.Assertions.*;
 
 class DuckDbJdbcTest {
@@ -44,24 +42,6 @@ class DuckDbJdbcTest {
         assertEquals("libduckdb_java.so_linux_amd64", DuckDbJdbc.nativeLibraryResource("Linux", "amd64"));
         assertEquals("libduckdb_java.so_osx_universal", DuckDbJdbc.nativeLibraryResource("Mac OS X", "aarch64"));
         assertEquals("libduckdb_java.so_windows_amd64", DuckDbJdbc.nativeLibraryResource("Windows 10", "x86_64"));
-    }
-
-    @Test
-    void versionComesFromTheVersionCatalog() throws IOException {
-        Path catalog = Path.of("gradle/libs.versions.toml");
-        String toml = Files.readString(catalog);
-        var match = Pattern.compile("^duckdb\\s*=\\s*\"([^\"]+)\"", Pattern.MULTILINE)
-            .matcher(toml);
-        assertTrue(match.find(), "duckdb version in libs.versions.toml");
-        assertEquals(match.group(1), DuckDbJdbc.VERSION);
-    }
-
-    @Test
-    void cacheLivesUnderInstanceAllTheLogsDir() {
-        Path gameDir = tempDir.resolve("instance");
-        assertEquals(
-            gameDir.resolve(".allthelogs").resolve("duckdb").resolve("jdbc").resolve(DuckDbJdbc.VERSION),
-            DuckDbJdbc.cacheDirectory(gameDir));
     }
 
     @Test

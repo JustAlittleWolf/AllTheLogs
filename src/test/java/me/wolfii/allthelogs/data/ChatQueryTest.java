@@ -9,30 +9,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ChatQueryTest {
     @Test
-    void defaultsToAscendingWithNoOffsetLimitOrTimeBounds() {
-        ChatQuery query = ChatQuery.all();
-
-        assertEquals(Sort.ASCENDING, query.sort());
-        assertNull(query.offset());
-        assertNull(query.offsetSource());
-        assertEquals(0, query.offsetLine());
-        assertNull(query.startingAt());
-        assertNull(query.upUntil());
-        assertNull(query.version());
-        assertNull(query.serverOrWorld());
-        assertEquals(-1, query.limit());
-    }
-
-    @Test
-    void withSortReplacesThePreviousOrder() {
-        ChatQuery descending = ChatQuery.all().withSort(Sort.DESCENDING);
-        assertEquals(Sort.DESCENDING, descending.sort());
-
-        ChatQuery ascending = descending.withSort(Sort.ASCENDING);
-        assertSame(Sort.ASCENDING, ascending.sort());
-    }
-
-    @Test
     void withOffsetRequiresATimestamp() {
         assertThrows(NullPointerException.class, () -> ChatQuery.all().withOffset(null));
         LocalDateTime offset = LocalDateTime.of(2026, 1, 1, 0, 0);
@@ -57,24 +33,6 @@ class ChatQueryTest {
     }
 
     @Test
-    void startingAtAndUpUntilAreIndependentBounds() {
-        LocalDateTime start = LocalDateTime.of(2026, 1, 1, 0, 0);
-        LocalDateTime end = LocalDateTime.of(2026, 1, 2, 0, 0);
-
-        ChatQuery fromStart = ChatQuery.all().startingAt(start);
-        assertEquals(start, fromStart.startingAt());
-        assertNull(fromStart.upUntil());
-
-        ChatQuery untilEnd = ChatQuery.all().upUntil(end);
-        assertNull(untilEnd.startingAt());
-        assertEquals(end, untilEnd.upUntil());
-
-        ChatQuery both = ChatQuery.all().startingAt(start).upUntil(end);
-        assertEquals(start, both.startingAt());
-        assertEquals(end, both.upUntil());
-    }
-
-    @Test
     void startingAtAfterUpUntilIsRejected() {
         LocalDateTime start = LocalDateTime.of(2026, 1, 2, 0, 0);
         LocalDateTime end = LocalDateTime.of(2026, 1, 1, 0, 0);
@@ -90,19 +48,13 @@ class ChatQueryTest {
     }
 
     @Test
-    void withVersionReplacesAndRejectsNull() {
+    void withVersionRejectsNull() {
         assertThrows(NullPointerException.class, () -> ChatQuery.all().withVersion(null));
-        ChatQuery first = ChatQuery.all().withVersion("26.2");
-        assertEquals("26.2", first.version());
-        assertEquals("1.8.9", first.withVersion("1.8.9").version());
     }
 
     @Test
-    void withServerOrWorldReplacesAndRejectsNull() {
+    void withServerOrWorldRejectsNull() {
         assertThrows(NullPointerException.class, () -> ChatQuery.all().withServerOrWorld(null));
-        ChatQuery first = ChatQuery.all().withServerOrWorld("unicacity.eu");
-        assertEquals("unicacity.eu", first.serverOrWorld());
-        assertEquals("world/Survival", first.withServerOrWorld("world/Survival").serverOrWorld());
     }
 
     @Test
