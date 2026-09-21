@@ -99,6 +99,20 @@ public final class ImportObserver {
         }
     }
 
+    /**
+     * Switches the bar off file counts before dedup / metadata apply, so the UI does not sit on
+     * {@code n/n} while post-file work runs.
+     */
+    public void beginChunking() {
+        if (callback == null) return;
+        synchronized (this) {
+            current = null;
+            discoveryComplete = true;
+            callback.accept(new ImportProgress(completedFiles, discoveredFiles, estimatedFiles, true, null,
+                ImportPhase.CHUNKING, 0d));
+        }
+    }
+
     private void setCurrent(LogSource source) {
         if (callback == null) return;
         synchronized (this) {

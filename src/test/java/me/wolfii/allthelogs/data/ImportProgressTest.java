@@ -273,7 +273,10 @@ class ImportProgressTest {
             updates::add);
 
         assertTrue(first.importedFiles() > 0);
-        assertTrue(updates.stream().noneMatch(progress -> progress.phase() == ImportPhase.CHUNKING));
+        assertTrue(updates.stream()
+            .filter(progress -> progress.phase() == ImportPhase.CHUNKING)
+            .allMatch(progress -> progress.phaseFraction() == 0d),
+            "optimize(false) should not rewrite chat_entry; only the post-file phase switch is allowed");
         ImportProgress last = updates.getLast();
         assertEquals(1.0, last.fraction());
         assertEquals(ImportPhase.OPTIMIZING, last.phase());
@@ -301,7 +304,10 @@ class ImportProgressTest {
         ImportResult result = store.importDirectory(logs, ImportOptions.currentLogsDirectory(), updates::add);
 
         assertEquals(15, result.importedFiles());
-        assertTrue(updates.stream().noneMatch(progress -> progress.phase() == ImportPhase.CHUNKING));
+        assertTrue(updates.stream()
+            .filter(progress -> progress.phase() == ImportPhase.CHUNKING)
+            .allMatch(progress -> progress.phaseFraction() == 0d),
+            "startup imports of 15 files should not cluster; only the post-file phase switch is allowed");
     }
 
     @Test
@@ -344,5 +350,22 @@ class ImportProgressTest {
         assertTrue(firstChunking > 0);
         assertTrue(updates.subList(0, firstChunking).stream()
             .allMatch(progress -> progress.phase() == ImportPhase.IMPORT));
+        assertEquals(0d, updates.get(firstChunking).phaseFraction());
+    }
+
+    @Test
+    void postFileWorkLeavesTheFileCountPhaseImmediately() throws IOException {
+        Path root = logsDirectory();
+        List<ImportProgress> updates = new CopyOnWriteArrayList<>();
+
+        store.importDirectory(root, updates::add);
+
+        int lastImport = -1;
+        for (int i = 0; i < updates.size(); i++) {
+            if (updates.get(i).phase() == ImportPhase.IMPORT) lastImport = i;
+        }
+        assertTrue(lastImport >= 0);
+        assertTrue(lastImport + 1 < updates.size());
+        assertEquals(ImportPhase.CHUNKING, updates.get(lastImport + 1).phase());
     }
 }

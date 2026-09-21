@@ -214,11 +214,16 @@ public final class LogImporter {
                 drain(queue, discoverer);
             }
 
-            observer.finished();
-
             RuntimeException discoveryFailure = failureRef.get();
             if (discoveryFailure != null && !stop.getAsBoolean()) throw discoveryFailure;
 
+            boolean postProcess = writer.writtenFiles() > 0
+                || (options.updateMetadataOnly() && options.updatesAnyMetadata());
+            if (postProcess) {
+                observer.beginChunking();
+            } else {
+                observer.finished();
+            }
             if (!options.updateMetadataOnly()) {
                 writer.deduplicate();
             } else {

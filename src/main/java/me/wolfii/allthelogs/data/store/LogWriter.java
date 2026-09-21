@@ -13,9 +13,11 @@ import java.sql.Timestamp;
 import java.sql.Types;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -414,60 +416,63 @@ public final class LogWriter implements AutoCloseable {
         long removed = 0;
         long removedFromThisImport = 0;
         try (Statement statement = connection.createStatement()) {
-            long[] sameSecond = deleteDuplicates(statement, """
+            DeletedRows sameSecond = deleteDuplicates(statement, """
                 DELETE FROM chat_entry WHERE rowid IN (
-                    SELECT rowid FROM (
-                        SELECT e.rowid,
-                               f.source_kind,
-                               row_number() OVER (
-                                   PARTITION BY date_trunc('second', e.entry_time),
-                                                replace(e.message, chr(92) || 'n', chr(10))
-                                   ORDER BY CASE WHEN f.source_kind = '%s' THEN 0 ELSE 1 END,
-                                            e.file_id,
-                                            e.line_index
-                               ) AS rn
-                        FROM chat_entry e
-                        JOIN log_file f ON f.id = e.file_id
-                    ) WHERE rn > 1 AND source_kind <> '%s'
-                ) RETURNING file_id""".formatted(SourceKind.SESSION.name(), SourceKind.SESSION.name()));
-            long[] nearLive = deleteDuplicates(statement, """
-                DELETE FROM chat_entry WHERE rowid IN (
-                    SELECT e.rowid
+                    SELECT DISTINCT e.rowid
                     FROM chat_entry e
                     JOIN log_file f ON f.id = e.file_id
-                    WHERE f.source_kind <> '%s'
-                      AND EXISTS (
-                          SELECT 1
-                          FROM chat_entry s
-                          JOIN log_file sf ON sf.id = s.file_id
-                          WHERE sf.source_kind = '%s'
-                            AND %s
-                            AND abs(date_diff('millisecond', s.entry_time, e.entry_time))
-                                <= %s * 1000
-                      )
-                ) RETURNING file_id""".formatted(SourceKind.SESSION.name(), SourceKind.SESSION.name(),
-                sameChatText("s.message", "e.message"), LIVE_DUPLICATE_WINDOW_SECONDS));
-            removed = sameSecond[0] + nearLive[0];
-            removedFromThisImport = sameSecond[1] + nearLive[1];
-            if (removed > 0) writtenFiles -= refreshFileAggregates(statement);
+                    JOIN chat_entry o
+                      ON o.file_id < e.file_id
+                     AND date_trunc('second', o.entry_time) = date_trunc('second', e.entry_time)
+                     AND %s
+                    WHERE e.file_id >= %d
+                      AND f.source_kind <> '%s'
+                ) RETURNING file_id""".formatted(
+                sameChatText("o.message", "e.message"), sessionStartId, SourceKind.SESSION.name()));
+            DeletedRows nearLive = deleteDuplicates(statement, """
+                DELETE FROM chat_entry WHERE rowid IN (
+                    SELECT DISTINCT e.rowid
+                    FROM chat_entry e
+                    JOIN log_file f ON f.id = e.file_id
+                    JOIN chat_entry s
+                      ON %s
+                     AND abs(date_diff('millisecond', s.entry_time, e.entry_time))
+                         <= %s * 1000
+                    JOIN log_file sf ON sf.id = s.file_id AND sf.source_kind = '%s'
+                    WHERE e.file_id >= %d
+                      AND f.source_kind <> '%s'
+                ) RETURNING file_id""".formatted(
+                sameChatText("s.message", "e.message"), LIVE_DUPLICATE_WINDOW_SECONDS,
+                SourceKind.SESSION.name(), sessionStartId, SourceKind.SESSION.name()));
+            removed = sameSecond.total + nearLive.total;
+            removedFromThisImport = sameSecond.fromThisImport + nearLive.fromThisImport;
+            if (removed > 0) {
+                Set<Long> touched = new HashSet<>();
+                touched.addAll(sameSecond.fileIds);
+                touched.addAll(nearLive.fileIds);
+                writtenFiles -= refreshFileAggregates(statement, touched);
+            }
         }
         writtenEntries -= removedFromThisImport;
         return removed;
     }
 
-    /**
-     * @return {@code [total deleted, deleted from this import]}
-     */
-    private long[] deleteDuplicates(Statement statement, String sql) throws SQLException {
+    private record DeletedRows(long total, long fromThisImport, List<Long> fileIds) {
+    }
+
+    private DeletedRows deleteDuplicates(Statement statement, String sql) throws SQLException {
         long total = 0;
         long fromThisImport = 0;
+        List<Long> fileIds = new ArrayList<>();
         try (ResultSet deleted = statement.executeQuery(sql)) {
             while (deleted.next()) {
+                long fileId = deleted.getLong(1);
                 total++;
-                if (deleted.getLong(1) >= sessionStartId) fromThisImport++;
+                fileIds.add(fileId);
+                if (fileId >= sessionStartId) fromThisImport++;
             }
         }
-        return new long[]{total, fromThisImport};
+        return new DeletedRows(total, fromThisImport, fileIds);
     }
 
     /**
@@ -477,21 +482,25 @@ public final class LogWriter implements AutoCloseable {
      * @return how many of this session's files were dropped because every one of their entries turned out to be a
      *         duplicate
      */
-    private int refreshFileAggregates(Statement statement) throws SQLException {
+    private int refreshFileAggregates(Statement statement, Set<Long> touchedFileIds) throws SQLException {
+        if (touchedFileIds.isEmpty()) return 0;
+        String idList = touchedFileIds.stream().map(String::valueOf).collect(Collectors.joining(","));
         statement.execute("""
             UPDATE log_file SET entry_count = coalesce(stats.count, 0)
             FROM (
                 SELECT f.id AS file_id, count(e.entry_time) AS count
                 FROM log_file f LEFT JOIN chat_entry e ON e.file_id = f.id
+                WHERE f.id IN (%s)
                 GROUP BY f.id
             ) stats
-            WHERE log_file.id = stats.file_id""");
+            WHERE log_file.id = stats.file_id""".formatted(idList));
 
         List<Long> emptyIds = new ArrayList<>();
         List<String> emptyLocations = new ArrayList<>();
         int emptySessionFiles = 0;
         try (ResultSet result = statement.executeQuery(
-            "SELECT id, source_path, entry_path FROM log_file WHERE entry_count = 0 AND source_kind <> '"
+            "SELECT id, source_path, entry_path FROM log_file WHERE entry_count = 0 AND id IN ("
+                + idList + ") AND source_kind <> '"
                 + SourceKind.SESSION.name() + "'")) {
             while (result.next()) {
                 long id = result.getLong(1);
