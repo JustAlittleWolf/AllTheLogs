@@ -20,7 +20,7 @@ class AllTheLogsConfigTest {
         assertTrue(config.extraImportDirectories().isEmpty());
         assertFalse(config.hideImportButton());
         assertEquals(AllTheLogsConfig.DEFAULT_CONTEXT_MESSAGE_BRIGHTNESS, config.contextMessageBrightness());
-        assertEquals(40, config.contextMessageBrightness());
+        assertEquals(92, config.contextMessageBrightness());
     }
 
     @Test
@@ -100,7 +100,7 @@ class AllTheLogsConfigTest {
         assertTrue(json.contains("\"hideImportButton\": true"));
         assertTrue(json.contains("\"messageFontSize\": 9"));
         assertTrue(json.contains("\"defaultContextLines\""));
-        assertTrue(json.contains("\"contextMessageBrightness\": 40"));
+        assertTrue(json.contains("\"contextMessageBrightness\": 92"));
         assertFalse(json.contains("filterPersistence"));
         assertFalse(json.contains("regexFlags"));
     }

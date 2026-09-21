@@ -17,7 +17,7 @@ public final class Colors {
      */
     public static final int CONTEXT_TIMESTAMP = 0xFF7E7E7E;
     /**
-     * Message text on context lines at the default brightness (40% of white).
+     * Message text on context lines at the default brightness ({@link AllTheLogsConfig#DEFAULT_CONTEXT_MESSAGE_BRIGHTNESS}% of white).
      */
     public static final int CONTEXT_TEXT = brightnessMultiply(AllTheLogsConfig.DEFAULT_CONTEXT_MESSAGE_BRIGHTNESS);
     /**

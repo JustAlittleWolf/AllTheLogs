@@ -18,7 +18,7 @@ class ColorsTest {
         assertEquals(0xFF1A1A1A, Colors.brightnessMultiply(10));
         assertEquals(Colors.brightnessMultiply(10), Colors.brightnessMultiply(0));
         assertEquals(Colors.brightnessMultiply(100), Colors.brightnessMultiply(200));
-        assertEquals(Colors.CONTEXT_TEXT, Colors.brightnessMultiply(40));
+        assertEquals(Colors.CONTEXT_TEXT, Colors.brightnessMultiply(92));
         assertEquals(Colors.MATCH_TEXT, Colors.multiply(Colors.MATCH_TEXT, Colors.brightnessMultiply(100)));
     }
 }

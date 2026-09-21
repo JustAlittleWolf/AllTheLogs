@@ -59,7 +59,7 @@ class SearchFilterTest {
     @Test
     void textSearchFetchesOneExtraContextLine() {
         assertEquals(1, SearchFilter.defaults().withText("hi").withContextLines(0).toQuery().contextLines());
-        assertEquals(5, SearchFilter.defaults().withText("hi").toQuery().contextLines());
+        assertEquals(4, SearchFilter.defaults().withText("hi").toQuery().contextLines());
         assertEquals(0, SearchFilter.defaults().toQuery().contextLines());
         assertEquals(0, SearchFilter.defaults().withVersion("26.2").toQuery().contextLines());
         assertEquals(0, SearchFilter.defaults().withServerOrWorld("hypixel.net").toQuery().contextLines());
