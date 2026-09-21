@@ -1,8 +1,6 @@
 package me.wolfii.allthelogs.data.extract;
 
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Finds the remote server or local world a log line was recorded on, and when the player left it.
@@ -26,18 +24,12 @@ public final class ServerOrWorldExtractor {
     private static final int DEFAULT_PORT = 25565;
     private static final String DEFAULT_PORT_SUFFIX = ":" + DEFAULT_PORT;
 
-    /** Host cannot contain a comma; a greedy {@code .+} backtracks badly on chat that mentions connecting. */
-    private static final Pattern CONNECTING = Pattern.compile("Connecting to ([^,]+), (\\d+)\\s*$");
-    private static final Pattern SAVING_LEVEL = Pattern.compile(
-        "Saving chunks for level '(?:ServerLevel\\[([^]]+)]|([^']+))'");
-    private static final Pattern LOADING_DIMENSION = Pattern.compile(
-        "Loading dimension -?\\d+ \\(([^)]+)\\) \\(net\\.minecraft\\.server\\.integrated\\.IntegratedServer@");
-    private static final Pattern CLIENT_STOP = Pattern.compile("]: Stopping!\\s*$");
-    private static final Pattern CLIENT_DISCONNECTED = Pattern.compile("]: Client disconnected with reason:");
-    private static final Pattern SINGLEPLAYER_STOP = Pattern.compile("Stopping singleplayer server");
-    private static final Pattern INTEGRATED_START = Pattern.compile("Starting integrated minecraft server");
-    private static final Pattern LOCAL_LOGIN = Pattern.compile("\\[local:E:[^]]+] logged in");
-    private static final Pattern GENERATING_KEYPAIR = Pattern.compile("]: Generating keypair\\s*$");
+    private static final String CONNECTING_TO = "Connecting to ";
+    private static final String SAVING_CHUNKS = "Saving chunks for level '";
+    private static final String LOADING_DIMENSION = "Loading dimension ";
+    private static final String INTEGRATED_SERVER_AT =
+        " (net.minecraft.server.integrated.IntegratedServer@";
+    private static final String SERVER_LEVEL = "ServerLevel[";
 
     private String current;
     private String last;
@@ -53,14 +45,16 @@ public final class ServerOrWorldExtractor {
             clearCurrent();
             return;
         }
-        if (isSingleplayerJoin(line) && isRemote(current)) {
+        boolean singleplayerJoin = isSingleplayerJoin(line);
+        if (singleplayerJoin && isRemote(current)) {
             current = null;
         }
-        if (isSessionStart(line)) {
+        Connecting connecting = connectingMatch(line);
+        if (connecting != null || singleplayerJoin) {
             inSession = true;
             placeAllowed = true;
         }
-        String found = find(line);
+        String found = placeFrom(line, connecting);
         if (found != null && found.startsWith(LOCAL_PREFIX) && isRemote(current)) {
             found = null;
         }
@@ -109,9 +103,9 @@ public final class ServerOrWorldExtractor {
      * reloads are not leaves.
      */
     public static boolean isLeave(String line) {
-        return containsAndFinds(line, "Stopping singleplayer server", SINGLEPLAYER_STOP)
-            || containsAndFinds(line, "]: Stopping!", CLIENT_STOP)
-            || containsAndFinds(line, "Client disconnected with reason:", CLIENT_DISCONNECTED);
+        return line.indexOf("Stopping singleplayer server") >= 0
+            || trailingAfter(line, "]: Stopping!")
+            || line.indexOf("Client disconnected with reason:") >= 0;
     }
 
     /**
@@ -119,7 +113,7 @@ public final class ServerOrWorldExtractor {
      * the world name is not known yet.
      */
     public static boolean isSessionStart(String line) {
-        return containsAndFinds(line, "Connecting to", CONNECTING) || isSingleplayerJoin(line);
+        return connectingMatch(line) != null || isSingleplayerJoin(line);
     }
 
     /**
@@ -127,40 +121,135 @@ public final class ServerOrWorldExtractor {
      * only later on save.
      */
     public static boolean isSingleplayerJoin(String line) {
-        return containsAndFinds(line, "Starting integrated minecraft server", INTEGRATED_START)
-            || containsAndFinds(line, "Loading dimension", LOADING_DIMENSION)
-            || containsAndFinds(line, "[local:E:", LOCAL_LOGIN)
-            || containsAndFinds(line, "Generating keypair", GENERATING_KEYPAIR);
+        return line.indexOf("Starting integrated minecraft server") >= 0
+            || trailingAfter(line, "]: Generating keypair")
+            || localLoginAt(line) >= 0
+            || loadingDimensionWorld(line) != null;
     }
 
     static String find(String line) {
-        Matcher connecting = line.indexOf("Connecting to") >= 0 ? CONNECTING.matcher(line) : null;
-        if (connecting != null && connecting.find()) {
-            String host = stripTrailingDots(connecting.group(1).strip());
+        return placeFrom(line, connectingMatch(line));
+    }
+
+    private static String placeFrom(String line, Connecting connecting) {
+        if (connecting != null) {
+            String host = stripTrailingDots(connecting.host().strip());
             int port;
             try {
-                port = Integer.parseInt(connecting.group(2));
+                port = Integer.parseInt(connecting.port());
             } catch (NumberFormatException e) {
                 return remote(host);
             }
             return port > 0 && port != DEFAULT_PORT ? remote(host + ":" + port) : remote(host);
         }
-        if (line.indexOf("Saving chunks for level") >= 0) {
-            Matcher saving = SAVING_LEVEL.matcher(line);
-            if (saving.find()) {
-                String name = saving.group(1) != null ? saving.group(1) : saving.group(2);
-                return localWorld(name);
-            }
-        }
-        if (line.indexOf("Loading dimension") >= 0) {
-            Matcher loading = LOADING_DIMENSION.matcher(line);
-            if (loading.find()) return localWorld(loading.group(1));
-        }
+        String saving = savingLevelWorld(line);
+        if (saving != null) return localWorld(saving);
+        String loading = loadingDimensionWorld(line);
+        if (loading != null) return localWorld(loading);
         return null;
     }
 
-    private static boolean containsAndFinds(String line, String needle, Pattern pattern) {
-        return line.indexOf(needle) >= 0 && pattern.matcher(line).find();
+    /**
+     * {@code Connecting to ([^,]+), (\\d+)\\s*$}. Host cannot contain a comma; a greedy
+     * {@code .+} backtracks badly on chat that mentions connecting.
+     */
+    private static Connecting connectingMatch(String line) {
+        if (line.indexOf("Connecting to") < 0) return null;
+        int from = 0;
+        while (true) {
+            int at = line.indexOf(CONNECTING_TO, from);
+            if (at < 0) return null;
+            int hostStart = at + CONNECTING_TO.length();
+            int comma = indexOfChar(line, ',', hostStart);
+            if (comma > hostStart) {
+                int i = comma + 1;
+                if (i < line.length() && line.charAt(i) == ' ') {
+                    int portStart = i + 1;
+                    int portEnd = portStart;
+                    while (portEnd < line.length() && ExtractChars.isDigit(line.charAt(portEnd))) portEnd++;
+                    if (portEnd > portStart && ExtractChars.onlyWhitespaceFrom(line, portEnd)) {
+                        return new Connecting(line.substring(hostStart, comma),
+                            line.substring(portStart, portEnd));
+                    }
+                }
+            }
+            from = at + 1;
+        }
+    }
+
+    /** {@code Saving chunks for level '(?:ServerLevel\\[([^]]+)]|([^']+))'} */
+    static String savingLevelWorld(String line) {
+        int from = 0;
+        while (true) {
+            int at = line.indexOf(SAVING_CHUNKS, from);
+            if (at < 0) return null;
+            int i = at + SAVING_CHUNKS.length();
+            if (line.startsWith(SERVER_LEVEL, i)) {
+                int nameStart = i + SERVER_LEVEL.length();
+                int close = indexOfChar(line, ']', nameStart);
+                if (close > nameStart) return line.substring(nameStart, close);
+            }
+            int quote = indexOfChar(line, '\'', i);
+            if (quote > i) return line.substring(i, quote);
+            from = at + 1;
+        }
+    }
+
+    /**
+     * {@code Loading dimension -?\\d+ \\(([^)]+)\\) \\(net\\.minecraft\\.server\\.integrated\\.IntegratedServer@}
+     */
+    static String loadingDimensionWorld(String line) {
+        if (line.indexOf("Loading dimension") < 0 || line.indexOf("IntegratedServer@") < 0) return null;
+        int from = 0;
+        while (true) {
+            int at = line.indexOf(LOADING_DIMENSION, from);
+            if (at < 0) return null;
+            int i = at + LOADING_DIMENSION.length();
+            int length = line.length();
+            if (i < length && line.charAt(i) == '-') i++;
+            int digits = i;
+            while (i < length && ExtractChars.isDigit(line.charAt(i))) i++;
+            if (i > digits && i + 1 < length && line.charAt(i) == ' ' && line.charAt(i + 1) == '(') {
+                int nameStart = i + 2;
+                int close = indexOfChar(line, ')', nameStart);
+                if (close > nameStart && line.startsWith(INTEGRATED_SERVER_AT, close + 1)) {
+                    return line.substring(nameStart, close);
+                }
+            }
+            from = at + 1;
+        }
+    }
+
+    private static int indexOfChar(String line, char c, int from) {
+        int at = line.indexOf(c, from);
+        return at < 0 ? -1 : at;
+    }
+
+    private record Connecting(String host, String port) {
+    }
+
+    /**
+     * Index of {@code [local:E:…]} when it is followed by {@code logged in}, or {@code -1}.
+     */
+    static int localLoginAt(String line) {
+        int start = line.indexOf("[local:E:");
+        if (start < 0) return -1;
+        int close = line.indexOf(']', start + 9);
+        if (close < 0 || !line.startsWith(" logged in", close + 1)) return -1;
+        return start;
+    }
+
+    /**
+     * {@code token} occurs, and only whitespace follows the last occurrence (same as {@code token\\s*$}).
+     */
+    private static boolean trailingAfter(String line, String token) {
+        int at = line.lastIndexOf(token);
+        if (at < 0) return false;
+        for (int i = at + token.length(); i < line.length(); i++) {
+            char c = line.charAt(i);
+            if (c != ' ' && c != '\t' && c != '\r' && c != '\n') return false;
+        }
+        return true;
     }
 
     /**
