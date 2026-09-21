@@ -291,6 +291,7 @@ public final class LogStore implements AutoCloseable {
     /**
      * Imports a live chat line using the player and server/world observed on the client when that
      * line was captured. Later calls without this context keep the last stamped values.
+     * The timestamp is the instant of capture, not the later database insert.
      *
      * @param minecraftUser the current player name, or {@code null} to keep the last known name
      * @param serverOrWorld the current remote server or {@code world/{name}}, or {@code null} after leave
@@ -300,7 +301,7 @@ public final class LogStore implements AutoCloseable {
         return importSessionMessage(message, formatting, LocalDateTime.now(), minecraftUser, serverOrWorld);
     }
 
-    boolean importSessionMessage(String message, long[] formatting, LocalDateTime timestamp,
+    public boolean importSessionMessage(String message, long[] formatting, LocalDateTime timestamp,
                                  String minecraftUser, String serverOrWorld) {
         sessions.stampLiveCapture(minecraftUser, serverOrWorld);
         return sessions.importMessage(message, formatting, timestamp);

@@ -31,6 +31,14 @@ import java.util.Objects;
  *                                       are converted to the JVM's default timezone for storage, so that files written
  *                                       in different zones stay comparable. Passing the default timezone leaves the
  *                                       values unchanged
+ * @param updateMetadataOnly             whether parsed logs are used only to fill metadata on messages already stored,
+ *                                       never to insert new chat lines or log files
+ * @param updateFormatting               when {@code updateMetadataOnly}, write formatting onto stored messages that
+ *                                       have none, if the log line has formatting
+ * @param updateMinecraftUser            when {@code updateMetadataOnly}, write the Minecraft player when the log has
+ *                                       one
+ * @param updateMinecraftServer          when {@code updateMetadataOnly}, write the server or world when the log has
+ *                                       one
  */
 public record ImportOptions(
     boolean recursive,
@@ -40,7 +48,11 @@ public record ImportOptions(
     boolean skipAlreadyImported,
     boolean optimize,
     int optimizeIfImportedFilesExceed,
-    ZoneId timezone
+    ZoneId timezone,
+    boolean updateMetadataOnly,
+    boolean updateFormatting,
+    boolean updateMinecraftUser,
+    boolean updateMinecraftServer
 ) {
     /**
      * Glob relative to a {@code logs} directory. Matches rotated and debug logs in that folder and any
@@ -73,7 +85,7 @@ public record ImportOptions(
      */
     public static ImportOptions defaults() {
         return new ImportOptions(true, true, null, Runtime.getRuntime().availableProcessors(), false, true, 0,
-            ZoneId.systemDefault());
+            ZoneId.systemDefault(), false, false, false, false);
     }
 
     /**
@@ -105,42 +117,64 @@ public record ImportOptions(
             .withPathMatcher(GAME_DIRECTORY_MATCHER);
     }
 
+    /**
+     * Whether this run should parse logs that would normally be skipped because their bytes or live-session
+     * marker already exist in the database. True when metadata is being patched and skip-already-imported is off.
+     */
+    public boolean reparseExistingLogs() {
+        return updateMetadataOnly && !skipAlreadyImported;
+    }
+
+    /**
+     * Whether any metadata field should be written during a metadata-only run.
+     */
+    public boolean updatesAnyMetadata() {
+        return updateMetadataOnly && (updateFormatting || updateMinecraftUser || updateMinecraftServer);
+    }
+
     public ImportOptions withRecursive(boolean recursive) {
-        return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
-            optimizeIfImportedFilesExceed, timezone);
+        return copy(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
+            optimizeIfImportedFilesExceed, timezone, updateMetadataOnly, updateFormatting, updateMinecraftUser,
+            updateMinecraftServer);
     }
 
     public ImportOptions withNestedArchives(boolean nestedArchives) {
-        return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
-            optimizeIfImportedFilesExceed, timezone);
+        return copy(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
+            optimizeIfImportedFilesExceed, timezone, updateMetadataOnly, updateFormatting, updateMinecraftUser,
+            updateMinecraftServer);
     }
 
     /**
      * @param pathMatcher a glob such as {@code **&#47;logs&#47;**}, or {@code null} to accept every file
      */
     public ImportOptions withPathMatcher(String pathMatcher) {
-        return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
-            optimizeIfImportedFilesExceed, timezone);
+        return copy(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
+            optimizeIfImportedFilesExceed, timezone, updateMetadataOnly, updateFormatting, updateMinecraftUser,
+            updateMinecraftServer);
     }
 
     public ImportOptions withParallelism(int parallelism) {
-        return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
-            optimizeIfImportedFilesExceed, timezone);
+        return copy(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
+            optimizeIfImportedFilesExceed, timezone, updateMetadataOnly, updateFormatting, updateMinecraftUser,
+            updateMinecraftServer);
     }
 
     public ImportOptions withSkipAlreadyImported(boolean skipAlreadyImported) {
-        return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
-            optimizeIfImportedFilesExceed, timezone);
+        return copy(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
+            optimizeIfImportedFilesExceed, timezone, updateMetadataOnly, updateFormatting, updateMinecraftUser,
+            updateMinecraftServer);
     }
 
     public ImportOptions withOptimize(boolean optimize) {
-        return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
-            optimizeIfImportedFilesExceed, timezone);
+        return copy(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
+            optimizeIfImportedFilesExceed, timezone, updateMetadataOnly, updateFormatting, updateMinecraftUser,
+            updateMinecraftServer);
     }
 
     public ImportOptions withOptimizeIfImportedFilesExceed(int optimizeIfImportedFilesExceed) {
-        return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
-            optimizeIfImportedFilesExceed, timezone);
+        return copy(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
+            optimizeIfImportedFilesExceed, timezone, updateMetadataOnly, updateFormatting, updateMinecraftUser,
+            updateMinecraftServer);
     }
 
     /**
@@ -149,8 +183,9 @@ public record ImportOptions(
      * leaves the values unchanged.
      */
     public ImportOptions withTimezone(ZoneId timezone) {
-        return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
-            optimizeIfImportedFilesExceed, timezone);
+        return copy(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
+            optimizeIfImportedFilesExceed, timezone, updateMetadataOnly, updateFormatting, updateMinecraftUser,
+            updateMinecraftServer);
     }
 
     /**
@@ -160,12 +195,47 @@ public record ImportOptions(
         return withTimezone(ZoneId.of(timezone));
     }
 
+    public ImportOptions withUpdateMetadataOnly(boolean updateMetadataOnly) {
+        return copy(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
+            optimizeIfImportedFilesExceed, timezone, updateMetadataOnly, updateFormatting, updateMinecraftUser,
+            updateMinecraftServer);
+    }
+
+    public ImportOptions withUpdateFormatting(boolean updateFormatting) {
+        return copy(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
+            optimizeIfImportedFilesExceed, timezone, updateMetadataOnly, updateFormatting, updateMinecraftUser,
+            updateMinecraftServer);
+    }
+
+    public ImportOptions withUpdateMinecraftUser(boolean updateMinecraftUser) {
+        return copy(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
+            optimizeIfImportedFilesExceed, timezone, updateMetadataOnly, updateFormatting, updateMinecraftUser,
+            updateMinecraftServer);
+    }
+
+    public ImportOptions withUpdateMinecraftServer(boolean updateMinecraftServer) {
+        return copy(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
+            optimizeIfImportedFilesExceed, timezone, updateMetadataOnly, updateFormatting, updateMinecraftUser,
+            updateMinecraftServer);
+    }
+
     /**
      * Whether this run should cluster and compact after {@code importedFiles} were newly stored.
+     * Metadata-only runs never rewrite the table: they only patch columns on existing rows.
      */
     public boolean shouldOptimize(int importedFiles) {
+        if (updateMetadataOnly) return false;
         if (importedFiles <= 0) return false;
         if (optimize) return true;
         return optimizeIfImportedFilesExceed > 0 && importedFiles > optimizeIfImportedFilesExceed;
+    }
+
+    private static ImportOptions copy(boolean recursive, boolean nestedArchives, String pathMatcher, int parallelism,
+                                      boolean skipAlreadyImported, boolean optimize, int optimizeIfImportedFilesExceed,
+                                      ZoneId timezone, boolean updateMetadataOnly, boolean updateFormatting,
+                                      boolean updateMinecraftUser, boolean updateMinecraftServer) {
+        return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
+            optimizeIfImportedFilesExceed, timezone, updateMetadataOnly, updateFormatting, updateMinecraftUser,
+            updateMinecraftServer);
     }
 }

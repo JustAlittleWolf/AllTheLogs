@@ -15,6 +15,10 @@ class ScrubberGeometryTest {
         assertEquals(0, ScrubberGeometry.scrollToRow(0, 800, 200), 0.0001);
         assertEquals(200, ScrubberGeometry.scrollToRow(200, 800, 200), 0.0001);
         assertEquals(600, ScrubberGeometry.scrollToRow(10_000, 800, 200), 0.0001);
+        assertEquals(0, ScrubberGeometry.scrollToRow(10, 800, 200, 2.0 / 3.0), 0.0001);
+        assertEquals(400 - (2.0 / 3.0) * 200, ScrubberGeometry.scrollToRow(400, 800, 200, 2.0 / 3.0), 0.0001);
+        assertEquals(600, ScrubberGeometry.scrollToRow(10_000, 800, 200, 2.0 / 3.0), 0.0001);
+        assertEquals(200, ScrubberGeometry.scrollToRow(400, 800, 200, 1), 0.0001);
         assertEquals(8, ScrubberGeometry.thumbGrabOffset(18, 10, 20, 200), 0.0001);
         assertEquals(10, ScrubberGeometry.thumbGrabOffset(4, 10, 20, 200), 0.0001);
         assertEquals(0, ScrubberGeometry.scrollForDateFraction(0, 400, 200, 0), 0.0001);

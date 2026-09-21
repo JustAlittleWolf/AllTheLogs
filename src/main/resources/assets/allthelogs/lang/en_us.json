@@ -30,7 +30,15 @@
   "allthelogs.import.nested_archives": "Nested archives",
   "allthelogs.import.nested_archives.hint": "Open zip, 7z, and tar files found while importing, including archives inside other archives.",
   "allthelogs.import.skip_imported": "Skip already imported",
-  "allthelogs.import.skip_imported.hint": "Leave out files that are already in the database instead of importing them again.",
+  "allthelogs.import.skip_imported.hint": "Leave out files that are already in the database instead of importing them again. Turn this off together with Update metadata only to re-read files that match a stored hash or a live session.",
+  "allthelogs.import.update_metadata": "Update metadata only",
+  "allthelogs.import.update_metadata.hint": "Do not store new messages. Fill selected fields on messages that are already in the database. Turn off Skip already imported so previously stored files, matching hashes, and session-tagged logs are parsed again.",
+  "allthelogs.import.update_metadata.formatting": "Formatting",
+  "allthelogs.import.update_metadata.formatting.hint": "Write formatting onto stored messages that have none, when the log line has formatting.",
+  "allthelogs.import.update_metadata.user": "Minecraft user",
+  "allthelogs.import.update_metadata.user.hint": "Set the Minecraft player when the log has a username. Existing live-imported names are left as they are.",
+  "allthelogs.import.update_metadata.server": "Minecraft server",
+  "allthelogs.import.update_metadata.server.hint": "Set the server or world when the log has one. Existing live-imported places are left as they are.",
   "allthelogs.import.path_matcher": "Path matcher",
   "allthelogs.import.path_matcher.hint": "Glob relative to the source path. Leave empty to import every file.\n\n* matches one folder or file name (not a slash).\n** matches nested folders.\n? matches one character.\n{*.log,*.log.gz} matches either pattern.\n[abc] matches one of those characters.\n\nExamples: **/logs/**, *.log, logs/*.log.gz",
   "allthelogs.import.threads": "Threads",
@@ -124,5 +132,7 @@
   "yacl3.config.minecraft:allthelogs.hideImportButton": "Hide import button",
   "yacl3.config.minecraft:allthelogs.hideImportButton.desc": "Remove the Import button from the messages screen. You can still open import with /allthelogs import.",
   "yacl3.config.minecraft:allthelogs.messageFontSize": "Message font size",
-  "yacl3.config.minecraft:allthelogs.messageFontSize.desc": "Size of chat lines."
+  "yacl3.config.minecraft:allthelogs.messageFontSize.desc": "Size of chat lines.",
+  "yacl3.config.minecraft:allthelogs.contextMessageBrightness": "Context message brightness",
+  "yacl3.config.minecraft:allthelogs.contextMessageBrightness.desc": "How bright neighbouring context lines are. 100% is full brightness (no darkening); 50% is half as bright."
 }

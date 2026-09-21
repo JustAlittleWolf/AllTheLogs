@@ -25,7 +25,11 @@ class ImportOptionsTest {
         assertTrue(ImportOptions.defaults().optimize());
         assertEquals(0, ImportOptions.defaults().optimizeIfImportedFilesExceed());
         assertTrue(ImportOptions.defaults().shouldOptimize(1));
-        assertFalse(ImportOptions.currentLogsDirectory().shouldOptimize(15));
-        assertTrue(ImportOptions.currentLogsDirectory().shouldOptimize(16));
+        assertFalse(ImportOptions.defaults().shouldOptimize(0));
+        ImportOptions metadata = ImportOptions.defaults().withUpdateMetadataOnly(true);
+        assertFalse(metadata.shouldOptimize(16));
+        assertFalse(ImportOptions.defaults().reparseExistingLogs());
+        assertTrue(metadata.withSkipAlreadyImported(false).reparseExistingLogs());
+        assertFalse(metadata.withSkipAlreadyImported(true).reparseExistingLogs());
     }
 }
