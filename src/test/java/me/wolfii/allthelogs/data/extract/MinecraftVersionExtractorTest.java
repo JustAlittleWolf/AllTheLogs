@@ -55,7 +55,7 @@ class MinecraftVersionExtractorTest {
         assertEquals("1.18.2", crash.version());
 
         MinecraftVersionExtractor dash = new MinecraftVersionExtractor();
-        dash.accept("Completely ignored arguments: [--username, x, --version, 1.20.1]");
+        dash.accept("Completely ignored arguments: --username x --version, 1.20.1");
         assertEquals("1.20.1", dash.version());
     }
 

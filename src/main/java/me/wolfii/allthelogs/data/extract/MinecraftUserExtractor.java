@@ -86,7 +86,7 @@ public final class MinecraftUserExtractor {
             int length = line.length();
             if (i < length && line.charAt(i) == ' ' && i + 1 < length && line.charAt(i + 1) == '(') {
                 int close = line.indexOf(')', i + 2);
-                if (close > i + 1 && line.startsWith(" as ", close + 1)) {
+                if (close > i + 2 && line.startsWith(" as ", close + 1)) {
                     int uuid = close + 5;
                     if (uuid + 37 <= length && hexDash36(line, uuid) && line.charAt(uuid + 36) == '/') {
                         int start = uuid + 37;
