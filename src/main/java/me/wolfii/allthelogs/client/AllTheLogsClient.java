@@ -1,6 +1,7 @@
 package me.wolfii.allthelogs.client;
 
 import me.wolfii.allthelogs.client.config.AllTheLogsConfig;
+import me.wolfii.allthelogs.client.config.StartupLogImports;
 import me.wolfii.allthelogs.data.LogSource;
 import me.wolfii.allthelogs.data.store.SessionMarker;
 import net.fabricmc.api.ClientModInitializer;
@@ -33,8 +34,8 @@ public final class AllTheLogsClient implements ClientModInitializer {
 
     /**
      * Whether startup has finished far enough for the vanilla loading overlay to fade: DuckDB failed
-     * to load, or the store is open, boot import (and its optimizations) have run, and the live
-     * session has started.
+     * to load, or the store is open and the live session has started. Instance log import may still
+     * be running on the store worker after this is true.
      */
     public static boolean isBootSettled() {
         return boot.isSettled();
@@ -78,17 +79,12 @@ public final class AllTheLogsClient implements ClientModInitializer {
     }
 
     /**
-     * Opens the log store after the DuckDB native library is on the classpath, then imports and
-     * starts a session. The loading overlay waits until that pipeline settles.
+     * Opens the log store after the DuckDB native library is on the classpath, then starts a
+     * session so the loading overlay can fade. Instance and extra-directory import continues on
+     * the store worker afterwards and does not block the client thread.
      */
     public static void onDriverReady() {
-        boot.start(
-                worker,
-                AllTheLogsPaths.database(),
-                AllTheLogsPaths.gameDirectory(),
-                AllTheLogsConfig.get().extraImportDirectories(),
-                minecraftVersion(),
-                currentUsername())
+        boot.start(worker, AllTheLogsPaths.database(), minecraftVersion(), currentUsername())
             .whenComplete((log, error) -> {
                 if (error != null) {
                     LOGGER.error("AllTheLogs failed to start", error);
@@ -97,6 +93,11 @@ public final class AllTheLogsClient implements ClientModInitializer {
                 if (log != null && log.source() instanceof LogSource.Session session && session.id() != null) {
                     LOGGER.info(SessionMarker.message(session.id()));
                 }
+                if (log == null) return;
+                StartupLogImports.importOnBoot(
+                    worker,
+                    AllTheLogsPaths.gameDirectory(),
+                    AllTheLogsConfig.get().extraImportDirectories());
             });
     }
 

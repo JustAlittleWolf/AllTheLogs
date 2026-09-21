@@ -9,9 +9,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * Keeps the vanilla loading overlay up until AllTheLogs has either failed to load DuckDB or
- * finished opening the store, importing (including post-import clustering/compact), and starting
- * the live session. A successful DuckDB download therefore never shows an extra screen, and the
- * store worker is free once the title screen appears.
+ * opened the store and started the live session. Directory import continues on the store worker
+ * after the overlay fades so a large logs folder cannot freeze the client thread or hold the
+ * title screen. Live chat that arrives during that import is queued until the worker is free.
  */
 @Mixin(LoadingOverlay.class)
 public abstract class LoadingOverlayMixin {

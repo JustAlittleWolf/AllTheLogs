@@ -1,6 +1,8 @@
 package me.wolfii.allthelogs.client;
 
+import me.wolfii.allthelogs.client.config.StartupLogImports;
 import me.wolfii.allthelogs.data.ChatEntry;
+import me.wolfii.allthelogs.data.ChatLog;
 import net.minecraft.network.chat.Component;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -24,7 +26,7 @@ class LogStoreBootTest {
     Path temp;
 
     @Test
-    void staysUnsettledUntilImportAndSessionFinishThenReleasesTheOverlay() throws Exception {
+    void releasesTheOverlayAfterTheSessionStartsWithoutImportingLogs() throws Exception {
         Path instance = temp.resolve("game");
         Path logs = instance.resolve("logs");
         Files.createDirectories(logs);
@@ -34,16 +36,34 @@ class LogStoreBootTest {
         assertFalse(boot.isSettled(), "loading overlay should hold before boot starts");
 
         try (LogStoreWorker worker = new LogStoreWorker()) {
-            var started = boot.start(worker, temp.resolve("logs.duckdb"), instance, List.of(),
-                "26.2", "Tester");
-            assertFalse(boot.isSettled(), "loading overlay should hold while import and clustering run");
-            assertNotNull(started.get(30, TimeUnit.SECONDS));
-            assertTrue(boot.isSettled(), "loading overlay may fade only after startSession returns");
+            var started = boot.start(worker, temp.resolve("logs.duckdb"), "26.2", "Tester");
+            ChatLog session = started.get(30, TimeUnit.SECONDS);
+            assertNotNull(session);
+            assertTrue(boot.isSettled(), "loading overlay may fade once the live session exists");
+            assertEquals(1, worker.chatLogs().join().size(),
+                "boot should start the live session without scanning the instance logs folder");
+            assertTrue(worker.allEntries().join().isEmpty());
+        }
+    }
+
+    @Test
+    void instanceLogsStillImportAfterTheOverlayIsReleased() throws Exception {
+        Path instance = temp.resolve("game");
+        Path logs = instance.resolve("logs");
+        Files.createDirectories(logs);
+        writeGzippedLog(logs.resolve("2026-01-02-1.log.gz"), "imported from boot");
+
+        LogStoreBoot boot = new LogStoreBoot();
+        try (LogStoreWorker worker = new LogStoreWorker()) {
+            boot.start(worker, temp.resolve("logs.duckdb"), "26.2", "Tester").get(30, TimeUnit.SECONDS);
+            assertTrue(boot.isSettled());
+
+            StartupLogImports.importOnBoot(worker, instance, List.of()).get(30, TimeUnit.SECONDS);
 
             List<String> messages = worker.allEntries().join().stream().map(ChatEntry::message).toList();
             assertTrue(messages.contains("imported from boot"));
             assertEquals(2, worker.chatLogs().join().size(),
-                "imported log plus the live session started at the end of boot");
+                "imported log plus the live session started before import");
         }
     }
 
@@ -51,8 +71,7 @@ class LogStoreBootTest {
     void aSecondStartIsANoOpAndDoesNotClearSettled() {
         LogStoreBoot boot = new LogStoreBoot();
         boot.markSettled();
-        assertTrue(boot.start(null, temp.resolve("x"), temp, List.of(), "26.2", null).toCompletableFuture()
-            .isDone());
+        assertTrue(boot.start(null, temp.resolve("x"), "26.2", null).isDone());
         assertTrue(boot.isSettled());
     }
 
@@ -66,7 +85,7 @@ class LogStoreBootTest {
     @Test
     void startWithANullWorkerSettlesImmediately() {
         LogStoreBoot boot = new LogStoreBoot();
-        assertNull(boot.start(null, temp.resolve("x"), temp, List.of(), "26.2", null).join());
+        assertNull(boot.start(null, temp.resolve("x"), "26.2", null).join());
         assertTrue(boot.isSettled());
     }
 
@@ -133,6 +152,37 @@ class LogStoreWorkerLiveQueueTest {
             assertTrue(Duration.between(first, second).toMillis() >= 20,
                 "queued live lines must keep the clock from ingest, not the later insert: first="
                     + first + " second=" + second);
+        }
+    }
+
+    @Test
+    void liveChatDuringAnImportAfterTheSessionHasStartedIsStoredWithCaptureTime() throws Exception {
+        Path logs = temp.resolve("logs");
+        Files.createDirectories(logs);
+        for (int day = 1; day <= 20; day++) {
+            Files.writeString(logs.resolve("2026-01-%02d-1.log".formatted(day)), """
+                [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+                [10:00:10] [Render thread/INFO]: [CHAT] file %d
+                """.formatted(day));
+        }
+
+        try (LogStoreWorker worker = new LogStoreWorker()) {
+            worker.open(temp.resolve("logs.duckdb")).join();
+            worker.startSession("26.2", "Tester").join();
+            var importFuture = worker.importDirectory(logs, me.wolfii.allthelogs.data.ImportOptions.currentLogsDirectory(),
+                null);
+            worker.importSessionMessage(Component.literal("during background import"), "Tester", "world/overworld");
+            LocalDateTime queuedAt = LocalDateTime.now();
+            importFuture.get(30, TimeUnit.SECONDS);
+
+            List<ChatEntry> entries = worker.allEntries().join();
+            ChatEntry live = entries.stream()
+                .filter(entry -> entry.message().equals("during background import"))
+                .findFirst()
+                .orElseThrow();
+            assertFalse(live.timestamp().isAfter(queuedAt),
+                "background import must not delay the stored capture time: " + live.timestamp()
+                    + " queued by " + queuedAt);
         }
     }
 }
