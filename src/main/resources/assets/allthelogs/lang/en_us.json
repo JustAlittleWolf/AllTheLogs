@@ -132,5 +132,7 @@
   "yacl3.config.minecraft:allthelogs.hideImportButton": "Hide import button",
   "yacl3.config.minecraft:allthelogs.hideImportButton.desc": "Remove the Import button from the messages screen. You can still open import with /allthelogs import.",
   "yacl3.config.minecraft:allthelogs.messageFontSize": "Message font size",
-  "yacl3.config.minecraft:allthelogs.messageFontSize.desc": "Size of chat lines."
+  "yacl3.config.minecraft:allthelogs.messageFontSize.desc": "Size of chat lines.",
+  "yacl3.config.minecraft:allthelogs.contextMessageBrightness": "Context message brightness",
+  "yacl3.config.minecraft:allthelogs.contextMessageBrightness.desc": "How bright neighbouring context lines are. 100% is full brightness (no darkening); 50% is half as bright."
 }

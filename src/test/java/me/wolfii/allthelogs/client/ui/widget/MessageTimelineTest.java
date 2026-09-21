@@ -1,6 +1,7 @@
 package me.wolfii.allthelogs.client.ui.widget;
 
 import me.wolfii.allthelogs.client.timeline.ScrubJump;
+import me.wolfii.allthelogs.client.timeline.ScrubberGeometry;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
@@ -59,5 +60,16 @@ class MessageTimelineTest {
         assertTrue(MessageTimeline.pinToBottomOnResize(200, 400, 200));
         assertTrue(MessageTimeline.pinToBottomOnResize(0, 120, 200));
         assertFalse(MessageTimeline.pinToBottomOnResize(40, 400, 200));
+    }
+
+    @Test
+    void searchStayAnchorIsTwoThirdsDownTheViewport() {
+        assertEquals(2.0 / 3.0, MessageTimeline.VIEWPORT_STAY_FRACTION, 0.0001);
+        assertEquals(140, ListView.contentYAtFraction(40, 0, 150, MessageTimeline.VIEWPORT_STAY_FRACTION), 0.0001);
+        assertEquals(40, ListView.contentYAtFraction(40, 0, 150, 0), 0.0001);
+        assertEquals(190, ListView.contentYAtFraction(40, 0, 150, 1), 0.0001);
+        assertEquals(20, ListView.contentYAtFraction(40, 20, 150, 0), 0.0001);
+        int stayY = (int) Math.round(ListView.contentYAtFraction(40, 0, 150, MessageTimeline.VIEWPORT_STAY_FRACTION));
+        assertEquals(40, ScrubberGeometry.scrollToRow(stayY, 800, 150, MessageTimeline.VIEWPORT_STAY_FRACTION), 0.0001);
     }
 }

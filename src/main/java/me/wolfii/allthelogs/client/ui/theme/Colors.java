@@ -1,5 +1,7 @@
 package me.wolfii.allthelogs.client.ui.theme;
 
+import me.wolfii.allthelogs.client.config.AllTheLogsConfig;
+
 /**
  * Palette for the log browser: message text, list chrome, the timeline track, and store-info tooltips.
  */
@@ -15,9 +17,9 @@ public final class Colors {
      */
     public static final int CONTEXT_TIMESTAMP = 0xFF7E7E7E;
     /**
-     * Message text on context lines, a bit darker than {@link #CONTEXT_TIMESTAMP}.
+     * Message text on context lines at the default brightness (40% of white).
      */
-    public static final int CONTEXT_TEXT = 0xFF686868;
+    public static final int CONTEXT_TEXT = brightnessMultiply(AllTheLogsConfig.DEFAULT_CONTEXT_MESSAGE_BRIGHTNESS);
     /**
      * Vertical bar that marks a context line between the timestamp and the message. Darker than
      * {@link #CONTEXT_TIMESTAMP}.
@@ -85,5 +87,13 @@ public final class Colors {
         int g = (((left >> 8) & 0xFF) * ((right >> 8) & 0xFF) + 127) / 255;
         int b = ((left & 0xFF) * (right & 0xFF) + 127) / 255;
         return (a << 24) | (r << 16) | (g << 8) | b;
+    }
+
+    /**
+     * Grey multiply for context-line brightness. {@code 100} is white (no change); {@code 50} is half brightness.
+     */
+    public static int brightnessMultiply(int percent) {
+        int channel = (int) Math.round(255.0 * Math.clamp(percent, 10, 100) / 100.0);
+        return 0xFF000000 | (channel << 16) | (channel << 8) | channel;
     }
 }

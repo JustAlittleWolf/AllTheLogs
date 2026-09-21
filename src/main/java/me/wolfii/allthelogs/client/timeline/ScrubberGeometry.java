@@ -85,9 +85,18 @@ public final class ScrubberGeometry {
      * on the bottom edge instead of leaving a gap.
      */
     public static double scrollToRow(int rowTop, int contentHeight, int viewHeight) {
+        return scrollToRow(rowTop, contentHeight, viewHeight, 0);
+    }
+
+    /**
+     * Scroll offset that puts {@code rowTop} at {@code viewFraction} of the way down the viewport
+     * ({@code 0} is the top, {@code 1} the bottom). Clamped so content cannot leave a gap past either end.
+     */
+    public static double scrollToRow(int rowTop, int contentHeight, int viewHeight, double viewFraction) {
         double max = Math.max(0, contentHeight - viewHeight);
-        if (rowTop < 0) return 0;
-        if (rowTop > max) return max;
-        return rowTop;
+        double desired = rowTop - Math.clamp(viewFraction, 0, 1) * Math.max(0, viewHeight);
+        if (desired < 0) return 0;
+        if (desired > max) return max;
+        return desired;
     }
 }

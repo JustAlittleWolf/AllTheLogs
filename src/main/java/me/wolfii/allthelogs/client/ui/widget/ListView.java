@@ -109,7 +109,7 @@ record ListView(int x, int y, int width, int height, double scrollY,
      * Index of the first row at least partly visible.
      */
     int firstVisibleRow() {
-        return Math.max(0, layout.rowAtY(scrollY - contentOrigin()));
+        return rowAtViewportFraction(0);
     }
 
     /**
@@ -117,7 +117,25 @@ record ListView(int x, int y, int width, int height, double scrollY,
      */
     int lastVisibleRow() {
         if (layout.size() == 0) return 0;
-        return Math.max(firstVisibleRow(), layout.rowAtY(scrollY - contentOrigin() + Math.max(0, height)));
+        return Math.max(firstVisibleRow(), rowAtViewportFraction(1));
+    }
+
+    /**
+     * Index of the row under {@code fraction} of the viewport height ({@code 0} is the top, {@code 1}
+     * the bottom). Used to keep a mid-screen message still when the page is replaced.
+     */
+    int rowAtViewportFraction(double fraction) {
+        if (layout.size() == 0 || rows.isEmpty()) return 0;
+        return Math.clamp(layout.rowAtY(contentYAtFraction(scrollY, contentOrigin(), height, fraction)),
+            0, rows.size() - 1);
+    }
+
+    /**
+     * Content-y at {@code fraction} of the viewport, matching {@link #contentY(double)} for
+     * {@code localY = fraction * height}.
+     */
+    static double contentYAtFraction(double scrollY, int contentOrigin, int viewHeight, double fraction) {
+        return scrollY - contentOrigin + Math.clamp(fraction, 0, 1) * Math.max(0, viewHeight);
     }
 
     boolean containsScreen(int screenX, int screenY) {
