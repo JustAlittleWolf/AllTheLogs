@@ -93,6 +93,16 @@ class LogStoreTest {
         store.close();
     }
 
+    private static ImportOptions metadataOnly(boolean formatting, boolean user, boolean server) {
+        return ImportOptions.defaults()
+            .withOptimize(false)
+            .withSkipAlreadyImported(false)
+            .withUpdateMetadataOnly(true)
+            .withUpdateFormatting(formatting)
+            .withUpdateMinecraftUser(user)
+            .withUpdateMinecraftServer(server);
+    }
+
     private Path logsDirectory() throws IOException {
         Path logs = tempDir.resolve("instance/logs");
         LogFixtures.writeGzipped(logs, "2026-08-24-1.log.gz",
@@ -1887,5 +1897,254 @@ class LogStoreTest {
         store.importDirectory(tempDir, ImportOptions.defaults().withTimezone(ZoneOffset.ofHours(14)));
         ChatLog plusFourteen = store.chatLogs().getFirst();
         assertEquals(LocalDate.of(2026, 8, 26), plusFourteen.date());
+    }
+
+    @Test
+    void metadataOnlyDoesNotInsertNewMessages() throws IOException {
+        Path logs = tempDir.resolve("logs");
+        LogFixtures.writePlain(logs, "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:10] [Render thread/INFO]: [CHAT] hello
+            """);
+        store.importDirectory(tempDir, ImportOptions.defaults().withOptimize(false));
+        LogFixtures.writePlain(logs, "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:10] [Render thread/INFO]: [CHAT] hello
+            [10:00:11] [Render thread/INFO]: [CHAT] extra
+            """);
+
+        ImportResult result = store.importDirectory(tempDir, metadataOnly(true, true, true));
+
+        assertTrue(result.failures().isEmpty(), () -> "failures=" + result.failures());
+        assertEquals(List.of("hello"), store.allEntries().stream().map(ChatEntry::message).toList());
+        assertEquals(1, store.chatLogs().size());
+    }
+
+    @Test
+    void metadataOnlyWritesFormattingWhenMissingAndFound() throws IOException {
+        Path logs = tempDir.resolve("logs");
+        LogFixtures.writePlain(logs, "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:10] [Render thread/INFO]: [CHAT] hello
+            """);
+        store.importDirectory(tempDir, ImportOptions.defaults().withOptimize(false));
+        assertNull(store.allEntries().getFirst().formatting());
+
+        LogFixtures.writePlain(logs, "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:10] [Render thread/INFO]: [CHAT] \u00a7chello
+            """);
+        store.importDirectory(tempDir, metadataOnly(true, false, false));
+        ChatEntry styled = store.allEntries().getFirst();
+        assertEquals("hello", styled.message());
+        assertEquals(PackedFormatting.color(0xFF5555), PackedFormatting.at(styled.formatting(), 0));
+
+        LogFixtures.writePlain(logs, "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:10] [Render thread/INFO]: [CHAT] \u00a7ahello
+            """);
+        store.importDirectory(tempDir, metadataOnly(true, false, false));
+        assertEquals(PackedFormatting.color(0xFF5555),
+            PackedFormatting.at(store.allEntries().getFirst().formatting(), 0));
+    }
+
+    @Test
+    void metadataOnlyDoesNotWriteUnselectedFields() throws IOException {
+        Path logs = tempDir.resolve("logs");
+        LogFixtures.writePlain(logs, "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:10] [Render thread/INFO]: [CHAT] hello
+            """);
+        store.importDirectory(tempDir, ImportOptions.defaults().withOptimize(false));
+        LogFixtures.writePlain(logs, "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:05] [Render thread/INFO]: Setting user: JustAlittleWolf
+            [10:00:06] [Render thread/INFO]: Connecting to unicacity.eu, 25565
+            [10:00:10] [Render thread/INFO]: [CHAT] \u00a7chello
+            """);
+
+        store.importDirectory(tempDir, metadataOnly(false, false, false));
+        ChatEntry unchanged = store.allEntries().getFirst();
+        assertNull(unchanged.formatting());
+        assertNull(unchanged.minecraftUser());
+        assertNull(unchanged.serverOrWorld());
+
+        store.importDirectory(tempDir, metadataOnly(false, true, false));
+        ChatEntry userOnly = store.allEntries().getFirst();
+        assertNull(userOnly.formatting());
+        assertEquals("JustAlittleWolf", userOnly.minecraftUser());
+        assertNull(userOnly.serverOrWorld());
+    }
+
+    @Test
+    void metadataOnlyWritesUserAndServerWhenTheLogHasThem() throws IOException {
+        Path logs = tempDir.resolve("logs");
+        LogFixtures.writePlain(logs, "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:10] [Render thread/INFO]: [CHAT] hello
+            """);
+        store.importDirectory(tempDir, ImportOptions.defaults().withOptimize(false));
+        LogFixtures.writePlain(logs, "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:05] [Render thread/INFO]: Setting user: JustAlittleWolf
+            [10:00:06] [Render thread/INFO]: Connecting to unicacity.eu, 25565
+            [10:00:10] [Render thread/INFO]: [CHAT] hello
+            """);
+
+        store.importDirectory(tempDir, metadataOnly(false, true, true));
+        ChatEntry entry = store.allEntries().getFirst();
+        assertEquals("JustAlittleWolf", entry.minecraftUser());
+        assertEquals("unicacity.eu", entry.serverOrWorld());
+        assertEquals("JustAlittleWolf", entry.chatLog().minecraftUser());
+    }
+
+    @Test
+    void metadataOnlyDoesNotClearUserOrServerWithNull() throws IOException {
+        Path logs = tempDir.resolve("logs");
+        LogFixtures.writePlain(logs, "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:05] [Render thread/INFO]: Setting user: JustAlittleWolf
+            [10:00:06] [Render thread/INFO]: Connecting to unicacity.eu, 25565
+            [10:00:10] [Render thread/INFO]: [CHAT] hello
+            """);
+        store.importDirectory(tempDir, ImportOptions.defaults().withOptimize(false));
+        LogFixtures.writePlain(logs, "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:10] [Render thread/INFO]: [CHAT] hello
+            """);
+
+        store.importDirectory(tempDir, metadataOnly(false, true, true));
+        ChatEntry entry = store.allEntries().getFirst();
+        assertEquals("JustAlittleWolf", entry.minecraftUser());
+        assertEquals("unicacity.eu", entry.serverOrWorld());
+    }
+
+    @Test
+    void metadataOnlyDoesNotOverwriteLiveUserServerOrFormatting() throws IOException {
+        LocalDateTime at = LocalDateTime.of(2026, 8, 26, 10, 0, 10);
+        store.startSession("26.2", at.minusSeconds(10), "LiveUser");
+        store.updateSessionPlace("live.example");
+        int red = PackedFormatting.color(0xFF5555);
+        assertTrue(store.importSessionMessage("hello", new long[]{PackedFormatting.run(0, 5, red)}, at));
+
+        LogFixtures.writePlain(tempDir.resolve("logs"), "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:05] [Render thread/INFO]: Setting user: FileUser
+            [10:00:06] [Render thread/INFO]: Connecting to file.example, 25565
+            [10:00:10] [Render thread/INFO]: [CHAT] \u00a7ahello
+            """);
+        store.importDirectory(tempDir, metadataOnly(true, true, true));
+
+        ChatEntry live = store.allEntries().getFirst();
+        assertInstanceOf(LogSource.Session.class, live.chatLog().source());
+        assertEquals("LiveUser", live.minecraftUser());
+        assertEquals("live.example", live.serverOrWorld());
+        assertEquals(red, PackedFormatting.at(live.formatting(), 0));
+        assertEquals(1, store.allEntries().size());
+    }
+
+    @Test
+    void metadataOnlyFillsNullLiveUserServerAndFormatting() throws IOException {
+        LocalDateTime at = LocalDateTime.of(2026, 8, 26, 10, 0, 10);
+        store.startSession("26.2", at.minusSeconds(10));
+        assertTrue(store.importSessionMessage("hello", at));
+        assertNull(store.allEntries().getFirst().formatting());
+        assertNull(store.allEntries().getFirst().minecraftUser());
+        assertNull(store.allEntries().getFirst().serverOrWorld());
+
+        LogFixtures.writePlain(tempDir.resolve("logs"), "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:05] [Render thread/INFO]: Setting user: FileUser
+            [10:00:06] [Render thread/INFO]: Connecting to file.example, 25565
+            [10:00:10] [Render thread/INFO]: [CHAT] \u00a7chello
+            """);
+        store.importDirectory(tempDir, metadataOnly(true, true, true));
+
+        ChatEntry live = store.allEntries().getFirst();
+        assertInstanceOf(LogSource.Session.class, live.chatLog().source());
+        assertEquals("FileUser", live.minecraftUser());
+        assertEquals("file.example", live.serverOrWorld());
+        assertEquals(PackedFormatting.color(0xFF5555), PackedFormatting.at(live.formatting(), 0));
+        assertEquals("FileUser", live.chatLog().minecraftUser());
+    }
+
+    @Test
+    void metadataOnlyWithSkipOffReparsesAMatchingHash() throws IOException {
+        Path original = tempDir.resolve("original");
+        String body = """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:10] [Render thread/INFO]: [CHAT] hello
+            """;
+        Path firstFile = LogFixtures.writeGzipped(original, "2026-08-26-1.log.gz", body);
+        store.importDirectory(original, ImportOptions.defaults().withOptimize(false).withSkipAlreadyImported(true));
+
+        Path copy = tempDir.resolve("copy");
+        Files.createDirectories(copy);
+        Files.copy(firstFile, copy.resolve("2026-08-27-1.log.gz"));
+        ImportResult skipped = store.importDirectory(copy, metadataOnly(true, true, true).withSkipAlreadyImported(true));
+        assertEquals(1, skipped.skippedFiles());
+        assertEquals(0, skipped.importedFiles());
+
+        ImportResult reparsed = store.importDirectory(copy, metadataOnly(true, true, true));
+        assertEquals(0, reparsed.skippedFiles(), () -> "failures=" + reparsed.failures());
+        assertEquals(1, store.chatLogs().size());
+        assertEquals(List.of("hello"), store.allEntries().stream().map(ChatEntry::message).toList());
+    }
+
+    @Test
+    void metadataOnlyWithSkipOffReparsesAMatchingSessionToken() throws IOException {
+        LocalDateTime at = LocalDateTime.of(2026, 8, 26, 10, 0, 10);
+        ChatLog session = store.startSession("26.2", at.minusSeconds(10));
+        String sessionId = ((LogSource.Session) session.source()).id();
+        assertTrue(store.importSessionMessage("hello", at));
+
+        LogFixtures.writeGzipped(tempDir.resolve("logs"), "2026-08-26-1.log.gz",
+            taggedLog(sessionId, "10:00:10", "\u00a7chello"));
+        ImportResult skipped = store.importDirectory(tempDir,
+            metadataOnly(true, false, false).withSkipAlreadyImported(true));
+        assertEquals(1, skipped.skippedFiles());
+        assertNull(store.allEntries().getFirst().formatting());
+
+        ImportResult reparsed = store.importDirectory(tempDir, metadataOnly(true, false, false));
+        assertEquals(0, reparsed.skippedFiles(), () -> "failures=" + reparsed.failures());
+        ChatEntry live = store.allEntries().getFirst();
+        assertInstanceOf(LogSource.Session.class, live.chatLog().source());
+        assertEquals("hello", live.message());
+        assertEquals(PackedFormatting.color(0xFF5555), PackedFormatting.at(live.formatting(), 0));
+        assertEquals(1, store.chatLogs().size());
+    }
+
+    @Test
+    void fileImportSkipsALiveMessageWithinThreeSeconds() throws IOException {
+        LocalDateTime at = LocalDateTime.of(2026, 8, 26, 10, 0, 10, 400_000_000);
+        store.startSession("26.2", at.minusSeconds(10));
+        assertTrue(store.importSessionMessage("hello", at));
+
+        LogFixtures.writePlain(tempDir.resolve("logs"), "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:12] [Render thread/INFO]: [CHAT] hello
+            [10:00:13] [Render thread/INFO]: [CHAT] only in the file
+            """);
+        store.importDirectory(tempDir, ImportOptions.defaults().withOptimize(false));
+
+        assertEquals(List.of("hello", "only in the file"),
+            store.allEntries().stream().map(ChatEntry::message).toList());
+        assertInstanceOf(LogSource.Session.class,
+            store.findEntries(ChatQuery.all().withSubstring("hello")).getFirst().chatLog().source());
+    }
+
+    @Test
+    void fileImportKeepsALiveMessageMoreThanThreeSecondsAway() throws IOException {
+        LocalDateTime at = LocalDateTime.of(2026, 8, 26, 10, 0, 10);
+        store.startSession("26.2", at.minusSeconds(10));
+        assertTrue(store.importSessionMessage("hello", at));
+
+        LogFixtures.writePlain(tempDir.resolve("logs"), "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:14] [Render thread/INFO]: [CHAT] hello
+            """);
+        store.importDirectory(tempDir, ImportOptions.defaults().withOptimize(false));
+
+        assertEquals(2, store.findEntries(ChatQuery.all().withSubstring("hello")).size());
     }
 }

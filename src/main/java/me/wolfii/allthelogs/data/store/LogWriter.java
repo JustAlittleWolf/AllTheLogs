@@ -1,5 +1,7 @@
 package me.wolfii.allthelogs.data.store;
 
+import me.wolfii.allthelogs.data.ImportOptions;
+import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import org.duckdb.DuckDBAppender;
 import org.duckdb.DuckDBConnection;
 
@@ -7,6 +9,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Timestamp;
+import java.sql.Types;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -20,6 +24,8 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class LogWriter implements AutoCloseable {
     private static final int FLUSH_INTERVAL = 100_000;
+    /** File-imported lines that repeat a live session line with the same text this close are dropped. */
+    static final int LIVE_DUPLICATE_WINDOW_SECONDS = 3;
 
     private final DuckDBConnection connection;
     private final DuckDBAppender fileAppender;
@@ -36,6 +42,7 @@ public final class LogWriter implements AutoCloseable {
     private long bufferedEntries;
     private long writtenEntries;
     private int writtenFiles;
+    private boolean metadataPatchReady;
 
     public LogWriter(DuckDBConnection connection) throws SQLException {
         this.connection = connection;
@@ -196,6 +203,165 @@ public final class LogWriter implements AutoCloseable {
         if (bufferedEntries >= FLUSH_INTERVAL) flushAppenders();
     }
 
+    /**
+     * Patches metadata on already stored chat lines that match this parsed log. No new {@code log_file} or
+     * {@code chat_entry} rows are inserted. Matching prefers the same source path and line index, and
+     * otherwise the same message text within {@link #LIVE_DUPLICATE_WINDOW_SECONDS}.
+     * <p>
+     * Formatting is written only when the stored line has none and the log line has some. Username and
+     * server/world are written only when the log value is non-null. Live session fields that already have
+     * a value are left unchanged.
+     */
+    public void updateMetadata(PreparedLog log, ImportOptions options) throws SQLException {
+        markConsidered(log.sourcePath(), log.entryPath(), log.contentHash());
+        if (!options.updatesAnyMetadata() || log.messages().isEmpty()) {
+            return;
+        }
+        flushAppenders();
+        ensureMetadataPatchTable();
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("DELETE FROM metadata_patch");
+        }
+        List<LocalDateTime> times = log.entryTimes();
+        List<String> messages = log.messages();
+        List<long[]> formattings = log.formattings();
+        List<String> users = log.entryUsers();
+        List<String> places = log.entryServerOrWorlds();
+        try (PreparedStatement insert = connection.prepareStatement("""
+            INSERT INTO metadata_patch (seq, entry_time, message, formatting, minecraft_user, server_or_world)
+            VALUES (?, ?, ?, CAST(? AS BIGINT[]), ?, ?)
+            """)) {
+            for (int i = 0; i < times.size(); i++) {
+                LocalDateTime time = times.get(i);
+                insert.setInt(1, i);
+                insert.setTimestamp(2, Timestamp.valueOf(time));
+                insert.setString(3, messages.get(i));
+                long[] formatting = formattings != null && i < formattings.size() ? formattings.get(i) : null;
+                String literal = PackedFormatting.toSqlLiteral(formatting);
+                if (literal == null) {
+                    insert.setNull(4, Types.VARCHAR);
+                } else {
+                    insert.setString(4, literal);
+                }
+                String user = users != null && i < users.size() ? users.get(i) : log.minecraftUser();
+                if (user == null) {
+                    insert.setNull(5, Types.VARCHAR);
+                } else {
+                    insert.setString(5, user);
+                }
+                String place = places != null && i < places.size() ? places.get(i) : null;
+                if (place == null) {
+                    insert.setNull(6, Types.VARCHAR);
+                } else {
+                    insert.setString(6, place);
+                }
+                insert.execute();
+            }
+        }
+
+        String window = String.valueOf(LIVE_DUPLICATE_WINDOW_SECONDS);
+        String formattingFlag = options.updateFormatting() ? "true" : "false";
+        String userFlag = options.updateMinecraftUser() ? "true" : "false";
+        String serverFlag = options.updateMinecraftServer() ? "true" : "false";
+        String session = SourceKind.SESSION.name();
+        try (PreparedStatement update = connection.prepareStatement("""
+            UPDATE chat_entry
+            SET
+                formatting = CASE
+                    WHEN %s AND chat_entry.formatting IS NULL AND m.new_formatting IS NOT NULL
+                    THEN m.new_formatting ELSE chat_entry.formatting END,
+                minecraft_user = CASE
+                    WHEN %s AND m.new_user IS NOT NULL
+                         AND (m.kind <> '%s' OR chat_entry.minecraft_user IS NULL)
+                    THEN m.new_user ELSE chat_entry.minecraft_user END,
+                server_or_world = CASE
+                    WHEN %s AND m.new_place IS NOT NULL
+                         AND (m.kind <> '%s' OR chat_entry.server_or_world IS NULL)
+                    THEN m.new_place ELSE chat_entry.server_or_world END
+            FROM (
+                SELECT rid, kind, new_formatting, new_user, new_place FROM (
+                    SELECT
+                        e.rowid AS rid,
+                        e.file_id AS file_id,
+                        f.source_kind AS kind,
+                        p.formatting AS new_formatting,
+                        p.minecraft_user AS new_user,
+                        p.server_or_world AS new_place,
+                        row_number() OVER (
+                            PARTITION BY e.rowid
+                            ORDER BY
+                                CASE WHEN f.source_path = ? AND f.entry_path = ? AND e.line_index = p.seq
+                                    THEN 0 ELSE 1 END,
+                                abs(date_diff('millisecond', e.entry_time, p.entry_time)),
+                                p.seq
+                        ) AS rn
+                    FROM chat_entry e
+                    JOIN log_file f ON f.id = e.file_id
+                    JOIN metadata_patch p ON e.message = p.message
+                    WHERE (f.source_path = ? AND f.entry_path = ? AND e.line_index = p.seq)
+                       OR abs(date_diff('millisecond', e.entry_time, p.entry_time)) <= %s * 1000
+                ) ranked
+                WHERE rn = 1
+            ) m
+            WHERE chat_entry.rowid = m.rid
+            """.formatted(formattingFlag, userFlag, session, serverFlag, session, window))) {
+            update.setString(1, log.sourcePath());
+            update.setString(2, log.entryPath());
+            update.setString(3, log.sourcePath());
+            update.setString(4, log.entryPath());
+            int updated = update.executeUpdate();
+            if (updated > 0 && options.updateMinecraftUser() && log.minecraftUser() != null) {
+                updateLogFileUsers(log);
+            }
+            if (updated > 0) {
+                writtenFiles++;
+                writtenEntries += updated;
+            }
+        }
+    }
+
+    private void ensureMetadataPatchTable() throws SQLException {
+        if (metadataPatchReady) return;
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("""
+                CREATE TEMP TABLE IF NOT EXISTS metadata_patch (
+                    seq INTEGER,
+                    entry_time TIMESTAMP,
+                    message VARCHAR,
+                    formatting BIGINT[],
+                    minecraft_user VARCHAR,
+                    server_or_world VARCHAR
+                )
+                """);
+        }
+        metadataPatchReady = true;
+    }
+
+    private void updateLogFileUsers(PreparedLog log) throws SQLException {
+        try (PreparedStatement update = connection.prepareStatement("""
+            UPDATE log_file SET minecraft_user = CASE
+                WHEN source_kind = ? THEN coalesce(minecraft_user, ?)
+                ELSE ?
+            END
+            WHERE (source_path = ? AND entry_path = ?)
+               OR (source_kind = ? AND minecraft_user IS NULL AND id IN (
+                    SELECT DISTINCT e.file_id
+                    FROM chat_entry e
+                    JOIN metadata_patch p ON e.message = p.message
+                    WHERE abs(date_diff('millisecond', e.entry_time, p.entry_time)) <= ? * 1000
+               ))
+            """)) {
+            update.setString(1, SourceKind.SESSION.name());
+            update.setString(2, log.minecraftUser());
+            update.setString(3, log.minecraftUser());
+            update.setString(4, log.sourcePath());
+            update.setString(5, log.entryPath());
+            update.setString(6, SourceKind.SESSION.name());
+            update.setInt(7, LIVE_DUPLICATE_WINDOW_SECONDS);
+            update.execute();
+        }
+    }
+
     public int writtenFiles() {
         return writtenFiles;
     }
@@ -205,39 +371,70 @@ public final class LogWriter implements AutoCloseable {
     }
 
     /**
-     * Drops entries from imported files that duplicate an existing entry (either from a live session
-     * or an earlier imported file) within the same second. Live session entries are never dropped.
+     * Drops entries from imported files that duplicate an existing entry: the same message in the same
+     * second (file or live), or the same message as a live session line within
+     * {@link #LIVE_DUPLICATE_WINDOW_SECONDS}. Live session entries are never dropped.
      *
      * @return the number of removed entries, across the whole store
      */
     public long deduplicate() throws SQLException {
         flushAppenders();
         long removed = 0;
-        long removedFromSession = 0;
-        try (Statement statement = connection.createStatement();
-             ResultSet deleted = statement.executeQuery("""
-                 DELETE FROM chat_entry WHERE rowid IN (
-                     SELECT rowid FROM (
-                         SELECT e.rowid,
-                                f.source_kind,
-                                row_number() OVER (
-                                    PARTITION BY date_trunc('second', e.entry_time), e.message
-                                    ORDER BY CASE WHEN f.source_kind = '%s' THEN 0 ELSE 1 END,
-                                             e.file_id,
-                                             e.line_index
-                                ) AS rn
-                         FROM chat_entry e
-                         JOIN log_file f ON f.id = e.file_id
-                     ) WHERE rn > 1 AND source_kind <> '%s'
-                 ) RETURNING file_id""".formatted(SourceKind.SESSION.name(), SourceKind.SESSION.name()))) {
-            while (deleted.next()) {
-                removed++;
-                if (deleted.getLong(1) >= sessionStartId) removedFromSession++;
-            }
+        long removedFromThisImport = 0;
+        try (Statement statement = connection.createStatement()) {
+            long[] sameSecond = deleteDuplicates(statement, """
+                DELETE FROM chat_entry WHERE rowid IN (
+                    SELECT rowid FROM (
+                        SELECT e.rowid,
+                               f.source_kind,
+                               row_number() OVER (
+                                   PARTITION BY date_trunc('second', e.entry_time), e.message
+                                   ORDER BY CASE WHEN f.source_kind = '%s' THEN 0 ELSE 1 END,
+                                            e.file_id,
+                                            e.line_index
+                               ) AS rn
+                        FROM chat_entry e
+                        JOIN log_file f ON f.id = e.file_id
+                    ) WHERE rn > 1 AND source_kind <> '%s'
+                ) RETURNING file_id""".formatted(SourceKind.SESSION.name(), SourceKind.SESSION.name()));
+            long[] nearLive = deleteDuplicates(statement, """
+                DELETE FROM chat_entry WHERE rowid IN (
+                    SELECT e.rowid
+                    FROM chat_entry e
+                    JOIN log_file f ON f.id = e.file_id
+                    WHERE f.source_kind <> '%s'
+                      AND EXISTS (
+                          SELECT 1
+                          FROM chat_entry s
+                          JOIN log_file sf ON sf.id = s.file_id
+                          WHERE sf.source_kind = '%s'
+                            AND s.message = e.message
+                            AND abs(date_diff('millisecond', s.entry_time, e.entry_time))
+                                <= %s * 1000
+                      )
+                ) RETURNING file_id""".formatted(SourceKind.SESSION.name(), SourceKind.SESSION.name(),
+                LIVE_DUPLICATE_WINDOW_SECONDS));
+            removed = sameSecond[0] + nearLive[0];
+            removedFromThisImport = sameSecond[1] + nearLive[1];
             if (removed > 0) writtenFiles -= refreshFileAggregates(statement);
         }
-        writtenEntries -= removedFromSession;
+        writtenEntries -= removedFromThisImport;
         return removed;
+    }
+
+    /**
+     * @return {@code [total deleted, deleted from this import]}
+     */
+    private long[] deleteDuplicates(Statement statement, String sql) throws SQLException {
+        long total = 0;
+        long fromThisImport = 0;
+        try (ResultSet deleted = statement.executeQuery(sql)) {
+            while (deleted.next()) {
+                total++;
+                if (deleted.getLong(1) >= sessionStartId) fromThisImport++;
+            }
+        }
+        return new long[]{total, fromThisImport};
     }
 
     /**
