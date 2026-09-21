@@ -2183,4 +2183,47 @@ class LogStoreTest {
 
         assertEquals(2, store.findEntries(ChatQuery.all().withSubstring("hello")).size());
     }
+
+    @Test
+    void metadataOnlyMatchesLogBackslashNToALiveNewline() throws IOException {
+        LocalDateTime at = LocalDateTime.of(2026, 8, 26, 21, 45, 24, 32_000_000);
+        store.startSession("26.2", at.minusSeconds(10), "JustAlittleWolf");
+        String live = "[JoinMe] zProxify spielt nun ItemChaos (Quidditch 8x1)\n"
+            + "[JoinMe] Klicke hier zum: [MITSPIELEN]";
+        assertTrue(store.importSessionMessage(live, at));
+        assertNull(store.allEntries().getFirst().serverOrWorld());
+
+        LogFixtures.writePlain(tempDir.resolve("logs"), "2026-08-26-1.log", """
+            [20:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [20:00:01] [Render thread/INFO]: Setting user: JustAlittlePanda
+            [20:00:02] [Render thread/INFO]: Connecting to gommehd.net, 25565
+            [21:45:24] [Render thread/INFO]: [CHAT] [JoinMe] zProxify spielt nun ItemChaos (Quidditch 8x1)\\n[JoinMe] Klicke hier zum: [MITSPIELEN]
+            """);
+        store.importDirectory(tempDir, metadataOnly(true, true, true));
+
+        ChatEntry liveEntry = store.allEntries().getFirst();
+        assertEquals(1, store.allEntries().size());
+        assertInstanceOf(LogSource.Session.class, liveEntry.chatLog().source());
+        assertEquals("JustAlittleWolf", liveEntry.minecraftUser());
+        assertEquals("gommehd.net", liveEntry.serverOrWorld());
+        assertEquals("JustAlittleWolf", liveEntry.chatLog().minecraftUser());
+    }
+
+    @Test
+    void fileImportSkipsALiveMessageWhoseLogUsesBackslashN() throws IOException {
+        LocalDateTime at = LocalDateTime.of(2026, 8, 26, 21, 45, 24, 32_000_000);
+        store.startSession("26.2", at.minusSeconds(10));
+        String live = "[JoinMe] zProxify spielt nun ItemChaos (Quidditch 8x1)\n"
+            + "[JoinMe] Klicke hier zum: [MITSPIELEN]";
+        assertTrue(store.importSessionMessage(live, at));
+
+        LogFixtures.writePlain(tempDir.resolve("logs"), "2026-08-26-1.log", """
+            [20:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [21:45:24] [Render thread/INFO]: [CHAT] [JoinMe] zProxify spielt nun ItemChaos (Quidditch 8x1)\\n[JoinMe] Klicke hier zum: [MITSPIELEN]
+            """);
+        store.importDirectory(tempDir, ImportOptions.defaults().withOptimize(false));
+
+        assertEquals(1, store.allEntries().size());
+        assertInstanceOf(LogSource.Session.class, store.allEntries().getFirst().chatLog().source());
+    }
 }

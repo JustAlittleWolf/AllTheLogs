@@ -24,8 +24,19 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class LogWriter implements AutoCloseable {
     private static final int FLUSH_INTERVAL = 100_000;
-    /** File-imported lines that repeat a live session line with the same text this close are dropped. */
+    /**
+     * File-imported lines that repeat a live session line with the same text this close are dropped.
+     * Log files write a linebreak as the two characters {@code \n}; live capture stores a real newline.
+     */
     static final int LIVE_DUPLICATE_WINDOW_SECONDS = 3;
+
+    /**
+     * SQL that treats a stored {@code \n} pair as the same character as a live newline.
+     */
+    private static String sameChatText(String left, String right) {
+        return "replace(" + left + ", chr(92) || 'n', chr(10)) = replace(" + right
+            + ", chr(92) || 'n', chr(10))";
+    }
 
     private final DuckDBConnection connection;
     private final DuckDBAppender fileAppender;
@@ -308,15 +319,17 @@ public final class LogWriter implements AutoCloseable {
                             ) AS rn
                         FROM chat_entry e
                         JOIN log_file f ON f.id = e.file_id
-                        JOIN metadata_patch p ON e.message = p.message
-                        WHERE (f.source_path = p.source_path AND f.entry_path = p.entry_path
-                                AND e.line_index = p.seq)
-                           OR abs(date_diff('millisecond', e.entry_time, p.entry_time)) <= %s * 1000
+                        JOIN metadata_patch p
+                          ON (f.source_path = p.source_path AND f.entry_path = p.entry_path
+                              AND e.line_index = p.seq)
+                          OR (%s
+                              AND abs(date_diff('millisecond', e.entry_time, p.entry_time)) <= %s * 1000)
                     ) ranked
                     WHERE rn = 1
                 ) m
                 WHERE chat_entry.rowid = m.rid
-                """.formatted(formattingFlag, userFlag, session, serverFlag, session, window));
+                """.formatted(formattingFlag, userFlag, session, serverFlag, session,
+                    sameChatText("e.message", "p.message"), window));
             if (updated > 0 && options.updateMinecraftUser()) {
                 updateLogFileUsers();
             }
@@ -368,7 +381,7 @@ public final class LogWriter implements AutoCloseable {
                 FROM (
                     SELECT e.file_id, p.minecraft_user
                     FROM chat_entry e
-                    JOIN metadata_patch p ON e.message = p.message
+                    JOIN metadata_patch p ON %s
                     WHERE p.minecraft_user IS NOT NULL
                       AND abs(date_diff('millisecond', e.entry_time, p.entry_time))
                           <= %d * 1000
@@ -377,7 +390,7 @@ public final class LogWriter implements AutoCloseable {
                 WHERE log_file.id = p.file_id
                   AND log_file.source_kind = '%s'
                   AND log_file.minecraft_user IS NULL
-                """.formatted(LIVE_DUPLICATE_WINDOW_SECONDS, session));
+                """.formatted(sameChatText("e.message", "p.message"), LIVE_DUPLICATE_WINDOW_SECONDS, session));
         }
     }
 
@@ -407,7 +420,8 @@ public final class LogWriter implements AutoCloseable {
                         SELECT e.rowid,
                                f.source_kind,
                                row_number() OVER (
-                                   PARTITION BY date_trunc('second', e.entry_time), e.message
+                                   PARTITION BY date_trunc('second', e.entry_time),
+                                                replace(e.message, chr(92) || 'n', chr(10))
                                    ORDER BY CASE WHEN f.source_kind = '%s' THEN 0 ELSE 1 END,
                                             e.file_id,
                                             e.line_index
@@ -427,12 +441,12 @@ public final class LogWriter implements AutoCloseable {
                           FROM chat_entry s
                           JOIN log_file sf ON sf.id = s.file_id
                           WHERE sf.source_kind = '%s'
-                            AND s.message = e.message
+                            AND %s
                             AND abs(date_diff('millisecond', s.entry_time, e.entry_time))
                                 <= %s * 1000
                       )
                 ) RETURNING file_id""".formatted(SourceKind.SESSION.name(), SourceKind.SESSION.name(),
-                LIVE_DUPLICATE_WINDOW_SECONDS));
+                sameChatText("s.message", "e.message"), LIVE_DUPLICATE_WINDOW_SECONDS));
             removed = sameSecond[0] + nearLive[0];
             removedFromThisImport = sameSecond[1] + nearLive[1];
             if (removed > 0) writtenFiles -= refreshFileAggregates(statement);
