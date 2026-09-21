@@ -80,11 +80,19 @@ public record ImportOptions(
     }
 
     /**
-     * Defaults to a recursive import of nested archives, one parser per CPU, replacing already imported files,
-     * clustering and compacting afterwards, and treating log timestamps as local time.
+     * Parser count used when the caller does not pick a thread count: half the machine's CPUs,
+     * at least one, so import work leaves cores free for the game.
+     */
+    public static int defaultParallelism() {
+        return Math.max(1, Runtime.getRuntime().availableProcessors() / 2);
+    }
+
+    /**
+     * Defaults to a recursive import of nested archives, half as many parsers as CPUs, replacing already
+     * imported files, clustering and compacting afterwards, and treating log timestamps as local time.
      */
     public static ImportOptions defaults() {
-        return new ImportOptions(true, true, null, Runtime.getRuntime().availableProcessors(), false, true, 0,
+        return new ImportOptions(true, true, null, defaultParallelism(), false, true, 0,
             ZoneId.systemDefault(), false, false, false, false);
     }
 
