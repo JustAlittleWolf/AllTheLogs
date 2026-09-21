@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.client.ui.text;
 
+import me.wolfii.allthelogs.client.config.AllTheLogsConfig;
 import me.wolfii.allthelogs.client.list.DisplayRow;
 import me.wolfii.allthelogs.client.list.MessageWrap;
 import me.wolfii.allthelogs.client.list.VisualMessage;
@@ -58,7 +59,7 @@ public final class MessageText {
     static String searchDurationText(long elapsedMs) {
         double seconds = Math.round(Math.max(0, elapsedMs) / 100.0) / 10.0;
         if (seconds < 0.1) return "";
-        return "%.1f".formatted(seconds);
+        return String.format(Locale.ROOT, "%.1f", seconds);
     }
 
     /**
@@ -165,7 +166,7 @@ public final class MessageText {
 
     /**
      * Chat colour with {@code \n} darkening multiplied in. Search hits are marked with a background fill.
-     * Context lines also darken the glyph colour a step past the context timestamp.
+     * Context lines also scale glyph brightness by the configured context-message percent.
      */
     static int stackedColor(DisplayRow row, int index, boolean interpretEscapes) {
         return stackedColor(row, index, interpretEscapes, PackedFormatting.at(row.visualFormatting(), index));
@@ -184,7 +185,7 @@ public final class MessageText {
             ? 0xFF000000 | PackedFormatting.rgb(format)
             : Colors.MATCH_TEXT;
         if (!row.match()) {
-            color = Colors.multiply(color, Colors.CONTEXT_TEXT);
+            color = Colors.multiply(color, Colors.brightnessMultiply(AllTheLogsConfig.currentContextMessageBrightness()));
         }
         if (VisualMessage.escapeChar(row.message(), index, interpretEscapes)) {
             color = Colors.multiply(color, Colors.ESCAPE_TEXT);

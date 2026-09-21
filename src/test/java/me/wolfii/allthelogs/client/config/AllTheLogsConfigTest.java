@@ -19,6 +19,8 @@ class AllTheLogsConfigTest {
         AllTheLogsConfig config = AllTheLogsConfig.load(temp.resolve("missing.json"));
         assertTrue(config.extraImportDirectories().isEmpty());
         assertFalse(config.hideImportButton());
+        assertEquals(AllTheLogsConfig.DEFAULT_CONTEXT_MESSAGE_BRIGHTNESS, config.contextMessageBrightness());
+        assertEquals(40, config.contextMessageBrightness());
     }
 
     @Test
@@ -30,6 +32,7 @@ class AllTheLogsConfigTest {
         config.setHideImportButton(true);
         config.setMessageFontSize(8);
         config.setDefaultContextLines(7);
+        config.setContextMessageBrightness(55);
         config.save();
 
         AllTheLogsConfig loaded = AllTheLogsConfig.load(file);
@@ -39,6 +42,7 @@ class AllTheLogsConfigTest {
         assertTrue(loaded.hideImportButton());
         assertEquals(8, loaded.messageFontSize());
         assertEquals(7, loaded.defaultContextLines());
+        assertEquals(55, loaded.contextMessageBrightness());
         assertFalse(Files.readString(file).contains("filterPersistence"));
         assertFalse(Files.readString(file).contains("\"filter\""));
     }
@@ -50,6 +54,17 @@ class AllTheLogsConfigTest {
         assertEquals(AllTheLogsConfig.MIN_MESSAGE_FONT_SIZE, config.messageFontSize());
         config.setMessageFontSize(99);
         assertEquals(AllTheLogsConfig.MAX_MESSAGE_FONT_SIZE, config.messageFontSize());
+    }
+
+    @Test
+    void clampsContextMessageBrightnessToTenThroughOneHundred() {
+        AllTheLogsConfig config = AllTheLogsConfig.load(temp.resolve("brightness.json"));
+        config.setContextMessageBrightness(1);
+        assertEquals(AllTheLogsConfig.MIN_CONTEXT_MESSAGE_BRIGHTNESS, config.contextMessageBrightness());
+        config.setContextMessageBrightness(150);
+        assertEquals(AllTheLogsConfig.MAX_CONTEXT_MESSAGE_BRIGHTNESS, config.contextMessageBrightness());
+        assertEquals(AllTheLogsConfig.DEFAULT_CONTEXT_MESSAGE_BRIGHTNESS,
+            AllTheLogsConfig.currentContextMessageBrightness());
     }
 
     @Test
@@ -77,6 +92,7 @@ class AllTheLogsConfigTest {
         assertTrue(loaded.hideImportButton());
         assertEquals(9, loaded.messageFontSize());
         assertEquals(SearchFilter.DEFAULT_CONTEXT_LINES, loaded.defaultContextLines());
+        assertEquals(AllTheLogsConfig.DEFAULT_CONTEXT_MESSAGE_BRIGHTNESS, loaded.contextMessageBrightness());
 
         loaded.save();
         String json = Files.readString(file);
@@ -84,7 +100,34 @@ class AllTheLogsConfigTest {
         assertTrue(json.contains("\"hideImportButton\": true"));
         assertTrue(json.contains("\"messageFontSize\": 9"));
         assertTrue(json.contains("\"defaultContextLines\""));
+        assertTrue(json.contains("\"contextMessageBrightness\": 40"));
         assertFalse(json.contains("filterPersistence"));
         assertFalse(json.contains("regexFlags"));
+    }
+
+    @Test
+    void loadsContextMessageBrightnessFromJson() throws Exception {
+        Path file = temp.resolve("brightness.json");
+        Files.writeString(file, """
+            {
+              "contextMessageBrightness": 75
+            }
+            """);
+        AllTheLogsConfig loaded = AllTheLogsConfig.load(file);
+        assertEquals(75, loaded.contextMessageBrightness());
+
+        Files.writeString(file, """
+            {
+              "contextMessageBrightness": 10
+            }
+            """);
+        assertEquals(10, AllTheLogsConfig.load(file).contextMessageBrightness());
+
+        Files.writeString(file, """
+            {
+              "contextMessageBrightness": 100
+            }
+            """);
+        assertEquals(100, AllTheLogsConfig.load(file).contextMessageBrightness());
     }
 }

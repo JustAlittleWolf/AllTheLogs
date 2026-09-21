@@ -42,7 +42,7 @@ public record SearchFilter(
 ) {
     public static final int MAX_CONTEXT_LINES = 1000;
     public static final int DEFAULT_LIMIT = 100;
-    public static final int DEFAULT_CONTEXT_LINES = 4;
+    public static final int DEFAULT_CONTEXT_LINES = 3;
     /**
      * Value the version menu uses for "every version", stored as no version filter at all.
      */

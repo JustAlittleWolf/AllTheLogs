@@ -40,6 +40,9 @@ public class AllTheLogsConfig {
     public static final int DEFAULT_MESSAGE_FONT_SIZE = MessageListLayout.ROW_HEIGHT;
     public static final int MIN_MESSAGE_FONT_SIZE = 6;
     public static final int MAX_MESSAGE_FONT_SIZE = 24;
+    public static final int MIN_CONTEXT_MESSAGE_BRIGHTNESS = 10;
+    public static final int MAX_CONTEXT_MESSAGE_BRIGHTNESS = 100;
+    public static final int DEFAULT_CONTEXT_MESSAGE_BRIGHTNESS = 92;
 
     private static ConfigClassHandler<AllTheLogsConfig> handler;
 
@@ -64,6 +67,11 @@ public class AllTheLogsConfig {
     @IntSlider(min = MIN_MESSAGE_FONT_SIZE, max = MAX_MESSAGE_FONT_SIZE, step = 1)
     @SerialEntry
     public int messageFontSize = DEFAULT_MESSAGE_FONT_SIZE;
+
+    @AutoGen(category = "browser")
+    @IntSlider(min = MIN_CONTEXT_MESSAGE_BRIGHTNESS, max = MAX_CONTEXT_MESSAGE_BRIGHTNESS, step = 1, format = "%d%%")
+    @SerialEntry(required = false)
+    public int contextMessageBrightness = DEFAULT_CONTEXT_MESSAGE_BRIGHTNESS;
 
     public static Path defaultPath() {
         return FabricLoader.getInstance().getConfigDir().resolve(FILE_NAME);
@@ -147,12 +155,33 @@ public class AllTheLogsConfig {
         this.messageFontSize = clampFontSize(messageFontSize);
     }
 
+    public int contextMessageBrightness() {
+        return clampContextMessageBrightness(contextMessageBrightness);
+    }
+
+    public void setContextMessageBrightness(int contextMessageBrightness) {
+        this.contextMessageBrightness = clampContextMessageBrightness(contextMessageBrightness);
+    }
+
+    /**
+     * Brightness applied to context-line message text. Uses the default until config has been loaded.
+     */
+    public static int currentContextMessageBrightness() {
+        if (handler == null) return DEFAULT_CONTEXT_MESSAGE_BRIGHTNESS;
+        AllTheLogsConfig instance = handler.instance();
+        return instance == null ? DEFAULT_CONTEXT_MESSAGE_BRIGHTNESS : instance.contextMessageBrightness();
+    }
+
     public static int clampFontSize(int fontSize) {
         return Math.clamp(fontSize, MIN_MESSAGE_FONT_SIZE, MAX_MESSAGE_FONT_SIZE);
     }
 
     public static int clampContextLines(int contextLines) {
         return Math.clamp(contextLines, 0, SearchFilter.MAX_CONTEXT_LINES);
+    }
+
+    public static int clampContextMessageBrightness(int percent) {
+        return Math.clamp(percent, MIN_CONTEXT_MESSAGE_BRIGHTNESS, MAX_CONTEXT_MESSAGE_BRIGHTNESS);
     }
 
     public void save() {
@@ -179,6 +208,8 @@ public class AllTheLogsConfig {
             : new ArrayList<>(ExtraImportDirectories.persisted(extraImportDirectories, null));
         defaultContextLines = clampContextLines(defaultContextLines);
         messageFontSize = clampFontSize(messageFontSize == 0 ? DEFAULT_MESSAGE_FONT_SIZE : messageFontSize);
+        contextMessageBrightness = clampContextMessageBrightness(
+            contextMessageBrightness == 0 ? DEFAULT_CONTEXT_MESSAGE_BRIGHTNESS : contextMessageBrightness);
     }
 
     static Gson gson() {
