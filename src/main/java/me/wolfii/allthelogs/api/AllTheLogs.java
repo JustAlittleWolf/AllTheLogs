@@ -14,7 +14,8 @@ import me.wolfii.allthelogs.client.AllTheLogsClient;
  *}
  * <p>
  * The database is opened asynchronously during client startup, while the vanilla loading overlay
- * is still up. {@link LogDatabase#isOpen()} is {@code false} until that finishes (and after the
+ * is still up. Directory import of this instance (and extra folders) continues after the overlay
+ * fades. {@link LogDatabase#isOpen()} is {@code false} until the store has opened (and after the
  * client shuts down). Queries issued while the store is not ready complete exceptionally with
  * {@link IllegalStateException}.
  */
