@@ -17,6 +17,7 @@ import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
 import me.wolfii.allthelogs.client.ui.text.WrappedTooltip;
 import me.wolfii.allthelogs.data.ImportOptions;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
@@ -333,6 +334,14 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
             return;
         }
         Minecraft.getInstance().gui.setScreen(new ImportProgressScreen(this, path, options(), Files.isRegularFile(path)));
+    }
+
+    @Override
+    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+        if (this.minecraft == null || this.minecraft.level != null) {
+            return;
+        }
+        this.extractPanorama(graphics, delta);
     }
 
     @Override
