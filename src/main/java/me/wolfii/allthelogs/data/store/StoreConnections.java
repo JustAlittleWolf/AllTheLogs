@@ -8,7 +8,6 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.time.Instant;
 import java.util.Properties;
 
 /**
@@ -25,7 +24,7 @@ public final class StoreConnections {
 
     /**
      * Opens, and if needed creates, the database file at {@code absolutePath}.
-     * When an on-disk file still needs a schema upgrade, a compressed backup is written first.
+     * When an on-disk file still needs a schema upgrade, the database file is copied first.
      */
     public static DuckDBConnection openFile(Path absolutePath) throws SQLException {
         DuckDBConnection connection = connect("jdbc:duckdb:" + absolutePath);
@@ -35,13 +34,7 @@ public final class StoreConnections {
                 checkpoint(connection);
                 connection.close();
                 connection = null;
-                try {
-                    SchemaBackup.create(absolutePath, version, Instant.now());
-                    SchemaBackup.pruneExpired(absolutePath, Instant.now());
-                } catch (IOException e) {
-                    throw new SQLException("could not back up the log database before migrating schema version "
-                        + version, e);
-                }
+                backupDatabase(absolutePath, version);
                 connection = connect("jdbc:duckdb:" + absolutePath);
             }
             migrate(connection);
@@ -83,6 +76,15 @@ public final class StoreConnections {
             throw new SQLException("DuckDB driver rejected URL: " + url);
         }
         return (DuckDBConnection) raw;
+    }
+
+    private static void backupDatabase(Path database, int schemaVersion) throws SQLException {
+        try {
+            DatabaseBackup.copyBeforeMigration(database, schemaVersion);
+        } catch (IOException e) {
+            throw new SQLException("could not back up the log database before migrating schema version "
+                + schemaVersion, e);
+        }
     }
 
     private static int schemaVersion(DuckDBConnection connection) throws SQLException {

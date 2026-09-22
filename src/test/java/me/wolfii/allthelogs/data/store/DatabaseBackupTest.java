@@ -15,7 +15,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class SchemaBackupTest {
+class DatabaseBackupTest {
     @TempDir
     Path tempDir;
 
@@ -25,10 +25,11 @@ class SchemaBackupTest {
         Files.writeString(database, "duckdb-bytes");
         Instant at = Instant.parse("2026-09-22T13:15:00Z");
 
-        Path backup = SchemaBackup.create(database, 4, at);
+        Path backup = DatabaseBackup.create(database, 4, at);
 
         assertEquals("logs.duckdb.v4.20260922T131500Z.lz4", backup.getFileName().toString());
         assertEquals("duckdb-bytes", new String(decompress(backup)));
+        assertFalse(Files.exists(backup.resolveSibling(backup.getFileName() + ".tmp")));
     }
 
     @Test
@@ -40,7 +41,7 @@ class SchemaBackupTest {
         Path stale = touchBackup(database, 3, Instant.parse("2025-01-01T00:00:00Z"));
         Path alsoStale = touchBackup(database, 3, Instant.parse("2025-06-01T00:00:00Z"));
 
-        SchemaBackup.pruneExpired(database, now);
+        DatabaseBackup.pruneExpired(database, now);
 
         assertTrue(Files.exists(newest), "newest backup must survive even past three months");
         assertFalse(Files.exists(stale));
@@ -56,7 +57,7 @@ class SchemaBackupTest {
         Path alsoRecent = touchBackup(database, 4, Instant.parse("2026-07-01T00:00:00Z"));
         Path stale = touchBackup(database, 3, Instant.parse("2025-01-01T00:00:00Z"));
 
-        SchemaBackup.pruneExpired(database, now);
+        DatabaseBackup.pruneExpired(database, now);
 
         assertTrue(Files.exists(recent));
         assertTrue(Files.exists(alsoRecent));
@@ -69,13 +70,13 @@ class SchemaBackupTest {
         Files.writeString(database, "db");
         Path only = touchBackup(database, 4, Instant.parse("2020-01-01T00:00:00Z"));
 
-        SchemaBackup.pruneExpired(database, Instant.parse("2026-09-22T12:00:00Z"));
+        DatabaseBackup.pruneExpired(database, Instant.parse("2026-09-22T12:00:00Z"));
 
         assertTrue(Files.exists(only));
     }
 
     @Test
-    void openingAnOlderDatabaseCreatesABackupThenMigrates() throws Exception {
+    void openingAnOlderDatabaseCopiesTheFileThenMigrates() throws Exception {
         Path database = tempDir.resolve("logs.duckdb");
         try (var connection = StoreConnections.openFile(database);
              Statement statement = connection.createStatement()) {
@@ -98,7 +99,7 @@ class SchemaBackupTest {
             }
         }
 
-        List<SchemaBackup.BackupFile> backups = SchemaBackup.list(database);
+        List<DatabaseBackup.Copy> backups = DatabaseBackup.list(database);
         assertEquals(1, backups.size());
         assertTrue(backups.getFirst().path().getFileName().toString().contains(".v4."));
         assertTrue(decompress(backups.getFirst().path()).length > 0);
@@ -111,11 +112,11 @@ class SchemaBackupTest {
         }
         try (var ignored = StoreConnections.openFile(database)) {
         }
-        assertTrue(SchemaBackup.list(database).isEmpty());
+        assertTrue(DatabaseBackup.list(database).isEmpty());
     }
 
     private static Path touchBackup(Path database, int version, Instant at) throws Exception {
-        Path path = SchemaBackup.backupPath(database, version, at);
+        Path path = DatabaseBackup.backupPath(database, version, at);
         Files.writeString(path, "backup");
         return path;
     }
