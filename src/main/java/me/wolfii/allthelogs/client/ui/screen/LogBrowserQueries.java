@@ -247,9 +247,10 @@ final class LogBrowserQueries {
         if (cursor == null) return;
         list.setLoading(true);
         List<DisplayRow> buffered = list.window().rows();
+        long pageLimit = list.autoScrolling() ? MessageTimeline.AUTO_SCROLL_PAGE_SIZE : filter.limit();
         SearchFilter page = towardStart
-            ? filter.withoutOffset().withSort(filter.sort().opposite())
-            : filter.withoutOffset();
+            ? filter.withoutOffset().withSort(filter.sort().opposite()).withLimit(pageLimit)
+            : filter.withoutOffset().withLimit(pageLimit);
         ChatQuery query = PageBounds.continueFrom(page.toQuery(), cursor);
         DisplayRow.RowKey anchor = list.visibleAnchor();
         int firstVisible = list.firstVisibleIndex();
@@ -266,15 +267,16 @@ final class LogBrowserQueries {
             List<DisplayRow> incoming = displaySearchRows(entries);
             if (towardStart) incoming = DisplayRows.reversed(incoming);
             int added = DisplayRows.countNewKeys(incoming, bufferedKeys);
-            boolean more = added > 0 && PageBounds.isFull(incoming, filter.limit());
+            boolean more = added > 0 && PageBounds.isFull(incoming, pageLimit);
 
             List<DisplayRow> current = list.window().rows();
             List<DisplayRow> merged = towardStart
                 ? DisplayRows.mergeUnique(incoming, current)
                 : DisplayRows.mergeUnique(current, incoming);
             int shift = towardStart ? added : 0;
+            int keep = (int) Math.max(1, Math.min(pageLimit, Integer.MAX_VALUE));
             List<DisplayRow> trimmed = DisplayRows.trimToMatchLimit(
-                merged, (int) Math.max(1, filter.limit()), firstVisible + shift, lastVisible + shift);
+                merged, keep, firstVisible + shift, lastVisible + shift);
             boolean hasBefore = (towardStart ? more : list.window().hasBefore())
                 || DisplayRows.trimmedHead(merged, trimmed);
             boolean hasAfter = (towardStart ? list.window().hasAfter() : more)
@@ -359,8 +361,9 @@ final class LogBrowserQueries {
     }
 
     /**
-     * Fetches matches on both sides of {@code target} and lands on whichever timestamp is closer.
-     * A one-sided exclusive offset from the latest line would otherwise miss every earlier hit.
+     * Fetches matches on both sides of {@code target} and keeps them together so clearing a search can
+     * still scroll older messages. A one-sided exclusive offset from the latest line would otherwise
+     * miss every earlier hit, and picking only the closer side locked upward scrolling after search.
      */
     private void jumpToClosest(LocalDateTime target, boolean preview) {
         SearchFilter page = filter.withoutOffset();
@@ -378,17 +381,42 @@ final class LogBrowserQueries {
                 if (gen != generation.get()) return;
                 List<ChatEntry> laterRows = laterError == null ? laterEntries : List.of();
                 List<ChatEntry> earlierRows = earlierError == null ? earlierEntries : List.of();
-                boolean useLater = PageBounds.preferLater(target,
-                    firstMatchTime(laterRows), firstMatchTime(earlierRows));
-                List<ChatEntry> chosen = useLater ? laterRows : earlierRows;
-                ChatQuery requested = useLater ? later : earlier;
-                Throwable error = chosen.isEmpty()
-                    ? (laterError != null ? laterError : earlierError)
-                    : null;
-                applyJumpEntries(null, target, preview, gen, requested,
-                    orderedForFilter(chosen, useLater ? ChatQuery.Sort.ASCENDING : ChatQuery.Sort.DESCENDING),
-                    error);
+                List<DisplayRow> laterDisplay = displaySearchRows(
+                    orderedForFilter(laterRows, ChatQuery.Sort.ASCENDING));
+                List<DisplayRow> earlierDisplay = displaySearchRows(
+                    orderedForFilter(earlierRows, ChatQuery.Sort.DESCENDING));
+                List<DisplayRow> merged = mergeClosestSides(earlierDisplay, laterDisplay, filter.sort());
+                if (merged.isEmpty()) {
+                    Throwable error = laterError != null ? laterError : earlierError;
+                    applyJumpEntries(null, target, preview, gen, later, List.of(), error);
+                    return;
+                }
+                boolean earlierFull = PageBounds.isFull(earlierDisplay, earlier.limit());
+                boolean laterFull = PageBounds.isFull(laterDisplay, later.limit());
+                boolean hasBefore = hasMoreBefore(earlierFull, filter.sort(), merged, matchSummary);
+                boolean hasAfter = hasMoreAfter(laterFull, filter.sort(), merged, matchSummary);
+                if (PageBounds.needsMoreToFill(merged, filter.contextLines(), list.viewHeight(), hasBefore)) {
+                    fillJumpViewport(gen, target, preview, merged, hasAfter, later.limit(), Double.NaN);
+                    return;
+                }
+                applyJump(target, preview, merged, hasBefore, hasAfter, Double.NaN);
             }));
+    }
+
+    static List<DisplayRow> mergeClosestSides(List<DisplayRow> earlier, List<DisplayRow> later,
+                                              ChatQuery.Sort sort) {
+        return DisplayRows.mergeSorted(earlier == null ? List.of() : earlier, later == null ? List.of() : later,
+            sort);
+    }
+
+    static boolean hasMoreBefore(boolean earlierPageFull, ChatQuery.Sort sort, List<DisplayRow> rows,
+                                 MatchSummary summary) {
+        return earlierPageFull || PageBounds.hasBefore(sort, rows, summary);
+    }
+
+    static boolean hasMoreAfter(boolean laterPageFull, ChatQuery.Sort sort, List<DisplayRow> rows,
+                                MatchSummary summary) {
+        return laterPageFull || PageBounds.hasAfter(sort, laterPageFull, rows, summary);
     }
 
     private void applyJumpEntries(ScrubJump jump, LocalDateTime target, boolean preview, int gen,
@@ -437,15 +465,6 @@ final class LogBrowserQueries {
             ? MessageTimeline.SCRUB_PAGE_SIZE
             : Math.min(MessageTimeline.SCRUB_PAGE_SIZE, filter.limit());
         return query.withLimit(Math.max(8, cap));
-    }
-
-    private LocalDateTime firstMatchTime(List<ChatEntry> entries) {
-        if (entries == null || entries.isEmpty()) return null;
-        var predicate = filter.messagePredicate();
-        for (ChatEntry entry : entries) {
-            if (predicate.test(entry.message())) return entry.timestamp();
-        }
-        return entries.getFirst().timestamp();
     }
 
     private List<ChatEntry> orderedForFilter(List<ChatEntry> entries, ChatQuery.Sort fetched) {

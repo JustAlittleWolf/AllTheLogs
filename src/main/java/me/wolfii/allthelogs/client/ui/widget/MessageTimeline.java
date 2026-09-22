@@ -44,11 +44,15 @@ public final class MessageTimeline extends BaseUIComponent {
     public static final int TIMELINE_WIDTH = 58;
     /** Matches fetched per preview query while the thumb is being dragged. */
     public static final int SCRUB_PAGE_SIZE = 32;
+    /** Matches fetched at once while middle-click auto-scroll is eating through the buffer. */
+    public static final int AUTO_SCROLL_PAGE_SIZE = 1000;
     private static final int SELECT_DRAG_SLOP = 3;
     private static final int MULTI_CLICK_MS = 400;
     private static final int MULTI_CLICK_SLOP = 4;
     /** Rows from either end of the buffer at which the next page is requested. */
     private static final int EDGE_ROWS = 3;
+    /** Request the next page earlier while auto-scroll is running, so a 1000-row fetch starts before the wall. */
+    private static final int AUTO_SCROLL_EDGE_ROWS = 80;
     /**
      * Viewport height fraction used to keep a message still when search results are replaced.
      * Below centre so the line the user is reading (usually a little down the list) does not jump.
@@ -190,6 +194,10 @@ public final class MessageTimeline extends BaseUIComponent {
 
     public int lastVisibleIndex() {
         return view().lastVisibleRow();
+    }
+
+    public boolean autoScrolling() {
+        return autoScroll.active();
     }
 
     public DisplayRow.RowKey visibleAnchor() {
@@ -853,9 +861,10 @@ public final class MessageTimeline extends BaseUIComponent {
 
     private void maybeRequestMore() {
         if (status.loading() || scrub.dragging() || window.rows().isEmpty()) return;
-        if (window.hasBefore() && firstVisibleIndex() <= EDGE_ROWS - 1) {
+        int edge = autoScroll.active() ? AUTO_SCROLL_EDGE_ROWS : EDGE_ROWS;
+        if (window.hasBefore() && firstVisibleIndex() <= edge - 1) {
             onApproachEdge.accept(TimelineEdge.BEFORE);
-        } else if (window.hasAfter() && lastVisibleIndex() >= window.rows().size() - EDGE_ROWS) {
+        } else if (window.hasAfter() && lastVisibleIndex() >= window.rows().size() - edge) {
             onApproachEdge.accept(TimelineEdge.AFTER);
         }
     }
