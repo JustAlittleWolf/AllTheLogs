@@ -137,4 +137,25 @@ class LogBrowserQueriesTest {
         assertTrue(LogBrowserQueries.keepViewport(LocalDateTime.of(2026, 8, 27, 10, 0), true));
     }
 
+    @Test
+    void mergingBothJumpSidesKeepsOlderAndNewerRows() {
+        LocalDateTime stay = LocalDateTime.of(2026, 8, 27, 12, 0, 0);
+        List<DisplayRow> earlier = List.of(row(stay.minusHours(1), 0), row(stay, 1));
+        List<DisplayRow> later = List.of(row(stay, 1), row(stay.plusHours(1), 2));
+        List<DisplayRow> merged = LogBrowserQueries.mergeClosestSides(earlier, later, ChatQuery.Sort.ASCENDING);
+        assertEquals(3, merged.size());
+        assertEquals(stay.minusHours(1), merged.getFirst().entry().timestamp());
+        assertEquals(stay.plusHours(1), merged.getLast().entry().timestamp());
+    }
+
+    @Test
+    void aFullEarlierPageUnlocksScrollingUpEvenWhenTheSummaryIsStale() {
+        LocalDateTime stay = LocalDateTime.of(2026, 8, 27, 12, 0, 0);
+        List<DisplayRow> rows = List.of(row(stay, 0), row(stay.plusMinutes(1), 1));
+        MatchSummary searchHits = new MatchSummary(stay, stay.plusMinutes(1), 2, List.of());
+        assertFalse(PageBounds.hasBefore(ChatQuery.Sort.ASCENDING, rows, searchHits));
+        assertTrue(LogBrowserQueries.hasMoreBefore(true, ChatQuery.Sort.ASCENDING, rows, searchHits));
+        assertFalse(LogBrowserQueries.hasMoreBefore(false, ChatQuery.Sort.ASCENDING, rows, searchHits));
+        assertTrue(LogBrowserQueries.hasMoreAfter(true, ChatQuery.Sort.ASCENDING, rows, searchHits));
+    }
 }
