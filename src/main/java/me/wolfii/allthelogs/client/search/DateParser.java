@@ -2,7 +2,6 @@ package me.wolfii.allthelogs.client.search;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
@@ -43,13 +42,10 @@ public final class DateParser {
     }
 
     /**
-     * Inverse of {@link #parseUntil} for exclusive midnight bounds, so the overlay shows the inclusive date.
+     * Inverse of {@link #parseUntil}. Exclusive midnight bounds are shown as that next-day {@code 00:00},
+     * matching a right-click "this day" filter rather than rewriting to the inclusive date.
      */
     public static String formatUntil(LocalDateTime time) {
-        if (time == null) return "";
-        if (time.toLocalTime().equals(LocalTime.MIDNIGHT)) {
-            return time.toLocalDate().minusDays(1).toString();
-        }
         return format(time);
     }
 

@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.client.ui.screen;
 
+import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.CheckboxComponent;
 import io.wispforest.owo.ui.component.TextBoxComponent;
 import io.wispforest.owo.ui.component.UIComponents;
@@ -184,12 +185,27 @@ final class FilterOverlay {
 
     private FlowLayout dateField(String key, String value, Function<String, Optional<LocalDateTime>> parse,
                                  Consumer<LocalDateTime> onParsed, boolean from) {
-        FlowLayout row = labeledField(key, value, text -> {
+        FlowLayout row = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
+        row.gap(2);
+        FlowLayout header = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
+        header.gap(4).verticalAlignment(VerticalAlignment.CENTER);
+        header.child(UIComponents.label(Component.translatable(key)).horizontalSizing(Sizing.expand()));
+        if (from) {
+            ButtonComponent clear = UIComponents.button(Component.translatable("allthelogs.filter.clear_dates"),
+                ignored -> emit(filter.get().withStartingAt(null).withUpUntil(null)));
+            clear.horizontalSizing(Sizing.content());
+            header.child(clear);
+        }
+        row.child(header);
+        TextBoxComponent box = UIComponents.textBox(Sizing.fill(), value);
+        box.setMaxLength(32);
+        box.setHint(Component.translatable("allthelogs.filter.date_hint"));
+        box.onChanged().subscribe(text -> {
+            if (syncing) return;
             if (!DateParser.isBlankOrValid(text)) return;
             onParsed.accept(parse.apply(text).orElse(null));
-        }, false);
-        TextBoxComponent box = lastBox(row);
-        box.setHint(Component.translatable("allthelogs.filter.date_hint"));
+        });
+        row.child(box);
         if (from) fromBox = box;
         else untilBox = box;
         return row;
@@ -207,11 +223,6 @@ final class FilterOverlay {
         row.child(box);
         if (context) contextBox = box;
         return row;
-    }
-
-    private static TextBoxComponent lastBox(FlowLayout row) {
-        List<UIComponent> children = row.children();
-        return (TextBoxComponent) children.getLast();
     }
 
     private void emit(SearchFilter next) {

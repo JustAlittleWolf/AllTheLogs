@@ -165,9 +165,11 @@ class SearchFilterTest {
     }
 
     @Test
-    void withDaySetsInclusiveMidnightBounds() {
+    void withDayFormatsUntilAsNextDayMidnight() {
         SearchFilter day = SearchFilter.defaults().withDay(java.time.LocalDate.of(2026, 8, 27));
         assertEquals(LocalDateTime.of(2026, 8, 27, 0, 0), day.startingAt());
         assertEquals(LocalDateTime.of(2026, 8, 28, 0, 0), day.upUntil());
+        assertEquals("2026-08-27 00:00", DateParser.format(day.startingAt()));
+        assertEquals("2026-08-28 00:00", DateParser.formatUntil(day.upUntil()));
     }
 }
