@@ -25,10 +25,18 @@ class DateParserTest {
     }
 
     @Test
-    void formatUntilShowsTheInclusiveDateForExclusiveMidnight() {
-        assertEquals("2026-08-26", DateParser.formatUntil(LocalDateTime.of(2026, 8, 27, 0, 0)));
+    void formatUntilShowsExclusiveMidnightAsNextDayMidnight() {
+        assertEquals("2026-08-27 00:00", DateParser.formatUntil(LocalDateTime.of(2026, 8, 27, 0, 0)));
         assertEquals("2026-08-26 14:30", DateParser.formatUntil(LocalDateTime.of(2026, 8, 26, 14, 30)));
         assertEquals("", DateParser.formatUntil(null));
         assertEquals("2026-08-26 00:00", DateParser.format(LocalDateTime.of(2026, 8, 26, 0, 0)));
+    }
+
+    @Test
+    void dayFilterRoundTripsThroughUntilFormatting() {
+        var until = DateParser.parseUntil("2026-08-26").orElseThrow();
+        assertEquals(LocalDateTime.of(2026, 8, 27, 0, 0), until);
+        assertEquals("2026-08-27 00:00", DateParser.formatUntil(until));
+        assertEquals(until, DateParser.parseUntil(DateParser.formatUntil(until)).orElseThrow());
     }
 }
