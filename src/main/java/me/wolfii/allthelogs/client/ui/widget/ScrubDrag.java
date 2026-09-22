@@ -25,8 +25,6 @@ final class ScrubDrag {
     private int capturedThumbHeight;
     private long lastPreviewAtMs;
     private boolean previewInFlight;
-    private boolean previewShown;
-    private boolean finishAfterPreview;
     private int previewEpoch;
     private ScrubJump lastSentJump;
 
@@ -40,14 +38,6 @@ final class ScrubDrag {
                                           ScrubJump lastSent) {
         if (inFlight || nowMs - lastQueryMs < throttleMs) return false;
         return !sameTarget(requested, lastSent);
-    }
-
-    /**
-     * Releasing the thumb must not fetch or reposition when the page for that spot is already on screen or
-     * still on its way. A different timestamp still commits, so a quick drag that never previewed still lands.
-     */
-    static boolean keepsHeldPage(boolean sameTarget, boolean previewInFlight, boolean previewShown) {
-        return sameTarget && (previewInFlight || previewShown);
     }
 
     /**
@@ -80,8 +70,6 @@ final class ScrubDrag {
         lastSentJump = null;
         lastPreviewAtMs = 0;
         previewInFlight = false;
-        previewShown = false;
-        finishAfterPreview = false;
         previewEpoch++;
     }
 
@@ -94,38 +82,6 @@ final class ScrubDrag {
 
     boolean previewInFlight() {
         return previewInFlight;
-    }
-
-    boolean previewShown() {
-        return previewShown;
-    }
-
-    ScrubJump lastSentJump() {
-        return lastSentJump;
-    }
-
-    /**
-     * The rows for the current preview are on screen. A newer claim clears this so a late result for the
-     * previous timestamp cannot be treated as the page the thumb is now holding.
-     */
-    void markPreviewShown() {
-        previewShown = true;
-    }
-
-    /**
-     * The button went up while this preview was still in flight. {@link #previewFinished(int)} then reports
-     * that the thumb should go back to following the viewport, without a second query.
-     */
-    void finishAfterPreview() {
-        finishAfterPreview = true;
-    }
-
-    /**
-     * A later slice of a preview that is already visible should keep those rows still once the button is up.
-     * While the thumb is held, the new slice is positioned under it instead.
-     */
-    boolean anchorsVisibleRows() {
-        return previewShown && !dragging;
     }
 
     /**
@@ -150,8 +106,6 @@ final class ScrubDrag {
         pointerOffset = Double.NaN;
         grabOffset = 0;
         capturedThumbHeight = 0;
-        previewShown = false;
-        finishAfterPreview = false;
     }
 
     /**
@@ -199,15 +153,12 @@ final class ScrubDrag {
     }
 
     /**
-     * Frees the preview slot. Returns whether the button already went up and the thumb should now follow
-     * the viewport. A result from an earlier drag ({@code epoch} no longer current) does neither.
+     * Frees the preview slot after the page it asked for is on screen. A result from an earlier drag
+     * ({@code epoch} no longer current) is ignored so it cannot unblock a newer query early.
      */
-    boolean previewFinished(int epoch) {
-        if (epoch != previewEpoch) return false;
+    void previewFinished(int epoch) {
+        if (epoch != previewEpoch) return;
         previewInFlight = false;
-        boolean finish = finishAfterPreview;
-        finishAfterPreview = false;
-        return finish;
     }
 
     /**
@@ -221,7 +172,6 @@ final class ScrubDrag {
         lastPreviewAtMs = now;
         lastSentJump = jump;
         previewInFlight = true;
-        previewShown = false;
         return true;
     }
 

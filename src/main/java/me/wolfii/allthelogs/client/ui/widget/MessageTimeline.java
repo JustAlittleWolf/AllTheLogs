@@ -191,37 +191,13 @@ public final class MessageTimeline extends BaseUIComponent {
     /**
      * Frees the preview slot for {@code epoch} after its rows are visible. Releasing it earlier let the next
      * thumb position cancel the page before it was drawn, so a held scrollbar updated only on mouse-up.
-     * When the button already went up, the caller should {@link #finishScrub()} so the thumb follows the
-     * page that just arrived instead of querying again.
      */
-    public boolean scrubQueryFinished(int epoch) {
-        return scrub.previewFinished(epoch);
+    public void scrubQueryFinished(int epoch) {
+        scrub.previewFinished(epoch);
     }
 
     public void scrubQueryFinished() {
-        if (scrubQueryFinished(scrub.epoch())) finishScrub();
-    }
-
-    public void markScrubPreviewShown() {
-        scrub.markPreviewShown();
-    }
-
-    /**
-     * Whether a follow-up slice of the preview already on screen should keep the visible rows still.
-     */
-    public boolean anchorsScrubPreview() {
-        return scrub.anchorsVisibleRows();
-    }
-
-    /**
-     * Replaces the buffered page and keeps the topmost visible row where it is. Returns false when that row
-     * is not in {@code rows}, so the caller can position the new page normally.
-     */
-    public boolean replacePreviewPage(List<DisplayRow> rows, boolean hasBefore, boolean hasAfter) {
-        DisplayRow.RowKey anchor = window.keyAt(view().firstVisibleRow());
-        if (anchor == null || DisplayRows.indexOf(rows, anchor) < 0) return false;
-        applyPage(rows, hasBefore, hasAfter, anchor);
-        return true;
+        scrub.previewFinished(scrub.epoch());
     }
 
     /**
@@ -540,7 +516,8 @@ public final class MessageTimeline extends BaseUIComponent {
     @Override
     public boolean onMouseUp(MouseButtonEvent click) {
         if (scrub.dragging()) {
-            releaseThumb(click.y());
+            scrub.endDrag();
+            applyThumbScrub(click.y(), true);
         }
         if (click.button() == GLFW.GLFW_MOUSE_BUTTON_MIDDLE) {
             return true;
@@ -824,47 +801,8 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     /**
-     * Lets go of the thumb. A page already shown for this spot stays exactly where it is: committing would
-     * fetch the full page and {@code showAt} would scroll it again, which is the jump on mouse-up. A preview
-     * that has not arrived yet is left to land, and then the thumb follows it. Anything else still commits,
-     * so a quick release before the first preview updates the list.
-     */
-    private void releaseThumb(double localY) {
-        int thumbHeight = scrub.capturedThumbHeight() > 0 ? scrub.capturedThumbHeight() : thumbHeight();
-        double progress = scrub.moveTo(localY, thumbHeight, height);
-        ScrubJump parked = scrubTarget(progress);
-        boolean keep = ScrubDrag.keepsHeldPage(
-            parked != null && ScrubDrag.sameTarget(parked, scrub.lastSentJump()),
-            scrub.previewInFlight(), scrub.previewShown());
-        scrub.endDrag();
-        if (keep) {
-            if (scrub.previewInFlight()) scrub.finishAfterPreview();
-            else scrub.finish();
-            return;
-        }
-        applyScrub(progress, true);
-    }
-
-    /**
-     * The store jump {@code progress} would ask for, or {@code null} when the loaded page can already show
-     * that edge.
-     */
-    private ScrubJump scrubTarget(double progress) {
-        double clamped = Math.clamp(progress, 0, 1);
-        if (clamped <= 0) {
-            return window.hasBefore() ? new ScrubJump(scrubOldest(), 0, 0) : null;
-        }
-        if (clamped >= 1) {
-            return window.hasAfter() ? new ScrubJump(scrubNewest(), skipAtEnd(), 1) : null;
-        }
-        LocalDateTime time = timeAtProgress(clamped);
-        long skip = matches.days().isEmpty() ? -1 : TimelineScale.skipAtProgress(clamped, matches.days());
-        if (time == null && skip < 0) return null;
-        return new ScrubJump(time, skip, clamped);
-    }
-
-    /**
-     * Keeps a parked thumb pulling in pages while it is held still.
+     * Keeps a parked thumb pulling in pages while it is held still. Mouse movement is not required:
+     * {@link #draw} calls this every frame for as long as the button is down.
      */
     private void continueScrub() {
         double progress = scrub.parkedProgress(height);
@@ -923,10 +861,12 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     /**
-     * Scrolls to {@code progress} without a store query when the buffer already holds that day. A day whose
-     * matches all share one timestamp cannot be reached this way once it holds more matches than are loaded,
-     * because only a match rank can address them. A preview slice of a longer day is not enough either:
-     * mapping the whole day onto those rows would hide messages the thumb still points at.
+     * Scrolls to {@code progress} without a store query when the buffer already holds that spot.
+     * <p>
+     * A fully loaded day is walked by its track fraction. A preview slice is not: the query already starts
+     * at the thumb's timestamp, so that timestamp belongs at the top, date header included. Mapping the
+     * whole day onto the slice scrolled to a different place than mouse-up, which is the jump on release.
+     * A collapsed day still has to be fetched by match rank until every match is loaded.
      */
     private boolean scrollLocally(double progress, LocalDateTime time, long skip) {
         return scrollLocally(progress, time, skip, false);
@@ -934,24 +874,35 @@ public final class MessageTimeline extends BaseUIComponent {
 
     private boolean scrollLocally(double progress, LocalDateTime time, long skip, boolean onFetchedPage) {
         MatchDay day = TimelineScale.dayAtProgress(progress, matches.days());
-        if (day != null) {
+        int loaded = day == null ? 0 : DisplayRows.matchCountOnDate(window.rows(), day.date());
+        if (day != null && day.collapsed() && skip >= 0 && !scrollsWholeDay(day, loaded) && !onFetchedPage) {
+            return false;
+        }
+        if (day != null && scrollsWholeDay(day, loaded)) {
             MessageListLayout.DateBand band = layout.dateBand(day.date());
-            int loaded = DisplayRows.matchCountOnDate(window.rows(), day.date());
-            boolean timeInBuffer = time != null && window.coversTime(time) && window.showsDate(time);
-            if (band != null && PageBounds.canScrollDayLocally(day, loaded, skip, onFetchedPage, timeInBuffer)) {
+            if (band != null) {
                 double fraction = TimelineScale.fractionInDay(progress, matches.days());
                 setScrollY(ScrubberGeometry.scrollForDateFraction(band.y(), layout.dateEndY(band), height, fraction));
                 return true;
             }
-            if (day.collapsed() && skip >= 0 && loaded < day.matches()) {
-                return false;
-            }
         }
-        if (time != null && window.showsDate(time)) {
+        if (onFetchedPage && time != null) {
+            scrollToTime(time);
+            return true;
+        }
+        if (time != null && window.coversTime(time) && window.showsDate(time)) {
             scrollToTime(time);
             return true;
         }
         return false;
+    }
+
+    /**
+     * Whether {@code loadedMatches} is the entire day, so thumb progress can scroll through those rows.
+     * A shorter slice stays pinned to the timestamp the query was fetched for.
+     */
+    static boolean scrollsWholeDay(MatchDay day, int loadedMatches) {
+        return day != null && !day.collapsed() && day.matches() > 0 && loadedMatches >= day.matches();
     }
 
     private void jump(ScrubJump jump, boolean commit) {
