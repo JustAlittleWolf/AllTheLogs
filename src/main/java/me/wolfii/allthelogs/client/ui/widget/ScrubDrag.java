@@ -25,6 +25,7 @@ final class ScrubDrag {
     private int capturedThumbHeight;
     private long lastPreviewAtMs;
     private boolean previewInFlight;
+    private int previewEpoch;
     private ScrubJump lastSentJump;
 
     /**
@@ -39,12 +40,15 @@ final class ScrubDrag {
         return !sameTarget(requested, lastSent);
     }
 
+    /**
+     * Whether both jumps ask the store for the same page. Progress only positions that page in the viewport,
+     * so a parked thumb whose pixel jitters without changing the timestamp or match rank must not count as a
+     * new query — that used to cancel the in-flight preview before it ever reached the list.
+     */
     static boolean sameTarget(ScrubJump left, ScrubJump right) {
         if (left == right) return true;
         if (left == null || right == null) return false;
-        return left.skip() == right.skip()
-            && Double.compare(left.progress(), right.progress()) == 0
-            && Objects.equals(left.time(), right.time());
+        return left.skip() == right.skip() && Objects.equals(left.time(), right.time());
     }
 
     boolean dragging() {
@@ -64,6 +68,20 @@ final class ScrubDrag {
         capturedThumbHeight = liveThumbHeight <= 0 ? 0 : Math.max(MIN_THUMB_HEIGHT, liveThumbHeight);
         grabOffset = 0;
         lastSentJump = null;
+        lastPreviewAtMs = 0;
+        previewInFlight = false;
+        previewEpoch++;
+    }
+
+    /**
+     * Identifies the drag that owns the current preview slot. Results from an older drag must not clear it.
+     */
+    int epoch() {
+        return previewEpoch;
+    }
+
+    boolean previewInFlight() {
+        return previewInFlight;
     }
 
     /**
@@ -134,7 +152,12 @@ final class ScrubDrag {
         return Math.clamp(centre - Math.max(1, thumbHeight) / 2, 0, Math.max(0, trackHeight - thumbHeight));
     }
 
-    void previewFinished() {
+    /**
+     * Frees the preview slot after the page it asked for is on screen. A result from an earlier drag
+     * ({@code epoch} no longer current) is ignored so it cannot unblock a newer query early.
+     */
+    void previewFinished(int epoch) {
+        if (epoch != previewEpoch) return;
         previewInFlight = false;
     }
 

@@ -3,6 +3,7 @@ package me.wolfii.allthelogs.client.ui.widget;
 import io.wispforest.owo.ui.core.CursorStyle;
 import me.wolfii.allthelogs.client.timeline.ScrubJump;
 import me.wolfii.allthelogs.client.timeline.ScrubberGeometry;
+import me.wolfii.allthelogs.client.timeline.TimelineEdge;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
@@ -48,6 +49,41 @@ class MessageTimelineTest {
         assertFalse(ScrubDrag.shouldSendPreviewQuery(false, 200, 100, 100, sent, sent));
         assertTrue(ScrubDrag.shouldSendPreviewQuery(false, 200, 100, 100, parked, sent));
         assertFalse(ScrubDrag.sameTarget(sent, parked));
+    }
+
+    @Test
+    void pixelJitterOnTheSameTimestampDoesNotCountAsANewPreview() {
+        LocalDateTime time = LocalDateTime.of(2026, 1, 1, 12, 0);
+        ScrubJump sent = new ScrubJump(time, 4, 0.50);
+        ScrubJump jitter = new ScrubJump(time, 4, 0.5001);
+        assertTrue(ScrubDrag.sameTarget(sent, jitter));
+        assertFalse(ScrubDrag.shouldSendPreviewQuery(false, 500, 100, 100, jitter, sent));
+    }
+
+    @Test
+    void stalePreviewResultDoesNotFreeTheSlotANewDragIsUsing() {
+        ScrubDrag scrub = new ScrubDrag();
+        scrub.begin(20);
+        int firstDrag = scrub.epoch();
+        assertTrue(scrub.claimPreview(new ScrubJump(LocalDateTime.of(2026, 1, 1, 0, 0), 0, 0.2)));
+        scrub.begin(20);
+        assertNotEquals(firstDrag, scrub.epoch());
+        assertTrue(scrub.claimPreview(new ScrubJump(LocalDateTime.of(2026, 6, 1, 0, 0), 10, 0.8)));
+        scrub.previewFinished(firstDrag);
+        assertTrue(scrub.previewInFlight());
+        scrub.previewFinished(scrub.epoch());
+        assertFalse(scrub.previewInFlight());
+    }
+
+    @Test
+    void autoScrollPrefetchesTheSideThePointerIsMovingToward() {
+        int edge = MessageTimeline.AUTO_SCROLL_EDGE_ROWS;
+        assertEquals(TimelineEdge.BEFORE, MessageTimeline.autoScrollEdge(-1, true, true, 10, 90, 100, edge));
+        assertEquals(TimelineEdge.AFTER, MessageTimeline.autoScrollEdge(1, true, true, 10, 90, 100, edge));
+        assertNull(MessageTimeline.autoScrollEdge(1, true, true, 10, 40, 4000, edge));
+        assertEquals(TimelineEdge.BEFORE, MessageTimeline.autoScrollEdge(0, true, false, 40, 0, 100, edge));
+        assertEquals(TimelineEdge.AFTER, MessageTimeline.autoScrollEdge(0, false, true, 0, 80, 100, edge));
+        assertNull(MessageTimeline.autoScrollEdge(0, true, true, 2500, 2500, 5000, edge));
     }
 
     @Test
