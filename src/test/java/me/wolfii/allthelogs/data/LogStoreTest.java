@@ -2196,6 +2196,41 @@ class LogStoreTest {
     }
 
     @Test
+    void fileImportSkipsAFileMessageWithinThreeSeconds() throws IOException {
+        LogFixtures.writePlain(tempDir.resolve("first/logs"), "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:10] [Render thread/INFO]: [CHAT] hello
+            """);
+        store.importDirectory(tempDir.resolve("first"), ImportOptions.defaults().withOptimize(false));
+        LogFixtures.writePlain(tempDir.resolve("second/logs"), "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:12] [Render thread/INFO]: [CHAT] hello
+            [10:00:13] [Render thread/INFO]: [CHAT] only in the later file
+            """);
+        store.importDirectory(tempDir.resolve("second"), ImportOptions.defaults().withOptimize(false));
+
+        assertEquals(List.of("hello", "only in the later file"),
+            store.allEntries().stream().map(ChatEntry::message).toList());
+        assertEquals(1, store.findEntries(ChatQuery.all().withSubstring("hello")).size());
+    }
+
+    @Test
+    void fileImportKeepsAFileMessageMoreThanThreeSecondsAway() throws IOException {
+        LogFixtures.writePlain(tempDir.resolve("first/logs"), "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:10] [Render thread/INFO]: [CHAT] hello
+            """);
+        store.importDirectory(tempDir.resolve("first"), ImportOptions.defaults().withOptimize(false));
+        LogFixtures.writePlain(tempDir.resolve("second/logs"), "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:14] [Render thread/INFO]: [CHAT] hello
+            """);
+        store.importDirectory(tempDir.resolve("second"), ImportOptions.defaults().withOptimize(false));
+
+        assertEquals(2, store.findEntries(ChatQuery.all().withSubstring("hello")).size());
+    }
+
+    @Test
     void fileImportKeepsALiveMessageMoreThanThreeSecondsAway() throws IOException {
         LocalDateTime at = LocalDateTime.of(2026, 8, 26, 10, 0, 10);
         store.startSession("26.2", at.minusSeconds(10));
