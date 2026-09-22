@@ -1,7 +1,6 @@
 package me.wolfii.allthelogs.data.store;
 
 import me.wolfii.allthelogs.data.ImportOptions;
-import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import org.duckdb.DuckDBAppender;
 import org.duckdb.DuckDBConnection;
 
@@ -9,8 +8,6 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.sql.Timestamp;
-import java.sql.Types;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,22 +22,16 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class LogWriter implements AutoCloseable {
     private static final int FLUSH_INTERVAL = 100_000;
     /**
-     * File-imported lines that repeat a live session line with the same text this close are dropped.
-     * Log files write a linebreak as the two characters {@code \n}; live capture stores a real newline.
+     * File-imported lines that repeat a line already stored before this import, with the same text this
+     * close, are dropped. Repeats inside the import itself are kept. Log files write a linebreak as the
+     * two characters {@code \n}; live capture stores a real newline.
      */
-    static final int LIVE_DUPLICATE_WINDOW_SECONDS = 3;
-
-    /**
-     * SQL that treats a stored {@code \n} pair as the same character as a live newline.
-     */
-    private static String sameChatText(String left, String right) {
-        return "replace(" + left + ", chr(92) || 'n', chr(10)) = replace(" + right
-            + ", chr(92) || 'n', chr(10))";
-    }
+    static final int LIVE_DUPLICATE_WINDOW_SECONDS = EntryMatch.WINDOW_SECONDS;
 
     private final DuckDBConnection connection;
     private final DuckDBAppender fileAppender;
     private final DuckDBAppender entryAppender;
+    private DuckDBAppender metadataAppender;
     private final Map<String, Long> existingLocations = new ConcurrentHashMap<>();
     private final Set<String> seenLocations = ConcurrentHashMap.newKeySet();
     private final Set<String> seenHashes = ConcurrentHashMap.newKeySet();
@@ -221,7 +212,7 @@ public final class LogWriter implements AutoCloseable {
      * every file in the import has been queued so the store is not rewritten per file.
      * <p>
      * Matching prefers the same source path and line index, and otherwise the same message text within
-     * {@link #LIVE_DUPLICATE_WINDOW_SECONDS}. Formatting is written only when the stored line has none
+     * {@link EntryMatch#WINDOW_SECONDS}. Formatting is written only when the stored line has none
      * and the log line has some. Username and server/world are written only when the log value is
      * non-null. Live session fields that already have a value are left unchanged.
      */
@@ -237,38 +228,32 @@ public final class LogWriter implements AutoCloseable {
         List<long[]> formattings = log.formattings();
         List<String> users = log.entryUsers();
         List<String> places = log.entryServerOrWorlds();
-        try (PreparedStatement insert = connection.prepareStatement("""
-            INSERT INTO metadata_patch (source_path, entry_path, seq, entry_time, message, formatting,
-                minecraft_user, server_or_world)
-            VALUES (?, ?, ?, ?, ?, CAST(? AS BIGINT[]), ?, ?)
-            """)) {
-            for (int i = 0; i < times.size(); i++) {
-                insert.setString(1, log.sourcePath());
-                insert.setString(2, log.entryPath());
-                insert.setInt(3, i);
-                insert.setTimestamp(4, Timestamp.valueOf(times.get(i)));
-                insert.setString(5, messages.get(i));
-                long[] formatting = formattings != null && i < formattings.size() ? formattings.get(i) : null;
-                String literal = PackedFormatting.toSqlLiteral(formatting);
-                if (literal == null) {
-                    insert.setNull(6, Types.VARCHAR);
-                } else {
-                    insert.setString(6, literal);
-                }
-                String user = users != null && i < users.size() ? users.get(i) : log.minecraftUser();
-                if (user == null) {
-                    insert.setNull(7, Types.VARCHAR);
-                } else {
-                    insert.setString(7, user);
-                }
-                String place = places != null && i < places.size() ? places.get(i) : null;
-                if (place == null) {
-                    insert.setNull(8, Types.VARCHAR);
-                } else {
-                    insert.setString(8, place);
-                }
-                insert.execute();
+        for (int i = 0; i < times.size(); i++) {
+            metadataAppender.beginRow();
+            metadataAppender.append(log.sourcePath());
+            metadataAppender.append(log.entryPath());
+            metadataAppender.append(i);
+            metadataAppender.append(times.get(i));
+            metadataAppender.append(messages.get(i));
+            long[] formatting = formattings != null && i < formattings.size() ? formattings.get(i) : null;
+            if (formatting == null || formatting.length == 0) {
+                metadataAppender.appendNull();
+            } else {
+                metadataAppender.append(formatting);
             }
+            String user = users != null && i < users.size() ? users.get(i) : log.minecraftUser();
+            if (user == null) {
+                metadataAppender.appendNull();
+            } else {
+                metadataAppender.append(user);
+            }
+            String place = places != null && i < places.size() ? places.get(i) : null;
+            if (place == null) {
+                metadataAppender.appendNull();
+            } else {
+                metadataAppender.append(place);
+            }
+            metadataAppender.endRow();
         }
         metadataPatchFiles++;
     }
@@ -284,13 +269,13 @@ public final class LogWriter implements AutoCloseable {
         if (!metadataPatchReady || metadataPatchFiles == 0 || !options.updatesAnyMetadata()) {
             return;
         }
+        flushMetadataAppender();
         String formattingFlag = options.updateFormatting() ? "true" : "false";
         String userFlag = options.updateMinecraftUser() ? "true" : "false";
         String serverFlag = options.updateMinecraftServer() ? "true" : "false";
         String session = SourceKind.SESSION.name();
-        int window = LIVE_DUPLICATE_WINDOW_SECONDS;
         try (Statement update = connection.createStatement()) {
-            prepareNormalizedPatches(update, window);
+            prepareNormalizedPatches(update);
             int updated = update.executeUpdate("""
                 UPDATE chat_entry
                 SET
@@ -346,25 +331,27 @@ public final class LogWriter implements AutoCloseable {
                               ON date_trunc('second', e.entry_time) = p.join_second
                              AND %s
                             JOIN log_file f ON f.id = e.file_id
-                            WHERE abs(date_diff('millisecond', e.entry_time, p.entry_time))
-                                <= %d * 1000
+                            WHERE %s
                         ) hits
                     ) ranked
                     WHERE rn = 1
                 ) m
                 WHERE chat_entry.rowid = m.rid
                 """.formatted(formattingFlag, userFlag, session, serverFlag, session,
-                    sameChatText("e.message", "p.text"), window));
+                    EntryMatch.sameAsNormalized("e.message", "p.text"),
+                    EntryMatch.withinWindow("e.entry_time", "p.entry_time")));
             if (updated > 0 && options.updateMinecraftUser()) {
                 updateLogFileUsers();
             }
             update.execute("DROP TABLE IF EXISTS metadata_patch_seconds");
             update.execute("DROP TABLE IF EXISTS metadata_patch_norm");
+            update.execute("DROP TABLE IF EXISTS metadata_patch");
             if (updated > 0) {
                 writtenFiles += metadataPatchFiles;
                 writtenEntries += updated;
             }
         }
+        metadataPatchReady = false;
         metadataPatchFiles = 0;
     }
 
@@ -372,7 +359,7 @@ public final class LogWriter implements AutoCloseable {
         if (metadataPatchReady) return;
         try (Statement statement = connection.createStatement()) {
             statement.execute("""
-                CREATE TEMP TABLE IF NOT EXISTS metadata_patch (
+                CREATE TABLE IF NOT EXISTS metadata_patch (
                     source_path VARCHAR,
                     entry_path VARCHAR,
                     seq INTEGER,
@@ -384,30 +371,25 @@ public final class LogWriter implements AutoCloseable {
                 )
                 """);
         }
+        metadataAppender = connection.createAppender(DuckDBConnection.DEFAULT_SCHEMA, "metadata_patch");
         metadataPatchReady = true;
     }
 
-    private static void prepareNormalizedPatches(Statement statement, int window) throws SQLException {
-        statement.execute("""
-            CREATE OR REPLACE TEMP TABLE metadata_patch_norm AS
+    private static void prepareNormalizedPatches(Statement statement) throws SQLException {
+        EntryMatch.expandSeconds(statement, """
             SELECT
                 source_path,
                 entry_path,
                 seq,
                 entry_time,
                 date_trunc('second', entry_time) AS entry_second,
-                replace(message, chr(92) || 'n', chr(10)) AS text,
+                %s AS text,
                 formatting,
                 minecraft_user,
                 server_or_world
             FROM metadata_patch
-            """);
-        statement.execute("""
-            CREATE OR REPLACE TEMP TABLE metadata_patch_seconds AS
-            SELECT p.*, p.entry_second + (delta * INTERVAL 1 SECOND) AS join_second
-            FROM metadata_patch_norm p
-            CROSS JOIN range(%d, %d) t(delta)
-            """.formatted(-window, window + 1));
+            """.formatted(EntryMatch.normalizedText("message")),
+            "metadata_patch_norm", "metadata_patch_seconds");
     }
 
     private void updateLogFileUsers() throws SQLException {
@@ -437,14 +419,14 @@ public final class LogWriter implements AutoCloseable {
                     JOIN log_file f ON f.id = e.file_id
                     WHERE p.minecraft_user IS NOT NULL
                       AND f.source_kind = '%s'
-                      AND abs(date_diff('millisecond', e.entry_time, p.entry_time))
-                          <= %d * 1000
+                      AND %s
                     QUALIFY row_number() OVER (PARTITION BY e.file_id ORDER BY p.seq) = 1
                 ) p
                 WHERE log_file.id = p.file_id
                   AND log_file.source_kind = '%s'
                   AND log_file.minecraft_user IS NULL
-                """.formatted(sameChatText("e.message", "p.text"), session, LIVE_DUPLICATE_WINDOW_SECONDS, session));
+                """.formatted(EntryMatch.sameAsNormalized("e.message", "p.text"), session,
+                    EntryMatch.withinWindow("e.entry_time", "p.entry_time"), session));
         }
     }
 
@@ -457,57 +439,48 @@ public final class LogWriter implements AutoCloseable {
     }
 
     /**
-     * Drops entries from imported files that duplicate an existing entry: the same message in the same
-     * second (file or live), or the same message as a live session line within
-     * {@link #LIVE_DUPLICATE_WINDOW_SECONDS}. Live session entries are never dropped.
+     * Drops file entries from this import that repeat a line already in the database: the same message
+     * text within {@link EntryMatch#WINDOW_SECONDS} of a row stored before this import started.
+     * Identical lines written by this import, including repeats inside one file, are kept. Live session
+     * rows are never dropped.
      *
-     * @return the number of removed entries, across the whole store
+     * @return the number of removed entries
      */
     public long deduplicate() throws SQLException {
         flushAppenders();
-        long removed = 0;
-        long removedFromThisImport = 0;
+        String session = SourceKind.SESSION.name();
         try (Statement statement = connection.createStatement()) {
-            long[] sameSecond = deleteDuplicates(statement, """
+            EntryMatch.expandSeconds(statement, """
+                SELECT
+                    e.rowid AS rid,
+                    e.file_id,
+                    e.entry_time,
+                    date_trunc('second', e.entry_time) AS entry_second,
+                    %s AS text
+                FROM chat_entry e
+                JOIN log_file f ON f.id = e.file_id
+                WHERE e.file_id >= %d
+                  AND f.source_kind <> '%s'
+                """.formatted(EntryMatch.normalizedText("e.message"), sessionStartId, session),
+                "import_dup_norm", "import_dup_seconds");
+            long[] removed = deleteDuplicates(statement, """
                 DELETE FROM chat_entry WHERE rowid IN (
-                    SELECT rowid FROM (
-                        SELECT e.rowid,
-                               f.source_kind,
-                               row_number() OVER (
-                                   PARTITION BY date_trunc('second', e.entry_time),
-                                                replace(e.message, chr(92) || 'n', chr(10))
-                                   ORDER BY CASE WHEN f.source_kind = '%s' THEN 0 ELSE 1 END,
-                                            e.file_id,
-                                            e.line_index
-                               ) AS rn
-                        FROM chat_entry e
-                        JOIN log_file f ON f.id = e.file_id
-                    ) WHERE rn > 1 AND source_kind <> '%s'
-                ) RETURNING file_id""".formatted(SourceKind.SESSION.name(), SourceKind.SESSION.name()));
-            long[] nearLive = deleteDuplicates(statement, """
-                DELETE FROM chat_entry WHERE rowid IN (
-                    SELECT e.rowid
-                    FROM chat_entry e
-                    JOIN log_file f ON f.id = e.file_id
-                    WHERE e.file_id >= %d
-                      AND f.source_kind <> '%s'
-                      AND EXISTS (
-                          SELECT 1
-                          FROM chat_entry s
-                          JOIN log_file sf ON sf.id = s.file_id
-                          WHERE sf.source_kind = '%s'
-                            AND %s
-                            AND abs(date_diff('millisecond', s.entry_time, e.entry_time))
-                                <= %s * 1000
-                      )
-                ) RETURNING file_id""".formatted(sessionStartId, SourceKind.SESSION.name(), SourceKind.SESSION.name(),
-                sameChatText("s.message", "e.message"), LIVE_DUPLICATE_WINDOW_SECONDS));
-            removed = sameSecond[0] + nearLive[0];
-            removedFromThisImport = sameSecond[1] + nearLive[1];
-            if (removed > 0) writtenFiles -= refreshFileAggregates(statement);
+                    SELECT DISTINCT n.rid
+                    FROM import_dup_seconds n
+                    JOIN chat_entry e
+                      ON date_trunc('second', e.entry_time) = n.join_second
+                     AND %s
+                    WHERE e.file_id < %d
+                      AND %s
+                ) RETURNING file_id
+                """.formatted(EntryMatch.sameAsNormalized("e.message", "n.text"), sessionStartId,
+                    EntryMatch.withinWindow("n.entry_time", "e.entry_time")));
+            statement.execute("DROP TABLE IF EXISTS import_dup_seconds");
+            statement.execute("DROP TABLE IF EXISTS import_dup_norm");
+            if (removed[0] > 0) writtenFiles -= refreshFileAggregates(statement);
+            writtenEntries -= removed[1];
+            return removed[0];
         }
-        writtenEntries -= removedFromThisImport;
-        return removed;
     }
 
     /**
@@ -580,12 +553,21 @@ public final class LogWriter implements AutoCloseable {
         bufferedEntries = 0;
     }
 
+    private void flushMetadataAppender() throws SQLException {
+        if (metadataAppender == null) return;
+        metadataAppender.flush();
+        metadataAppender.close();
+        metadataAppender = null;
+    }
+
     @Override
     public void close() throws SQLException {
         fileAppender.close();
         entryAppender.close();
+        flushMetadataAppender();
         persistSeen();
         try (Statement statement = connection.createStatement()) {
+            statement.execute("DROP TABLE IF EXISTS metadata_patch");
             statement.execute("COMMIT");
         }
     }

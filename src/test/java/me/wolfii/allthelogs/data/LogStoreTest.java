@@ -1660,7 +1660,7 @@ class LogStoreTest {
     }
 
     @Test
-    void identicalEntriesFromDifferentSourcesAreStoredOnce() throws IOException {
+    void identicalEntriesFromTheSameImportAreBothStored() throws IOException {
         String log = LogFixtures.modernLog("26.2", "shared line", "unique to first");
         LogFixtures.writeGzipped(tempDir.resolve("logs"), "2026-06-01-1.log.gz", log);
         LogFixtures.writeGzipped(tempDir.resolve("other"), "2026-06-01-1.log.gz",
@@ -1668,8 +1668,8 @@ class LogStoreTest {
 
         store.importDirectory(tempDir);
 
-        assertEquals(1, store.findEntries(ChatQuery.all().withSubstring("shared line")).size());
-        assertEquals(3, store.allEntries().size());
+        assertEquals(2, store.findEntries(ChatQuery.all().withSubstring("shared line")).size());
+        assertEquals(4, store.allEntries().size());
     }
 
     @Test
@@ -1836,7 +1836,7 @@ class LogStoreTest {
     }
 
     @Test
-    void importedFileMetadataStaysConsistentAfterDeduplication() throws IOException {
+    void sameImportKeepsRepeatedLinesInEveryFile() throws IOException {
         LogFixtures.writeGzipped(tempDir.resolve("a/logs"), "2026-06-01-1.log.gz",
             LogFixtures.modernLog("26.2", "shared", "only in a"));
         LogFixtures.writeGzipped(tempDir.resolve("b/logs"), "2026-06-01-1.log.gz",
@@ -1844,7 +1844,8 @@ class LogStoreTest {
 
         store.importDirectory(tempDir);
 
-        assertEquals(3, store.allEntries().size());
+        assertEquals(4, store.allEntries().size());
+        assertEquals(2, store.findEntries(ChatQuery.all().withSubstring("shared")).size());
         assertEquals(2, store.chatLogs().size());
     }
 
@@ -2193,6 +2194,67 @@ class LogStoreTest {
             store.allEntries().stream().map(ChatEntry::message).toList());
         assertInstanceOf(LogSource.Session.class,
             store.findEntries(ChatQuery.all().withSubstring("hello")).getFirst().chatLog().source());
+    }
+
+    @Test
+    void repeatedLinesInsideOneImportedFileAreAllStored() throws IOException {
+        StringBuilder log = new StringBuilder();
+        log.append("[10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3\n");
+        for (int second = 0; second <= 8; second += 2) {
+            log.append(String.format("[10:00:%02d] [Render thread/INFO]: [CHAT] gg%n", second));
+        }
+        log.append("[10:00:09] [Render thread/INFO]: [CHAT] unique\n");
+        LogFixtures.writePlain(tempDir.resolve("logs"), "2026-08-26-1.log", log.toString());
+
+        store.importDirectory(tempDir, ImportOptions.defaults().withOptimize(false));
+
+        assertEquals(List.of("gg", "gg", "gg", "gg", "gg", "unique"),
+            store.allEntries().stream().map(ChatEntry::message).toList());
+    }
+
+    @Test
+    void repeatedLiveMessagesWithinThreeSecondsAreBothStored() {
+        LocalDateTime at = LocalDateTime.of(2026, 8, 26, 10, 0, 10);
+        store.startSession("26.2", at.minusSeconds(10));
+        assertTrue(store.importSessionMessage("gg", at));
+        assertTrue(store.importSessionMessage("gg", at.plusSeconds(2)));
+
+        assertEquals(2, store.findEntries(ChatQuery.all().withSubstring("gg")).size());
+    }
+
+    @Test
+    void fileImportSkipsAFileMessageWithinThreeSeconds() throws IOException {
+        LogFixtures.writePlain(tempDir.resolve("first/logs"), "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:10] [Render thread/INFO]: [CHAT] hello
+            """);
+        store.importDirectory(tempDir.resolve("first"), ImportOptions.defaults().withOptimize(false));
+        LogFixtures.writePlain(tempDir.resolve("second/logs"), "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:12] [Render thread/INFO]: [CHAT] hello
+            [10:00:13] [Render thread/INFO]: [CHAT] only in the later file
+            """);
+        store.importDirectory(tempDir.resolve("second"), ImportOptions.defaults().withOptimize(false));
+
+        assertEquals(List.of("hello", "only in the later file"),
+            store.allEntries().stream().map(ChatEntry::message).toList());
+        assertEquals(1, store.findEntries(ChatQuery.all().withSubstring("hello")).size());
+    }
+
+    @Test
+    void fileImportKeepsAFileMessageMoreThanThreeSecondsAway() throws IOException {
+        LogFixtures.writePlain(tempDir.resolve("first/logs"), "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:10] [Render thread/INFO]: [CHAT] hello
+            """);
+        store.importDirectory(tempDir.resolve("first"), ImportOptions.defaults().withOptimize(false));
+        LogFixtures.writePlain(tempDir.resolve("second/logs"), "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:14] [Render thread/INFO]: [CHAT] hello
+            """);
+        store.importDirectory(tempDir.resolve("second"), ImportOptions.defaults().withOptimize(false));
+
+        assertEquals(2, store.findEntries(ChatQuery.all().withSubstring("hello")).size());
     }
 
     @Test
