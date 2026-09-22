@@ -22,8 +22,9 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class LogWriter implements AutoCloseable {
     private static final int FLUSH_INTERVAL = 100_000;
     /**
-     * File-imported lines that repeat an already stored line with the same text this close are dropped.
-     * Log files write a linebreak as the two characters {@code \n}; live capture stores a real newline.
+     * File-imported lines that repeat a line already stored before this import, with the same text this
+     * close, are dropped. Repeats inside the import itself are kept. Log files write a linebreak as the
+     * two characters {@code \n}; live capture stores a real newline.
      */
     static final int LIVE_DUPLICATE_WINDOW_SECONDS = EntryMatch.WINDOW_SECONDS;
 
@@ -438,11 +439,12 @@ public final class LogWriter implements AutoCloseable {
     }
 
     /**
-     * Drops newly imported file entries that duplicate an already stored line: the same message text
-     * within {@link EntryMatch#WINDOW_SECONDS}. Live session entries are never dropped; when two file
-     * rows collide, the earlier {@code file_id} (then line index) is kept.
+     * Drops file entries from this import that repeat a line already in the database: the same message
+     * text within {@link EntryMatch#WINDOW_SECONDS} of a row stored before this import started.
+     * Identical lines written by this import, including repeats inside one file, are kept. Live session
+     * rows are never dropped.
      *
-     * @return the number of removed entries, across the whole store
+     * @return the number of removed entries
      */
     public long deduplicate() throws SQLException {
         flushAppenders();
@@ -452,7 +454,6 @@ public final class LogWriter implements AutoCloseable {
                 SELECT
                     e.rowid AS rid,
                     e.file_id,
-                    e.line_index,
                     e.entry_time,
                     date_trunc('second', e.entry_time) AS entry_second,
                     %s AS text
@@ -469,17 +470,11 @@ public final class LogWriter implements AutoCloseable {
                     JOIN chat_entry e
                       ON date_trunc('second', e.entry_time) = n.join_second
                      AND %s
-                    JOIN log_file f ON f.id = e.file_id
-                    WHERE n.rid <> e.rowid
+                    WHERE e.file_id < %d
                       AND %s
-                      AND (
-                          f.source_kind = '%s'
-                          OR e.file_id < n.file_id
-                          OR (e.file_id = n.file_id AND e.line_index < n.line_index)
-                      )
                 ) RETURNING file_id
-                """.formatted(EntryMatch.sameAsNormalized("e.message", "n.text"),
-                    EntryMatch.withinWindow("n.entry_time", "e.entry_time"), session));
+                """.formatted(EntryMatch.sameAsNormalized("e.message", "n.text"), sessionStartId,
+                    EntryMatch.withinWindow("n.entry_time", "e.entry_time")));
             statement.execute("DROP TABLE IF EXISTS import_dup_seconds");
             statement.execute("DROP TABLE IF EXISTS import_dup_norm");
             if (removed[0] > 0) writtenFiles -= refreshFileAggregates(statement);

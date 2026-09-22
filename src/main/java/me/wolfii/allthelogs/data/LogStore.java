@@ -268,8 +268,9 @@ public final class LogStore implements AutoCloseable {
     /**
      * Imports an already-stripped live chat line with flattened packed formatting, stamped with the current time.
      * <p>
-     * Live rows are always stored. A later file import that repeats the same text within
-     * {@link me.wolfii.allthelogs.data.store.EntryMatch#WINDOW_SECONDS} is the copy that is removed.
+     * Live rows are always stored, including two identical lines a few seconds apart. A later file import
+     * that repeats text already stored before that import, within
+     * {@link me.wolfii.allthelogs.data.store.EntryMatch#WINDOW_SECONDS}, is the copy that is removed.
      * A log that contains this session's {@link me.wolfii.allthelogs.data.store.SessionMarker} is skipped
      * entirely.
      *

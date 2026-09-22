@@ -89,9 +89,9 @@ public final class SessionCapture {
 
     /**
      * Stores a chat line in the current session. Timestamps are truncated to milliseconds. Live rows are
-     * never dropped as duplicates; a later file import that repeats the same text in the same second, or
-     * within {@link EntryMatch#WINDOW_SECONDS} of a live line, is the copy
-     * that {@link LogWriter#deduplicate()} removes. Legacy {@code §} codes are
+     * never dropped as duplicates, including two identical lines a few seconds apart. A later file import
+     * that repeats text already stored before that import, within {@link EntryMatch#WINDOW_SECONDS}, is
+     * the copy that {@link LogWriter#deduplicate()} removes. Legacy {@code §} codes are
      * stripped like on file import; {@code formatting} is stored as packed runs, or parsed from the
      * message when {@code null}.
      *
