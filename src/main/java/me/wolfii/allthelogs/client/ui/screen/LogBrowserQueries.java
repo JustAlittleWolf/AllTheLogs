@@ -469,7 +469,9 @@ final class LogBrowserQueries {
      * then stops the next thumb position from invalidating a page the list has not drawn yet.
      */
     private void finishPreview(boolean preview, int epoch) {
-        if (preview && list != null) list.scrubQueryFinished(epoch);
+        if (preview && list != null && list.scrubQueryFinished(epoch)) {
+            list.finishScrub();
+        }
     }
 
     private ChatQuery jumpQuery(ScrubJump jump, LocalDateTime target, boolean preview) {
@@ -536,8 +538,13 @@ final class LogBrowserQueries {
         boolean fromSearch = replaceOnJumpFailure;
         replaceOnJumpFailure = false;
         list.setLoading(false);
-        list.showAt(target, rows, hasBefore, hasAfter, progress,
-            fromSearch ? MessageTimeline.VIEWPORT_STAY_FRACTION : 0);
+        boolean kept = preview && list.anchorsScrubPreview()
+            && list.replacePreviewPage(rows, hasBefore, hasAfter);
+        if (!kept) {
+            list.showAt(target, rows, hasBefore, hasAfter, progress,
+                fromSearch ? MessageTimeline.VIEWPORT_STAY_FRACTION : 0);
+        }
+        if (preview) list.markScrubPreviewShown();
         if (preview && releasePreview) {
             finishPreview(true, epoch);
         } else if (!preview && releasePreview) {

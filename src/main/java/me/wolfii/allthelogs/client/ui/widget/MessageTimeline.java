@@ -27,8 +27,9 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
- * Virtualised log list with a timeline scrubber on its right edge. Newest is at the bottom, and a page shorter
- * than the viewport sits on its bottom edge.
+ * Virtualised log list with a timeline scrubber on its right edge. Newest is at the bottom. A page shorter
+ * than the viewport sits on its bottom edge only when it is the tail of the result; anywhere earlier, including
+ * a page the scrubber just loaded, the date header stays on the top edge.
  * <p>
  * Double-click selects a word and triple-click selects the line. Expand carets on cluster
  * separators load more context through {@link #onExpand}; shift-click fetches a larger chunk.
@@ -190,13 +191,46 @@ public final class MessageTimeline extends BaseUIComponent {
     /**
      * Frees the preview slot for {@code epoch} after its rows are visible. Releasing it earlier let the next
      * thumb position cancel the page before it was drawn, so a held scrollbar updated only on mouse-up.
+     * When the button already went up, the caller should {@link #finishScrub()} so the thumb follows the
+     * page that just arrived instead of querying again.
      */
-    public void scrubQueryFinished(int epoch) {
-        scrub.previewFinished(epoch);
+    public boolean scrubQueryFinished(int epoch) {
+        return scrub.previewFinished(epoch);
     }
 
     public void scrubQueryFinished() {
-        scrub.previewFinished(scrub.epoch());
+        if (scrubQueryFinished(scrub.epoch())) finishScrub();
+    }
+
+    public void markScrubPreviewShown() {
+        scrub.markPreviewShown();
+    }
+
+    /**
+     * Whether a follow-up slice of the preview already on screen should keep the visible rows still.
+     */
+    public boolean anchorsScrubPreview() {
+        return scrub.anchorsVisibleRows();
+    }
+
+    /**
+     * Replaces the buffered page and keeps the topmost visible row where it is. Returns false when that row
+     * is not in {@code rows}, so the caller can position the new page normally.
+     */
+    public boolean replacePreviewPage(List<DisplayRow> rows, boolean hasBefore, boolean hasAfter) {
+        DisplayRow.RowKey anchor = window.keyAt(view().firstVisibleRow());
+        if (anchor == null || DisplayRows.indexOf(rows, anchor) < 0) return false;
+        applyPage(rows, hasBefore, hasAfter, anchor);
+        return true;
+    }
+
+    /**
+     * Top padding for a short page. The tail of the result stays bottom-aligned, like a chat log. A page with
+     * more matches after it is top-aligned so its date header sits on the top edge instead of a few pixels down.
+     */
+    static int contentOrigin(int contentHeight, int viewHeight, boolean pinToBottom) {
+        if (!pinToBottom) return 0;
+        return MessageListLayout.bottomPad(contentHeight, viewHeight);
     }
 
     public double scrollY() {
@@ -506,8 +540,7 @@ public final class MessageTimeline extends BaseUIComponent {
     @Override
     public boolean onMouseUp(MouseButtonEvent click) {
         if (scrub.dragging()) {
-            scrub.endDrag();
-            applyThumbScrub(click.y(), true);
+            releaseThumb(click.y());
         }
         if (click.button() == GLFW.GLFW_MOUSE_BUTTON_MIDDLE) {
             return true;
@@ -545,7 +578,8 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     private ListView view() {
-        return new ListView(x, y, width, height, scrollY, layout, window.rows(), font(), messageRowHeight);
+        return new ListView(x, y, width, height, scrollY, layout, window.rows(), font(), messageRowHeight,
+            !window.hasAfter());
     }
 
     private TimelineTrackPainter.Track track() {
@@ -790,6 +824,46 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     /**
+     * Lets go of the thumb. A page already shown for this spot stays exactly where it is: committing would
+     * fetch the full page and {@code showAt} would scroll it again, which is the jump on mouse-up. A preview
+     * that has not arrived yet is left to land, and then the thumb follows it. Anything else still commits,
+     * so a quick release before the first preview updates the list.
+     */
+    private void releaseThumb(double localY) {
+        int thumbHeight = scrub.capturedThumbHeight() > 0 ? scrub.capturedThumbHeight() : thumbHeight();
+        double progress = scrub.moveTo(localY, thumbHeight, height);
+        ScrubJump parked = scrubTarget(progress);
+        boolean keep = ScrubDrag.keepsHeldPage(
+            parked != null && ScrubDrag.sameTarget(parked, scrub.lastSentJump()),
+            scrub.previewInFlight(), scrub.previewShown());
+        scrub.endDrag();
+        if (keep) {
+            if (scrub.previewInFlight()) scrub.finishAfterPreview();
+            else scrub.finish();
+            return;
+        }
+        applyScrub(progress, true);
+    }
+
+    /**
+     * The store jump {@code progress} would ask for, or {@code null} when the loaded page can already show
+     * that edge.
+     */
+    private ScrubJump scrubTarget(double progress) {
+        double clamped = Math.clamp(progress, 0, 1);
+        if (clamped <= 0) {
+            return window.hasBefore() ? new ScrubJump(scrubOldest(), 0, 0) : null;
+        }
+        if (clamped >= 1) {
+            return window.hasAfter() ? new ScrubJump(scrubNewest(), skipAtEnd(), 1) : null;
+        }
+        LocalDateTime time = timeAtProgress(clamped);
+        long skip = matches.days().isEmpty() ? -1 : TimelineScale.skipAtProgress(clamped, matches.days());
+        if (time == null && skip < 0) return null;
+        return new ScrubJump(time, skip, clamped);
+    }
+
+    /**
      * Keeps a parked thumb pulling in pages while it is held still.
      */
     private void continueScrub() {
@@ -942,7 +1016,7 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     private int contentOrigin() {
-        return MessageListLayout.bottomPad(layout.contentHeight(), height);
+        return contentOrigin(layout.contentHeight(), height, !window.hasAfter());
     }
 
     private double clampScroll(double value) {

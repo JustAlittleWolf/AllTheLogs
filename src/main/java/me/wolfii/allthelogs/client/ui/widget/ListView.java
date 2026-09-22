@@ -13,17 +13,19 @@ import java.util.List;
  * apart.
  * <p>
  * Content y is measured from the top of the laid-out rows; screen y is measured from the top of the window.
- * When the content is shorter than the viewport it is bottom-aligned, which is what {@link #contentOrigin()}
- * accounts for.
+ * When the content is shorter than the viewport and {@code pinToBottom} is set, it is bottom-aligned, which
+ * is what {@link #contentOrigin()} accounts for. A scrubbed page leaves {@code pinToBottom} clear so its
+ * date header stays on the top edge.
  *
  * @param x       left edge of the whole widget, list plus timeline track
  * @param y       top edge of the whole widget
  * @param width   width of the whole widget, list plus timeline track
  * @param height  height of the whole widget
- * @param scrollY content-y currently at the top of the viewport
+ * @param scrollY     content-y currently at the top of the viewport
+ * @param pinToBottom whether a short page sits on the bottom edge
  */
 record ListView(int x, int y, int width, int height, double scrollY,
-                MessageListLayout layout, List<DisplayRow> rows, Font font, int rowHeight) {
+                MessageListLayout layout, List<DisplayRow> rows, Font font, int rowHeight, boolean pinToBottom) {
     /** Padding between the list edge and the timestamp gutter. */
     static final int PAD = 4;
 
@@ -80,7 +82,7 @@ record ListView(int x, int y, int width, int height, double scrollY,
      * Top padding that bottom-aligns the content when it is shorter than the viewport.
      */
     int contentOrigin() {
-        return MessageListLayout.bottomPad(layout.contentHeight(), height);
+        return MessageTimeline.contentOrigin(layout.contentHeight(), height, pinToBottom);
     }
 
     int screenY(int contentY) {

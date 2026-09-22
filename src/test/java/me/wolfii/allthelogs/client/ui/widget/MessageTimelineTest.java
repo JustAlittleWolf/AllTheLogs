@@ -66,13 +66,49 @@ class MessageTimelineTest {
         scrub.begin(20);
         int firstDrag = scrub.epoch();
         assertTrue(scrub.claimPreview(new ScrubJump(LocalDateTime.of(2026, 1, 1, 0, 0), 0, 0.2)));
+        scrub.endDrag();
+        scrub.finishAfterPreview();
         scrub.begin(20);
         assertNotEquals(firstDrag, scrub.epoch());
         assertTrue(scrub.claimPreview(new ScrubJump(LocalDateTime.of(2026, 6, 1, 0, 0), 10, 0.8)));
-        scrub.previewFinished(firstDrag);
+        assertFalse(scrub.previewFinished(firstDrag));
         assertTrue(scrub.previewInFlight());
-        scrub.previewFinished(scrub.epoch());
+        assertFalse(scrub.previewFinished(scrub.epoch()));
         assertFalse(scrub.previewInFlight());
+    }
+
+    @Test
+    void releasingAHeldPreviewKeepsThatPage() {
+        LocalDateTime held = LocalDateTime.of(2023, 1, 24, 9, 56);
+        ScrubJump shown = new ScrubJump(held, 0, 0.4);
+        ScrubJump sameSpot = new ScrubJump(held, 0, 0.401);
+        ScrubJump elsewhere = new ScrubJump(LocalDateTime.of(2023, 2, 13, 0, 0), 0, 0.5);
+        assertTrue(ScrubDrag.keepsHeldPage(ScrubDrag.sameTarget(shown, sameSpot), false, true));
+        assertTrue(ScrubDrag.keepsHeldPage(true, true, false));
+        assertFalse(ScrubDrag.keepsHeldPage(ScrubDrag.sameTarget(shown, elsewhere), false, true));
+        assertFalse(ScrubDrag.keepsHeldPage(false, false, false));
+    }
+
+    @Test
+    void previewSliceAfterReleaseKeepsVisibleRowsAndThenFollowsThem() {
+        ScrubDrag scrub = new ScrubDrag();
+        scrub.begin(20);
+        assertTrue(scrub.claimPreview(new ScrubJump(LocalDateTime.of(2023, 1, 24, 9, 56), 0, 0.4)));
+        scrub.markPreviewShown();
+        assertFalse(scrub.anchorsVisibleRows());
+        scrub.endDrag();
+        scrub.finishAfterPreview();
+        assertTrue(scrub.anchorsVisibleRows());
+        assertTrue(scrub.previewFinished(scrub.epoch()));
+        assertFalse(scrub.previewInFlight());
+    }
+
+    @Test
+    void shortPageWithMoreAfterKeepsTheDateHeaderAtTheTop() {
+        assertEquals(0, MessageTimeline.contentOrigin(400, 420, false));
+        assertEquals(20, MessageTimeline.contentOrigin(400, 420, true));
+        assertEquals(0, MessageTimeline.contentOrigin(500, 420, false));
+        assertEquals(0, MessageTimeline.contentOrigin(500, 420, true));
     }
 
     @Test
