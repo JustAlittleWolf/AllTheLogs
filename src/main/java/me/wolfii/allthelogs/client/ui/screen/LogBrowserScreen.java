@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.client.ui.screen;
 
+import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.DropdownComponent;
@@ -109,6 +110,14 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         }
         if (list != null && queries.consumeReload()) {
             queries.reload();
+        }
+    }
+
+    @Override
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+        super.extractRenderState(graphics, mouseX, mouseY, delta);
+        if (list != null && list.verticalCursor()) {
+            graphics.requestCursor(CursorTypes.RESIZE_NS);
         }
     }
 
