@@ -564,11 +564,9 @@ public final class MessageTimeline extends BaseUIComponent {
 
     private void updateCursor(ListView view, int mouseX, int mouseY) {
         boolean inRows = mouseY >= y && mouseY < y + height;
-        boolean nearTrack = mouseX >= x + view.listWidth() - TimelineTrackPainter.HOVER_SLOP
-            && mouseX < x + width && inRows;
         boolean overMessage = mouseX >= view.messageX() && mouseX < x + view.listWidth() && inRows;
         boolean overExpand = MessageListPainter.expandAt(view, mouseX - x, mouseY - y) != null;
-        this.cursorStyle(listCursor(nearTrack || scrub.dragging() || autoScroll.active(), overExpand, overMessage));
+        this.cursorStyle(listCursor(autoScroll.active(), overExpand, overMessage));
     }
 
     /**
