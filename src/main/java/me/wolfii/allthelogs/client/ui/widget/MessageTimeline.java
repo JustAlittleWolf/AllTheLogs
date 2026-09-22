@@ -568,15 +568,26 @@ public final class MessageTimeline extends BaseUIComponent {
             && mouseX < x + width && inRows;
         boolean overMessage = mouseX >= view.messageX() && mouseX < x + view.listWidth() && inRows;
         boolean overExpand = MessageListPainter.expandAt(view, mouseX - x, mouseY - y) != null;
-        if (nearTrack || scrub.dragging() || autoScroll.active()) {
-            this.cursorStyle(CursorStyle.MOVE);
-        } else if (overExpand) {
-            this.cursorStyle(CursorStyle.HAND);
-        } else if (overMessage) {
-            this.cursorStyle(CursorStyle.TEXT);
-        } else {
-            this.cursorStyle(CursorStyle.POINTER);
-        }
+        this.cursorStyle(listCursor(nearTrack || scrub.dragging() || autoScroll.active(), overExpand, overMessage));
+    }
+
+    /**
+     * Middle-click auto-scroll and the date track only move up and down. Standard cursors have no
+     * one-way arrow, so that gesture uses the north-south resize cursor rather than the four-way move cursor.
+     */
+    static CursorStyle listCursor(boolean verticalDrag, boolean overExpand, boolean overMessage) {
+        if (verticalDrag) return CursorStyle.VERTICAL_RESIZE;
+        if (overExpand) return CursorStyle.HAND;
+        if (overMessage) return CursorStyle.TEXT;
+        return CursorStyle.POINTER;
+    }
+
+    /**
+     * The list wants the up-down cursor. The screen forwards this through Minecraft's cursor request so
+     * the pointer is not reset to the arrow after the widget sets it.
+     */
+    public boolean verticalCursor() {
+        return cursorStyle() == CursorStyle.VERTICAL_RESIZE;
     }
 
     private void applyAutoScroll(int mouseY, float delta) {

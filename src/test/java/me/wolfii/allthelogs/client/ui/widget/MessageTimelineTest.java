@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.client.ui.widget;
 
+import io.wispforest.owo.ui.core.CursorStyle;
 import me.wolfii.allthelogs.client.timeline.ScrubJump;
 import me.wolfii.allthelogs.client.timeline.ScrubberGeometry;
 import org.junit.jupiter.api.Test;
@@ -9,6 +10,14 @@ import java.time.LocalDateTime;
 import static org.junit.jupiter.api.Assertions.*;
 
 class MessageTimelineTest {
+    @Test
+    void middleDragAndTheTimelineUseAnUpDownCursor() {
+        assertEquals(CursorStyle.VERTICAL_RESIZE, MessageTimeline.listCursor(true, true, true));
+        assertEquals(CursorStyle.HAND, MessageTimeline.listCursor(false, true, true));
+        assertEquals(CursorStyle.TEXT, MessageTimeline.listCursor(false, false, true));
+        assertEquals(CursorStyle.POINTER, MessageTimeline.listCursor(false, false, false));
+    }
+
     @Test
     void middleHoldLatchesOnlyAfterTheHoldThresholdWhileTheButtonIsDown() {
         assertFalse(AutoScroller.latchMiddleHold(false, true, 249));
