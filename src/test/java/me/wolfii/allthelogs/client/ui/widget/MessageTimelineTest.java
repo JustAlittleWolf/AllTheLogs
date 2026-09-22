@@ -4,6 +4,7 @@ import io.wispforest.owo.ui.core.CursorStyle;
 import me.wolfii.allthelogs.client.timeline.ScrubJump;
 import me.wolfii.allthelogs.client.timeline.ScrubberGeometry;
 import me.wolfii.allthelogs.client.timeline.TimelineEdge;
+import me.wolfii.allthelogs.data.MatchDay;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
@@ -73,6 +74,25 @@ class MessageTimelineTest {
         assertTrue(scrub.previewInFlight());
         scrub.previewFinished(scrub.epoch());
         assertFalse(scrub.previewInFlight());
+    }
+
+    @Test
+    void onlyAFullyLoadedDayScrollsByThumbFraction() {
+        MatchDay partial = new MatchDay(java.time.LocalDate.of(2023, 1, 24),
+            LocalDateTime.of(2023, 1, 24, 0, 0), LocalDateTime.of(2023, 1, 24, 23, 0), 80);
+        MatchDay collapsed = new MatchDay(partial.date(), partial.oldest(), partial.oldest(), 50);
+        assertFalse(MessageTimeline.scrollsWholeDay(partial, 32));
+        assertTrue(MessageTimeline.scrollsWholeDay(partial, 80));
+        assertFalse(MessageTimeline.scrollsWholeDay(collapsed, 50));
+        assertFalse(MessageTimeline.scrollsWholeDay(null, 10));
+    }
+
+    @Test
+    void shortPageWithMoreAfterKeepsTheDateHeaderAtTheTop() {
+        assertEquals(0, MessageTimeline.contentOrigin(400, 420, false));
+        assertEquals(20, MessageTimeline.contentOrigin(400, 420, true));
+        assertEquals(0, MessageTimeline.contentOrigin(500, 420, false));
+        assertEquals(0, MessageTimeline.contentOrigin(500, 420, true));
     }
 
     @Test

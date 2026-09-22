@@ -27,8 +27,9 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
- * Virtualised log list with a timeline scrubber on its right edge. Newest is at the bottom, and a page shorter
- * than the viewport sits on its bottom edge.
+ * Virtualised log list with a timeline scrubber on its right edge. Newest is at the bottom. A page shorter
+ * than the viewport sits on its bottom edge only when it is the tail of the result; anywhere earlier, including
+ * a page the scrubber just loaded, the date header stays on the top edge.
  * <p>
  * Double-click selects a word and triple-click selects the line. Expand carets on cluster
  * separators load more context through {@link #onExpand}; shift-click fetches a larger chunk.
@@ -197,6 +198,15 @@ public final class MessageTimeline extends BaseUIComponent {
 
     public void scrubQueryFinished() {
         scrub.previewFinished(scrub.epoch());
+    }
+
+    /**
+     * Top padding for a short page. The tail of the result stays bottom-aligned, like a chat log. A page with
+     * more matches after it is top-aligned so its date header sits on the top edge instead of a few pixels down.
+     */
+    static int contentOrigin(int contentHeight, int viewHeight, boolean pinToBottom) {
+        if (!pinToBottom) return 0;
+        return MessageListLayout.bottomPad(contentHeight, viewHeight);
     }
 
     public double scrollY() {
@@ -545,7 +555,8 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     private ListView view() {
-        return new ListView(x, y, width, height, scrollY, layout, window.rows(), font(), messageRowHeight);
+        return new ListView(x, y, width, height, scrollY, layout, window.rows(), font(), messageRowHeight,
+            !window.hasAfter());
     }
 
     private TimelineTrackPainter.Track track() {
@@ -790,7 +801,8 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     /**
-     * Keeps a parked thumb pulling in pages while it is held still.
+     * Keeps a parked thumb pulling in pages while it is held still. Mouse movement is not required:
+     * {@link #draw} calls this every frame for as long as the button is down.
      */
     private void continueScrub() {
         double progress = scrub.parkedProgress(height);
@@ -849,10 +861,12 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     /**
-     * Scrolls to {@code progress} without a store query when the buffer already holds that day. A day whose
-     * matches all share one timestamp cannot be reached this way once it holds more matches than are loaded,
-     * because only a match rank can address them. A preview slice of a longer day is not enough either:
-     * mapping the whole day onto those rows would hide messages the thumb still points at.
+     * Scrolls to {@code progress} without a store query when the buffer already holds that spot.
+     * <p>
+     * A fully loaded day is walked by its track fraction. A preview slice is not: the query already starts
+     * at the thumb's timestamp, so that timestamp belongs at the top, date header included. Mapping the
+     * whole day onto the slice scrolled to a different place than mouse-up, which is the jump on release.
+     * A collapsed day still has to be fetched by match rank until every match is loaded.
      */
     private boolean scrollLocally(double progress, LocalDateTime time, long skip) {
         return scrollLocally(progress, time, skip, false);
@@ -860,24 +874,35 @@ public final class MessageTimeline extends BaseUIComponent {
 
     private boolean scrollLocally(double progress, LocalDateTime time, long skip, boolean onFetchedPage) {
         MatchDay day = TimelineScale.dayAtProgress(progress, matches.days());
-        if (day != null) {
+        int loaded = day == null ? 0 : DisplayRows.matchCountOnDate(window.rows(), day.date());
+        if (day != null && day.collapsed() && skip >= 0 && !scrollsWholeDay(day, loaded) && !onFetchedPage) {
+            return false;
+        }
+        if (day != null && scrollsWholeDay(day, loaded)) {
             MessageListLayout.DateBand band = layout.dateBand(day.date());
-            int loaded = DisplayRows.matchCountOnDate(window.rows(), day.date());
-            boolean timeInBuffer = time != null && window.coversTime(time) && window.showsDate(time);
-            if (band != null && PageBounds.canScrollDayLocally(day, loaded, skip, onFetchedPage, timeInBuffer)) {
+            if (band != null) {
                 double fraction = TimelineScale.fractionInDay(progress, matches.days());
                 setScrollY(ScrubberGeometry.scrollForDateFraction(band.y(), layout.dateEndY(band), height, fraction));
                 return true;
             }
-            if (day.collapsed() && skip >= 0 && loaded < day.matches()) {
-                return false;
-            }
         }
-        if (time != null && window.showsDate(time)) {
+        if (onFetchedPage && time != null) {
+            scrollToTime(time);
+            return true;
+        }
+        if (time != null && window.coversTime(time) && window.showsDate(time)) {
             scrollToTime(time);
             return true;
         }
         return false;
+    }
+
+    /**
+     * Whether {@code loadedMatches} is the entire day, so thumb progress can scroll through those rows.
+     * A shorter slice stays pinned to the timestamp the query was fetched for.
+     */
+    static boolean scrollsWholeDay(MatchDay day, int loadedMatches) {
+        return day != null && !day.collapsed() && day.matches() > 0 && loadedMatches >= day.matches();
     }
 
     private void jump(ScrubJump jump, boolean commit) {
@@ -942,7 +967,7 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     private int contentOrigin() {
-        return MessageListLayout.bottomPad(layout.contentHeight(), height);
+        return contentOrigin(layout.contentHeight(), height, !window.hasAfter());
     }
 
     private double clampScroll(double value) {
