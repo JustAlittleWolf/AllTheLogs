@@ -29,7 +29,7 @@ import java.util.function.Supplier;
 final class FilterOverlay {
     static final int PANEL_WIDTH = 144;
     /** Shorter than a normal 20px button, and only as wide as the X plus the button border. */
-    private static final int RESET_BUTTON_WIDTH = 12;
+    private static final int RESET_BUTTON_WIDTH = 14;
     private static final int RESET_BUTTON_HEIGHT = 14;
     private static boolean sessionOpen;
 
@@ -212,7 +212,7 @@ final class FilterOverlay {
         FlowLayout header = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
         header.gap(4).verticalAlignment(VerticalAlignment.CENTER);
         header.child(UIComponents.label(Component.translatable(key)).horizontalSizing(Sizing.expand()));
-        ButtonComponent clear = UIComponents.button(Component.literal("X"), ignored -> reset.run());
+        ButtonComponent clear = UIComponents.button(Component.literal("❌"), ignored -> reset.run());
         clear.horizontalSizing(Sizing.fixed(RESET_BUTTON_WIDTH));
         clear.verticalSizing(Sizing.fixed(RESET_BUTTON_HEIGHT));
         header.child(clear);
