@@ -23,6 +23,8 @@ final class AutoScroller {
     private boolean holdLatched;
     private long buttonDownAtMs;
     private double originY;
+    /** {@code -1} toward the top of the list, {@code +1} toward the bottom, {@code 0} before the pointer leaves the deadzone. */
+    private int direction;
 
     /**
      * Once the middle button has been held for {@link #HOLD_MS}, releasing it should stop auto-scroll.
@@ -41,12 +43,22 @@ final class AutoScroller {
         holdLatched = false;
         buttonDownAtMs = System.currentTimeMillis();
         originY = localY;
+        direction = 0;
     }
 
     void stop() {
         active = false;
         buttonDown = false;
         holdLatched = false;
+        direction = 0;
+    }
+
+    /**
+     * Scroll direction once the pointer has left the deadzone. {@code +1} increases scroll (toward newer
+     * rows at the bottom); {@code -1} decreases it.
+     */
+    int direction() {
+        return direction;
     }
 
     /**
@@ -72,6 +84,7 @@ final class AutoScroller {
         }
         double offset = localY - originY;
         if (Math.abs(offset) <= DEADZONE_PX) return 0;
+        direction = offset > 0 ? 1 : -1;
         double pastDeadzone = offset - Math.copySign(DEADZONE_PX, offset);
         return pastDeadzone / PIXELS_PER_ROW * MessageListLayout.ROW_HEIGHT * Math.max(0.05, delta) * ROWS_PER_FRAME;
     }

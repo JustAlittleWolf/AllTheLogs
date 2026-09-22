@@ -354,9 +354,10 @@ final class LogBrowserQueries {
         }
         ChatQuery requested = jumpQuery(jump, target, preview);
         int gen = generation.incrementAndGet();
+        int epoch = list.scrubEpoch();
         if (!preview) list.setLoading(true);
         onClient(AllTheLogsClient.worker().findEntries(requested), (entries, error) -> {
-            applyJumpEntries(jump, target, preview, gen, requested, entries, error);
+            applyJumpEntries(jump, target, preview, gen, epoch, requested, entries, error);
         });
     }
 
@@ -372,13 +373,16 @@ final class LogBrowserQueries {
         ChatQuery earlier = previewLimit(page.withSort(ChatQuery.Sort.DESCENDING)
             .withOffset(PageBounds.exclusiveOffset(target, ChatQuery.Sort.DESCENDING)).toQuery(), preview);
         int gen = generation.incrementAndGet();
+        int epoch = list.scrubEpoch();
         if (!preview) list.setLoading(true);
         CompletableFuture<List<ChatEntry>> laterFuture = AllTheLogsClient.worker().findEntries(later);
         CompletableFuture<List<ChatEntry>> earlierFuture = AllTheLogsClient.worker().findEntries(earlier);
         onClient(laterFuture, (laterEntries, laterError) ->
             onClient(earlierFuture, (earlierEntries, earlierError) -> {
-                if (preview && list != null) list.scrubQueryFinished();
-                if (gen != generation.get()) return;
+                if (gen != generation.get()) {
+                    finishPreview(preview, epoch);
+                    return;
+                }
                 List<ChatEntry> laterRows = laterError == null ? laterEntries : List.of();
                 List<ChatEntry> earlierRows = earlierError == null ? earlierEntries : List.of();
                 List<DisplayRow> laterDisplay = displaySearchRows(
@@ -388,7 +392,7 @@ final class LogBrowserQueries {
                 List<DisplayRow> merged = mergeClosestSides(earlierDisplay, laterDisplay, filter.sort());
                 if (merged.isEmpty()) {
                     Throwable error = laterError != null ? laterError : earlierError;
-                    applyJumpEntries(null, target, preview, gen, later, List.of(), error);
+                    applyJumpEntries(null, target, preview, gen, epoch, later, List.of(), error);
                     return;
                 }
                 boolean earlierFull = PageBounds.isFull(earlierDisplay, earlier.limit());
@@ -396,10 +400,13 @@ final class LogBrowserQueries {
                 boolean hasBefore = hasMoreBefore(earlierFull, filter.sort(), merged, matchSummary);
                 boolean hasAfter = hasMoreAfter(laterFull, filter.sort(), merged, matchSummary);
                 if (PageBounds.needsMoreToFill(merged, filter.contextLines(), list.viewHeight(), hasBefore)) {
-                    fillJumpViewport(gen, target, preview, merged, hasAfter, later.limit(), Double.NaN);
+                    if (preview) {
+                        applyJump(target, true, merged, hasBefore, hasAfter, Double.NaN, epoch, false);
+                    }
+                    fillJumpViewport(gen, epoch, target, preview, merged, hasAfter, later.limit(), Double.NaN);
                     return;
                 }
-                applyJump(target, preview, merged, hasBefore, hasAfter, Double.NaN);
+                applyJump(target, preview, merged, hasBefore, hasAfter, Double.NaN, epoch, true);
             }));
     }
 
@@ -419,10 +426,12 @@ final class LogBrowserQueries {
         return laterPageFull || PageBounds.hasAfter(sort, laterPageFull, rows, summary);
     }
 
-    private void applyJumpEntries(ScrubJump jump, LocalDateTime target, boolean preview, int gen,
+    private void applyJumpEntries(ScrubJump jump, LocalDateTime target, boolean preview, int gen, int epoch,
                                   ChatQuery requested, List<ChatEntry> entries, Throwable error) {
-        if (preview && list != null && jump != null) list.scrubQueryFinished();
-        if (gen != generation.get()) return;
+        if (gen != generation.get()) {
+            finishPreview(preview, epoch);
+            return;
+        }
         List<DisplayRow> rows = error == null && entries != null ? displaySearchRows(entries) : List.of();
         if (error != null || rows.isEmpty()) {
             if (error != null) logQueryFailure("AllTheLogs jump query failed", error);
@@ -437,6 +446,7 @@ final class LogBrowserQueries {
             } else if (!preview) {
                 list.finishScrub();
             }
+            finishPreview(preview, epoch);
             return;
         }
         boolean full = PageBounds.isFull(rows, requested.limit());
@@ -445,10 +455,21 @@ final class LogBrowserQueries {
         boolean hasBefore = PageBounds.hasBefore(filter.sort(), rows, matchSummary, skipped);
         boolean hasAfter = PageBounds.hasAfter(filter.sort(), full, rows, matchSummary);
         if (PageBounds.needsMoreToFill(rows, filter.contextLines(), list.viewHeight(), hasBefore)) {
-            fillJumpViewport(gen, target, preview, rows, hasAfter, requested.limit(), progress);
+            if (preview) {
+                applyJump(target, true, rows, hasBefore, hasAfter, progress, epoch, false);
+            }
+            fillJumpViewport(gen, epoch, target, preview, rows, hasAfter, requested.limit(), progress);
             return;
         }
-        applyJump(target, preview, rows, hasBefore, hasAfter, progress);
+        applyJump(target, preview, rows, hasBefore, hasAfter, progress, epoch, true);
+    }
+
+    /**
+     * Drops the preview slot once its page is visible, or once the query has failed. Holding the slot until
+     * then stops the next thumb position from invalidating a page the list has not drawn yet.
+     */
+    private void finishPreview(boolean preview, int epoch) {
+        if (preview && list != null) list.scrubQueryFinished(epoch);
     }
 
     private ChatQuery jumpQuery(ScrubJump jump, LocalDateTime target, boolean preview) {
@@ -477,11 +498,11 @@ final class LogBrowserQueries {
     /**
      * Prepends older matches to a jump that landed too close to the end of the result set to fill the list.
      */
-    private void fillJumpViewport(int gen, LocalDateTime target, boolean preview, List<DisplayRow> rows,
+    private void fillJumpViewport(int gen, int epoch, LocalDateTime target, boolean preview, List<DisplayRow> rows,
                                   boolean hasAfter, long pageLimit, double progress) {
         DisplayRow cursor = DisplayRows.firstMatch(rows);
         if (cursor == null) {
-            applyJump(target, preview, rows, true, hasAfter, progress);
+            applyJump(target, preview, rows, true, hasAfter, progress, epoch, true);
             return;
         }
         SearchFilter extra = filter.withoutOffset().withSort(filter.sort().opposite())
@@ -489,10 +510,13 @@ final class LogBrowserQueries {
         ChatQuery extraQuery = PageBounds.continueFrom(extra.toQuery(), cursor);
         Set<DisplayRow.RowKey> alreadyLoaded = DisplayRows.keysOf(rows);
         onClient(AllTheLogsClient.worker().findEntries(extraQuery), (entries, error) -> {
-            if (gen != generation.get()) return;
+            if (gen != generation.get()) {
+                finishPreview(preview, epoch);
+                return;
+            }
             if (error != null) {
                 logQueryFailure("AllTheLogs jump fill query failed", error);
-                applyJump(target, preview, rows, true, hasAfter, progress);
+                applyJump(target, preview, rows, true, hasAfter, progress, epoch, true);
                 return;
             }
             List<DisplayRow> incoming = DisplayRows.reversed(displaySearchRows(entries));
@@ -501,18 +525,24 @@ final class LogBrowserQueries {
             List<DisplayRow> merged = DisplayRows.mergeUnique(incoming, rows);
             applyJump(target, preview, merged,
                 more || PageBounds.hasBefore(filter.sort(), merged, matchSummary),
-                hasAfter || PageBounds.hasAfter(filter.sort(), false, merged, matchSummary), progress);
+                hasAfter || PageBounds.hasAfter(filter.sort(), false, merged, matchSummary),
+                progress, epoch, true);
         });
     }
 
     private void applyJump(LocalDateTime target, boolean preview, List<DisplayRow> rows,
-                           boolean hasBefore, boolean hasAfter, double progress) {
+                           boolean hasBefore, boolean hasAfter, double progress, int epoch,
+                           boolean releasePreview) {
         boolean fromSearch = replaceOnJumpFailure;
         replaceOnJumpFailure = false;
         list.setLoading(false);
         list.showAt(target, rows, hasBefore, hasAfter, progress,
             fromSearch ? MessageTimeline.VIEWPORT_STAY_FRACTION : 0);
-        if (!preview) list.finishScrub();
+        if (preview && releasePreview) {
+            finishPreview(true, epoch);
+        } else if (!preview && releasePreview) {
+            list.finishScrub();
+        }
         if (fromSearch) {
             list.offerPageMatchCount(DisplayRows.matchCount(rows), 0, filter.isNarrowed());
         }

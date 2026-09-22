@@ -44,15 +44,22 @@ public final class MessageTimeline extends BaseUIComponent {
     public static final int TIMELINE_WIDTH = 58;
     /** Matches fetched per preview query while the thumb is being dragged. */
     public static final int SCRUB_PAGE_SIZE = 32;
-    /** Matches fetched at once while middle-click auto-scroll is eating through the buffer. */
-    public static final int AUTO_SCROLL_PAGE_SIZE = 1000;
+    /**
+     * Matches fetched at once while middle-click auto-scroll is eating through the buffer.
+     * A fast drag walks hundreds of rows a second, so the page has to be large enough that the next
+     * fetch can finish before the viewport reaches the end of this one.
+     */
+    public static final int AUTO_SCROLL_PAGE_SIZE = 4000;
     private static final int SELECT_DRAG_SLOP = 3;
     private static final int MULTI_CLICK_MS = 400;
     private static final int MULTI_CLICK_SLOP = 4;
     /** Rows from either end of the buffer at which the next page is requested. */
     private static final int EDGE_ROWS = 3;
-    /** Request the next page earlier while auto-scroll is running, so a 1000-row fetch starts before the wall. */
-    private static final int AUTO_SCROLL_EDGE_ROWS = 80;
+    /**
+     * Rows of runway to keep in the travel direction while auto-scrolling. The next page is requested as soon
+     * as fewer than this many loaded rows remain, which is half of {@link #AUTO_SCROLL_PAGE_SIZE}.
+     */
+    static final int AUTO_SCROLL_EDGE_ROWS = 2000;
     /**
      * Viewport height fraction used to keep a message still when search results are replaced.
      * Below centre so the line the user is reading (usually a little down the list) does not jump.
@@ -172,8 +179,24 @@ public final class MessageTimeline extends BaseUIComponent {
         return status.loading();
     }
 
+    /**
+     * Drag generation that owns the preview query currently in flight. Pass it back to
+     * {@link #scrubQueryFinished(int)} when that query's page is on screen.
+     */
+    public int scrubEpoch() {
+        return scrub.epoch();
+    }
+
+    /**
+     * Frees the preview slot for {@code epoch} after its rows are visible. Releasing it earlier let the next
+     * thumb position cancel the page before it was drawn, so a held scrollbar updated only on mouse-up.
+     */
+    public void scrubQueryFinished(int epoch) {
+        scrub.previewFinished(epoch);
+    }
+
     public void scrubQueryFinished() {
-        scrub.previewFinished();
+        scrub.previewFinished(scrub.epoch());
     }
 
     public double scrollY() {
@@ -404,6 +427,7 @@ public final class MessageTimeline extends BaseUIComponent {
             autoScroll.start(click.y());
             draggingSelection = false;
             pendingClear = false;
+            maybeRequestMore();
             return true;
         }
         if (click.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
@@ -761,9 +785,7 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     private void applyThumbScrub(double localY, boolean commit) {
-        int thumbHeight = scrub.dragging() && scrub.capturedThumbHeight() > 0
-            ? scrub.capturedThumbHeight()
-            : thumbHeight();
+        int thumbHeight = scrub.capturedThumbHeight() > 0 ? scrub.capturedThumbHeight() : thumbHeight();
         applyScrub(scrub.moveTo(localY, thumbHeight, height), commit);
     }
 
@@ -870,12 +892,36 @@ public final class MessageTimeline extends BaseUIComponent {
 
     private void maybeRequestMore() {
         if (status.loading() || scrub.dragging() || window.rows().isEmpty()) return;
-        int edge = autoScroll.active() ? AUTO_SCROLL_EDGE_ROWS : EDGE_ROWS;
-        if (window.hasBefore() && firstVisibleIndex() <= edge - 1) {
+        if (autoScroll.active()) {
+            TimelineEdge edge = autoScrollEdge(autoScroll.direction(), window.hasBefore(), window.hasAfter(),
+                firstVisibleIndex(), lastVisibleIndex(), window.rows().size(), AUTO_SCROLL_EDGE_ROWS);
+            if (edge != null) onApproachEdge.accept(edge);
+            return;
+        }
+        if (window.hasBefore() && firstVisibleIndex() <= EDGE_ROWS - 1) {
             onApproachEdge.accept(TimelineEdge.BEFORE);
-        } else if (window.hasAfter() && lastVisibleIndex() >= window.rows().size() - edge) {
+        } else if (window.hasAfter() && lastVisibleIndex() >= window.rows().size() - EDGE_ROWS) {
             onApproachEdge.accept(TimelineEdge.AFTER);
         }
+    }
+
+    /**
+     * Which side to extend while auto-scrolling. {@code direction} is {@code +1} toward the bottom of the list,
+     * {@code -1} toward the top, and {@code 0} before the pointer has left the deadzone. A side is close when
+     * fewer than {@code edgeRows} loaded rows remain between the viewport and that end of the buffer.
+     */
+    static TimelineEdge autoScrollEdge(int direction, boolean hasBefore, boolean hasAfter,
+                                       int firstVisible, int lastVisible, int rowCount, int edgeRows) {
+        if (rowCount <= 0 || edgeRows <= 0) return null;
+        int rowsBefore = Math.max(0, firstVisible);
+        int rowsAfter = Math.max(0, rowCount - 1 - lastVisible);
+        boolean beforeClose = hasBefore && rowsBefore < edgeRows;
+        boolean afterClose = hasAfter && rowsAfter < edgeRows;
+        if (direction > 0) return afterClose ? TimelineEdge.AFTER : null;
+        if (direction < 0) return beforeClose ? TimelineEdge.BEFORE : null;
+        if (beforeClose && (!afterClose || rowsBefore <= rowsAfter)) return TimelineEdge.BEFORE;
+        if (afterClose) return TimelineEdge.AFTER;
+        return null;
     }
 
     private int charAt(int row, double localX, double localY) {
