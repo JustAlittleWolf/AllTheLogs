@@ -3,6 +3,7 @@ package me.wolfii.allthelogs.data.store;
 import org.duckdb.DuckDBConnection;
 import org.duckdb.DuckDBDriver;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -23,16 +24,45 @@ public final class StoreConnections {
 
     /**
      * Opens, and if needed creates, the database file at {@code absolutePath}.
+     * When an on-disk file still needs a schema upgrade, the database file is copied first.
      */
     public static DuckDBConnection openFile(Path absolutePath) throws SQLException {
-        return open("jdbc:duckdb:" + absolutePath);
+        DuckDBConnection connection = connect("jdbc:duckdb:" + absolutePath);
+        try {
+            int version = schemaVersion(connection);
+            if (version > 0 && version < Schema.CURRENT_VERSION) {
+                checkpoint(connection);
+                connection.close();
+                connection = null;
+                backupDatabase(absolutePath, version);
+                connection = connect("jdbc:duckdb:" + absolutePath);
+            }
+            migrate(connection);
+            return connection;
+        } catch (SQLException e) {
+            if (connection != null) {
+                try {
+                    connection.close();
+                } catch (SQLException suppressed) {
+                    e.addSuppressed(suppressed);
+                }
+            }
+            throw e;
+        }
     }
 
     /**
      * Opens an in-memory database.
      */
     public static DuckDBConnection openInMemory() throws SQLException {
-        return open("jdbc:duckdb:");
+        DuckDBConnection connection = connect("jdbc:duckdb:");
+        try {
+            migrate(connection);
+            return connection;
+        } catch (SQLException e) {
+            connection.close();
+            throw e;
+        }
     }
 
     /**
@@ -40,19 +70,39 @@ public final class StoreConnections {
      * classloader is a named module; {@code DriverManager.getConnection} then rejects the
      * already-registered DuckDB driver ({@code No suitable driver found for jdbc:duckdb:}).
      */
-    private static DuckDBConnection open(String url) throws SQLException {
+    private static DuckDBConnection connect(String url) throws SQLException {
         Connection raw = DRIVER.connect(url, settings());
         if (raw == null) {
             throw new SQLException("DuckDB driver rejected URL: " + url);
         }
-        DuckDBConnection connection = (DuckDBConnection) raw;
+        return (DuckDBConnection) raw;
+    }
+
+    private static void backupDatabase(Path database, int schemaVersion) throws SQLException {
+        try {
+            DatabaseBackup.copyBeforeMigration(database, schemaVersion);
+        } catch (IOException e) {
+            throw new SQLException("could not back up the log database before migrating schema version "
+                + schemaVersion, e);
+        }
+    }
+
+    private static int schemaVersion(DuckDBConnection connection) throws SQLException {
+        try (Statement statement = connection.createStatement()) {
+            return SchemaMigration.readVersion(statement);
+        }
+    }
+
+    private static void checkpoint(DuckDBConnection connection) throws SQLException {
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("CHECKPOINT");
+        }
+    }
+
+    private static void migrate(DuckDBConnection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
             SchemaMigration.migrate(statement);
-        } catch (SQLException e) {
-            connection.close();
-            throw e;
         }
-        return connection;
     }
 
     private static Properties settings() {
