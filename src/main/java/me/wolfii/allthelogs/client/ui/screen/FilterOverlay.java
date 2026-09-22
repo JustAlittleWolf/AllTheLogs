@@ -28,6 +28,9 @@ import java.util.function.Supplier;
  */
 final class FilterOverlay {
     static final int PANEL_WIDTH = 144;
+    /** Shorter than a normal 20px button, and only as wide as the X plus the button border. */
+    private static final int RESET_BUTTON_WIDTH = 12;
+    private static final int RESET_BUTTON_HEIGHT = 14;
     private static boolean sessionOpen;
 
     private final FlowLayout host;
@@ -154,7 +157,7 @@ final class FilterOverlay {
     private FlowLayout serverField(String value) {
         FlowLayout row = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
         row.gap(2);
-        row.child(UIComponents.label(Component.translatable("allthelogs.filter.server")));
+        row.child(resetHeader("allthelogs.filter.server", () -> emit(filter.get().withServerOrWorld(null))));
         serverBox = UIComponents.textBox(Sizing.fill(), value == null ? "" : value);
         serverBox.setMaxLength(256);
         serverBox.setHint(Component.translatable("allthelogs.filter.server_hint"));
@@ -187,16 +190,7 @@ final class FilterOverlay {
                                  Consumer<LocalDateTime> onParsed, boolean from) {
         FlowLayout row = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
         row.gap(2);
-        FlowLayout header = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
-        header.gap(4).verticalAlignment(VerticalAlignment.CENTER);
-        header.child(UIComponents.label(Component.translatable(key)).horizontalSizing(Sizing.expand()));
-        if (from) {
-            ButtonComponent clear = UIComponents.button(Component.translatable("allthelogs.filter.clear_dates"),
-                ignored -> emit(filter.get().withStartingAt(null).withUpUntil(null)));
-            clear.horizontalSizing(Sizing.content());
-            header.child(clear);
-        }
-        row.child(header);
+        row.child(resetHeader(key, () -> onParsed.accept(null)));
         TextBoxComponent box = UIComponents.textBox(Sizing.fill(), value);
         box.setMaxLength(32);
         box.setHint(Component.translatable("allthelogs.filter.date_hint"));
@@ -209,6 +203,20 @@ final class FilterOverlay {
         if (from) fromBox = box;
         else untilBox = box;
         return row;
+    }
+
+    /**
+     * Label with a narrow X on the right. The X is a Minecraft font glyph, and the button clears that one field.
+     */
+    private FlowLayout resetHeader(String key, Runnable reset) {
+        FlowLayout header = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
+        header.gap(4).verticalAlignment(VerticalAlignment.CENTER);
+        header.child(UIComponents.label(Component.translatable(key)).horizontalSizing(Sizing.expand()));
+        ButtonComponent clear = UIComponents.button(Component.literal("X"), ignored -> reset.run());
+        clear.horizontalSizing(Sizing.fixed(RESET_BUTTON_WIDTH));
+        clear.verticalSizing(Sizing.fixed(RESET_BUTTON_HEIGHT));
+        header.child(clear);
+        return header;
     }
 
     private FlowLayout labeledField(String key, String value, Consumer<String> onFieldChange, boolean context) {
