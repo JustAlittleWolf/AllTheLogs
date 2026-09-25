@@ -135,14 +135,6 @@ public final class MessageListLayout {
     }
 
     /**
-     * Expanding toward the top of the list loads older messages when the list is oldest-first, and
-     * newer ones when it is newest-first.
-     */
-    public static boolean expandOlderMessages(boolean towardTop, boolean oldestFirst) {
-        return towardTop == oldestFirst;
-    }
-
-    /**
      * Local-x where the gray rule starts. The rule runs from the left inset across the list, with a
      * gap around the expand carets so it does not sit behind the triangles.
      */

@@ -29,22 +29,21 @@ public final class ContextPeeks {
      * Marks expand carets for a result page. Text search peeks around hits. Without a search term every
      * filter-bar match is already in the page, so there is nothing to expand.
      */
-    public static List<DisplayRow> forSearchPage(List<DisplayRow> rows, boolean hasText, int contextLines,
-                                                 boolean oldestFirst) {
-        return forSearchPage(rows, hasText, contextLines, oldestFirst, List.of());
+    public static List<DisplayRow> forSearchPage(List<DisplayRow> rows, boolean hasText, int contextLines) {
+        return forSearchPage(rows, hasText, contextLines, List.of());
     }
 
     /**
-     * Same as {@link #forSearchPage(List, boolean, int, boolean)}, treating {@code neighbors} as rows already
+     * Same as {@link #forSearchPage(List, boolean, int)}, treating {@code neighbors} as rows already
      * on the page. A probe that fills the hole between those rows and this page is shown instead of becoming
      * a caret. Scrolling and a search that keeps the viewport fetch each side alone, so the shared boundary
      * line would otherwise stay hidden.
      */
     public static List<DisplayRow> forSearchPage(List<DisplayRow> rows, boolean hasText, int contextLines,
-                                                 boolean oldestFirst, List<DisplayRow> neighbors) {
+                                                 List<DisplayRow> neighbors) {
         if (rows == null) return List.of();
         if (hasText) {
-            return strip(rows, contextLines, true, oldestFirst, neighbors);
+            return strip(rows, contextLines, true, neighbors);
         }
         return List.copyOf(rows);
     }
@@ -54,13 +53,12 @@ public final class ContextPeeks {
      * Distance is the number of fetched same-log rows to the nearest hit, so other-server neighbours that
      * were skipped in SQL do not consume the context budget.
      */
-    public static List<DisplayRow> strip(List<DisplayRow> rows, int contextLines, boolean hasText,
-                                         boolean oldestFirst) {
-        return strip(rows, contextLines, hasText, oldestFirst, List.of());
+    public static List<DisplayRow> strip(List<DisplayRow> rows, int contextLines, boolean hasText) {
+        return strip(rows, contextLines, hasText, List.of());
     }
 
     static List<DisplayRow> strip(List<DisplayRow> rows, int contextLines, boolean hasText,
-                                  boolean oldestFirst, List<DisplayRow> neighbors) {
+                                  List<DisplayRow> neighbors) {
         if (!hasText || rows == null || rows.isEmpty()) {
             return rows == null ? List.of() : List.copyOf(rows);
         }
@@ -93,7 +91,7 @@ public final class ContextPeeks {
             }
         }
         for (DisplayRow peek : peeks) {
-            markNearestEdges(visible, peek, oldestFirst);
+            markNearestEdges(visible, peek);
         }
         return List.copyOf(visible);
     }
@@ -103,7 +101,7 @@ public final class ContextPeeks {
      * gap showed a down arrow and no up arrow. A second probe on the same row also has to update the row
      * already replaced by the first probe; matching the original instance misses it once its flags change.
      */
-    private static void markNearestEdges(List<DisplayRow> visible, DisplayRow peek, boolean oldestFirst) {
+    private static void markNearestEdges(List<DisplayRow> visible, DisplayRow peek) {
         LocalDate peekDay = peek.entry().timestamp().toLocalDate();
         int best = Integer.MAX_VALUE;
         List<Integer> edges = new ArrayList<>();
@@ -123,7 +121,7 @@ public final class ContextPeeks {
         for (int index : edges) {
             DisplayRow edge = visible.get(index);
             boolean moreBefore = edge.lineIndex() > peek.lineIndex();
-            visible.set(index, addFileExpand(edge, moreBefore, !moreBefore, oldestFirst));
+            visible.set(index, addFileExpand(edge, moreBefore, !moreBefore));
         }
     }
 
@@ -132,17 +130,17 @@ public final class ContextPeeks {
      * {@code extra} is a count of filter-matching lines, not file indices.
      */
     public static List<DisplayRow> forExpand(List<DisplayRow> fetched, DisplayRow anchor, boolean olderInFile,
-                                             int extra, boolean oldestFirst) {
-        return forExpand(fetched, anchor, olderInFile, extra, oldestFirst, List.of());
+                                             int extra) {
+        return forExpand(fetched, anchor, olderInFile, extra, List.of());
     }
 
     /**
-     * Same as {@link #forExpand(List, DisplayRow, boolean, int, boolean)}. {@code already} is the open page.
+     * Same as {@link #forExpand(List, DisplayRow, boolean, int)}. {@code already} is the open page.
      * When the probe is the only line between the new edge and a row already on that page, it is kept and no
      * caret is added.
      */
     public static List<DisplayRow> forExpand(List<DisplayRow> fetched, DisplayRow anchor, boolean olderInFile,
-                                             int extra, boolean oldestFirst, List<DisplayRow> already) {
+                                             int extra, List<DisplayRow> already) {
         if (fetched == null || fetched.isEmpty() || anchor == null) return List.of();
         LocalDate day = anchor.entry().timestamp().toLocalDate();
         List<DisplayRow> kept = new ArrayList<>();
@@ -172,7 +170,7 @@ public final class ContextPeeks {
         for (int i = 0; i < kept.size(); i++) {
             DisplayRow row = kept.get(i);
             if (row.sameLog(anchor) && row.lineIndex() == far.lineIndex()) {
-                kept.set(i, addFileExpand(row, olderInFile, !olderInFile, oldestFirst));
+                kept.set(i, addFileExpand(row, olderInFile, !olderInFile));
             }
         }
         return List.copyOf(kept);
@@ -183,11 +181,10 @@ public final class ContextPeeks {
      */
     public static List<DisplayRow> mergeAfterExpand(List<DisplayRow> existing, List<DisplayRow> expanded,
                                                     DisplayRow anchor, boolean olderInFile, ChatQuery.Sort sort) {
-        boolean oldestFirst = sort == ChatQuery.Sort.ASCENDING;
         List<DisplayRow> cleared = new ArrayList<>(existing.size());
         for (DisplayRow row : existing) {
             if (anchor != null && row.key().equals(anchor.key())) {
-                cleared.add(clearExpandedSide(row, olderInFile, oldestFirst));
+                cleared.add(clearExpandedSide(row, olderInFile));
             } else {
                 cleared.add(row);
             }
@@ -313,29 +310,22 @@ public final class ContextPeeks {
         return List.of(out);
     }
 
-    static DisplayRow addFileExpand(DisplayRow row, boolean moreBefore, boolean moreAfter, boolean oldestFirst) {
+    /**
+     * The list is oldest at the top, so a line earlier in the file is list-up and a later line is list-down.
+     */
+    static DisplayRow addFileExpand(DisplayRow row, boolean moreBefore, boolean moreAfter) {
         boolean up = row.expandUp();
         boolean down = row.expandDown();
-        if (oldestFirst) {
-            if (moreBefore) up = true;
-            if (moreAfter) down = true;
-        } else {
-            if (moreAfter) up = true;
-            if (moreBefore) down = true;
-        }
+        if (moreBefore) up = true;
+        if (moreAfter) down = true;
         return row.withExpand(up, down);
     }
 
-    private static DisplayRow clearExpandedSide(DisplayRow row, boolean olderInFile, boolean oldestFirst) {
+    private static DisplayRow clearExpandedSide(DisplayRow row, boolean olderInFile) {
         boolean up = row.expandUp();
         boolean down = row.expandDown();
-        if (oldestFirst) {
-            if (olderInFile) up = false;
-            else down = false;
-        } else {
-            if (olderInFile) down = false;
-            else up = false;
-        }
+        if (olderInFile) up = false;
+        else down = false;
         return row.withExpand(up, down);
     }
 

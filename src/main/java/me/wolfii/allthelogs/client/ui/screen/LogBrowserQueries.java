@@ -291,10 +291,8 @@ final class LogBrowserQueries {
      */
     private void expandAround(DisplayRow row, TimelineEdge side, int extra) {
         if (list == null) return;
-        boolean older = MessageListLayout.expandOlderMessages(
-            side == TimelineEdge.BEFORE, filter.sort() == ChatQuery.Sort.ASCENDING);
+        boolean older = side == TimelineEdge.BEFORE;
         DisplayRow.RowKey anchor = row.key();
-        boolean oldestFirst = filter.sort() == ChatQuery.Sort.ASCENDING;
         onClient(AllTheLogsClient.worker().matchingContextToward(
                 row.chatLog(), row.lineIndex(), older, extra + 1,
                 filter.toFilterBarQuery(), row.entry().timestamp().toLocalDate()),
@@ -307,7 +305,7 @@ final class LogBrowserQueries {
                 withAnchor.add(row.entry());
                 withAnchor.addAll(entries);
                 List<DisplayRow> fetched = ContextPeeks.forExpand(displayRows(withAnchor), row, older, extra,
-                    oldestFirst, list.window().rows());
+                    list.window().rows());
                 List<DisplayRow> merged = ContextPeeks.mergeAfterExpand(
                     list.window().rows(), fetched, row, older, filter.sort());
                 list.applyPage(merged, list.window().hasBefore(), list.window().hasAfter(), anchor);
@@ -391,7 +389,7 @@ final class LogBrowserQueries {
                 boolean laterFull = PageBounds.isFull(laterRaw, later.limit());
                 List<DisplayRow> merged = ContextPeeks.forSearchPage(
                     mergeClosestSides(earlierRaw, laterRaw, filter.sort()),
-                    filter.hasText(), filter.contextLines(), filter.sort() == ChatQuery.Sort.ASCENDING);
+                    filter.hasText(), filter.contextLines());
                 if (merged.isEmpty()) {
                     Throwable error = laterError != null ? laterError : earlierError;
                     applyJumpEntries(null, target, preview, gen, epoch, later, List.of(), error);
@@ -555,7 +553,7 @@ final class LogBrowserQueries {
 
     private List<DisplayRow> displaySearchRows(List<ChatEntry> entries, List<DisplayRow> neighbors) {
         return ContextPeeks.forSearchPage(displayRows(entries), filter.hasText(), filter.contextLines(),
-            filter.sort() == ChatQuery.Sort.ASCENDING, neighbors);
+            neighbors);
     }
 
     private List<DisplayRow> displayRows(List<ChatEntry> entries) {

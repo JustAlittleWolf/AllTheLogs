@@ -42,7 +42,7 @@ class ContextPeeksTest {
             row(log, 2, "hit", true),
             row(log, 3, "ctx3", false),
             row(log, 4, "ctx4", false));
-        List<DisplayRow> visible = ContextPeeks.strip(rows, 1, true, true);
+        List<DisplayRow> visible = ContextPeeks.strip(rows, 1, true);
         assertEquals(List.of(1, 2, 3), visible.stream().map(DisplayRow::lineIndex).toList());
         assertTrue(visible.getFirst().expandUp());
         assertFalse(visible.getFirst().expandDown());
@@ -57,7 +57,7 @@ class ContextPeeksTest {
         List<DisplayRow> rows = List.of(
             new DisplayRow(new ChatEntry(log, day.minusMinutes(2), 0, "prev"), false, List.of()),
             new DisplayRow(new ChatEntry(log, day, 1, "hit"), true, List.of()));
-        List<DisplayRow> visible = ContextPeeks.strip(rows, 0, true, true);
+        List<DisplayRow> visible = ContextPeeks.strip(rows, 0, true);
         assertEquals(1, visible.size());
         assertFalse(visible.getFirst().expandUp());
         assertFalse(visible.getFirst().expandDown());
@@ -73,7 +73,7 @@ class ContextPeeksTest {
         }
         fetched.add(new DisplayRow(new ChatEntry(log, LocalDateTime.of(2026, 8, 27, 0, 0), 22, "next-day"),
             false, List.of()));
-        List<DisplayRow> kept = ContextPeeks.forExpand(fetched, anchor, false, 10, true);
+        List<DisplayRow> kept = ContextPeeks.forExpand(fetched, anchor, false, 10);
         assertEquals(11, kept.size());
         assertEquals(20, kept.getLast().lineIndex());
         assertTrue(kept.getLast().expandDown());
@@ -89,7 +89,7 @@ class ContextPeeksTest {
         for (int line = 10; line <= 10 + extra + 1; line++) {
             fetched.add(row(log, line, "m" + line, line == 10));
         }
-        List<DisplayRow> kept = ContextPeeks.forExpand(fetched, anchor, false, extra, true);
+        List<DisplayRow> kept = ContextPeeks.forExpand(fetched, anchor, false, extra);
         assertEquals(extra + 1, kept.size());
         assertEquals(10 + extra, kept.getLast().lineIndex());
         assertTrue(kept.getLast().expandDown());
@@ -138,19 +138,11 @@ class ContextPeeksTest {
     }
 
     @Test
-    void newestFirstMapsFileAfterToListUp() {
-        DisplayRow row = row(log("a.log"), 5, "hit", true);
-        DisplayRow marked = ContextPeeks.addFileExpand(row, false, true, false);
-        assertTrue(marked.expandUp());
-        assertFalse(marked.expandDown());
-    }
-
-    @Test
     void unfilteredPagesAreLeftAlone() {
         List<DisplayRow> rows = DisplayRow.from(List.of(
                 new ChatEntry(log("a.log"), LocalDateTime.of(2026, 8, 26, 10, 0), 0, "a")),
             SearchFilter.defaults());
-        assertEquals(rows, ContextPeeks.strip(rows, 4, false, true));
+        assertEquals(rows, ContextPeeks.strip(rows, 4, false));
     }
 
     @Test
@@ -159,7 +151,7 @@ class ContextPeeksTest {
         DisplayRow first = row(log, 0, "a", true);
         DisplayRow later = row(log, 20, "b", true);
         List<DisplayRow> rows = List.of(first, later);
-        List<DisplayRow> visible = ContextPeeks.forSearchPage(rows, false, 4, true);
+        List<DisplayRow> visible = ContextPeeks.forSearchPage(rows, false, 4);
         assertEquals(rows, visible);
         assertFalse(visible.getFirst().expandDown());
         assertFalse(visible.getLast().expandUp());
@@ -170,8 +162,8 @@ class ContextPeeksTest {
     void unfilteredGapsAreNotMarkedForExpand() {
         ChatLog log = log("a.log");
         List<DisplayRow> rows = List.of(row(log, 0, "a", true), row(log, 20, "b", true));
-        assertEquals(rows, ContextPeeks.strip(rows, 4, false, true));
-        assertEquals(rows, ContextPeeks.forSearchPage(rows, false, 4, true));
+        assertEquals(rows, ContextPeeks.strip(rows, 4, false));
+        assertEquals(rows, ContextPeeks.forSearchPage(rows, false, 4));
         assertFalse(rows.getFirst().expandDown());
         assertFalse(rows.getLast().expandUp());
     }
@@ -185,7 +177,7 @@ class ContextPeeksTest {
             row(log, 2, "hit", true),
             row(log, 3, "ctx3", false),
             row(log, 4, "ctx4", false));
-        List<DisplayRow> visible = ContextPeeks.forSearchPage(rows, true, 1, true);
+        List<DisplayRow> visible = ContextPeeks.forSearchPage(rows, true, 1);
         assertEquals(List.of(1, 2, 3), visible.stream().map(DisplayRow::lineIndex).toList());
         assertTrue(visible.getFirst().expandUp());
         assertTrue(visible.getLast().expandDown());
@@ -200,7 +192,7 @@ class ContextPeeksTest {
             row(log, 10, "hit", true),
             row(log, 15, "near after", false),
             row(log, 20, "far after", false));
-        List<DisplayRow> visible = ContextPeeks.strip(rows, 1, true, true);
+        List<DisplayRow> visible = ContextPeeks.strip(rows, 1, true);
         assertEquals(List.of(5, 10, 15), visible.stream().map(DisplayRow::lineIndex).toList());
         assertTrue(visible.getFirst().expandUp());
         assertTrue(visible.getLast().expandDown());
@@ -217,7 +209,7 @@ class ContextPeeksTest {
             row(log, 12, "still hypixel", false, "mc.hypixel.net"),
             row(log, 13, "peek", false, "hypixel.net"));
         List<DisplayRow> allowed = fetched.stream().filter(row -> filter.allowsContext(row.entry())).toList();
-        List<DisplayRow> kept = ContextPeeks.forExpand(allowed, anchor, false, 1, true);
+        List<DisplayRow> kept = ContextPeeks.forExpand(allowed, anchor, false, 1);
         assertEquals(List.of(10, 12), kept.stream().map(DisplayRow::lineIndex).toList());
         assertTrue(kept.getLast().expandDown());
     }
@@ -257,7 +249,7 @@ class ContextPeeksTest {
             row(log, 10, "hit", true),
             row(log, 11, "after", false),
             row(log, 14, "later", true));
-        List<DisplayRow> visible = ContextPeeks.strip(rows, 0, true, true);
+        List<DisplayRow> visible = ContextPeeks.strip(rows, 0, true);
         assertEquals(List.of(10, 14), visible.stream().map(DisplayRow::lineIndex).toList());
         assertTrue(visible.getFirst().expandUp());
         assertTrue(visible.getFirst().expandDown());
@@ -271,7 +263,7 @@ class ContextPeeksTest {
             row(log, 10, "hit", true),
             row(log, 15, "middle", false),
             row(log, 20, "hit", true));
-        List<DisplayRow> visible = ContextPeeks.strip(rows, 0, true, true);
+        List<DisplayRow> visible = ContextPeeks.strip(rows, 0, true);
         assertEquals(List.of(10, 20), visible.stream().map(DisplayRow::lineIndex).toList());
         assertTrue(visible.getFirst().expandDown());
         assertFalse(visible.getFirst().expandUp());
@@ -289,7 +281,7 @@ class ContextPeeksTest {
             row(log, 12, "gap", false),
             row(log, 13, "hit", true),
             row(log, 14, "after", false));
-        List<DisplayRow> visible = ContextPeeks.strip(rows, 0, true, true);
+        List<DisplayRow> visible = ContextPeeks.strip(rows, 0, true);
         assertEquals(List.of(10, 11, 12, 13), visible.stream().map(DisplayRow::lineIndex).toList());
         assertFalse(visible.get(1).expandUp() || visible.get(1).expandDown());
         assertFalse(visible.get(2).expandUp() || visible.get(2).expandDown());
@@ -305,7 +297,7 @@ class ContextPeeksTest {
         List<DisplayRow> rows = List.of(
             row(log, 11, "between", false),
             row(log, 12, "hit", true));
-        List<DisplayRow> visible = ContextPeeks.forSearchPage(rows, true, 0, true, List.of(already));
+        List<DisplayRow> visible = ContextPeeks.forSearchPage(rows, true, 0, List.of(already));
         assertEquals(List.of(11, 12), visible.stream().map(DisplayRow::lineIndex).toList());
         assertFalse(visible.getFirst().expandUp());
         assertFalse(visible.getLast().expandUp());
@@ -320,7 +312,7 @@ class ContextPeeksTest {
             anchor,
             row(log, 11, "new", false),
             row(log, 12, "probe", false));
-        List<DisplayRow> kept = ContextPeeks.forExpand(fetched, anchor, false, 1, true, List.of(anchor, loaded));
+        List<DisplayRow> kept = ContextPeeks.forExpand(fetched, anchor, false, 1, List.of(anchor, loaded));
         assertEquals(List.of(10, 11, 12), kept.stream().map(DisplayRow::lineIndex).toList());
         assertFalse(kept.get(1).expandDown());
         assertFalse(kept.getLast().expandDown());
@@ -335,7 +327,7 @@ class ContextPeeksTest {
             row(log, 11, "between", false),
             row(log, 12, "hit", true),
             row(log, 13, "after", false));
-        List<DisplayRow> visible = ContextPeeks.strip(rows, 0, true, true);
+        List<DisplayRow> visible = ContextPeeks.strip(rows, 0, true);
         assertEquals(List.of(10, 11, 12), visible.stream().map(DisplayRow::lineIndex).toList());
         assertTrue(visible.getFirst().expandUp());
         assertFalse(visible.getFirst().expandDown());
@@ -359,7 +351,7 @@ class ContextPeeksTest {
             row(log, 11, "probe", false),
             row(log, 13, "hit", true),
             row(log, 14, "after", false));
-        List<DisplayRow> visible = ContextPeeks.strip(rows, 0, true, true);
+        List<DisplayRow> visible = ContextPeeks.strip(rows, 0, true);
         assertEquals(List.of(10, 13), visible.stream().map(DisplayRow::lineIndex).toList());
         assertTrue(visible.getFirst().expandDown());
         assertFalse(visible.getLast().expandUp());
@@ -383,7 +375,7 @@ class ContextPeeksTest {
         for (int line : fetched) {
             rows.add(row(log, line, "m" + line, hitSet.contains(line)));
         }
-        List<DisplayRow> visible = ContextPeeks.strip(rows, 3, true, true);
+        List<DisplayRow> visible = ContextPeeks.strip(rows, 3, true);
         assertEquals(342, rowAt(visible, 342).lineIndex());
         assertFalse(rowAt(visible, 341).expandDown());
         assertFalse(rowAt(visible, 343).expandUp());
