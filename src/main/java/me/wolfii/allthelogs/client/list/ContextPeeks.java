@@ -2,14 +2,18 @@ package me.wolfii.allthelogs.client.list;
 
 import me.wolfii.allthelogs.api.ChatQuery;
 import me.wolfii.allthelogs.data.ChatLog;
+import me.wolfii.allthelogs.data.LogSource;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Uses one extra fetched context line that is not shown, so cluster edges know whether they can still grow.
@@ -127,7 +131,28 @@ public final class ContextPeeks {
                 cleared.add(row);
             }
         }
-        return clearClosedGaps(DisplayRows.mergeSorted(cleared, expanded, sort));
+        return clearCaretsFacingLoadedLines(clearClosedGaps(DisplayRows.mergeSorted(cleared, expanded, sort)));
+    }
+
+    /**
+     * Drops a caret when the next stored line in that direction is already on the page. Merging two searches
+     * can leave the flag from the page that had not yet loaded that neighbour, and a line-index hole or another
+     * log sitting between them would still draw the triangle even though expanding cannot reveal anything new.
+     */
+    public static List<DisplayRow> clearCaretsFacingLoadedLines(List<DisplayRow> rows) {
+        if (rows == null || rows.isEmpty()) return List.of();
+        Map<LogSource, Set<Integer>> linesBySource = new HashMap<>();
+        for (DisplayRow row : rows) {
+            linesBySource.computeIfAbsent(row.chatLog().source(), key -> new HashSet<>()).add(row.lineIndex());
+        }
+        List<DisplayRow> cleared = new ArrayList<>(rows.size());
+        for (DisplayRow row : rows) {
+            Set<Integer> lines = linesBySource.get(row.chatLog().source());
+            boolean up = row.expandUp() && (lines == null || !lines.contains(row.lineIndex() - 1));
+            boolean down = row.expandDown() && (lines == null || !lines.contains(row.lineIndex() + 1));
+            cleared.add(row.withExpand(up, down));
+        }
+        return List.copyOf(cleared);
     }
 
     /**

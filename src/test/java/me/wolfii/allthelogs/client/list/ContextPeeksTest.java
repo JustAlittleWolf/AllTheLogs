@@ -10,7 +10,10 @@ import org.junit.jupiter.api.Test;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -217,5 +220,80 @@ class ContextPeeksTest {
         List<DisplayRow> kept = ContextPeeks.forExpand(allowed, anchor, false, 1, true);
         assertEquals(List.of(10, 12), kept.stream().map(DisplayRow::lineIndex).toList());
         assertTrue(kept.getLast().expandDown());
+    }
+
+    @Test
+    void dropsACaretWhenTheNextStoredLineIsAlreadyOnThePage() {
+        ChatLog log = log("a.log");
+        ChatLog other = log("b.log");
+        DisplayRow edge = row(log, 10, "edge", true).withExpand(false, true);
+        DisplayRow foreign = row(other, 1, "other session", true);
+        DisplayRow next = row(log, 11, "already loaded", false);
+        List<DisplayRow> merged = DisplayRows.mergeUnique(List.of(edge), List.of(row(log, 10, "edge", true), next));
+        merged = new ArrayList<>(merged);
+        merged.add(1, foreign);
+        List<DisplayRow> shown = ContextPeeks.clearCaretsFacingLoadedLines(merged);
+        assertFalse(shown.getFirst().expandDown());
+        assertEquals(0, MessageListLayout.of(shown, 3).separators().stream()
+            .filter(separator -> separator.expandUp() || separator.expandDown()).count());
+    }
+
+    @Test
+    void keepsACaretWhenTheNeighbourIsStillHidden() {
+        ChatLog log = log("a.log");
+        DisplayRow edge = row(log, 10, "edge", true).withExpand(false, true);
+        DisplayRow later = row(log, 14, "later", true).withExpand(true, false);
+        List<DisplayRow> shown = ContextPeeks.clearCaretsFacingLoadedLines(List.of(edge, later));
+        assertTrue(shown.getFirst().expandDown());
+        assertTrue(shown.getLast().expandUp());
+        assertEquals(1, MessageListLayout.of(shown, 3).separators().size());
+    }
+
+    /**
+     * Search {@code 0bcn} on 2026-08-30 in the reported log: sixteen hits in one session, context 3.
+     * Every caret has a hidden neighbour (the probe line just outside the cluster), so none of them is a
+     * false arrow.
+     */
+    @Test
+    void august30SearchKeepsCaretsOnlyWhereANeighbourIsHidden() {
+        ChatLog log = log("session.log");
+        int[] hits = {283, 287, 299, 305, 318, 319, 326, 328, 331, 337, 338, 346, 347, 348, 352, 353};
+        Set<Integer> hitSet = new HashSet<>();
+        for (int hit : hits) hitSet.add(hit);
+        Set<Integer> fetched = new TreeSet<>();
+        for (int hit : hits) {
+            for (int delta = -4; delta <= 4; delta++) fetched.add(hit + delta);
+        }
+        List<DisplayRow> rows = new ArrayList<>();
+        for (int line : fetched) {
+            rows.add(row(log, line, "m" + line, hitSet.contains(line)));
+        }
+        List<DisplayRow> visible = ContextPeeks.strip(rows, 3, true, true);
+        assertEquals(List.of(280, 290, 296, 308, 315, 341, 356), carets(visible));
+        assertTrue(rowAt(visible, 280).expandUp());
+        assertTrue(rowAt(visible, 290).expandDown());
+        assertTrue(rowAt(visible, 296).expandUp());
+        assertTrue(rowAt(visible, 308).expandDown());
+        assertTrue(rowAt(visible, 315).expandUp());
+        assertTrue(rowAt(visible, 341).expandDown());
+        assertFalse(rowAt(visible, 343).expandUp());
+        assertTrue(rowAt(visible, 356).expandDown());
+        List<DisplayRow> shown = ContextPeeks.clearCaretsFacingLoadedLines(visible);
+        assertEquals(carets(visible), carets(shown));
+    }
+
+    private static DisplayRow rowAt(List<DisplayRow> rows, int line) {
+        for (DisplayRow row : rows) {
+            if (row.lineIndex() == line) return row;
+        }
+        throw new AssertionError("missing line " + line);
+    }
+
+    private static List<Integer> carets(List<DisplayRow> rows) {
+        List<Integer> lines = new ArrayList<>();
+        for (DisplayRow row : rows) {
+            if (row.expandUp() || row.expandDown()) lines.add(row.lineIndex());
+        }
+        return lines;
     }
 }
