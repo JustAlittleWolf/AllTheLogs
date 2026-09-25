@@ -250,6 +250,83 @@ class ContextPeeksTest {
     }
 
     @Test
+    void marksBothCaretsWhenTheSameRowHasAProbeOnEachSide() {
+        ChatLog log = log("a.log");
+        List<DisplayRow> rows = List.of(
+            row(log, 9, "before", false),
+            row(log, 10, "hit", true),
+            row(log, 11, "after", false),
+            row(log, 14, "later", true));
+        List<DisplayRow> visible = ContextPeeks.strip(rows, 0, true, true);
+        assertEquals(List.of(10, 14), visible.stream().map(DisplayRow::lineIndex).toList());
+        assertTrue(visible.getFirst().expandUp());
+        assertTrue(visible.getFirst().expandDown());
+        assertFalse(visible.getLast().expandUp());
+    }
+
+    @Test
+    void marksBothSidesWhenAProbeSitsHalfwayAcrossARealGap() {
+        ChatLog log = log("a.log");
+        List<DisplayRow> rows = List.of(
+            row(log, 10, "hit", true),
+            row(log, 15, "middle", false),
+            row(log, 20, "hit", true));
+        List<DisplayRow> visible = ContextPeeks.strip(rows, 0, true, true);
+        assertEquals(List.of(10, 20), visible.stream().map(DisplayRow::lineIndex).toList());
+        assertTrue(visible.getFirst().expandDown());
+        assertFalse(visible.getFirst().expandUp());
+        assertTrue(visible.getLast().expandUp());
+        assertFalse(visible.getLast().expandDown());
+    }
+
+    @Test
+    void showsEveryFetchedLineThatFillsAGap() {
+        ChatLog log = log("a.log");
+        List<DisplayRow> rows = List.of(
+            row(log, 9, "before", false),
+            row(log, 10, "hit", true),
+            row(log, 11, "gap", false),
+            row(log, 12, "gap", false),
+            row(log, 13, "hit", true),
+            row(log, 14, "after", false));
+        List<DisplayRow> visible = ContextPeeks.strip(rows, 0, true, true);
+        assertEquals(List.of(10, 11, 12, 13), visible.stream().map(DisplayRow::lineIndex).toList());
+        assertFalse(visible.get(1).expandUp() || visible.get(1).expandDown());
+        assertFalse(visible.get(2).expandUp() || visible.get(2).expandDown());
+        assertTrue(visible.getFirst().expandUp());
+        assertFalse(visible.getFirst().expandDown());
+        assertTrue(visible.getLast().expandDown());
+    }
+
+    @Test
+    void showsAProbeThatFillsTheGapToARowAlreadyOnThePage() {
+        ChatLog log = log("a.log");
+        DisplayRow already = row(log, 10, "loaded", true);
+        List<DisplayRow> rows = List.of(
+            row(log, 11, "between", false),
+            row(log, 12, "hit", true));
+        List<DisplayRow> visible = ContextPeeks.forSearchPage(rows, true, 0, true, List.of(already));
+        assertEquals(List.of(11, 12), visible.stream().map(DisplayRow::lineIndex).toList());
+        assertFalse(visible.getFirst().expandUp());
+        assertFalse(visible.getLast().expandUp());
+    }
+
+    @Test
+    void expandKeepsTheProbeWhenItIsTheOnlyLineBeforeALoadedRow() {
+        ChatLog log = log("a.log");
+        DisplayRow anchor = row(log, 10, "hit", true);
+        DisplayRow loaded = row(log, 13, "already", true);
+        List<DisplayRow> fetched = List.of(
+            anchor,
+            row(log, 11, "new", false),
+            row(log, 12, "probe", false));
+        List<DisplayRow> kept = ContextPeeks.forExpand(fetched, anchor, false, 1, true, List.of(anchor, loaded));
+        assertEquals(List.of(10, 11, 12), kept.stream().map(DisplayRow::lineIndex).toList());
+        assertFalse(kept.get(1).expandDown());
+        assertFalse(kept.getLast().expandDown());
+    }
+
+    @Test
     void showsTheSingleFetchedLineBetweenTwoClusters() {
         ChatLog log = log("a.log");
         List<DisplayRow> rows = List.of(

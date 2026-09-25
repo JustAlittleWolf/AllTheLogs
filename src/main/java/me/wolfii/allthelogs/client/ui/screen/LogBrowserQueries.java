@@ -264,7 +264,7 @@ final class LogBrowserQueries {
                 logQueryFailure("AllTheLogs page query failed", error);
                 return;
             }
-            List<DisplayRow> incoming = displaySearchRows(entries);
+            List<DisplayRow> incoming = displaySearchRows(entries, buffered);
             if (towardStart) incoming = DisplayRows.reversed(incoming);
             int added = DisplayRows.countNewKeys(incoming, bufferedKeys);
             boolean more = added > 0 && PageBounds.isFull(incoming, pageLimit);
@@ -307,7 +307,7 @@ final class LogBrowserQueries {
                 withAnchor.add(row.entry());
                 withAnchor.addAll(entries);
                 List<DisplayRow> fetched = ContextPeeks.forExpand(displayRows(withAnchor), row, older, extra,
-                    oldestFirst);
+                    oldestFirst, list.window().rows());
                 List<DisplayRow> merged = ContextPeeks.mergeAfterExpand(
                     list.window().rows(), fetched, row, older, filter.sort());
                 list.applyPage(merged, list.window().hasBefore(), list.window().hasAfter(), anchor);
@@ -385,18 +385,18 @@ final class LogBrowserQueries {
                 }
                 List<ChatEntry> laterRows = laterError == null ? laterEntries : List.of();
                 List<ChatEntry> earlierRows = earlierError == null ? earlierEntries : List.of();
-                List<DisplayRow> laterDisplay = displaySearchRows(
-                    orderedForFilter(laterRows, ChatQuery.Sort.ASCENDING));
-                List<DisplayRow> earlierDisplay = displaySearchRows(
-                    orderedForFilter(earlierRows, ChatQuery.Sort.DESCENDING));
-                List<DisplayRow> merged = mergeClosestSides(earlierDisplay, laterDisplay, filter.sort());
+                List<DisplayRow> laterRaw = displayRows(orderedForFilter(laterRows, ChatQuery.Sort.ASCENDING));
+                List<DisplayRow> earlierRaw = displayRows(orderedForFilter(earlierRows, ChatQuery.Sort.DESCENDING));
+                boolean earlierFull = PageBounds.isFull(earlierRaw, earlier.limit());
+                boolean laterFull = PageBounds.isFull(laterRaw, later.limit());
+                List<DisplayRow> merged = ContextPeeks.forSearchPage(
+                    mergeClosestSides(earlierRaw, laterRaw, filter.sort()),
+                    filter.hasText(), filter.contextLines(), filter.sort() == ChatQuery.Sort.ASCENDING);
                 if (merged.isEmpty()) {
                     Throwable error = laterError != null ? laterError : earlierError;
                     applyJumpEntries(null, target, preview, gen, epoch, later, List.of(), error);
                     return;
                 }
-                boolean earlierFull = PageBounds.isFull(earlierDisplay, earlier.limit());
-                boolean laterFull = PageBounds.isFull(laterDisplay, later.limit());
                 boolean hasBefore = hasMoreBefore(earlierFull, filter.sort(), merged, matchSummary);
                 boolean hasAfter = hasMoreAfter(laterFull, filter.sort(), merged, matchSummary);
                 if (PageBounds.needsMoreToFill(merged, filter.contextLines(), list.viewHeight(), hasBefore)) {
@@ -519,7 +519,7 @@ final class LogBrowserQueries {
                 applyJump(target, preview, rows, true, hasAfter, progress, epoch, true);
                 return;
             }
-            List<DisplayRow> incoming = DisplayRows.reversed(displaySearchRows(entries));
+            List<DisplayRow> incoming = DisplayRows.reversed(displaySearchRows(entries, rows));
             boolean more = PageBounds.isFull(incoming, extra.limit())
                 && DisplayRows.countNewKeys(incoming, alreadyLoaded) > 0;
             List<DisplayRow> merged = DisplayRows.mergeUnique(incoming, rows);
@@ -550,8 +550,12 @@ final class LogBrowserQueries {
     }
 
     private List<DisplayRow> displaySearchRows(List<ChatEntry> entries) {
+        return displaySearchRows(entries, List.of());
+    }
+
+    private List<DisplayRow> displaySearchRows(List<ChatEntry> entries, List<DisplayRow> neighbors) {
         return ContextPeeks.forSearchPage(displayRows(entries), filter.hasText(), filter.contextLines(),
-            filter.sort() == ChatQuery.Sort.ASCENDING);
+            filter.sort() == ChatQuery.Sort.ASCENDING, neighbors);
     }
 
     private List<DisplayRow> displayRows(List<ChatEntry> entries) {
