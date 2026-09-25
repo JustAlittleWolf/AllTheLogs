@@ -6,6 +6,7 @@ import me.wolfii.allthelogs.data.LogSource;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -48,11 +49,22 @@ public final class ContextPeeks {
             return rows == null ? List.of() : List.copyOf(rows);
         }
         Map<DisplayRow, Integer> rankFromHit = rankFromNearestHit(rows);
+        List<DisplayRow> within = new ArrayList<>();
+        List<DisplayRow> probes = new ArrayList<>();
+        for (DisplayRow row : rows) {
+            int distance = rankFromHit.getOrDefault(row, Integer.MAX_VALUE);
+            if (row.match() || distance <= contextLines) {
+                within.add(row);
+            } else if (distance == contextLines + 1) {
+                probes.add(row);
+            }
+        }
+        Set<DisplayRow> covered = coveredGapProbes(within, probes);
         List<DisplayRow> visible = new ArrayList<>();
         List<DisplayRow> peeks = new ArrayList<>();
         for (DisplayRow row : rows) {
             int distance = rankFromHit.getOrDefault(row, Integer.MAX_VALUE);
-            if (row.match() || distance <= contextLines) {
+            if (row.match() || distance <= contextLines || covered.contains(row)) {
                 visible.add(row);
             } else if (distance == contextLines + 1) {
                 peeks.add(row);
@@ -132,6 +144,65 @@ public final class ContextPeeks {
             }
         }
         return clearCaretsFacingLoadedLines(clearClosedGaps(DisplayRows.mergeSorted(cleared, expanded, sort)));
+    }
+
+    /**
+     * Probe lines that already fill the hole between two visible rows. Hiding them draws an expand caret for a
+     * message the page fetched, and when the hole is a single line the nearer-edge tie keeps only the down caret.
+     */
+    private static Set<DisplayRow> coveredGapProbes(List<DisplayRow> visible, List<DisplayRow> probes) {
+        if (visible.size() < 2 || probes.isEmpty()) return Set.of();
+        Map<LogDay, List<DisplayRow>> visibleByDay = new HashMap<>();
+        Map<LogDay, List<DisplayRow>> probesByDay = new HashMap<>();
+        for (DisplayRow row : visible) {
+            visibleByDay.computeIfAbsent(logDay(row), key -> new ArrayList<>()).add(row);
+        }
+        for (DisplayRow row : probes) {
+            probesByDay.computeIfAbsent(logDay(row), key -> new ArrayList<>()).add(row);
+        }
+        Set<DisplayRow> covered = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (Map.Entry<LogDay, List<DisplayRow>> entry : probesByDay.entrySet()) {
+            List<DisplayRow> dayVisible = visibleByDay.get(entry.getKey());
+            if (dayVisible == null || dayVisible.size() < 2) continue;
+            List<DisplayRow> sortedVisible = new ArrayList<>(dayVisible);
+            sortedVisible.sort(Comparator.comparingInt(DisplayRow::lineIndex));
+            List<DisplayRow> sortedProbes = new ArrayList<>(entry.getValue());
+            sortedProbes.sort(Comparator.comparingInt(DisplayRow::lineIndex));
+            int probeIndex = 0;
+            for (int i = 1; i < sortedVisible.size(); i++) {
+                int left = sortedVisible.get(i - 1).lineIndex();
+                int right = sortedVisible.get(i).lineIndex();
+                while (probeIndex < sortedProbes.size() && sortedProbes.get(probeIndex).lineIndex() <= left) {
+                    probeIndex++;
+                }
+                int start = probeIndex;
+                while (probeIndex < sortedProbes.size() && sortedProbes.get(probeIndex).lineIndex() < right) {
+                    probeIndex++;
+                }
+                if (probeIndex - start != right - left - 1) continue;
+                int expected = left + 1;
+                boolean full = true;
+                for (int probe = start; probe < probeIndex; probe++) {
+                    if (sortedProbes.get(probe).lineIndex() != expected) {
+                        full = false;
+                        break;
+                    }
+                    expected++;
+                }
+                if (!full) continue;
+                for (int probe = start; probe < probeIndex; probe++) {
+                    covered.add(sortedProbes.get(probe));
+                }
+            }
+        }
+        return covered;
+    }
+
+    private static LogDay logDay(DisplayRow row) {
+        return new LogDay(row.chatLog().source(), row.entry().timestamp().toLocalDate());
+    }
+
+    private record LogDay(LogSource source, LocalDate day) {
     }
 
     /**

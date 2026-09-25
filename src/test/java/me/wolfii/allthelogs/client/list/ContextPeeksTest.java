@@ -249,13 +249,51 @@ class ContextPeeksTest {
         assertEquals(1, MessageListLayout.of(shown, 3).separators().size());
     }
 
+    @Test
+    void showsTheSingleFetchedLineBetweenTwoClusters() {
+        ChatLog log = log("a.log");
+        List<DisplayRow> rows = List.of(
+            row(log, 9, "before", false),
+            row(log, 10, "hit", true),
+            row(log, 11, "between", false),
+            row(log, 12, "hit", true),
+            row(log, 13, "after", false));
+        List<DisplayRow> visible = ContextPeeks.strip(rows, 0, true, true);
+        assertEquals(List.of(10, 11, 12), visible.stream().map(DisplayRow::lineIndex).toList());
+        assertTrue(visible.getFirst().expandUp());
+        assertFalse(visible.getFirst().expandDown());
+        assertFalse(visible.get(1).expandUp());
+        assertFalse(visible.get(1).expandDown());
+        assertTrue(visible.getLast().expandDown());
+        List<MessageListLayout.Separator> carets = MessageListLayout.of(visible, 0).separators().stream()
+            .filter(separator -> separator.expandUp() || separator.expandDown()).toList();
+        assertEquals(2, carets.size());
+        assertTrue(carets.getFirst().expandUp());
+        assertFalse(carets.getFirst().expandDown());
+        assertTrue(carets.getLast().expandDown());
+        assertFalse(carets.getLast().expandUp());
+    }
+
+    @Test
+    void keepsTheDownCaretWhenTheGapIsMoreThanTheFetchedProbe() {
+        ChatLog log = log("a.log");
+        List<DisplayRow> rows = List.of(
+            row(log, 10, "hit", true),
+            row(log, 11, "probe", false),
+            row(log, 13, "hit", true),
+            row(log, 14, "after", false));
+        List<DisplayRow> visible = ContextPeeks.strip(rows, 0, true, true);
+        assertEquals(List.of(10, 13), visible.stream().map(DisplayRow::lineIndex).toList());
+        assertTrue(visible.getFirst().expandDown());
+        assertFalse(visible.getLast().expandUp());
+    }
+
     /**
-     * Search {@code 0bcn} on 2026-08-30 in the reported log: sixteen hits in one session, context 3.
-     * Every caret has a hidden neighbour (the probe line just outside the cluster), so none of them is a
-     * false arrow.
+     * Search {@code 0bcn} on 2026-08-30: sixteen hits in one session, context 3. Line 342 is the only
+     * fetched message between the clusters around it, so it stays visible and does not grow a down caret.
      */
     @Test
-    void august30SearchKeepsCaretsOnlyWhereANeighbourIsHidden() {
+    void august30SearchShowsTheOneLineGapAndKeepsRealCarets() {
         ChatLog log = log("session.log");
         int[] hits = {283, 287, 299, 305, 318, 319, 326, 328, 331, 337, 338, 346, 347, 348, 352, 353};
         Set<Integer> hitSet = new HashSet<>();
@@ -269,17 +307,16 @@ class ContextPeeksTest {
             rows.add(row(log, line, "m" + line, hitSet.contains(line)));
         }
         List<DisplayRow> visible = ContextPeeks.strip(rows, 3, true, true);
-        assertEquals(List.of(280, 290, 296, 308, 315, 341, 356), carets(visible));
+        assertEquals(342, rowAt(visible, 342).lineIndex());
+        assertFalse(rowAt(visible, 341).expandDown());
+        assertFalse(rowAt(visible, 343).expandUp());
+        assertEquals(List.of(280, 290, 296, 308, 315, 356), carets(visible));
         assertTrue(rowAt(visible, 280).expandUp());
         assertTrue(rowAt(visible, 290).expandDown());
         assertTrue(rowAt(visible, 296).expandUp());
         assertTrue(rowAt(visible, 308).expandDown());
         assertTrue(rowAt(visible, 315).expandUp());
-        assertTrue(rowAt(visible, 341).expandDown());
-        assertFalse(rowAt(visible, 343).expandUp());
         assertTrue(rowAt(visible, 356).expandDown());
-        List<DisplayRow> shown = ContextPeeks.clearCaretsFacingLoadedLines(visible);
-        assertEquals(carets(visible), carets(shown));
     }
 
     private static DisplayRow rowAt(List<DisplayRow> rows, int line) {
