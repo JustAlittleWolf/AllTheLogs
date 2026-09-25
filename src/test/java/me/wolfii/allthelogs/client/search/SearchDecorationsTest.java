@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.client.search;
 
+import me.wolfii.allthelogs.client.ui.theme.Colors;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -8,27 +9,28 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SearchDecorationsTest {
     @Test
-    void wrapsRegexWithUneditableSlashesAndAnIFlagWhenInsensitive() {
+    void regexChromeSitsBesideThePattern() {
         SearchFilter regex = SearchFilter.defaults().withRegex(true).withText("foo.*");
         assertTrue(SearchDecorations.wraps(regex));
-        assertEquals("/foo.*/i", SearchDecorations.wrap(regex, "foo.*"));
-        assertEquals("foo.*", SearchDecorations.unwrap(regex, "/foo.*/i"));
-        assertEquals(1, SearchDecorations.clampCursor(regex, "/foo.*/i", 0));
-        assertEquals(6, SearchDecorations.clampCursor(regex, "/foo.*/i", 99));
+        assertEquals("/", SearchDecorations.prefix(regex));
+        assertEquals("/i", SearchDecorations.suffix(regex));
+        assertEquals(Colors.REGEX_GROUP, SearchDecorations.decorationColor("/i", 0));
+        assertEquals(Colors.REGEX_ANCHOR, SearchDecorations.decorationColor("/i", 1));
     }
 
     @Test
-    void omitsTheIFlagWhenCaseSensitive() {
+    void caseSensitiveRegexOmitsTheIFlag() {
         SearchFilter regex = SearchFilter.defaults().withRegex(true).withCaseSensitive(true).withText("Bar");
-        assertEquals("/Bar/", SearchDecorations.wrap(regex, "Bar"));
-        assertEquals("Bar", SearchDecorations.unwrap(regex, "/Bar/"));
+        assertEquals("/", SearchDecorations.prefix(regex));
+        assertEquals("/", SearchDecorations.suffix(regex));
+        assertEquals(Colors.REGEX_GROUP, SearchDecorations.decorationColor("/", 0));
     }
 
     @Test
-    void substringSearchHasNoSlashWrapping() {
+    void substringSearchHasNoChrome() {
         SearchFilter text = SearchFilter.defaults().withText("hello");
         assertFalse(SearchDecorations.wraps(text));
-        assertEquals("hello", SearchDecorations.wrap(text, "hello"));
-        assertEquals("hello", SearchDecorations.unwrap(text, "hello"));
+        assertEquals("", SearchDecorations.prefix(text));
+        assertEquals("", SearchDecorations.suffix(text));
     }
 }
