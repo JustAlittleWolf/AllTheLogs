@@ -9,20 +9,23 @@ import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.Positioning;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.UIComponent;
+import io.wispforest.owo.ui.util.NinePatchTexture;
 import me.wolfii.allthelogs.client.export.MessageExport;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 
 import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
 import java.util.function.IntSupplier;
 
 /**
- * Menu on the messages toolbar. Hovering or clicking the hamburger opens Scripts, Import, and Export
- * above it. A click keeps the menu open so Import and Scripts can be chosen. Export opens to the side,
- * then the chosen scope opens the file format beside that.
+ * Menu on the messages toolbar. Hovering or clicking the hamburger opens Export, Import, and Scripts
+ * above it, top to bottom. A click keeps the menu open so Import and Scripts can be chosen. Export opens
+ * to the side, then the chosen scope opens the file format beside that. The scope row stays highlighted
+ * while its format menu is open.
  */
 final class BrowserToolsMenu {
     private static final int CLOSE_DELAY_MS = 160;
@@ -177,10 +180,10 @@ final class BrowserToolsMenu {
         }
         int width = labelWidth("allthelogs.menu.scripts", "allthelogs.menu.import", "allthelogs.menu.export");
         FlowLayout menu = panel(width);
-        menu.child(action(Component.translatable("allthelogs.menu.scripts"), openScripts));
-        menu.child(action(Component.translatable("allthelogs.menu.import"), openImport));
         exportButton = action(Component.translatable("allthelogs.menu.export"), this::ensureScope);
         menu.child(exportButton);
+        menu.child(action(Component.translatable("allthelogs.menu.import"), openImport));
+        menu.child(action(Component.translatable("allthelogs.menu.scripts"), openScripts));
         actions = menu;
         overlays.child(menu);
         placeActions();
@@ -215,6 +218,7 @@ final class BrowserToolsMenu {
     private void ensureFormat(Scope scope) {
         if (formatMenu != null && formatScope == scope) {
             placeFormat();
+            markSelectedScope();
             return;
         }
         closeFormat();
@@ -227,6 +231,7 @@ final class BrowserToolsMenu {
         formatMenu = menu;
         overlays.child(menu);
         placeFormat();
+        markSelectedScope();
     }
 
     private void closeScope() {
@@ -246,6 +251,29 @@ final class BrowserToolsMenu {
         formatScope = null;
         placedFormatX = Integer.MIN_VALUE;
         placedFormatY = Integer.MIN_VALUE;
+        markSelectedScope();
+    }
+
+    /**
+     * Keeps the scope whose format menu is open drawn in the hovered style, so moving onto Text, JSON,
+     * or CSV does not make that choice look unselected.
+     */
+    private void markSelectedScope() {
+        markScope(selectionButton, formatScope == Scope.SELECTION);
+        markScope(onScreenButton, formatScope == Scope.VISIBLE);
+        markScope(queryButton, formatScope == Scope.QUERY);
+    }
+
+    private static void markScope(ButtonComponent button, boolean selected) {
+        if (button == null) return;
+        button.renderer((graphics, widget, delta) -> {
+            Identifier texture = !widget.active()
+                ? ButtonComponent.DISABLED_TEXTURE
+                : selected || widget.isHovered()
+                    ? ButtonComponent.HOVERED_TEXTURE
+                    : ButtonComponent.ACTIVE_TEXTURE;
+            NinePatchTexture.draw(texture, graphics, widget.getX(), widget.getY(), widget.width(), widget.height());
+        });
     }
 
     private void placeActions() {

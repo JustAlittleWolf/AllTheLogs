@@ -4,9 +4,7 @@ import me.wolfii.allthelogs.data.ChatEntry;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Inclusive-start exclusive-end character range of selected message text, spanning one or more displayed rows.
@@ -204,17 +202,6 @@ public final class MessageSelection {
         List<ChatEntry> entries = new ArrayList<>(selected.size());
         for (DisplayRow row : selected) entries.add(row.entry());
         return List.copyOf(entries);
-    }
-
-    /**
-     * Keys of the rows that contain at least one selected character.
-     */
-    public Set<DisplayRow.RowKey> selectedKeys(List<DisplayRow> rows) {
-        List<DisplayRow> selected = selectedRows(rows);
-        if (selected.isEmpty()) return Set.of();
-        Set<DisplayRow.RowKey> keys = new HashSet<>();
-        for (DisplayRow row : selected) keys.add(row.key());
-        return Set.copyOf(keys);
     }
 
     public String copy(List<DisplayRow> rows) {
