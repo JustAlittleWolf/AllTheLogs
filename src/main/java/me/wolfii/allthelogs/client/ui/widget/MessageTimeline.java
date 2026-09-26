@@ -46,7 +46,7 @@ public final class MessageTimeline extends BaseUIComponent {
     /** Gutter for the date track; ~15% narrower than 68 so the message list can grow. */
     public static final int TIMELINE_WIDTH = 58;
     /** Matches fetched per preview query while the thumb is being dragged. */
-    public static final int SCRUB_PAGE_SIZE = 32;
+    public static final int SCRUB_PAGE_SIZE = 40;
     /**
      * Matches fetched at once while middle-click auto-scroll is eating through the buffer.
      * A fast drag walks hundreds of rows a second, so the page has to be large enough that the next
