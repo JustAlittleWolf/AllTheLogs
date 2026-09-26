@@ -1,6 +1,6 @@
 package me.wolfii.allthelogs.data;
 
-import me.wolfii.allthelogs.api.PendingLiveMessage;
+import me.wolfii.allthelogs.api.PendingImportMessage;
 import me.wolfii.allthelogs.data.importer.LogImporter;
 import me.wolfii.allthelogs.data.query.ChatQueries;
 import me.wolfii.allthelogs.data.store.Schema;
@@ -327,7 +327,7 @@ public final class LogStore implements AutoCloseable {
      * @throws LogDataException if {@code messages} is not empty and no session is active, or the entries
      *                          cannot be written
      */
-    public void importSessionMessages(List<PendingLiveMessage> messages) {
+    public void importSessionMessages(List<PendingImportMessage> messages) {
         Objects.requireNonNull(messages, "messages");
         if (messages.isEmpty()) return;
         sessions.importMessages(List.copyOf(messages));

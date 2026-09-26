@@ -1,6 +1,6 @@
 package me.wolfii.allthelogs.data.store;
 
-import me.wolfii.allthelogs.api.PendingLiveMessage;
+import me.wolfii.allthelogs.api.PendingImportMessage;
 import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.LogDataException;
 import me.wolfii.allthelogs.data.LogSource;
@@ -125,7 +125,7 @@ public final class SessionCapture {
      *
      * @throws LogDataException if no session is active, or the entries cannot be written
      */
-    public void importMessages(List<PendingLiveMessage> messages) {
+    public void importMessages(List<PendingImportMessage> messages) {
         Objects.requireNonNull(messages, "messages");
         if (messages.isEmpty()) return;
         requireActiveSession();
@@ -138,7 +138,7 @@ public final class SessionCapture {
             int nextLine = sessionLineIndex;
             LocalDateTime latest = null;
             try (PreparedStatement insert = connection.prepareStatement(INSERT_ENTRY)) {
-                for (PendingLiveMessage pending : messages) {
+                for (PendingImportMessage pending : messages) {
                     Objects.requireNonNull(pending, "messages");
                     stampLiveCapture(pending.minecraftUser(), pending.serverOrWorld());
                     StoredLine line = resolve(pending.text(), pending.formatting(), pending.capturedAt());

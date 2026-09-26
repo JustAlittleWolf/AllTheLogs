@@ -1,7 +1,7 @@
 package me.wolfii.allthelogs.data;
 
 import me.wolfii.allthelogs.api.ChatQuery.Sort;
-import me.wolfii.allthelogs.api.PendingLiveMessage;
+import me.wolfii.allthelogs.api.PendingImportMessage;
 import me.wolfii.allthelogs.client.list.PageBounds;
 import me.wolfii.allthelogs.data.parse.LogDates;
 import me.wolfii.allthelogs.data.parse.PackedFormatting;
@@ -1379,7 +1379,7 @@ class LogStoreTest {
         LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
         assertDoesNotThrow(() -> store.importSessionMessages(List.of()));
         assertThrows(LogDataException.class, () -> store.importSessionMessages(List.of(
-            new PendingLiveMessage("too early", null, null, null, startedAt))));
+            new PendingImportMessage("too early", null, null, null, startedAt))));
 
         store.startSession("26.2", startedAt, "session-start-user");
         assertDoesNotThrow(() -> store.importSessionMessages(List.of()));
@@ -1388,15 +1388,15 @@ class LogStoreTest {
         LocalDateTime firstAt = startedAt.plusSeconds(1).plusNanos(750_000);
         LocalDateTime secondAt = startedAt.plusSeconds(2);
         LocalDateTime thirdAt = startedAt.plusSeconds(3);
-        List<PendingLiveMessage> batch = new ArrayList<>();
-        batch.add(new PendingLiveMessage("on hypixel", new long[]{PackedFormatting.run(0, 2, red)},
+        List<PendingImportMessage> batch = new ArrayList<>();
+        batch.add(new PendingImportMessage("on hypixel", new long[]{PackedFormatting.run(0, 2, red)},
             "JustAlittleWolf", "hypixel.net", firstAt));
-        batch.add(new PendingLiveMessage("\u00a7aon gommehd", null, null, "GommeHD.net", secondAt));
-        batch.add(new PendingLiveMessage("after leave", new long[0], "  ", null, thirdAt));
-        batch.add(new PendingLiveMessage("gg", null, "JustAlittleWolf", "hypixel.net", thirdAt));
-        batch.add(new PendingLiveMessage("gg", null, "JustAlittleWolf", "hypixel.net", thirdAt.plusSeconds(1)));
+        batch.add(new PendingImportMessage("\u00a7aon gommehd", null, null, "GommeHD.net", secondAt));
+        batch.add(new PendingImportMessage("after leave", new long[0], "  ", null, thirdAt));
+        batch.add(new PendingImportMessage("gg", null, "JustAlittleWolf", "hypixel.net", thirdAt));
+        batch.add(new PendingImportMessage("gg", null, "JustAlittleWolf", "hypixel.net", thirdAt.plusSeconds(1)));
         for (int i = 0; i < 200; i++) {
-            batch.add(new PendingLiveMessage("flood " + i, null, "JustAlittleWolf", "hypixel.net",
+            batch.add(new PendingImportMessage("flood " + i, null, "JustAlittleWolf", "hypixel.net",
                 thirdAt.plusSeconds(2L + i)));
         }
         store.importSessionMessages(batch);

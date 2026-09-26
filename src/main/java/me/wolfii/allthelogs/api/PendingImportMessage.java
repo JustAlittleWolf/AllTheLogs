@@ -11,14 +11,14 @@ import java.util.Objects;
  * {@code serverOrWorld} clears the place. {@code formatting} is packed runs into {@code text}; {@code null}
  * asks the store to parse legacy {@code §} codes from the text, and an empty array stores the text unchanged.
  */
-public record PendingLiveMessage(
+public record PendingImportMessage(
     String text,
     long[] formatting,
     String minecraftUser,
     String serverOrWorld,
     LocalDateTime capturedAt
 ) {
-    public PendingLiveMessage {
+    public PendingImportMessage {
         Objects.requireNonNull(text, "text");
         Objects.requireNonNull(capturedAt, "capturedAt");
         formatting = formatting == null ? null : formatting.clone();

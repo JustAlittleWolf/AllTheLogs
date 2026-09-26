@@ -1,6 +1,6 @@
 package me.wolfii.allthelogs.client;
 
-import me.wolfii.allthelogs.api.PendingLiveMessage;
+import me.wolfii.allthelogs.api.PendingImportMessage;
 import me.wolfii.allthelogs.data.*;
 import me.wolfii.allthelogs.data.parse.FormattingCodes;
 import net.minecraft.network.chat.Component;
@@ -30,7 +30,7 @@ public final class LogStoreWorker implements AutoCloseable {
     private final ExecutorService executor;
     private final AtomicBoolean cancelImport = new AtomicBoolean();
     private final AtomicBoolean liveFlushScheduled = new AtomicBoolean();
-    private final Queue<PendingLiveMessage> pendingLive = new ConcurrentLinkedQueue<>();
+    private final Queue<PendingImportMessage> pendingLive = new ConcurrentLinkedQueue<>();
     private volatile LogStore store;
     private volatile boolean sessionStarted;
 
@@ -89,7 +89,7 @@ public final class LogStoreWorker implements AutoCloseable {
         FormattingCodes.Parsed flat = ComponentFormatting.flatten(message);
         String user = minecraftUser == null || minecraftUser.isBlank() ? null : minecraftUser;
         String place = serverOrWorld == null || serverOrWorld.isBlank() ? null : serverOrWorld;
-        pendingLive.add(new PendingLiveMessage(flat.text(), flat.formatting(), user, place, capturedAt));
+        pendingLive.add(new PendingImportMessage(flat.text(), flat.formatting(), user, place, capturedAt));
     }
 
     /**
@@ -215,7 +215,7 @@ public final class LogStoreWorker implements AutoCloseable {
 
     private void storeQueuedLive() {
         if (store == null || !sessionStarted) return;
-        List<PendingLiveMessage> batch = drainPendingLive();
+        List<PendingImportMessage> batch = drainPendingLive();
         if (batch.isEmpty()) return;
         try {
             store.importSessionMessages(batch);
@@ -224,9 +224,9 @@ public final class LogStoreWorker implements AutoCloseable {
         }
     }
 
-    private List<PendingLiveMessage> drainPendingLive() {
-        List<PendingLiveMessage> batch = new ArrayList<>();
-        PendingLiveMessage pending;
+    private List<PendingImportMessage> drainPendingLive() {
+        List<PendingImportMessage> batch = new ArrayList<>();
+        PendingImportMessage pending;
         while ((pending = pendingLive.poll()) != null) {
             batch.add(pending);
         }
