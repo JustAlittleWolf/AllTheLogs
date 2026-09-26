@@ -49,7 +49,6 @@
   "allthelogs.import.invalid_timezone": "Choose a timezone from the list, or type a valid timezone id",
   "allthelogs.import.start": "Start import",
   "allthelogs.done": "Done",
-  "allthelogs.meta.marker": "?",
   "allthelogs.meta.hint": "Database Statistics",
   "allthelogs.meta.unavailable": "Log store is not ready",
   "allthelogs.meta.loading": "Loading database statistics...",

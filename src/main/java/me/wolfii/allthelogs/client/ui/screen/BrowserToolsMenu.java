@@ -1,10 +1,13 @@
 package me.wolfii.allthelogs.client.ui.screen;
 
+import io.wispforest.owo.ui.component.BoxComponent;
 import io.wispforest.owo.ui.component.ButtonComponent;
+import io.wispforest.owo.ui.component.LabelComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
+import io.wispforest.owo.ui.core.Color;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.Positioning;
 import io.wispforest.owo.ui.core.Sizing;
@@ -17,15 +20,16 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
+import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
 import java.util.function.IntSupplier;
 
 /**
  * Menu on the messages toolbar. Hovering or clicking the hamburger opens Export, Import, and Scripts
- * above it, top to bottom. A click keeps the menu open so Import and Scripts can be chosen. Export opens
- * to the side, then the chosen scope opens the file format beside that. The scope row stays highlighted
- * while its format menu is open.
+ * above it, top to bottom, with the database summary under those actions. A click keeps the menu open
+ * so Import and Scripts can be chosen. Export opens to the side, then the chosen scope opens the file
+ * format beside that. The scope row stays highlighted while its format menu is open.
  */
 final class BrowserToolsMenu {
     private static final int CLOSE_DELAY_MS = 160;
@@ -47,6 +51,9 @@ final class BrowserToolsMenu {
 
     private ButtonComponent anchor;
     private FlowLayout actions;
+    private FlowLayout databaseInfo;
+    private List<Component> databaseLines = List.of(Component.translatable("allthelogs.meta.loading"));
+    private int actionWidth;
     private ButtonComponent exportButton;
     private FlowLayout scopeMenu;
     private ButtonComponent selectionButton;
@@ -80,7 +87,7 @@ final class BrowserToolsMenu {
     }
 
     /**
-     * Square button drawn to the right of the database-stats button. Menus grow up and to the left,
+     * Square button at the right end of the messages toolbar. Menus grow up and to the left,
      * into the screen, instead of off the right edge.
      */
     ButtonComponent button() {
@@ -125,6 +132,7 @@ final class BrowserToolsMenu {
         closeScope();
         remove(actions);
         actions = null;
+        databaseInfo = null;
         exportButton = null;
         placedActionsX = Integer.MIN_VALUE;
         placedActionsY = Integer.MIN_VALUE;
@@ -178,12 +186,14 @@ final class BrowserToolsMenu {
             placeActions();
             return;
         }
-        int width = labelWidth("allthelogs.menu.scripts", "allthelogs.menu.import", "allthelogs.menu.export");
-        FlowLayout menu = panel(width);
+        actionWidth = labelWidth("allthelogs.menu.scripts", "allthelogs.menu.import", "allthelogs.menu.export");
+        FlowLayout menu = panel(panelWidth());
         exportButton = action(Component.translatable("allthelogs.menu.export"), this::ensureScope);
         menu.child(exportButton);
         menu.child(action(Component.translatable("allthelogs.menu.import"), openImport));
         menu.child(action(Component.translatable("allthelogs.menu.scripts"), openScripts));
+        databaseInfo = databaseBlock();
+        menu.child(databaseInfo);
         actions = menu;
         overlays.child(menu);
         placeActions();
@@ -306,7 +316,73 @@ final class BrowserToolsMenu {
     }
 
     /**
+     * Replaces the database summary under the actions. Safe to call before the menu is open.
+     */
+    void setDatabaseInfo(List<Component> lines) {
+        List<Component> next = lines == null || lines.isEmpty()
+            ? List.of(Component.translatable("allthelogs.meta.unavailable"))
+            : List.copyOf(lines);
+        if (sameLines(databaseLines, next)) return;
+        databaseLines = next;
+        if (actions == null) return;
+        fillDatabaseInfo();
+        actions.horizontalSizing(Sizing.fixed(panelWidth()));
+        placedActionsX = Integer.MIN_VALUE;
+        placedActionsY = Integer.MIN_VALUE;
+        placeActions();
+        placedScopeX = Integer.MIN_VALUE;
+        placedScopeY = Integer.MIN_VALUE;
+        placeScope();
+        placedFormatX = Integer.MIN_VALUE;
+        placedFormatY = Integer.MIN_VALUE;
+        placeFormat();
+    }
+
+    private FlowLayout databaseBlock() {
+        FlowLayout block = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
+        block.gap(1).padding(Insets.top(4));
+        block.mouseDown().subscribe((mouse, doubled) -> true);
+        fillDatabaseInfo(block);
+        return block;
+    }
+
+    private void fillDatabaseInfo() {
+        fillDatabaseInfo(databaseInfo);
+    }
+
+    private void fillDatabaseInfo(FlowLayout block) {
+        if (block == null) return;
+        block.clearChildren();
+        BoxComponent rule = UIComponents.box(Sizing.fill(), Sizing.fixed(1));
+        rule.fill(true).color(Color.ofRgb(0x3C3C3C));
+        block.child(rule);
+        for (Component line : databaseLines) {
+            LabelComponent label = UIComponents.label(line);
+            label.shadow(true);
+            block.child(label);
+        }
+    }
+
+    private int panelWidth() {
+        Font font = Minecraft.getInstance().font;
+        int text = 0;
+        for (Component line : databaseLines) {
+            text = Math.max(text, font.width(line));
+        }
+        return Math.max(actionWidth, text + 8);
+    }
+
+    private static boolean sameLines(List<Component> left, List<Component> right) {
+        if (left.size() != right.size()) return false;
+        for (int i = 0; i < left.size(); i++) {
+            if (!left.get(i).getString().equals(right.get(i).getString())) return false;
+        }
+        return true;
+    }
+
+    /**
      * Prefers the left side of {@code row} so a menu on the right edge stays on screen.
+     * The menu's top padding is removed from {@code y} so its first row lines up with {@code row}.
      */
     private int[] beside(FlowLayout menu, UIComponent row) {
         if (menu.width() <= 0 || menu.height() <= 0) return null;
@@ -314,10 +390,19 @@ final class BrowserToolsMenu {
         int right = row.x() + row.width() + GAP;
         int x = left >= 4 ? left : right;
         if (x + menu.width() > screenWidth.getAsInt() - 4) x = Math.max(4, left);
-        int y = row.y();
-        int bottom = screenHeight.getAsInt() - 4;
-        if (y + menu.height() > bottom) y = Math.max(4, bottom - menu.height());
+        int y = submenuTop(row.y(), menu.padding().get().top(), menu.height(), screenHeight.getAsInt());
         return new int[]{x, y};
+    }
+
+    /**
+     * Top of a side menu whose first row should meet {@code rowY}. {@code paddingTop} is that
+     * menu's own top padding; leaving it in place drops the row by that many pixels.
+     */
+    static int submenuTop(int rowY, int paddingTop, int menuHeight, int screenHeight) {
+        int y = rowY - paddingTop;
+        int limit = screenHeight - 4;
+        if (y + menuHeight > limit) y = Math.max(4, limit - menuHeight);
+        return y;
     }
 
     private ButtonComponent scopeButton(Scope scope) {

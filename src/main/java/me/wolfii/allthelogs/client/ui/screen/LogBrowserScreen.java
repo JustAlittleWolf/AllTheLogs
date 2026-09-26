@@ -54,7 +54,6 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     private MessageTimeline list;
     private DecoratedSearchField search;
     private boolean syncingSearch;
-    private ButtonComponent infoButton;
     private FilterOverlay filters;
     private StackLayout overlays;
     private DropdownComponent messageMenu;
@@ -113,7 +112,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
             () -> list.hasSelectedText(), () -> exportBusy, this::closeMessageMenu,
             this::openScripts, this::openImport, this::startExport);
         FlowLayout toolbar = buildToolbar();
-        queries.attach(list, infoButton);
+        queries.attach(list, tools::setDatabaseInfo);
         content.child(list.verticalSizing(Sizing.expand()));
         content.child(toolbar);
         chrome.child(content);
@@ -211,11 +210,6 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
                 refreshSearchDecorations();
             }));
 
-        infoButton = UIComponents.button(Component.translatable("allthelogs.meta.marker"), button -> {
-        });
-        infoButton.tooltip(List.of(Component.translatable("allthelogs.meta.loading")));
-        infoButton.horizontalSizing(Sizing.fixed(20));
-        bar.child(infoButton);
         bar.child(tools.button());
         return bar;
     }

@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Human-readable log-store facts for the browser info button.
+ * Human-readable log-store facts shown at the bottom of the browser menu.
  */
 public final class StoreSummary {
     private StoreSummary() {
