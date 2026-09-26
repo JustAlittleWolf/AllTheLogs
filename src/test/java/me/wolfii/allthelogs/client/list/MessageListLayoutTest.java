@@ -24,14 +24,6 @@ class MessageListLayoutTest {
     }
 
     @Test
-    void expandFollowsListDirection() {
-        assertTrue(MessageListLayout.expandOlderMessages(true, true));
-        assertFalse(MessageListLayout.expandOlderMessages(false, true));
-        assertFalse(MessageListLayout.expandOlderMessages(true, false));
-        assertTrue(MessageListLayout.expandOlderMessages(false, false));
-    }
-
-    @Test
     void bottomPadAlignsShortContentToTheBottom() {
         assertEquals(0, MessageListLayout.bottomPad(400, 200));
         assertEquals(80, MessageListLayout.bottomPad(120, 200));

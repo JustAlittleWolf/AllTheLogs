@@ -2,14 +2,19 @@ package me.wolfii.allthelogs.client.list;
 
 import me.wolfii.allthelogs.api.ChatQuery;
 import me.wolfii.allthelogs.data.ChatLog;
+import me.wolfii.allthelogs.data.LogSource;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Uses one extra fetched context line that is not shown, so cluster edges know whether they can still grow.
@@ -24,11 +29,21 @@ public final class ContextPeeks {
      * Marks expand carets for a result page. Text search peeks around hits. Without a search term every
      * filter-bar match is already in the page, so there is nothing to expand.
      */
+    public static List<DisplayRow> forSearchPage(List<DisplayRow> rows, boolean hasText, int contextLines) {
+        return forSearchPage(rows, hasText, contextLines, List.of());
+    }
+
+    /**
+     * Same as {@link #forSearchPage(List, boolean, int)}, treating {@code neighbors} as rows already
+     * on the page. A probe that fills the hole between those rows and this page is shown instead of becoming
+     * a caret. Scrolling and a search that keeps the viewport fetch each side alone, so the shared boundary
+     * line would otherwise stay hidden.
+     */
     public static List<DisplayRow> forSearchPage(List<DisplayRow> rows, boolean hasText, int contextLines,
-                                                 boolean oldestFirst) {
+                                                 List<DisplayRow> neighbors) {
         if (rows == null) return List.of();
         if (hasText) {
-            return strip(rows, contextLines, true, oldestFirst);
+            return strip(rows, contextLines, true, neighbors);
         }
         return List.copyOf(rows);
     }
@@ -38,42 +53,76 @@ public final class ContextPeeks {
      * Distance is the number of fetched same-log rows to the nearest hit, so other-server neighbours that
      * were skipped in SQL do not consume the context budget.
      */
-    public static List<DisplayRow> strip(List<DisplayRow> rows, int contextLines, boolean hasText,
-                                         boolean oldestFirst) {
+    public static List<DisplayRow> strip(List<DisplayRow> rows, int contextLines, boolean hasText) {
+        return strip(rows, contextLines, hasText, List.of());
+    }
+
+    static List<DisplayRow> strip(List<DisplayRow> rows, int contextLines, boolean hasText,
+                                  List<DisplayRow> neighbors) {
         if (!hasText || rows == null || rows.isEmpty()) {
             return rows == null ? List.of() : List.copyOf(rows);
         }
         Map<DisplayRow, Integer> rankFromHit = rankFromNearestHit(rows);
+        List<DisplayRow> within = new ArrayList<>();
+        List<DisplayRow> probes = new ArrayList<>();
+        for (DisplayRow row : rows) {
+            int distance = rankFromHit.getOrDefault(row, Integer.MAX_VALUE);
+            if (row.match() || distance <= contextLines) {
+                within.add(row);
+            } else if (distance == contextLines + 1) {
+                probes.add(row);
+            }
+        }
+        List<DisplayRow> gapVisible = new ArrayList<>(within);
+        if (neighbors != null) {
+            for (DisplayRow neighbor : neighbors) {
+                if (neighbor != null) gapVisible.add(neighbor);
+            }
+        }
+        Set<DisplayRow> covered = coveredGapProbes(gapVisible, probes);
         List<DisplayRow> visible = new ArrayList<>();
         List<DisplayRow> peeks = new ArrayList<>();
         for (DisplayRow row : rows) {
             int distance = rankFromHit.getOrDefault(row, Integer.MAX_VALUE);
-            if (row.match() || distance <= contextLines) {
+            if (row.match() || distance <= contextLines || covered.contains(row)) {
                 visible.add(row);
             } else if (distance == contextLines + 1) {
                 peeks.add(row);
             }
         }
         for (DisplayRow peek : peeks) {
-            LocalDate peekDay = peek.entry().timestamp().toLocalDate();
-            DisplayRow edge = null;
-            int best = Integer.MAX_VALUE;
-            boolean moreBefore = false;
-            for (DisplayRow row : visible) {
-                if (!row.sameLog(peek)) continue;
-                if (!row.entry().timestamp().toLocalDate().equals(peekDay)) continue;
-                int gap = row.lineIndex() - peek.lineIndex();
-                int abs = Math.abs(gap);
-                if (abs == 0 || abs >= best) continue;
-                best = abs;
-                edge = row;
-                moreBefore = gap > 0;
-            }
-            if (edge == null) continue;
-            int index = visible.indexOf(edge);
-            visible.set(index, addFileExpand(edge, moreBefore, !moreBefore, oldestFirst));
+            markNearestEdges(visible, peek);
         }
         return List.copyOf(visible);
+    }
+
+    /**
+     * Every visible row at the closest distance gets the caret. A tie used to keep only the earlier row, so a
+     * gap showed a down arrow and no up arrow. A second probe on the same row also has to update the row
+     * already replaced by the first probe; matching the original instance misses it once its flags change.
+     */
+    private static void markNearestEdges(List<DisplayRow> visible, DisplayRow peek) {
+        LocalDate peekDay = peek.entry().timestamp().toLocalDate();
+        int best = Integer.MAX_VALUE;
+        List<Integer> edges = new ArrayList<>();
+        for (int i = 0; i < visible.size(); i++) {
+            DisplayRow row = visible.get(i);
+            if (!row.sameLog(peek)) continue;
+            if (!row.entry().timestamp().toLocalDate().equals(peekDay)) continue;
+            int gap = row.lineIndex() - peek.lineIndex();
+            int abs = Math.abs(gap);
+            if (abs == 0 || abs > best) continue;
+            if (abs < best) {
+                best = abs;
+                edges.clear();
+            }
+            edges.add(i);
+        }
+        for (int index : edges) {
+            DisplayRow edge = visible.get(index);
+            boolean moreBefore = edge.lineIndex() > peek.lineIndex();
+            visible.set(index, addFileExpand(edge, moreBefore, !moreBefore));
+        }
     }
 
     /**
@@ -81,7 +130,17 @@ public final class ContextPeeks {
      * {@code extra} is a count of filter-matching lines, not file indices.
      */
     public static List<DisplayRow> forExpand(List<DisplayRow> fetched, DisplayRow anchor, boolean olderInFile,
-                                             int extra, boolean oldestFirst) {
+                                             int extra) {
+        return forExpand(fetched, anchor, olderInFile, extra, List.of());
+    }
+
+    /**
+     * Same as {@link #forExpand(List, DisplayRow, boolean, int)}. {@code already} is the open page.
+     * When the probe is the only line between the new edge and a row already on that page, it is kept and no
+     * caret is added.
+     */
+    public static List<DisplayRow> forExpand(List<DisplayRow> fetched, DisplayRow anchor, boolean olderInFile,
+                                             int extra, List<DisplayRow> already) {
         if (fetched == null || fetched.isEmpty() || anchor == null) return List.of();
         LocalDate day = anchor.entry().timestamp().toLocalDate();
         List<DisplayRow> kept = new ArrayList<>();
@@ -104,10 +163,14 @@ public final class ContextPeeks {
         kept.addAll(toward);
         if (peek == null || toward.isEmpty()) return List.copyOf(kept);
         DisplayRow far = olderInFile ? toward.getFirst() : toward.getLast();
+        if (probeFillsLoadedGap(peek, far, already, olderInFile)) {
+            kept.add(peek);
+            return List.copyOf(kept);
+        }
         for (int i = 0; i < kept.size(); i++) {
             DisplayRow row = kept.get(i);
             if (row.sameLog(anchor) && row.lineIndex() == far.lineIndex()) {
-                kept.set(i, addFileExpand(row, olderInFile, !olderInFile, oldestFirst));
+                kept.set(i, addFileExpand(row, olderInFile, !olderInFile));
             }
         }
         return List.copyOf(kept);
@@ -118,16 +181,109 @@ public final class ContextPeeks {
      */
     public static List<DisplayRow> mergeAfterExpand(List<DisplayRow> existing, List<DisplayRow> expanded,
                                                     DisplayRow anchor, boolean olderInFile, ChatQuery.Sort sort) {
-        boolean oldestFirst = sort == ChatQuery.Sort.ASCENDING;
         List<DisplayRow> cleared = new ArrayList<>(existing.size());
         for (DisplayRow row : existing) {
             if (anchor != null && row.key().equals(anchor.key())) {
-                cleared.add(clearExpandedSide(row, olderInFile, oldestFirst));
+                cleared.add(clearExpandedSide(row, olderInFile));
             } else {
                 cleared.add(row);
             }
         }
-        return clearClosedGaps(DisplayRows.mergeSorted(cleared, expanded, sort));
+        return clearCaretsFacingLoadedLines(clearClosedGaps(DisplayRows.mergeSorted(cleared, expanded, sort)));
+    }
+
+    /**
+     * Probe lines that already fill the hole between two visible rows. Hiding them draws an expand caret for a
+     * message the page fetched, and when the hole is a single line the nearer-edge tie keeps only the down caret.
+     */
+    private static Set<DisplayRow> coveredGapProbes(List<DisplayRow> visible, List<DisplayRow> probes) {
+        if (visible.size() < 2 || probes.isEmpty()) return Set.of();
+        Map<LogDay, List<DisplayRow>> visibleByDay = new HashMap<>();
+        Map<LogDay, List<DisplayRow>> probesByDay = new HashMap<>();
+        for (DisplayRow row : visible) {
+            visibleByDay.computeIfAbsent(logDay(row), key -> new ArrayList<>()).add(row);
+        }
+        for (DisplayRow row : probes) {
+            probesByDay.computeIfAbsent(logDay(row), key -> new ArrayList<>()).add(row);
+        }
+        Set<DisplayRow> covered = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (Map.Entry<LogDay, List<DisplayRow>> entry : probesByDay.entrySet()) {
+            List<DisplayRow> dayVisible = visibleByDay.get(entry.getKey());
+            if (dayVisible == null || dayVisible.size() < 2) continue;
+            List<DisplayRow> sortedVisible = new ArrayList<>(dayVisible);
+            sortedVisible.sort(Comparator.comparingInt(DisplayRow::lineIndex));
+            List<DisplayRow> sortedProbes = new ArrayList<>(entry.getValue());
+            sortedProbes.sort(Comparator.comparingInt(DisplayRow::lineIndex));
+            int probeIndex = 0;
+            for (int i = 1; i < sortedVisible.size(); i++) {
+                int left = sortedVisible.get(i - 1).lineIndex();
+                int right = sortedVisible.get(i).lineIndex();
+                while (probeIndex < sortedProbes.size() && sortedProbes.get(probeIndex).lineIndex() <= left) {
+                    probeIndex++;
+                }
+                int start = probeIndex;
+                while (probeIndex < sortedProbes.size() && sortedProbes.get(probeIndex).lineIndex() < right) {
+                    probeIndex++;
+                }
+                if (probeIndex - start != right - left - 1) continue;
+                int expected = left + 1;
+                boolean full = true;
+                for (int probe = start; probe < probeIndex; probe++) {
+                    if (sortedProbes.get(probe).lineIndex() != expected) {
+                        full = false;
+                        break;
+                    }
+                    expected++;
+                }
+                if (!full) continue;
+                for (int probe = start; probe < probeIndex; probe++) {
+                    covered.add(sortedProbes.get(probe));
+                }
+            }
+        }
+        return covered;
+    }
+
+    private static boolean probeFillsLoadedGap(DisplayRow peek, DisplayRow far, List<DisplayRow> already,
+                                               boolean olderInFile) {
+        if (peek == null || far == null || already == null || already.isEmpty() || !far.sameLog(peek)) return false;
+        int inner = olderInFile ? peek.lineIndex() + 1 : peek.lineIndex() - 1;
+        if (far.lineIndex() != inner) return false;
+        int outer = olderInFile ? peek.lineIndex() - 1 : peek.lineIndex() + 1;
+        LocalDate day = peek.entry().timestamp().toLocalDate();
+        for (DisplayRow row : already) {
+            if (!row.sameLog(peek) || row.lineIndex() != outer) continue;
+            if (row.entry().timestamp().toLocalDate().equals(day)) return true;
+        }
+        return false;
+    }
+
+    private static LogDay logDay(DisplayRow row) {
+        return new LogDay(row.chatLog().source(), row.entry().timestamp().toLocalDate());
+    }
+
+    private record LogDay(LogSource source, LocalDate day) {
+    }
+
+    /**
+     * Drops a caret when the next stored line in that direction is already on the page. Merging two searches
+     * can leave the flag from the page that had not yet loaded that neighbour, and a line-index hole or another
+     * log sitting between them would still draw the triangle even though expanding cannot reveal anything new.
+     */
+    public static List<DisplayRow> clearCaretsFacingLoadedLines(List<DisplayRow> rows) {
+        if (rows == null || rows.isEmpty()) return List.of();
+        Map<LogSource, Set<Integer>> linesBySource = new HashMap<>();
+        for (DisplayRow row : rows) {
+            linesBySource.computeIfAbsent(row.chatLog().source(), key -> new HashSet<>()).add(row.lineIndex());
+        }
+        List<DisplayRow> cleared = new ArrayList<>(rows.size());
+        for (DisplayRow row : rows) {
+            Set<Integer> lines = linesBySource.get(row.chatLog().source());
+            boolean up = row.expandUp() && (lines == null || !lines.contains(row.lineIndex() - 1));
+            boolean down = row.expandDown() && (lines == null || !lines.contains(row.lineIndex() + 1));
+            cleared.add(row.withExpand(up, down));
+        }
+        return List.copyOf(cleared);
     }
 
     /**
@@ -154,29 +310,22 @@ public final class ContextPeeks {
         return List.of(out);
     }
 
-    static DisplayRow addFileExpand(DisplayRow row, boolean moreBefore, boolean moreAfter, boolean oldestFirst) {
+    /**
+     * The list is oldest at the top, so a line earlier in the file is list-up and a later line is list-down.
+     */
+    static DisplayRow addFileExpand(DisplayRow row, boolean moreBefore, boolean moreAfter) {
         boolean up = row.expandUp();
         boolean down = row.expandDown();
-        if (oldestFirst) {
-            if (moreBefore) up = true;
-            if (moreAfter) down = true;
-        } else {
-            if (moreAfter) up = true;
-            if (moreBefore) down = true;
-        }
+        if (moreBefore) up = true;
+        if (moreAfter) down = true;
         return row.withExpand(up, down);
     }
 
-    private static DisplayRow clearExpandedSide(DisplayRow row, boolean olderInFile, boolean oldestFirst) {
+    private static DisplayRow clearExpandedSide(DisplayRow row, boolean olderInFile) {
         boolean up = row.expandUp();
         boolean down = row.expandDown();
-        if (oldestFirst) {
-            if (olderInFile) up = false;
-            else down = false;
-        } else {
-            if (olderInFile) down = false;
-            else up = false;
-        }
+        if (olderInFile) up = false;
+        else down = false;
         return row.withExpand(up, down);
     }
 

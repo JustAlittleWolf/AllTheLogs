@@ -287,7 +287,7 @@ public final class MessageTimeline extends BaseUIComponent {
      * Replaces the buffered page with a fresh search result, scrolled to the top.
      */
     public void reset(List<DisplayRow> rows, boolean hasBefore, boolean hasAfter) {
-        window.reset(rows, hasBefore, hasAfter);
+        window.reset(ContextPeeks.clearCaretsFacingLoadedLines(rows), hasBefore, hasAfter);
         rebuildLayout();
         this.scrollY = 0;
         selection.clear();
@@ -567,7 +567,7 @@ public final class MessageTimeline extends BaseUIComponent {
 
     private void replacePage(List<DisplayRow> rows, boolean hasBefore, boolean hasAfter) {
         List<DisplayRow> previous = window.rows();
-        window.reset(rows, hasBefore, hasAfter);
+        window.reset(ContextPeeks.clearCaretsFacingLoadedLines(rows), hasBefore, hasAfter);
         remapSelection(previous, window.rows());
         rebuildLayout();
     }
