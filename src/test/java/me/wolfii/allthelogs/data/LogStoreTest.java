@@ -1,6 +1,7 @@
 package me.wolfii.allthelogs.data;
 
 import me.wolfii.allthelogs.api.ChatQuery.Sort;
+import me.wolfii.allthelogs.api.PendingImportMessage;
 import me.wolfii.allthelogs.client.list.PageBounds;
 import me.wolfii.allthelogs.data.parse.LogDates;
 import me.wolfii.allthelogs.data.parse.PackedFormatting;
@@ -15,6 +16,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.time.*;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -1370,6 +1372,73 @@ class LogStoreTest {
     @Test
     void importSessionMessageRequiresAnActiveSession() {
         assertThrows(LogDataException.class, () -> store.importSessionMessage("hello"));
+    }
+
+    @Test
+    void importSessionMessagesWritesAQueuedFloodInOneCall() {
+        LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+        assertDoesNotThrow(() -> store.importSessionMessages(List.of()));
+        assertThrows(LogDataException.class, () -> store.importSessionMessages(List.of(
+            new PendingImportMessage("too early", null, null, null, startedAt))));
+
+        store.startSession("26.2", startedAt, "session-start-user");
+        assertDoesNotThrow(() -> store.importSessionMessages(List.of()));
+
+        int red = PackedFormatting.color(0xFF5555);
+        LocalDateTime firstAt = startedAt.plusSeconds(1).plusNanos(750_000);
+        LocalDateTime secondAt = startedAt.plusSeconds(2);
+        LocalDateTime thirdAt = startedAt.plusSeconds(3);
+        List<PendingImportMessage> batch = new ArrayList<>();
+        batch.add(new PendingImportMessage("on hypixel", new long[]{PackedFormatting.run(0, 2, red)},
+            "JustAlittleWolf", "hypixel.net", firstAt));
+        batch.add(new PendingImportMessage("\u00a7aon gommehd", null, null, "GommeHD.net", secondAt));
+        batch.add(new PendingImportMessage("after leave", new long[0], "  ", null, thirdAt));
+        batch.add(new PendingImportMessage("gg", null, "JustAlittleWolf", "hypixel.net", thirdAt));
+        batch.add(new PendingImportMessage("gg", null, "JustAlittleWolf", "hypixel.net", thirdAt.plusSeconds(1)));
+        for (int i = 0; i < 200; i++) {
+            batch.add(new PendingImportMessage("flood " + i, null, "JustAlittleWolf", "hypixel.net",
+                thirdAt.plusSeconds(2L + i)));
+        }
+        store.importSessionMessages(batch);
+
+        List<ChatEntry> entries = store.allEntries();
+        assertEquals(205, entries.size());
+        assertEquals(List.of(0, 1, 2, 3, 4), entries.stream().limit(5).map(ChatEntry::lineIndex).toList());
+        assertEquals(204, entries.getLast().lineIndex());
+
+        ChatEntry hypixel = entries.getFirst();
+        assertEquals("on hypixel", hypixel.message());
+        assertEquals(firstAt.truncatedTo(java.time.temporal.ChronoUnit.MILLIS), hypixel.timestamp());
+        assertEquals("JustAlittleWolf", hypixel.minecraftUser());
+        assertEquals("hypixel.net", hypixel.serverOrWorld());
+        assertEquals(red, PackedFormatting.at(hypixel.formatting(), 0));
+
+        ChatEntry gommehd = entries.get(1);
+        assertEquals("on gommehd", gommehd.message());
+        assertEquals("JustAlittleWolf", gommehd.minecraftUser());
+        assertEquals("GommeHD.net", gommehd.serverOrWorld());
+        assertEquals(PackedFormatting.color(0x55FF55), PackedFormatting.at(gommehd.formatting(), 0));
+
+        ChatEntry afterLeave = entries.get(2);
+        assertEquals("after leave", afterLeave.message());
+        assertEquals("JustAlittleWolf", afterLeave.minecraftUser());
+        assertNull(afterLeave.serverOrWorld());
+        assertNull(afterLeave.formatting());
+
+        assertEquals(List.of("gg", "gg"), List.of(entries.get(3).message(), entries.get(4).message()));
+        assertEquals("flood 199", entries.getLast().message());
+        assertEquals("JustAlittleWolf", entries.getLast().minecraftUser());
+        assertEquals("hypixel.net", entries.getLast().serverOrWorld());
+
+        ChatLog session = store.chatLogs().getFirst();
+        assertEquals(thirdAt.plusSeconds(201), session.endTime());
+        assertEquals(205, store.metadata().chatEntryCount());
+
+        store.importSessionMessage("keeps last user", thirdAt.plusSeconds(300));
+        ChatEntry keepsUser = store.findEntries(ChatQuery.all().withSubstring("keeps last user")).getFirst();
+        assertEquals("JustAlittleWolf", keepsUser.minecraftUser());
+        assertEquals("hypixel.net", keepsUser.serverOrWorld());
+        assertEquals(205, keepsUser.lineIndex());
     }
 
     @Test

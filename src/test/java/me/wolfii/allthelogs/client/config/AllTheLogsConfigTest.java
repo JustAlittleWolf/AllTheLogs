@@ -18,7 +18,6 @@ class AllTheLogsConfigTest {
     void defaultsMatchCurrentBrowserBehavior() {
         AllTheLogsConfig config = AllTheLogsConfig.load(temp.resolve("missing.json"));
         assertTrue(config.extraImportDirectories().isEmpty());
-        assertFalse(config.hideImportButton());
         assertEquals(AllTheLogsConfig.DEFAULT_CONTEXT_MESSAGE_BRIGHTNESS, config.contextMessageBrightness());
         assertEquals(92, config.contextMessageBrightness());
     }
@@ -29,7 +28,6 @@ class AllTheLogsConfigTest {
         Path instance = temp.resolve("instance");
         AllTheLogsConfig config = AllTheLogsConfig.load(file);
         config.setExtraImportDirectories(List.of(instance.toString(), temp.resolve("other").toString()), instance);
-        config.setHideImportButton(true);
         config.setMessageFontSize(8);
         config.setDefaultContextLines(7);
         config.setContextMessageBrightness(55);
@@ -39,7 +37,6 @@ class AllTheLogsConfigTest {
         String otherLogs = temp.resolve("other").resolve("logs").toAbsolutePath().normalize().toString();
         assertEquals(List.of(otherLogs), loaded.extraImportDirectories());
         assertFalse(Files.readString(file).contains(instance.toAbsolutePath().normalize().toString()));
-        assertTrue(loaded.hideImportButton());
         assertEquals(8, loaded.messageFontSize());
         assertEquals(7, loaded.defaultContextLines());
         assertEquals(55, loaded.contextMessageBrightness());
@@ -89,7 +86,6 @@ class AllTheLogsConfigTest {
         AllTheLogsConfig loaded = AllTheLogsConfig.load(file);
         String otherLogs = temp.resolve("other").resolve("logs").toAbsolutePath().normalize().toString();
         assertEquals(List.of(otherLogs), loaded.extraImportDirectories());
-        assertTrue(loaded.hideImportButton());
         assertEquals(9, loaded.messageFontSize());
         assertEquals(SearchFilter.DEFAULT_CONTEXT_LINES, loaded.defaultContextLines());
         assertEquals(AllTheLogsConfig.DEFAULT_CONTEXT_MESSAGE_BRIGHTNESS, loaded.contextMessageBrightness());
@@ -97,7 +93,7 @@ class AllTheLogsConfigTest {
         loaded.save();
         String json = Files.readString(file);
         assertTrue(json.contains("\"extraImportDirectories\""));
-        assertTrue(json.contains("\"hideImportButton\": true"));
+        assertFalse(json.contains("hideImportButton"));
         assertTrue(json.contains("\"messageFontSize\": 9"));
         assertTrue(json.contains("\"defaultContextLines\""));
         assertTrue(json.contains("\"contextMessageBrightness\": 92"));

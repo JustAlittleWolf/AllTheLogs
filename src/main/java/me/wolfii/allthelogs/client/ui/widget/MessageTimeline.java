@@ -11,6 +11,7 @@ import me.wolfii.allthelogs.client.timeline.ScrubberGeometry;
 import me.wolfii.allthelogs.client.timeline.TimelineEdge;
 import me.wolfii.allthelogs.client.timeline.TimelineScale;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
+import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.MatchDay;
 import me.wolfii.allthelogs.data.MatchSummary;
 import net.minecraft.client.Minecraft;
@@ -22,6 +23,7 @@ import org.lwjgl.glfw.GLFW;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -227,6 +229,53 @@ public final class MessageTimeline extends BaseUIComponent {
 
     public int lastVisibleIndex() {
         return view().lastVisibleRow();
+    }
+
+    public boolean hasSelectedText() {
+        return !selectedEntries().isEmpty();
+    }
+
+    /**
+     * Whole messages touched by the current selection, top to bottom.
+     */
+    public List<ChatEntry> selectedEntries() {
+        return selection.selectedEntries(window.rows());
+    }
+
+    /**
+     * Rows touched by the current selection, top to bottom.
+     */
+    public List<DisplayRow> selectedRows() {
+        return selection.selectedRows(window.rows());
+    }
+
+    /**
+     * Messages at least partly inside the viewport, top to bottom.
+     */
+    public List<ChatEntry> visibleEntries() {
+        return entriesOnScreen(window.rows(), firstVisibleIndex(), lastVisibleIndex());
+    }
+
+    /**
+     * Rows at least partly inside the viewport, top to bottom.
+     */
+    public List<DisplayRow> visibleRows() {
+        return rowsOnScreen(window.rows(), firstVisibleIndex(), lastVisibleIndex());
+    }
+
+    static List<DisplayRow> rowsOnScreen(List<DisplayRow> rows, int firstVisible, int lastVisible) {
+        if (rows == null || rows.isEmpty()) return List.of();
+        int from = Math.clamp(Math.min(firstVisible, lastVisible), 0, rows.size() - 1);
+        int to = Math.clamp(Math.max(firstVisible, lastVisible), 0, rows.size() - 1);
+        return List.copyOf(rows.subList(from, to + 1));
+    }
+
+    static List<ChatEntry> entriesOnScreen(List<DisplayRow> rows, int firstVisible, int lastVisible) {
+        List<DisplayRow> visible = rowsOnScreen(rows, firstVisible, lastVisible);
+        if (visible.isEmpty()) return List.of();
+        List<ChatEntry> entries = new ArrayList<>(visible.size());
+        for (DisplayRow row : visible) entries.add(row.entry());
+        return List.copyOf(entries);
     }
 
     public boolean autoScrolling() {

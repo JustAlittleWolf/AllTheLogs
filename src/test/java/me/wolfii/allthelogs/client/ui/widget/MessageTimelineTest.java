@@ -1,17 +1,40 @@
 package me.wolfii.allthelogs.client.ui.widget;
 
 import io.wispforest.owo.ui.core.CursorStyle;
+import me.wolfii.allthelogs.client.list.DisplayRow;
 import me.wolfii.allthelogs.client.timeline.ScrubJump;
+import me.wolfii.allthelogs.data.ChatEntry;
+import me.wolfii.allthelogs.data.ChatLog;
+import me.wolfii.allthelogs.data.LogSource;
 import me.wolfii.allthelogs.client.timeline.ScrubberGeometry;
 import me.wolfii.allthelogs.client.timeline.TimelineEdge;
 import me.wolfii.allthelogs.data.MatchDay;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Path;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class MessageTimelineTest {
+    @Test
+    void onScreenExportKeepsTheInclusiveVisibleSlice() {
+        DisplayRow first = row("one");
+        DisplayRow second = row("two");
+        DisplayRow third = row("three");
+        assertEquals(List.of(second.entry(), third.entry()),
+            MessageTimeline.entriesOnScreen(List.of(first, second, third), 1, 2));
+        assertEquals(List.of(), MessageTimeline.entriesOnScreen(List.of(), 0, 0));
+        assertEquals(List.of(first.entry()), MessageTimeline.entriesOnScreen(List.of(first, second), -4, -1));
+    }
+
+    private static DisplayRow row(String message) {
+        LocalDateTime time = LocalDateTime.of(2026, 9, 26, 14, 3, 1);
+        ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), time.toLocalDate(), "26.2", time, time);
+        return new DisplayRow(new ChatEntry(log, time, 0, message), true, List.of());
+    }
+
     @Test
     void middleDragAndTheTimelineUseAnUpDownCursor() {
         assertEquals(CursorStyle.VERTICAL_RESIZE, MessageTimeline.listCursor(true, true, true));

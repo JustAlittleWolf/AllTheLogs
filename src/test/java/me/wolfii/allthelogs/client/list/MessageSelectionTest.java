@@ -38,6 +38,26 @@ class MessageSelectionTest {
     }
 
     @Test
+    void selectedEntriesExportsWholeMessagesTouchedByTheRange() {
+        DisplayRow first = row("hello");
+        DisplayRow second = row("world");
+        DisplayRow third = row("!");
+        List<DisplayRow> rows = List.of(first, second, third);
+        MessageSelection selection = new MessageSelection();
+        selection.start(0, 1);
+        selection.extend(0, 4);
+        assertEquals(List.of(first.entry()), selection.selectedEntries(rows));
+
+        selection.start(0, 5);
+        selection.extend(2, 0);
+        assertEquals(List.of(second.entry()), selection.selectedEntries(rows));
+
+        selection.start(0, 3);
+        selection.extend(1, 2);
+        assertEquals(List.of(first.entry(), second.entry()), selection.selectedEntries(rows));
+    }
+
+    @Test
     void copiesAcrossRows() {
         MessageSelection selection = new MessageSelection();
         selection.start(0, 3);
