@@ -17,15 +17,17 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
+import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
 import java.util.function.IntSupplier;
 
 /**
  * Menu on the messages toolbar. Hovering or clicking the hamburger opens Export, Import, and Scripts
- * above it, top to bottom. A click keeps the menu open so Import and Scripts can be chosen. Export opens
- * to the side, then the chosen scope opens the file format beside that. The scope row stays highlighted
- * while its format menu is open.
+ * above it, top to bottom, with a ? button under those actions. Hovering ? shows the database summary.
+ * A click keeps the menu open so Import and Scripts can be chosen. Export opens to the side, then the
+ * chosen scope opens the file format beside that. The scope row stays highlighted while its format menu
+ * is open.
  */
 final class BrowserToolsMenu {
     private static final int CLOSE_DELAY_MS = 160;
@@ -47,6 +49,8 @@ final class BrowserToolsMenu {
 
     private ButtonComponent anchor;
     private FlowLayout actions;
+    private ButtonComponent databaseButton;
+    private List<Component> databaseTooltip = List.of(Component.translatable("allthelogs.meta.loading"));
     private ButtonComponent exportButton;
     private FlowLayout scopeMenu;
     private ButtonComponent selectionButton;
@@ -80,7 +84,7 @@ final class BrowserToolsMenu {
     }
 
     /**
-     * Square button drawn to the right of the database-stats button. Menus grow up and to the left,
+     * Square button at the right end of the messages toolbar. Menus grow up and to the left,
      * into the screen, instead of off the right edge.
      */
     ButtonComponent button() {
@@ -125,6 +129,7 @@ final class BrowserToolsMenu {
         closeScope();
         remove(actions);
         actions = null;
+        databaseButton = null;
         exportButton = null;
         placedActionsX = Integer.MIN_VALUE;
         placedActionsY = Integer.MIN_VALUE;
@@ -184,6 +189,9 @@ final class BrowserToolsMenu {
         menu.child(exportButton);
         menu.child(action(Component.translatable("allthelogs.menu.import"), openImport));
         menu.child(action(Component.translatable("allthelogs.menu.scripts"), openScripts));
+        databaseButton = action(Component.translatable("allthelogs.meta.marker"), () -> {});
+        databaseButton.tooltip(databaseTooltip);
+        menu.child(databaseButton);
         actions = menu;
         overlays.child(menu);
         placeActions();
@@ -306,7 +314,18 @@ final class BrowserToolsMenu {
     }
 
     /**
+     * Tooltip for the ? row at the bottom of the menu. Safe to call before the menu is open.
+     */
+    void setDatabaseInfo(List<Component> lines) {
+        databaseTooltip = lines == null || lines.isEmpty()
+            ? List.of(Component.translatable("allthelogs.meta.unavailable"))
+            : List.copyOf(lines);
+        if (databaseButton != null) databaseButton.tooltip(databaseTooltip);
+    }
+
+    /**
      * Prefers the left side of {@code row} so a menu on the right edge stays on screen.
+     * The menu's top padding is removed from {@code y} so its first row lines up with {@code row}.
      */
     private int[] beside(FlowLayout menu, UIComponent row) {
         if (menu.width() <= 0 || menu.height() <= 0) return null;
@@ -314,10 +333,19 @@ final class BrowserToolsMenu {
         int right = row.x() + row.width() + GAP;
         int x = left >= 4 ? left : right;
         if (x + menu.width() > screenWidth.getAsInt() - 4) x = Math.max(4, left);
-        int y = row.y();
-        int bottom = screenHeight.getAsInt() - 4;
-        if (y + menu.height() > bottom) y = Math.max(4, bottom - menu.height());
+        int y = submenuTop(row.y(), menu.padding().get().top(), menu.height(), screenHeight.getAsInt());
         return new int[]{x, y};
+    }
+
+    /**
+     * Top of a side menu whose first row should meet {@code rowY}. {@code paddingTop} is that
+     * menu's own top padding; leaving it in place drops the row by that many pixels.
+     */
+    static int submenuTop(int rowY, int paddingTop, int menuHeight, int screenHeight) {
+        int y = rowY - paddingTop;
+        int limit = screenHeight - 4;
+        if (y + menuHeight > limit) y = Math.max(4, limit - menuHeight);
+        return y;
     }
 
     private ButtonComponent scopeButton(Scope scope) {

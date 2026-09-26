@@ -1,6 +1,5 @@
 package me.wolfii.allthelogs.client.ui.screen;
 
-import io.wispforest.owo.ui.component.ButtonComponent;
 import me.wolfii.allthelogs.api.ChatQuery;
 import me.wolfii.allthelogs.client.AllTheLogsClient;
 import me.wolfii.allthelogs.client.list.*;
@@ -23,6 +22,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 /**
  * Runs the browser's log-store queries and applies the pages to {@link MessageTimeline}.
@@ -40,7 +40,7 @@ final class LogBrowserQueries {
     private final AtomicInteger generation = new AtomicInteger();
     private SearchFilter filter;
     private MessageTimeline list;
-    private ButtonComponent info;
+    private Consumer<List<Component>> databaseInfo;
     private List<String> versions = List.of();
     private MatchSummary matchSummary = MatchSummary.empty();
     private boolean reloadPending = true;
@@ -120,10 +120,10 @@ final class LogBrowserQueries {
     /**
      * Binds a freshly built widget, restoring the page that was on screen before it was rebuilt.
      */
-    void attach(MessageTimeline list, ButtonComponent info) {
+    void attach(MessageTimeline list, Consumer<List<Component>> databaseInfo) {
         takeSnapshot();
         this.list = list;
-        this.info = info;
+        this.databaseInfo = databaseInfo;
         list.setContextLines(filter.contextLines());
         list.onApproachEdge(this::loadMore);
         list.onJump(this::jumpTo);
@@ -217,20 +217,22 @@ final class LogBrowserQueries {
     }
 
     void refreshStats() {
-        if (info == null) return;
         onClient(AllTheLogsClient.worker().browserMetadata(), (metadata, error) -> {
-            if (info == null) return;
             if (error != null || metadata == null) {
-                info.tooltip(List.of(Component.translatable("allthelogs.meta.unavailable")));
+                publishDatabaseInfo(List.of(Component.translatable("allthelogs.meta.unavailable")));
                 return;
             }
-            info.tooltip(StoreSummary.tooltip(metadata));
+            publishDatabaseInfo(StoreSummary.tooltip(metadata));
             versions = metadata.minecraftVersions();
             if (list != null && !filter.isNarrowed()) {
                 list.setTotalMatchCount(metadata.chatEntryCount());
                 takeSnapshot();
             }
         });
+    }
+
+    private void publishDatabaseInfo(List<Component> lines) {
+        if (databaseInfo != null) databaseInfo.accept(lines);
     }
 
     /**

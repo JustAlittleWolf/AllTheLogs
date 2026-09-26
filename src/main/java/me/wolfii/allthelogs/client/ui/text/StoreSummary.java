@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Human-readable log-store facts for the browser info button.
+ * Human-readable log-store facts for the ? button's hover tooltip.
  */
 public final class StoreSummary {
     private StoreSummary() {
