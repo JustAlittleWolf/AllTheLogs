@@ -117,6 +117,7 @@ public final class AllTheLogsClient implements ClientModInitializer {
             AllTheLogsCommands.register(dispatcher));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            worker.flushQueuedLiveMessages();
             long now = System.currentTimeMillis();
             if (now - lastSessionEndTouchMs < SESSION_END_TOUCH_INTERVAL_MS) return;
             lastSessionEndTouchMs = now;

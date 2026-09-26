@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.data;
 
+import me.wolfii.allthelogs.api.PendingLiveMessage;
 import me.wolfii.allthelogs.data.importer.LogImporter;
 import me.wolfii.allthelogs.data.query.ChatQueries;
 import me.wolfii.allthelogs.data.store.Schema;
@@ -312,6 +313,24 @@ public final class LogStore implements AutoCloseable {
                                  String minecraftUser, String serverOrWorld) {
         sessions.stampLiveCapture(minecraftUser, serverOrWorld);
         return sessions.importMessage(message, formatting, timestamp);
+    }
+
+    /**
+     * Imports already-stripped live chat lines in one write.
+     * <p>
+     * Each line keeps the capture time, player, and server or world it was queued with. A null or blank
+     * player keeps the last known name, and a null or blank place clears the server or world, matching
+     * {@link #importSessionMessage(String, long[], LocalDateTime, String, String)}. Every line is stored,
+     * including repeats of the same text a few seconds apart. An empty list does nothing, including when
+     * no session is active.
+     *
+     * @throws LogDataException if {@code messages} is not empty and no session is active, or the entries
+     *                          cannot be written
+     */
+    public void importSessionMessages(List<PendingLiveMessage> messages) {
+        Objects.requireNonNull(messages, "messages");
+        if (messages.isEmpty()) return;
+        sessions.importMessages(List.copyOf(messages));
     }
 
     /**

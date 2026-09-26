@@ -98,6 +98,7 @@ class LogDatabaseTest {
             worker.open(tempDir.resolve("live.duckdb")).join();
             worker.startSession("26.2", "session-start-user").join();
             worker.importSessionMessage(Component.literal("hello from live"), "JustAlittleWolf", "hypixel.net");
+            worker.flushQueuedLiveMessages();
             ChatEntry entry = worker.allEntries().join().getFirst();
             assertEquals("hello from live", entry.message());
             assertEquals("JustAlittleWolf", entry.minecraftUser());

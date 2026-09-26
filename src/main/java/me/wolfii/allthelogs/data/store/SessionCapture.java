@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.data.store;
 
+import me.wolfii.allthelogs.api.PendingLiveMessage;
 import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.LogDataException;
 import me.wolfii.allthelogs.data.LogSource;
@@ -11,12 +12,16 @@ import java.sql.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Objects;
 
 /**
  * Captures chat lines from a running Minecraft client into a {@link LogSource.Session} log.
  */
 public final class SessionCapture {
+    private static final String INSERT_ENTRY = """
+        INSERT INTO chat_entry (file_id, line_index, entry_time, message, formatting, minecraft_user, server_or_world)
+        VALUES (?, ?, ?, ?, CAST(? AS BIGINT[]), ?, ?)""";
 
     private DuckDBConnection connection;
     private long sessionFileId = -1;
@@ -106,22 +111,67 @@ public final class SessionCapture {
         Objects.requireNonNull(message, "message");
         Objects.requireNonNull(timestamp, "timestamp");
         requireActiveSession();
-        LocalDateTime stamp = timestamp.truncatedTo(ChronoUnit.MILLIS);
-        String text;
-        long[] packed;
-        if (formatting == null) {
-            FormattingCodes.Parsed parsed = FormattingCodes.parse(message);
-            text = parsed.text();
-            packed = parsed.formatting();
-        } else {
-            text = message;
-            packed = formatting.length == 0 ? null : formatting;
-        }
+        StoredLine line = resolve(message, formatting, timestamp);
         try {
-            return writeEntry(text, packed, stamp);
+            return writeEntry(line.text(), line.formatting(), line.timestamp());
         } catch (SQLException e) {
             throw new LogDataException("could not store client chat entry", e);
         }
+    }
+
+    /**
+     * Stores every queued live line in one transaction. Each line is stamped with its own player and
+     * place, then appended in list order. An empty list does nothing, including when no session is active.
+     *
+     * @throws LogDataException if no session is active, or the entries cannot be written
+     */
+    public void importMessages(List<PendingLiveMessage> messages) {
+        Objects.requireNonNull(messages, "messages");
+        if (messages.isEmpty()) return;
+        requireActiveSession();
+        boolean open = false;
+        try {
+            try (Statement begin = connection.createStatement()) {
+                begin.execute("BEGIN TRANSACTION");
+            }
+            open = true;
+            int nextLine = sessionLineIndex;
+            LocalDateTime latest = null;
+            try (PreparedStatement insert = connection.prepareStatement(INSERT_ENTRY)) {
+                for (PendingLiveMessage pending : messages) {
+                    Objects.requireNonNull(pending, "messages");
+                    stampLiveCapture(pending.minecraftUser(), pending.serverOrWorld());
+                    StoredLine line = resolve(pending.text(), pending.formatting(), pending.capturedAt());
+                    bindEntry(insert, nextLine, line.text(), line.formatting(), line.timestamp());
+                    insert.execute();
+                    if (latest == null || line.timestamp().isAfter(latest)) latest = line.timestamp();
+                    nextLine++;
+                }
+            }
+            touchSession(latest, nextLine - sessionLineIndex);
+            try (Statement commit = connection.createStatement()) {
+                commit.execute("COMMIT");
+            }
+            open = false;
+            sessionLineIndex = nextLine;
+        } catch (SQLException e) {
+            throw new LogDataException("could not store client chat entries", e);
+        } finally {
+            if (open) rollback();
+        }
+    }
+
+    private static StoredLine resolve(String message, long[] formatting, LocalDateTime timestamp) {
+        LocalDateTime stamp = timestamp.truncatedTo(ChronoUnit.MILLIS);
+        if (formatting == null) {
+            FormattingCodes.Parsed parsed = FormattingCodes.parse(message);
+            return new StoredLine(parsed.text(), parsed.formatting(), stamp);
+        }
+        long[] packed = formatting.length == 0 ? null : formatting;
+        return new StoredLine(message, packed, stamp);
+    }
+
+    private record StoredLine(String text, long[] formatting, LocalDateTime timestamp) {
     }
 
     /**
@@ -174,36 +224,53 @@ public final class SessionCapture {
     }
 
     private boolean writeEntry(String message, long[] formatting, LocalDateTime timestamp) throws SQLException {
-        try (PreparedStatement insert = connection.prepareStatement(
-            "INSERT INTO chat_entry (file_id, line_index, entry_time, message, formatting, minecraft_user, server_or_world) VALUES (?, ?, ?, ?, CAST(? AS BIGINT[]), ?, ?)")) {
-            insert.setLong(1, sessionFileId);
-            insert.setInt(2, sessionLineIndex);
-            insert.setTimestamp(3, Timestamp.valueOf(timestamp));
-            insert.setString(4, message);
-            insert.setString(5, PackedFormatting.toSqlLiteral(formatting));
-            if (currentUser == null) {
-                insert.setNull(6, Types.VARCHAR);
-            } else {
-                insert.setString(6, currentUser);
-            }
-            if (currentPlace == null) {
-                insert.setNull(7, Types.VARCHAR);
-            } else {
-                insert.setString(7, currentPlace);
-            }
+        try (PreparedStatement insert = connection.prepareStatement(INSERT_ENTRY)) {
+            LocalDateTime stamp = bindEntry(insert, sessionLineIndex, message, formatting, timestamp);
             insert.execute();
-        }
-        sessionLineIndex++;
-        try (PreparedStatement update = connection.prepareStatement("""
-            UPDATE log_file SET
-                entry_count = entry_count + 1,
-                end_time = greatest(end_time, ?)
-            WHERE id = ?""")) {
-            update.setTimestamp(1, Timestamp.valueOf(timestamp));
-            update.setLong(2, sessionFileId);
-            update.execute();
+            sessionLineIndex++;
+            touchSession(stamp, 1);
         }
         return true;
+    }
+
+    private LocalDateTime bindEntry(PreparedStatement insert, int lineIndex, String message, long[] formatting,
+                                    LocalDateTime timestamp) throws SQLException {
+        insert.setLong(1, sessionFileId);
+        insert.setInt(2, lineIndex);
+        insert.setTimestamp(3, Timestamp.valueOf(timestamp));
+        insert.setString(4, message);
+        insert.setString(5, PackedFormatting.toSqlLiteral(formatting));
+        if (currentUser == null) {
+            insert.setNull(6, Types.VARCHAR);
+        } else {
+            insert.setString(6, currentUser);
+        }
+        if (currentPlace == null) {
+            insert.setNull(7, Types.VARCHAR);
+        } else {
+            insert.setString(7, currentPlace);
+        }
+        return timestamp;
+    }
+
+    private void touchSession(LocalDateTime stamp, int addedEntries) throws SQLException {
+        try (PreparedStatement update = connection.prepareStatement("""
+            UPDATE log_file SET
+                entry_count = entry_count + ?,
+                end_time = greatest(end_time, ?)
+            WHERE id = ?""")) {
+            update.setInt(1, addedEntries);
+            update.setTimestamp(2, Timestamp.valueOf(stamp));
+            update.setLong(3, sessionFileId);
+            update.execute();
+        }
+    }
+
+    private void rollback() {
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("ROLLBACK");
+        } catch (SQLException ignored) {
+        }
     }
 
     private long nextFileId() throws SQLException {

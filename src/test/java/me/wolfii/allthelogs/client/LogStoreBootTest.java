@@ -174,6 +174,7 @@ class LogStoreWorkerLiveQueueTest {
             worker.importSessionMessage(Component.literal("during background import"), "Tester", "world/overworld");
             LocalDateTime queuedAt = LocalDateTime.now();
             importFuture.get(30, TimeUnit.SECONDS);
+            worker.flushQueuedLiveMessages();
 
             List<ChatEntry> entries = worker.allEntries().join();
             ChatEntry live = entries.stream()
@@ -183,6 +184,45 @@ class LogStoreWorkerLiveQueueTest {
             assertFalse(live.timestamp().isAfter(queuedAt),
                 "background import must not delay the stored capture time: " + live.timestamp()
                     + " queued by " + queuedAt);
+        }
+    }
+
+    @Test
+    void aFloodStaysQueuedUntilOneFlushWritesIt() throws Exception {
+        try (LogStoreWorker worker = new LogStoreWorker()) {
+            worker.open(temp.resolve("logs.duckdb")).join();
+            worker.importSessionMessage(Component.literal("before session"), "Tester", "world/overworld");
+            worker.flushQueuedLiveMessages();
+            worker.startSession("26.2", "Tester").join();
+
+            List<String> afterStart = worker.allEntries().join().stream().map(ChatEntry::message).toList();
+            assertEquals(List.of("before session"), afterStart);
+
+            for (int i = 0; i < 40; i++) {
+                String place = i % 2 == 0 ? "alpha.net" : null;
+                worker.importSessionMessage(Component.literal("line " + i), "Tester", place);
+            }
+            assertEquals(List.of("before session"),
+                worker.allEntries().join().stream().map(ChatEntry::message).toList(),
+                "lines captured after the session starts stay queued until a tick flushes them");
+
+            worker.flushQueuedLiveMessages();
+            List<ChatEntry> flushed = worker.allEntries().join();
+            assertEquals(41, flushed.size());
+            assertEquals("line 0", flushed.get(1).message());
+            assertEquals("alpha.net", flushed.get(1).serverOrWorld());
+            assertEquals("line 1", flushed.get(2).message());
+            assertNull(flushed.get(2).serverOrWorld());
+            assertEquals("line 39", flushed.getLast().message());
+            assertEquals("Tester", flushed.getLast().minecraftUser());
+
+            worker.flushQueuedLiveMessages();
+            assertEquals(41, worker.allEntries().join().size());
+
+            worker.importSessionMessage(Component.literal("after flush"), "Tester", "alpha.net");
+            assertEquals(41, worker.allEntries().join().size());
+            worker.flushQueuedLiveMessages();
+            assertEquals("after flush", worker.allEntries().join().getLast().message());
         }
     }
 }
