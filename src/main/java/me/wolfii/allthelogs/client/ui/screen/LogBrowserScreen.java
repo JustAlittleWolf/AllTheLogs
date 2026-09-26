@@ -15,6 +15,7 @@ import me.wolfii.allthelogs.client.AllTheLogsClient;
 import me.wolfii.allthelogs.client.AllTheLogsScreens;
 import me.wolfii.allthelogs.client.config.AllTheLogsConfig;
 import me.wolfii.allthelogs.client.config.BrowserSession;
+import me.wolfii.allthelogs.client.export.ExportMetadata;
 import me.wolfii.allthelogs.client.export.ExportProgress;
 import me.wolfii.allthelogs.client.export.MessageExport;
 import me.wolfii.allthelogs.client.list.DisplayRow;
@@ -36,6 +37,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -373,9 +375,22 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
                 if (token != exportToken || !exportBusy || Minecraft.getInstance().gui.screen() != this) return;
                 showExporting();
             }));
-        lines.thenApplyAsync(exported -> MessageExport.save(format, exported,
+        ExportMetadata metadata = exportMetadata(scope);
+        lines.thenApplyAsync(exported -> MessageExport.save(format, exported, metadata,
                 progress -> reportExport(token, progress)), MessageExport.executor())
             .whenComplete((path, error) -> Minecraft.getInstance().execute(() -> finishExport(token, path, error)));
+    }
+
+    private ExportMetadata exportMetadata(BrowserToolsMenu.Scope scope) {
+        SearchFilter filter = queries.filter();
+        String scopeName = switch (scope) {
+            case SELECTION -> "selection";
+            case VISIBLE -> "visible";
+            case QUERY -> "query";
+        };
+        return new ExportMetadata(scopeName, filter.text(), filter.regex(), filter.caseSensitive(),
+            filter.contextLines(), filter.sort().name().toLowerCase(Locale.ROOT), filter.startingAt(),
+            filter.upUntil(), filter.version(), filter.serverOrWorld());
     }
 
     private Component queryBlockedReason() {

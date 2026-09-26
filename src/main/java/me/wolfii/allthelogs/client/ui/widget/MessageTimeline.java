@@ -46,7 +46,7 @@ public final class MessageTimeline extends BaseUIComponent {
     /** Gutter for the date track; ~15% narrower than 68 so the message list can grow. */
     public static final int TIMELINE_WIDTH = 58;
     /** Matches fetched per preview query while the thumb is being dragged. */
-    public static final int SCRUB_PAGE_SIZE = 32;
+    public static final int SCRUB_PAGE_SIZE = 40;
     /**
      * Matches fetched at once while middle-click auto-scroll is eating through the buffer.
      * A fast drag walks hundreds of rows a second, so the page has to be large enough that the next
@@ -419,6 +419,16 @@ public final class MessageTimeline extends BaseUIComponent {
         scrub.finish();
     }
 
+    /**
+     * Ends a drag that landed on the first or last loaded row. A preview parked on the oldest messages is
+     * only a short slice with nothing before it, so the normal edge fetch has to run once the thumb is
+     * released or that slice stays shorter than the list and the thumb stays hidden.
+     */
+    private void finishScrubAtEnd() {
+        finishScrub();
+        maybeRequestMore();
+    }
+
     @Override
     public boolean canFocus(UIComponent.FocusSource source) {
         return true;
@@ -442,12 +452,17 @@ public final class MessageTimeline extends BaseUIComponent {
 
         ListView view = view();
         listPainter.drawRows(graphics, view, selection, status.showingLoading());
+        // Overlays such as the tools menu sit above this list. Hover is still reported from the raw pointer,
+        // which would light up the scrubber underneath the menu. Only the component that owns the pointer draws it.
+        boolean pointerHere = hovered || scrub.dragging();
+        int hoverX = pointerHere ? mouseX : Integer.MIN_VALUE;
+        int hoverY = pointerHere ? mouseY : Integer.MIN_VALUE;
         if (!draggingSelection && !scrub.dragging() && !autoScroll.active()) {
-            listPainter.drawMessageInfo(graphics, view, mouseX, mouseY);
+            listPainter.drawMessageInfo(graphics, view, hoverX, hoverY);
         }
-        status.draw(graphics, view, view.containsScreen(mouseX, mouseY));
-        TimelineTrackPainter.draw(graphics, view, track(), mouseX, mouseY, this::timeAtLocalY);
-        updateCursor(view, mouseX, mouseY);
+        status.draw(graphics, view, view.containsScreen(hoverX, hoverY));
+        TimelineTrackPainter.draw(graphics, view, track(), hoverX, hoverY, this::timeAtLocalY);
+        if (pointerHere) updateCursor(view, mouseX, mouseY);
     }
 
     /**
@@ -788,19 +803,28 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     private int thumbHeight() {
-        if (scrub.dragging() && scrub.capturedThumbHeight() > 0) return scrub.capturedThumbHeight();
+        if (scrub.capturedThumbHeight() > 0 && (scrub.dragging() || scrub.holdsPosition())) {
+            return scrub.capturedThumbHeight();
+        }
         if (window.rows().isEmpty() || height <= 0) return 0;
-        return ScrubberGeometry.thumbHeightForDays(height, matches.uniqueDates(), layout.contentHeight(), height);
+        int spanned = ScrubberGeometry.thumbContentSpan(layout.contentHeight(), height,
+            window.hasBefore(), window.hasAfter());
+        return ScrubberGeometry.thumbHeightForDays(height, matches.uniqueDates(), spanned, height);
     }
 
     private int thumbTop(int thumbHeight) {
+        boolean atStart = scrolledToStart();
+        boolean atEnd = scrolledToEnd();
+        int local;
         if (scrub.holdsPosition()) {
-            return y + scrub.heldThumbTopOffset(height, thumbHeight);
+            local = scrub.heldThumbTopOffset(height, thumbHeight);
+        } else {
+            LocalDateTime time = visibleTime();
+            if (time == null || scrubOldest() == null || scrubNewest() == null) return y;
+            double progress = ScrubberGeometry.pinnedProgress(thumbProgress(time), atStart, atEnd);
+            local = ScrubberGeometry.thumbOffset(height, progress, thumbHeight);
         }
-        LocalDateTime time = visibleTime();
-        if (time == null || scrubOldest() == null || scrubNewest() == null) return y;
-        double progress = ScrubberGeometry.pinnedProgress(thumbProgress(time), scrolledToStart(), scrolledToEnd());
-        return y + ScrubberGeometry.thumbOffset(height, progress, thumbHeight);
+        return y + ScrubberGeometry.reserveEndGap(local, height, thumbHeight, atStart, atEnd);
     }
 
     private double thumbProgress(LocalDateTime time) {
@@ -826,7 +850,7 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     private boolean scrolledToStart() {
-        return !window.hasBefore() && scrollY <= 0.5 && layout.contentHeight() > height;
+        return !window.hasBefore() && scrollY <= 0.5;
     }
 
     private boolean scrolledToEnd() {
@@ -866,7 +890,7 @@ public final class MessageTimeline extends BaseUIComponent {
                 jump(new ScrubJump(scrubOldest(), 0, 0), commit);
                 return;
             }
-            if (commit) finishScrub();
+            if (commit) finishScrubAtEnd();
             return;
         }
         if (clamped >= 1) {
@@ -875,7 +899,7 @@ public final class MessageTimeline extends BaseUIComponent {
                 return;
             }
             scrollToEnd();
-            if (commit) finishScrub();
+            if (commit) finishScrubAtEnd();
             return;
         }
         LocalDateTime time = timeAtProgress(clamped);

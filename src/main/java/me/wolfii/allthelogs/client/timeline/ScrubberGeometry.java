@@ -15,6 +15,18 @@ public final class ScrubberGeometry {
     }
 
     /**
+     * Height the thumb should treat as scrollable content. A loaded slice shorter than the viewport still
+     * has somewhere to go when more matches exist outside it, and hiding the thumb there made a drag to the
+     * oldest page (a short preview with nothing before it) drop the pill.
+     */
+    public static int thumbContentSpan(int contentHeight, int viewHeight, boolean hasBefore, boolean hasAfter) {
+        if ((hasBefore || hasAfter) && viewHeight > 0 && contentHeight <= viewHeight) {
+            return viewHeight + 1;
+        }
+        return Math.max(0, contentHeight);
+    }
+
+    /**
      * Small Immich-style scrubber thumb. Taller when few occupied days are in the query, shorter when many
      * are; independent of scroll position. {@code 0} when the loaded content already fits, so the draggable
      * thumb can be hidden.
@@ -47,6 +59,22 @@ public final class ScrubberGeometry {
     public static int thumbOffset(int trackHeight, double progress, int thumbHeight) {
         if (thumbHeight <= 0 || thumbHeight >= trackHeight) return 0;
         return (int) Math.round(Math.clamp(progress, 0, 1) * (trackHeight - thumbHeight));
+    }
+
+    /**
+     * Pulls a thumb at least one pixel in from a track end the viewport has not reached. A thumb sitting
+     * flush with the top or the bottom means the list is scrolled all the way there.
+     *
+     * @param thumbTop local y of the thumb top, before the gap
+     */
+    public static int reserveEndGap(int thumbTop, int trackHeight, int thumbHeight, boolean atStart, boolean atEnd) {
+        if (thumbHeight <= 0 || thumbHeight >= trackHeight) return 0;
+        int travel = trackHeight - thumbHeight;
+        int top = Math.clamp(thumbTop, 0, travel);
+        if (travel < 2) return top;
+        if (!atStart && top == 0) return 1;
+        if (!atEnd && top == travel) return travel - 1;
+        return top;
     }
 
     /**
