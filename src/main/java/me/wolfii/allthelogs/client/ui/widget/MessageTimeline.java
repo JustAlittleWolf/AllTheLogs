@@ -442,12 +442,17 @@ public final class MessageTimeline extends BaseUIComponent {
 
         ListView view = view();
         listPainter.drawRows(graphics, view, selection, status.showingLoading());
+        // Overlays such as the tools menu sit above this list. Hover is still reported from the raw pointer,
+        // which would light up the scrubber underneath the menu. Only the component that owns the pointer draws it.
+        boolean pointerHere = hovered || scrub.dragging();
+        int hoverX = pointerHere ? mouseX : Integer.MIN_VALUE;
+        int hoverY = pointerHere ? mouseY : Integer.MIN_VALUE;
         if (!draggingSelection && !scrub.dragging() && !autoScroll.active()) {
-            listPainter.drawMessageInfo(graphics, view, mouseX, mouseY);
+            listPainter.drawMessageInfo(graphics, view, hoverX, hoverY);
         }
-        status.draw(graphics, view, view.containsScreen(mouseX, mouseY));
-        TimelineTrackPainter.draw(graphics, view, track(), mouseX, mouseY, this::timeAtLocalY);
-        updateCursor(view, mouseX, mouseY);
+        status.draw(graphics, view, view.containsScreen(hoverX, hoverY));
+        TimelineTrackPainter.draw(graphics, view, track(), hoverX, hoverY, this::timeAtLocalY);
+        if (pointerHere) updateCursor(view, mouseX, mouseY);
     }
 
     /**

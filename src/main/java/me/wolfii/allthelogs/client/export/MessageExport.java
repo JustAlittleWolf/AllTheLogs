@@ -29,11 +29,13 @@ import java.util.function.Consumer;
  * Writes chat lines to a downloads file. Log paths, archive entries, and session ids are left out.
  * <p>
  * Each message is formatted and appended to the file on its own. The whole document is never built in memory.
- * JSON entries are still individual Gson objects, written into a compact array one at a time.
+ * JSON entries are still individual Gson objects. Each one is a single line, and the search metadata is written
+ * after the messages.
  * <p>
  * Text is one message per line. The date and time stay readable and share one pair of square brackets.
  * JSON adds the user, server or world, formatting as ranges into the message, and whether the line is a search match.
  * JSON and CSV timestamps are ISO-8601 local date-times. CSV keeps only the timestamp and the message.
+ * The file name includes the search text, or {@code none} when the search box is empty.
  * A selection exports each touched message in full, not the highlighted substring.
  */
 public final class MessageExport {
@@ -98,7 +100,17 @@ public final class MessageExport {
      * starting at zero written. It may be null. It runs on the caller thread.
      */
     public static Path save(Format format, List<Line> lines, Consumer<ExportProgress> progress) {
-        return save(DownloadFolder.resolve(), format, lines, LocalDateTime.now(), progress);
+        return save(format, lines, null, progress);
+    }
+
+    /**
+     * Writes {@code lines} straight to a new file named with {@code metadata}'s search text.
+     * {@code progress} is notified as each message is appended, starting at zero written. Either may be null.
+     * The callback runs on the caller thread.
+     */
+    public static Path save(Format format, List<Line> lines, ExportMetadata metadata,
+                            Consumer<ExportProgress> progress) {
+        return save(DownloadFolder.resolve(), format, lines, LocalDateTime.now(), metadata, progress);
     }
 
     /**
@@ -128,16 +140,21 @@ public final class MessageExport {
     }
 
     static Path save(Path directory, Format format, List<Line> lines, LocalDateTime exportedAt) {
-        return save(directory, format, lines, exportedAt, null);
+        return save(directory, format, lines, exportedAt, null, null);
     }
 
     static Path save(Path directory, Format format, List<Line> lines, LocalDateTime exportedAt,
                      Consumer<ExportProgress> progress) {
+        return save(directory, format, lines, exportedAt, null, progress);
+    }
+
+    static Path save(Path directory, Format format, List<Line> lines, LocalDateTime exportedAt,
+                     ExportMetadata metadata, Consumer<ExportProgress> progress) {
         try {
             Files.createDirectories(directory);
-            Path file = uniqueFile(directory, format, exportedAt);
+            Path file = uniqueFile(directory, format, exportedAt, metadata);
             try (BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
-                write(format, lines, writer, progress);
+                write(format, lines, writer, metadata, progress);
             }
             return file;
         } catch (IOException error) {
@@ -146,23 +163,27 @@ public final class MessageExport {
     }
 
     static String render(Format format, List<Line> lines) {
+        return render(format, lines, null);
+    }
+
+    static String render(Format format, List<Line> lines, ExportMetadata metadata) {
         StringBuilder body = new StringBuilder();
         try {
-            write(format, lines, body, null);
+            write(format, lines, body, metadata, null);
         } catch (IOException error) {
             throw new UncheckedIOException(error);
         }
         return body.toString();
     }
 
-    private static void write(Format format, List<Line> lines, Appendable out, Consumer<ExportProgress> progress)
-        throws IOException {
+    private static void write(Format format, List<Line> lines, Appendable out, ExportMetadata metadata,
+                              Consumer<ExportProgress> progress) throws IOException {
         List<Line> present = present(lines);
         int total = present.size();
         report(progress, 0, total);
         switch (format) {
             case TEXT -> writeText(present, out, progress);
-            case JSON -> writeJson(present, out, progress);
+            case JSON -> writeJson(present, out, metadata, progress);
             case CSV -> writeCsv(present, out, progress);
         }
     }
@@ -198,13 +219,15 @@ public final class MessageExport {
         return time.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
     }
 
-    private static Path uniqueFile(Path directory, Format format, LocalDateTime exportedAt) {
+    private static Path uniqueFile(Path directory, Format format, LocalDateTime exportedAt, ExportMetadata metadata) {
         String stamp = exportedAt == null ? "export" : exportedAt.format(FILE_STAMP);
+        String token = metadata == null ? ExportMetadata.fileToken(null) : metadata.fileToken();
         String extension = format.extension();
-        Path candidate = directory.resolve("allthelogs-" + stamp + "." + extension);
+        String stem = "allthelogs-" + stamp + "-" + token;
+        Path candidate = directory.resolve(stem + "." + extension);
         int suffix = 2;
         while (Files.exists(candidate)) {
-            candidate = directory.resolve("allthelogs-" + stamp + "-" + suffix + "." + extension);
+            candidate = directory.resolve(stem + "-" + suffix + "." + extension);
             suffix++;
         }
         return candidate;
@@ -222,19 +245,38 @@ public final class MessageExport {
         if (!lines.isEmpty()) out.append('\n');
     }
 
-    private static void writeJson(List<Line> lines, Appendable out, Consumer<ExportProgress> progress)
-        throws IOException {
-        if (lines.isEmpty()) {
-            out.append("[]\n");
-            return;
-        }
-        out.append('[');
+    private static void writeJson(List<Line> lines, Appendable out, ExportMetadata metadata,
+                                  Consumer<ExportProgress> progress) throws IOException {
+        out.append("{\n\"messages\": [");
         for (int i = 0; i < lines.size(); i++) {
-            if (i > 0) out.append(',');
+            out.append(i == 0 ? "\n" : ",\n");
             out.append(GSON.toJson(jsonObject(lines.get(i))));
             report(progress, i + 1, lines.size());
         }
-        out.append("]\n");
+        out.append(lines.isEmpty() ? "],\n\"metadata\": " : "\n],\n\"metadata\": ");
+        out.append(GSON.toJson(metadataObject(metadata)));
+        out.append("\n}\n");
+    }
+
+    private static JsonObject metadataObject(ExportMetadata metadata) {
+        JsonObject object = new JsonObject();
+        addNullable(object, "scope", metadata == null ? null : metadata.scope());
+        addNullable(object, "query", metadata == null ? null : metadata.query());
+        object.addProperty("regex", metadata != null && metadata.regex());
+        object.addProperty("caseSensitive", metadata != null && metadata.caseSensitive());
+        object.addProperty("contextLines", metadata == null ? 0 : metadata.contextLines());
+        addNullable(object, "sort", metadata == null ? null : metadata.sort());
+        addNullable(object, "startingAt", metadata == null ? null : isoTimestampOrNull(metadata.startingAt()));
+        addNullable(object, "upUntil", metadata == null ? null : isoTimestampOrNull(metadata.upUntil()));
+        addNullable(object, "version", metadata == null ? null : metadata.version());
+        addNullable(object, "server", metadata == null ? null : metadata.server());
+        return object;
+    }
+
+    private static String isoTimestampOrNull(LocalDateTime time) {
+        if (time == null) return null;
+        String text = isoTimestamp(time);
+        return text.isEmpty() ? null : text;
     }
 
     private static JsonObject jsonObject(Line line) {
