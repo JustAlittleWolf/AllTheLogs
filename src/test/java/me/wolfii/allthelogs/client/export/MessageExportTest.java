@@ -49,7 +49,10 @@ class MessageExportTest {
         assertFalse(json.contains("26.2"));
         assertFalse(json.contains("log-user"));
         assertFalse(json.contains("\n "));
-        JsonArray rows = JsonParser.parseString(json).getAsJsonArray();
+        assertTrue(json.contains("},\n{"));
+        JsonObject document = JsonParser.parseString(json).getAsJsonObject();
+        JsonArray rows = document.getAsJsonArray("messages");
+        assertTrue(document.getAsJsonObject("metadata").get("query").isJsonNull());
         assertEquals(2, rows.size());
         JsonObject first = rows.get(0).getAsJsonObject();
         assertEquals("2026-09-26T14:03:01", first.get("timestamp").getAsString());
@@ -140,16 +143,68 @@ class MessageExportTest {
     @Test
     void emptyExportsStayValidAndFilesLandWithoutColliding() throws Exception {
         assertEquals("", MessageExport.render(MessageExport.Format.TEXT, List.of()));
-        assertEquals("[]\n", MessageExport.render(MessageExport.Format.JSON, List.of()));
+        assertEquals("""
+            {
+            "messages": [],
+            "metadata": {"scope":null,"query":null,"regex":false,"caseSensitive":false,"contextLines":0,"sort":null,"startingAt":null,"upUntil":null,"version":null,"server":null}
+            }
+            """, MessageExport.render(MessageExport.Format.JSON, List.of()));
         assertEquals("timestamp,message\n", MessageExport.render(MessageExport.Format.CSV, List.of()));
 
         LocalDateTime stamp = LocalDateTime.of(2026, 9, 26, 14, 3, 1);
         Path first = MessageExport.save(temp, MessageExport.Format.TEXT, List.of(
             line(stamp, null, null, "Hi", null, true)), stamp);
         Path second = MessageExport.save(temp, MessageExport.Format.TEXT, List.of(), stamp);
-        assertEquals("allthelogs-2026-09-26-14-03-01.txt", first.getFileName().toString());
-        assertEquals("allthelogs-2026-09-26-14-03-01-2.txt", second.getFileName().toString());
+        assertEquals("allthelogs-2026-09-26-14-03-01-none.txt", first.getFileName().toString());
+        assertEquals("allthelogs-2026-09-26-14-03-01-none-2.txt", second.getFileName().toString());
         assertEquals("[2026-09-26 14:03:01] Hi\n", Files.readString(first));
+    }
+
+    @Test
+    void jsonWritesSearchMetadataAfterEachMessageOnItsOwnLine() {
+        ExportMetadata metadata = new ExportMetadata("query", "Hello/there?", true, false, 3, "ascending",
+            LocalDateTime.of(2026, 9, 26, 0, 0), null, "1.21.8", "hypixel");
+        String json = MessageExport.render(MessageExport.Format.JSON, List.of(
+            line(LocalDateTime.of(2026, 9, 26, 14, 3, 1), "Notch", "hypixel.net", "Hello", null, true),
+            line(LocalDateTime.of(2026, 9, 26, 14, 3, 2), null, null, "plain", null, false)
+        ), metadata);
+        assertTrue(json.startsWith("""
+            {
+            "messages": [
+            {"""));
+        assertTrue(json.contains("},\n{"));
+        assertFalse(json.contains("\n "));
+        JsonObject document = JsonParser.parseString(json).getAsJsonObject();
+        assertEquals(2, document.getAsJsonArray("messages").size());
+        JsonObject meta = document.getAsJsonObject("metadata");
+        assertEquals("query", meta.get("scope").getAsString());
+        assertEquals("Hello/there?", meta.get("query").getAsString());
+        assertTrue(meta.get("regex").getAsBoolean());
+        assertFalse(meta.get("caseSensitive").getAsBoolean());
+        assertEquals(3, meta.get("contextLines").getAsInt());
+        assertEquals("ascending", meta.get("sort").getAsString());
+        assertEquals("2026-09-26T00:00:00", meta.get("startingAt").getAsString());
+        assertTrue(meta.get("upUntil").isJsonNull());
+        assertEquals("1.21.8", meta.get("version").getAsString());
+        assertEquals("hypixel", meta.get("server").getAsString());
+        int messagesEnd = json.indexOf("\n],\n\"metadata\": ");
+        assertTrue(messagesEnd > 0);
+        assertTrue(messagesEnd < json.indexOf("\"metadata\""));
+    }
+
+    @Test
+    void fileNameIncludesTheSearchQueryOrNone() throws Exception {
+        LocalDateTime stamp = LocalDateTime.of(2026, 9, 26, 14, 3, 1);
+        ExportMetadata named = new ExportMetadata("visible", "Hello/there?", false, false, 0, null,
+            null, null, null, null);
+        Path queried = MessageExport.save(temp, MessageExport.Format.JSON, List.of(
+            line(stamp, null, null, "Hi", null, true)), stamp, named, null);
+        Path empty = MessageExport.save(temp, MessageExport.Format.CSV, List.of(), stamp, null, null);
+        assertEquals("allthelogs-2026-09-26-14-03-01-Hello-there.json", queried.getFileName().toString());
+        assertEquals("allthelogs-2026-09-26-14-03-01-none.csv", empty.getFileName().toString());
+        assertEquals("none", ExportMetadata.fileToken("   "));
+        assertEquals("none", ExportMetadata.fileToken("???"));
+        assertEquals("café", ExportMetadata.fileToken("café"));
     }
 
     @Test
