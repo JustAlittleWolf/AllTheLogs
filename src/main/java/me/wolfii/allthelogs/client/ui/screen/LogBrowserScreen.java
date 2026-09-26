@@ -2,6 +2,7 @@ package me.wolfii.allthelogs.client.ui.screen;
 
 import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import io.wispforest.owo.ui.base.BaseOwoScreen;
+import io.wispforest.owo.ui.component.BoxComponent;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.DropdownComponent;
 import io.wispforest.owo.ui.component.LabelComponent;
@@ -14,6 +15,7 @@ import me.wolfii.allthelogs.client.AllTheLogsClient;
 import me.wolfii.allthelogs.client.AllTheLogsScreens;
 import me.wolfii.allthelogs.client.config.AllTheLogsConfig;
 import me.wolfii.allthelogs.client.config.BrowserSession;
+import me.wolfii.allthelogs.client.export.ExportProgress;
 import me.wolfii.allthelogs.client.export.MessageExport;
 import me.wolfii.allthelogs.client.list.DisplayRow;
 import me.wolfii.allthelogs.client.list.MessageSelection;
@@ -36,6 +38,8 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Transparent log browser: search bar, side filter panel, virtualised history, and a timeline of every hit.
@@ -56,8 +60,14 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     private DropdownComponent messageMenu;
     private BrowserToolsMenu tools;
     private FlowLayout exporting;
+    private LabelComponent exportCounts;
+    private BoxComponent exportFill;
     private LabelComponent exportLargeLabel;
     private boolean exportLarge;
+    private long exportTotal = -1;
+    private ExportProgress exportProgress;
+    private final AtomicReference<ExportSnapshot> latestExport = new AtomicReference<>();
+    private final AtomicBoolean exportProgressScheduled = new AtomicBoolean();
     private FlowLayout exportNotice;
     private int exportToken;
     private int noticeToken;
@@ -143,6 +153,12 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
             return;
         }
         this.extractPanorama(graphics, delta);
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        drainExportProgress();
     }
 
     @Override
@@ -345,8 +361,11 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         }
         exportBusy = true;
         exportLarge = false;
+        exportProgress = null;
+        latestExport.set(null);
         int token = ++exportToken;
         long known = exportSize(scope);
+        exportTotal = known;
         if (known > LARGE_EXPORT) showLargeExportWarning();
         else if (scope == BrowserToolsMenu.Scope.QUERY) countQueryForWarning(token);
         CompletableFuture<List<MessageExport.Line>> lines = switch (scope) {
@@ -360,7 +379,8 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
                 if (token != exportToken || !exportBusy || Minecraft.getInstance().gui.screen() != this) return;
                 showExporting();
             }));
-        lines.thenApplyAsync(exported -> MessageExport.save(format, exported), MessageExport.executor())
+        lines.thenApplyAsync(exported -> MessageExport.save(format, exported,
+                progress -> reportExport(token, progress)), MessageExport.executor())
             .whenComplete((path, error) -> Minecraft.getInstance().execute(() -> finishExport(token, path, error)));
     }
 
@@ -399,9 +419,48 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     private void countQueryForWarning(int token) {
         AllTheLogsClient.worker().countMatches(queries.filter().toSummaryQuery())
             .whenComplete((count, error) -> Minecraft.getInstance().execute(() -> {
-                if (token != exportToken || error != null || count == null || count <= LARGE_EXPORT) return;
-                showLargeExportWarning();
+                if (token != exportToken || error != null || count == null) return;
+                if (exportProgress == null) exportTotal = count;
+                if (count > LARGE_EXPORT) showLargeExportWarning();
+                if (exporting != null && exportProgress == null) showIdleExportProgress();
             }));
+    }
+
+    private void reportExport(int token, ExportProgress progress) {
+        latestExport.set(new ExportSnapshot(token, progress));
+        if (exportProgressScheduled.compareAndSet(false, true)) {
+            Minecraft.getInstance().execute(this::drainExportProgress);
+        }
+    }
+
+    private void drainExportProgress() {
+        exportProgressScheduled.set(false);
+        ExportSnapshot snapshot = latestExport.getAndSet(null);
+        if (snapshot == null || snapshot.token() != exportToken || !exportBusy) return;
+        exportProgress = snapshot.progress();
+        applyExportProgress(snapshot.progress());
+    }
+
+    private void applyExportProgress(ExportProgress progress) {
+        if (exportFill == null || exportCounts == null || progress == null) return;
+        int percent = progress.percent();
+        exportFill.horizontalSizing(Sizing.fill(percent >= 100 ? 100 : Math.max(1, percent)));
+        exportCounts.text(Component.translatable("allthelogs.export.progress",
+            Long.toString(progress.written()), Long.toString(progress.total()), Integer.toString(percent)));
+    }
+
+    private void showIdleExportProgress() {
+        if (exportProgress != null) {
+            applyExportProgress(exportProgress);
+            return;
+        }
+        if (exportFill == null || exportCounts == null) return;
+        if (exportTotal >= 0) {
+            applyExportProgress(new ExportProgress(0, exportTotal));
+            return;
+        }
+        exportFill.horizontalSizing(Sizing.fill(1));
+        exportCounts.text(Component.translatable("allthelogs.export.progress.loading"));
     }
 
     private void showLargeExportWarning() {
@@ -409,7 +468,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         if (exporting == null || exportLargeLabel != null) return;
         exportLargeLabel = UIComponents.label(Component.translatable("allthelogs.export.large"));
         exportLargeLabel.color(Color.ofRgb(0xE8D7A8));
-        exportLargeLabel.maxWidth(Math.max(160, this.width - 96));
+        exportLargeLabel.maxWidth(Math.min(328, Math.max(160, this.width - 96)));
         if (!exporting.children().isEmpty() && exporting.children().getFirst() instanceof FlowLayout card) {
             card.child(exportLargeLabel);
         }
@@ -425,12 +484,25 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         shade.positioning(Positioning.absolute(0, 0));
         shade.mouseDown().subscribe((mouse, doubled) -> true);
         shade.mouseScroll().subscribe((x, y, amount) -> true);
-        FlowLayout card = UIContainers.verticalFlow(Sizing.content(), Sizing.content());
-        card.padding(Insets.of(16, 16, 28, 28)).surface(PanelSurfaces.card());
+        int cardWidth = Math.min(360, Math.max(240, this.width - 48));
+        FlowLayout card = UIContainers.verticalFlow(Sizing.fixed(cardWidth), Sizing.content());
+        card.gap(8).padding(Insets.of(16)).surface(PanelSurfaces.card());
         card.child(UIComponents.label(Component.translatable("allthelogs.export.exporting")));
+        exportCounts = UIComponents.label(Component.empty());
+        exportCounts.color(Color.ofRgb(0xA0A0A0));
+        exportCounts.maxWidth(Math.max(160, cardWidth - 32));
+        card.child(exportCounts);
+        FlowLayout track = UIContainers.horizontalFlow(Sizing.fill(), Sizing.fixed(10));
+        track.surface(Surface.flat(0xFF1A1A1A).and(Surface.outline(0xFF3C3C3C)));
+        exportFill = UIComponents.box(Sizing.fill(1), Sizing.fill());
+        exportFill.fill(true).color(Color.ofRgb(0x7CB342));
+        track.child(exportFill);
+        card.child(track);
         shade.child(card);
         overlays.child(shade);
         exporting = shade;
+        drainExportProgress();
+        showIdleExportProgress();
         if (exportLarge) showLargeExportWarning();
     }
 
@@ -439,8 +511,12 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
             overlays.removeChild(exporting);
         }
         exporting = null;
+        exportCounts = null;
+        exportFill = null;
         exportLargeLabel = null;
         exportLarge = false;
+        exportTotal = -1;
+        exportProgress = null;
     }
 
     private void showExportNotice(Component text, boolean error) {
@@ -479,5 +555,8 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
             overlays.removeChild(exportNotice);
         }
         exportNotice = null;
+    }
+
+    private record ExportSnapshot(int token, ExportProgress progress) {
     }
 }

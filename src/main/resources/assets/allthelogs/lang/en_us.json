@@ -84,6 +84,8 @@
   "allthelogs.export.json": "JSON",
   "allthelogs.export.csv": "CSV",
   "allthelogs.export.exporting": "Exporting...",
+  "allthelogs.export.progress": "%s / %s (%s%%)",
+  "allthelogs.export.progress.loading": "Loading messages...",
   "allthelogs.export.large": "More than 10,000 messages. This may take a while.",
   "allthelogs.export.saved": "Saved %s",
   "allthelogs.export.failed": "Could not export",
