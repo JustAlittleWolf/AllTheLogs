@@ -131,6 +131,30 @@ class LogBrowserQueriesTest {
     }
 
     @Test
+    void aTailViewportReloadsSoReopenShowsMessagesThatArrivedLater() {
+        LocalDateTime time = LocalDateTime.of(2026, 8, 27, 10, 0, 0);
+        ListSnapshot tail = new ListSnapshot(List.of(row(time, 0)), true, false, 400, true, 1, false, 12);
+        ListSnapshot middle = new ListSnapshot(List.of(row(time, 0)), true, false, 40, false, 1, false, 12);
+        assertFalse(LogBrowserQueries.restoreSavedViewport(tail));
+        assertTrue(LogBrowserQueries.restoreSavedViewport(middle));
+        assertFalse(LogBrowserQueries.restoreSavedViewport(ListSnapshot.EMPTY));
+        assertFalse(LogBrowserQueries.restoreSavedViewport(null));
+        try {
+            LogBrowserQueries.rememberSession(tail, MatchSummary.empty());
+            LogBrowserQueries reopenedAtTail = new LogBrowserQueries();
+            reopenedAtTail.restoreSessionLocation();
+            assertTrue(reopenedAtTail.consumeReload());
+
+            LogBrowserQueries.rememberSession(middle, MatchSummary.empty());
+            LogBrowserQueries reopenedInPlace = new LogBrowserQueries();
+            reopenedInPlace.restoreSessionLocation();
+            assertFalse(reopenedInPlace.consumeReload());
+        } finally {
+            LogBrowserQueries.rememberSession(ListSnapshot.EMPTY, MatchSummary.empty());
+        }
+    }
+
+    @Test
     void keepViewportWhenTheListAlreadyHasAPlace() {
         assertFalse(LogBrowserQueries.keepViewport(null, true));
         assertFalse(LogBrowserQueries.keepViewport(LocalDateTime.of(2026, 8, 27, 10, 0), false));
