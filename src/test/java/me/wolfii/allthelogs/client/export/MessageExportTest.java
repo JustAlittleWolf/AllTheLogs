@@ -106,6 +106,38 @@ class MessageExportTest {
     }
 
     @Test
+    void saveStreamsEachMessageAndMatchesTheRenderedText() throws Exception {
+        long[] formatting = {PackedFormatting.run(0, 5, PackedFormatting.color(0xFF5555) | PackedFormatting.BOLD)};
+        List<MessageExport.Line> lines = new ArrayList<>();
+        lines.add(line(LocalDateTime.of(2026, 9, 26, 14, 3, 1), "Notch", "hypixel.net", "Hello there", formatting, true));
+        lines.add(null);
+        lines.add(line(LocalDateTime.of(2026, 9, 26, 14, 3, 2), null, null, "say \"hi\", friend\nnext", null, false));
+        LocalDateTime stamp = LocalDateTime.of(2026, 9, 26, 14, 3, 1);
+        for (MessageExport.Format format : MessageExport.Format.values()) {
+            List<ExportProgress> seen = new ArrayList<>();
+            Path file = MessageExport.save(temp, format, lines, stamp, seen::add);
+            assertEquals(MessageExport.render(format, lines), Files.readString(file), format.name());
+            assertEquals(3, seen.size(), format.name());
+            assertEquals(0, seen.getFirst().written());
+            assertEquals(2, seen.getFirst().total());
+            assertEquals(2, seen.getLast().written());
+            assertEquals(100, seen.getLast().percent());
+            for (int i = 1; i < seen.size(); i++) {
+                assertTrue(seen.get(i).written() >= seen.get(i - 1).written());
+            }
+        }
+    }
+
+    @Test
+    void exportProgressPercentTracksWrittenMessages() {
+        assertEquals(0, new ExportProgress(0, 0).percent());
+        assertEquals(0, new ExportProgress(0, 10).percent());
+        assertEquals(50, new ExportProgress(1, 2).percent());
+        assertEquals(100, new ExportProgress(2, 2).percent());
+        assertEquals(0, new ExportProgress(-1, -4).percent());
+    }
+
+    @Test
     void emptyExportsStayValidAndFilesLandWithoutColliding() throws Exception {
         assertEquals("", MessageExport.render(MessageExport.Format.TEXT, List.of()));
         assertEquals("[]\n", MessageExport.render(MessageExport.Format.JSON, List.of()));
