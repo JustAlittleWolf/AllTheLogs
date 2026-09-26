@@ -29,6 +29,24 @@ class ScrubberGeometryTest {
     }
 
     @Test
+    void thumbStaysAPixelOffEitherEndUntilTheViewportIsThere() {
+        int travel = 150;
+        assertEquals(1, ScrubberGeometry.reserveEndGap(0, 200, 50, false, false));
+        assertEquals(travel - 1, ScrubberGeometry.reserveEndGap(travel, 200, 50, false, false));
+        assertEquals(0, ScrubberGeometry.reserveEndGap(0, 200, 50, true, false));
+        assertEquals(travel, ScrubberGeometry.reserveEndGap(travel, 200, 50, false, true));
+        assertEquals(75, ScrubberGeometry.reserveEndGap(75, 200, 50, false, false));
+        assertEquals(travel - 1, ScrubberGeometry.reserveEndGap(
+            ScrubberGeometry.thumbOffset(200, 0.999, 50), 200, 50, false, false));
+        assertEquals(1, ScrubberGeometry.reserveEndGap(
+            ScrubberGeometry.thumbOffset(200, 0.001, 50), 200, 50, false, false));
+        assertEquals(travel, ScrubberGeometry.reserveEndGap(
+            ScrubberGeometry.thumbOffset(200, 1, 50), 200, 50, false, true));
+        assertEquals(0, ScrubberGeometry.reserveEndGap(0, 20, 19, false, false));
+        assertEquals(1, ScrubberGeometry.reserveEndGap(1, 20, 19, false, false));
+    }
+
+    @Test
     void thumbHeightShrinksAsOccupiedDaysGrowAndHidesWhenThePageFits() {
         int fewDays = ScrubberGeometry.thumbHeightForDays(200, 1, 800, 200);
         int someDays = ScrubberGeometry.thumbHeightForDays(200, 8, 800, 200);
