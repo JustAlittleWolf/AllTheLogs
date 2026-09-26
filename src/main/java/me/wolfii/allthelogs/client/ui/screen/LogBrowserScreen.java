@@ -43,6 +43,8 @@ import java.util.concurrent.TimeUnit;
  */
 public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     private static final int SEARCH_DEBOUNCE_MS = 250;
+    /** Above this many messages, the export shade warns that the write may take a while. */
+    private static final int LARGE_EXPORT = 10_000;
 
     private final Screen parent;
     private final LogBrowserQueries queries;
@@ -55,6 +57,8 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     private DropdownComponent messageMenu;
     private BrowserToolsMenu tools;
     private FlowLayout exporting;
+    private LabelComponent exportLargeLabel;
+    private boolean exportLarge;
     private FlowLayout exportNotice;
     private int exportToken;
     private int noticeToken;
@@ -341,7 +345,11 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
             }
         }
         exportBusy = true;
+        exportLarge = false;
         int token = ++exportToken;
+        long known = exportSize(scope);
+        if (known > LARGE_EXPORT) showLargeExportWarning();
+        else if (scope == BrowserToolsMenu.Scope.QUERY) countQueryForWarning(token);
         Set<DisplayRow.RowKey> selected = list.selectedKeys();
         CompletableFuture<List<MessageExport.Line>> lines = switch (scope) {
             case SELECTION -> CompletableFuture.completedFuture(MessageExport.fromRows(list.selectedRows(), selected));
@@ -376,7 +384,37 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
             showExportNotice(Component.translatable("allthelogs.export.failed"), true);
             return;
         }
-        showExportNotice(Component.translatable("allthelogs.export.saved", path.getFileName().toString()), false);
+        showExportNotice(Component.translatable("allthelogs.export.saved", path.toAbsolutePath().toString()), false);
+    }
+
+    /**
+     * Messages this export will write, or {@code -1} when a search-query total is not known yet.
+     */
+    private long exportSize(BrowserToolsMenu.Scope scope) {
+        return switch (scope) {
+            case SELECTION -> list.selectedRows().size();
+            case VISIBLE -> list.visibleRows().size();
+            case QUERY -> list.exactMatchCount() ? list.matchCount() : -1;
+        };
+    }
+
+    private void countQueryForWarning(int token) {
+        AllTheLogsClient.worker().countMatches(queries.filter().toSummaryQuery())
+            .whenComplete((count, error) -> Minecraft.getInstance().execute(() -> {
+                if (token != exportToken || error != null || count == null || count <= LARGE_EXPORT) return;
+                showLargeExportWarning();
+            }));
+    }
+
+    private void showLargeExportWarning() {
+        exportLarge = true;
+        if (exporting == null || exportLargeLabel != null) return;
+        exportLargeLabel = UIComponents.label(Component.translatable("allthelogs.export.large"));
+        exportLargeLabel.color(Color.ofRgb(0xE8D7A8));
+        exportLargeLabel.maxWidth(Math.max(160, this.width - 96));
+        if (!exporting.children().isEmpty() && exporting.children().getFirst() instanceof FlowLayout card) {
+            card.child(exportLargeLabel);
+        }
     }
 
     private void showExporting() {
@@ -395,6 +433,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         shade.child(card);
         overlays.child(shade);
         exporting = shade;
+        if (exportLarge) showLargeExportWarning();
     }
 
     private void hideExporting() {
@@ -402,6 +441,8 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
             overlays.removeChild(exporting);
         }
         exporting = null;
+        exportLargeLabel = null;
+        exportLarge = false;
     }
 
     private void showExportNotice(Component text, boolean error) {
@@ -410,19 +451,26 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         int token = ++noticeToken;
         FlowLayout notice = UIContainers.verticalFlow(Sizing.content(), Sizing.content());
         notice.padding(Insets.of(6, 6, 8, 8)).surface(PanelSurfaces.menu());
+        int maxInner = Math.max(120, this.width - 32);
         LabelComponent label = UIComponents.label(text);
+        label.maxWidth(maxInner);
         if (error) label.color(Color.ofRgb(0xE8A8A8));
         notice.child(label);
-        int width = Minecraft.getInstance().font.width(text) + 16;
-        int height = 22;
+        var font = Minecraft.getInstance().font;
+        List<FormattedCharSequence> lines = font.split(text, maxInner);
+        int textWidth = 0;
+        for (FormattedCharSequence line : lines) textWidth = Math.max(textWidth, font.width(line));
+        int width = Math.min(this.width - 8, Math.max(80, textWidth + 16));
+        int height = Math.max(22, lines.size() * font.lineHeight + 12);
         ButtonComponent anchor = tools.button();
         int x = Math.max(4, anchor.x() + anchor.width() - width);
         int y = Math.max(4, anchor.y() - height - 4);
         notice.positioning(Positioning.absolute(x, y));
-        notice.horizontalSizing(Sizing.fixed(Math.max(width, 80)));
+        notice.horizontalSizing(Sizing.fixed(width));
         overlays.child(notice);
         exportNotice = notice;
-        CompletableFuture.delayedExecutor(4, TimeUnit.SECONDS).execute(() ->
+        int holdSeconds = error ? 4 : 8;
+        CompletableFuture.delayedExecutor(holdSeconds, TimeUnit.SECONDS).execute(() ->
             Minecraft.getInstance().execute(() -> {
                 if (token == noticeToken) hideExportNotice();
             }));

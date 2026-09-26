@@ -27,16 +27,16 @@ import java.util.concurrent.Executors;
 /**
  * Writes chat lines to a downloads file. Log paths, archive entries, and session ids are left out.
  * <p>
- * Text is one message per line, each prefixed with a dated timestamp. JSON adds the user, server or
- * world, formatting as ranges into the message, whether the line is a search match, and whether that
- * whole message is part of the current selection. CSV keeps only the timestamp and the message.
+ * Text is one message per line, each prefixed with a dated timestamp. JSON is compact, one array, and
+ * adds the user, server or world, formatting as ranges into the message, whether the line is a search
+ * match, and whether that whole message is part of the current selection. CSV keeps only the timestamp
+ * and the message.
  * A selection exports each touched message in full, not the highlighted substring.
  */
 public final class MessageExport {
     private static final DateTimeFormatter DATED = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final DateTimeFormatter FILE_STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss");
     private static final Gson GSON = new GsonBuilder()
-        .setPrettyPrinting()
         .disableHtmlEscaping()
         .serializeNulls()
         .create();

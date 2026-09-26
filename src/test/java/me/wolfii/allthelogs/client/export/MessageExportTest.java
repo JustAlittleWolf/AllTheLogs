@@ -49,6 +49,7 @@ class MessageExportTest {
         assertFalse(json.contains("latest.log"));
         assertFalse(json.contains("26.2"));
         assertFalse(json.contains("log-user"));
+        assertFalse(json.contains("\n "));
         JsonArray rows = JsonParser.parseString(json).getAsJsonArray();
         assertEquals(2, rows.size());
         JsonObject first = rows.get(0).getAsJsonObject();
