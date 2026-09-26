@@ -31,8 +31,8 @@ class MessageExportTest {
             line(LocalDateTime.of(2026, 9, 26, 14, 3, 2, 123_000_000), "Notch", "hypixel.net", "café", null, true, true)
         ));
         assertEquals("""
-            2026-09-26 14:03:01 Hello
-            2026-09-26 14:03:02.123 café
+            [2026-09-26 14:03:01] Hello
+            [2026-09-26 14:03:02.123] café
             """, text);
         assertFalse(text.contains("Notch"));
         assertFalse(text.contains("hypixel"));
@@ -53,7 +53,7 @@ class MessageExportTest {
         JsonArray rows = JsonParser.parseString(json).getAsJsonArray();
         assertEquals(2, rows.size());
         JsonObject first = rows.get(0).getAsJsonObject();
-        assertEquals("2026-09-26 14:03:01", first.get("timestamp").getAsString());
+        assertEquals("2026-09-26T14:03:01", first.get("timestamp").getAsString());
         assertEquals("Notch", first.get("user").getAsString());
         assertEquals("hypixel.net", first.get("server").getAsString());
         assertEquals("Hello there", first.get("message").getAsString());
@@ -73,6 +73,7 @@ class MessageExportTest {
         assertFalse(range.get("obfuscated").getAsBoolean());
 
         JsonObject plain = rows.get(1).getAsJsonObject();
+        assertEquals("2026-09-26T14:03:02", plain.get("timestamp").getAsString());
         assertTrue(plain.get("user").isJsonNull());
         assertTrue(plain.get("server").isJsonNull());
         assertFalse(plain.get("match").getAsBoolean());
@@ -90,8 +91,8 @@ class MessageExportTest {
         ));
         assertEquals("""
             timestamp,message
-            2026-09-26 14:03:01,Hello
-            2026-09-26 14:03:02,"say ""hi"", friend
+            2026-09-26T14:03:01,Hello
+            2026-09-26T14:03:02,"say ""hi"", friend
             next"
             """, csv);
         assertFalse(csv.contains("Notch"));
@@ -117,7 +118,7 @@ class MessageExportTest {
         Path second = MessageExport.save(temp, MessageExport.Format.TEXT, List.of(), stamp);
         assertEquals("allthelogs-2026-09-26-14-03-01.txt", first.getFileName().toString());
         assertEquals("allthelogs-2026-09-26-14-03-01-2.txt", second.getFileName().toString());
-        assertEquals("2026-09-26 14:03:01 Hi\n", Files.readString(first));
+        assertEquals("[2026-09-26 14:03:01] Hi\n", Files.readString(first));
     }
 
     @Test

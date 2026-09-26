@@ -27,10 +27,10 @@ import java.util.concurrent.Executors;
 /**
  * Writes chat lines to a downloads file. Log paths, archive entries, and session ids are left out.
  * <p>
- * Text is one message per line, each prefixed with a dated timestamp. JSON is compact, one array, and
- * adds the user, server or world, formatting as ranges into the message, whether the line is a search
- * match, and whether that whole message is part of the current selection. CSV keeps only the timestamp
- * and the message.
+ * Text is one message per line. The date and time stay readable and share one pair of square brackets.
+ * JSON is a compact array and adds the user, server or world, formatting as ranges into the message,
+ * whether the line is a search match, and whether that whole message is part of the current selection.
+ * JSON and CSV timestamps are ISO-8601 local date-times. CSV keeps only the timestamp and the message.
  * A selection exports each touched message in full, not the highlighted substring.
  */
 public final class MessageExport {
@@ -151,11 +151,22 @@ public final class MessageExport {
         return present;
     }
 
-    static String timestamp(LocalDateTime time) {
+    /**
+     * Readable date and time for the text file, without brackets.
+     */
+    static String readableTimestamp(LocalDateTime time) {
         if (time == null) return "";
         String text = time.format(DATED);
         if (time.getNano() == 0) return text;
         return text + "." + String.format(Locale.ROOT, "%03d", time.getNano() / 1_000_000);
+    }
+
+    /**
+     * ISO-8601 local date-time for JSON and CSV, such as {@code 2026-09-26T14:03:02.123}.
+     */
+    static String isoTimestamp(LocalDateTime time) {
+        if (time == null) return "";
+        return time.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
     }
 
     private static Path uniqueFile(Path directory, Format format, LocalDateTime exportedAt) {
@@ -176,8 +187,7 @@ public final class MessageExport {
         for (int i = 0; i < lines.size(); i++) {
             if (i > 0) body.append('\n');
             ChatEntry entry = lines.get(i).entry();
-            body.append(timestamp(entry.timestamp()))
-                .append(' ')
+            body.append('[').append(readableTimestamp(entry.timestamp())).append("] ")
                 .append(message(entry));
         }
         return body.append('\n').toString();
@@ -188,7 +198,7 @@ public final class MessageExport {
         for (Line line : lines) {
             ChatEntry entry = line.entry();
             JsonObject object = new JsonObject();
-            object.addProperty("timestamp", timestamp(entry.timestamp()));
+            object.addProperty("timestamp", isoTimestamp(entry.timestamp()));
             addNullable(object, "user", entry.minecraftUser());
             addNullable(object, "server", entry.serverOrWorld());
             object.addProperty("message", message(entry));
@@ -206,7 +216,7 @@ public final class MessageExport {
         StringBuilder body = new StringBuilder("timestamp,message\n");
         for (Line line : lines) {
             ChatEntry entry = line.entry();
-            body.append(field(timestamp(entry.timestamp()))).append(',')
+            body.append(field(isoTimestamp(entry.timestamp()))).append(',')
                 .append(field(message(entry))).append('\n');
         }
         return body.toString();
