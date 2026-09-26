@@ -143,6 +143,17 @@ class MessageTimelineTest {
     }
 
     @Test
+    void theTailStaysPinnedOnlyWhenNothingFollowsTheLoadedPage() {
+        assertTrue(MessageTimeline.pinnedToEnd(200, 400, 200, false));
+        assertTrue(MessageTimeline.pinnedToEnd(199.6, 400, 200, false));
+        assertFalse(MessageTimeline.pinnedToEnd(199, 400, 200, false));
+        assertFalse(MessageTimeline.pinnedToEnd(200, 400, 200, true));
+        assertTrue(MessageTimeline.pinnedToEnd(0, 120, 200, false));
+        assertFalse(MessageTimeline.pinnedToEnd(0, 400, 200, false));
+        assertFalse(MessageTimeline.pinnedToEnd(0, 400, -1, false));
+    }
+
+    @Test
     void resizeKeepsTheBottomPinnedWhenTheViewportWasAtTheEnd() {
         assertFalse(MessageTimeline.pinToBottomOnResize(0, 400, -1));
         assertTrue(MessageTimeline.pinToBottomOnResize(200, 400, 200));

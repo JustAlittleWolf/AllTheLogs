@@ -853,9 +853,22 @@ public final class MessageTimeline extends BaseUIComponent {
         return !window.hasBefore() && scrollY <= 0.5;
     }
 
+    /**
+     * Whether the viewport is sitting on the latest loaded row. More matches after the buffer are still
+     * below this page, so that position should not follow messages captured later.
+     */
+    public boolean pinnedToEnd() {
+        return pinnedToEnd(scrollY, layout.contentHeight(), height, window.hasAfter());
+    }
+
+    static boolean pinnedToEnd(double scrollY, int contentHeight, int viewHeight, boolean hasAfter) {
+        if (hasAfter) return false;
+        int view = Math.max(0, viewHeight);
+        return scrollY >= Math.max(0, contentHeight - view) - 0.5;
+    }
+
     private boolean scrolledToEnd() {
-        if (window.hasAfter()) return false;
-        return scrollY >= Math.max(0, layout.contentHeight() - height) - 0.5;
+        return pinnedToEnd();
     }
 
     private void beginScrub(double localY) {
