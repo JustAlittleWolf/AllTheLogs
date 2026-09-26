@@ -59,12 +59,23 @@ final class LogBrowserQueries {
 
     /**
      * Restores the last closed viewport for this Minecraft run.
+     * <p>
+     * A list left on the latest row is not restored. Messages captured while the screen was closed would
+     * sit past that saved offset, so the next open reloads and starts at the new bottom.
      */
     void restoreSessionLocation() {
-        if (sessionSnapshot.isEmpty()) return;
+        if (!restoreSavedViewport(sessionSnapshot)) return;
         snapshot = sessionSnapshot;
         matchSummary = sessionMatchSummary;
         reloadPending = false;
+    }
+
+    /**
+     * A saved page is shown again only when the user had scrolled away from the latest messages.
+     * The tail is reloaded so a reopen lands on whatever arrived since the screen was closed.
+     */
+    static boolean restoreSavedViewport(ListSnapshot saved) {
+        return saved != null && !saved.isEmpty() && !saved.pinnedToEnd();
     }
 
     /**
@@ -72,8 +83,12 @@ final class LogBrowserQueries {
      */
     void rememberSessionLocation() {
         takeSnapshot();
-        sessionSnapshot = snapshot;
-        sessionMatchSummary = matchSummary;
+        rememberSession(snapshot, matchSummary);
+    }
+
+    static void rememberSession(ListSnapshot saved, MatchSummary summary) {
+        sessionSnapshot = saved == null ? ListSnapshot.EMPTY : saved;
+        sessionMatchSummary = summary == null ? MatchSummary.empty() : summary;
     }
 
     private static long elapsedMs(long startedAtNanos) {
@@ -117,6 +132,7 @@ final class LogBrowserQueries {
         refreshStats();
         if (reloadPending || snapshot.isEmpty()) return;
         list.restore(snapshot.rows(), snapshot.hasBefore(), snapshot.hasAfter(), snapshot.scrollY());
+        if (snapshot.pinnedToEnd()) list.scrollToEnd();
         list.setMatchSummary(matchSummary);
         list.showMatchCount(snapshot.matchCount(), snapshot.elapsedMs(), filter.isNarrowed());
         if (snapshot.exactMatchCount()) {
