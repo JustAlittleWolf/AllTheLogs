@@ -1,16 +1,17 @@
 package me.wolfii.allthelogs.client.search;
 
 import me.wolfii.allthelogs.client.ui.theme.Colors;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 
 /**
- * Uneditable {@code /pattern/} wrapping for the search box, plus an {@code i} flag when the search is
- * case insensitive.
+ * Visual {@code /pattern/} chrome for the search box. The slashes and the {@code i} flag are not part of
+ * the field value: the box holds only the pattern, and the chrome is drawn beside it.
  */
 public final class SearchDecorations {
+    /** Space between a decoration and the editable pattern, in pixels. */
+    public static final int GAP = 1;
+
     private SearchDecorations() {
     }
 
@@ -27,73 +28,31 @@ public final class SearchDecorations {
         return filter.caseSensitive() ? "/" : "/i";
     }
 
-    public static String wrap(SearchFilter filter, String text) {
-        String inner = text == null ? "" : text;
-        return prefix(filter) + inner + suffix(filter);
+    /**
+     * Colour of one decoration character. The slashes use the group colour; the {@code i} flag uses the
+     * anchor colour, matching the old in-text wrapping.
+     */
+    public static int decorationColor(String decoration, int index) {
+        if (decoration == null || index < 0 || index >= decoration.length()) return Colors.REGEX_GROUP;
+        if (index == 0) return Colors.REGEX_GROUP;
+        return Colors.REGEX_ANCHOR;
     }
 
-    public static String unwrap(SearchFilter filter, String shown) {
-        String value = shown == null ? "" : shown;
-        String prefix = prefix(filter);
-        String suffix = suffix(filter);
-        if (!prefix.isEmpty() && value.startsWith(prefix)) {
-            value = value.substring(prefix.length());
-        }
-        if (!suffix.isEmpty() && value.endsWith(suffix)) {
-            value = value.substring(0, value.length() - suffix.length());
-        }
-        return value;
-    }
-
-    public static int clampCursor(SearchFilter filter, String shown, int cursor) {
-        String prefix = prefix(filter);
-        String suffix = suffix(filter);
-        int min = prefix.length();
-        int max = Math.max(min, (shown == null ? 0 : shown.length()) - suffix.length());
-        return Math.clamp(cursor, min, max);
-    }
-
+    /**
+     * Colours the editable pattern. {@code visible} is the slice currently on screen, starting at
+     * {@code start} in the full value.
+     */
     public static FormattedCharSequence format(SearchFilter filter, String visible, int start) {
         if (visible == null || visible.isEmpty()) return FormattedCharSequence.EMPTY;
-        if (!wraps(filter)) {
-            int color = Colors.SEARCH_TEXT;
-            return FormattedCharSequence.forward(visible, Style.EMPTY.withColor(color & 0xFFFFFF));
-        }
-        String inner = filter.text();
-        int prefixLen = prefix(filter).length();
-        int innerEnd = prefixLen + inner.length();
-        MutableComponent result = Component.empty();
-        int runStart = 0;
-        int runColor = colorAt(start, prefixLen, innerEnd, filter);
-        for (int i = 1; i <= visible.length(); i++) {
-            int color = i < visible.length()
-                ? colorAt(start + i, prefixLen, innerEnd, filter)
-                : runColor ^ 1;
-            if (color != runColor) {
-                result.append(slice(filter, visible, start, runStart, i, prefixLen, innerEnd, runColor));
-                runStart = i;
-                runColor = color;
+        if (filter != null && filter.regex() && filter.hasText() && !filter.invalidRegex()) {
+            String pattern = filter.text();
+            int from = Math.max(0, Math.min(start, pattern.length()));
+            int to = Math.min(pattern.length(), from + visible.length());
+            if (from < to) {
+                return RegexHighlight.highlight(pattern.substring(from, to)).getVisualOrderText();
             }
         }
-        return result.getVisualOrderText();
-    }
-
-    private static Component slice(SearchFilter filter, String visible, int start, int from, int to,
-                                   int prefixLen, int innerEnd, int color) {
-        String piece = visible.substring(from, to);
-        int abs = start + from;
-        if (abs >= prefixLen && abs < innerEnd && !filter.invalidRegex()) {
-            int innerFrom = Math.max(0, abs - prefixLen);
-            return RegexHighlight.highlight(filter.text().substring(innerFrom, innerFrom + piece.length()));
-        }
-        return Component.literal(piece).withStyle(Style.EMPTY.withColor(color & 0xFFFFFF));
-    }
-
-    private static int colorAt(int index, int prefixLen, int innerEnd, SearchFilter filter) {
-        if (index < prefixLen) return Colors.REGEX_GROUP;
-        if (index >= innerEnd) {
-            return index == innerEnd ? Colors.REGEX_GROUP : Colors.REGEX_ANCHOR;
-        }
-        return filter.invalidRegex() ? Colors.SEARCH_INVALID : Colors.SEARCH_TEXT;
+        int color = filter != null && filter.invalidRegex() ? Colors.SEARCH_INVALID : Colors.SEARCH_TEXT;
+        return FormattedCharSequence.forward(visible, Style.EMPTY.withColor(color & 0xFFFFFF));
     }
 }
