@@ -19,7 +19,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -29,7 +28,7 @@ import java.util.concurrent.Executors;
  * <p>
  * Text is one message per line. The date and time stay readable and share one pair of square brackets.
  * JSON is a compact array and adds the user, server or world, formatting as ranges into the message,
- * whether the line is a search match, and whether that whole message is part of the current selection.
+ * and whether the line is a search match.
  * JSON and CSV timestamps are ISO-8601 local date-times. CSV keeps only the timestamp and the message.
  * A selection exports each touched message in full, not the highlighted substring.
  */
@@ -63,10 +62,9 @@ public final class MessageExport {
 
     /**
      * One exported message. {@code match} is false for a context line around a search hit.
-     * {@code selected} is true when the current selection covers this message; the file still contains
-     * the whole message.
+     * The file contains the whole message.
      */
-    public record Line(ChatEntry entry, boolean match, boolean selected) {
+    public record Line(ChatEntry entry, boolean match) {
     }
 
     /**
@@ -92,32 +90,27 @@ public final class MessageExport {
     }
 
     /**
-     * Loaded rows already limited to the export scope. A row is marked selected when its key is in
-     * {@code selectedKeys}.
+     * Loaded rows already limited to the export scope.
      */
-    public static List<Line> fromRows(List<DisplayRow> rows, Set<DisplayRow.RowKey> selectedKeys) {
+    public static List<Line> fromRows(List<DisplayRow> rows) {
         if (rows == null || rows.isEmpty()) return List.of();
-        Set<DisplayRow.RowKey> keys = selectedKeys == null ? Set.of() : selectedKeys;
         List<Line> lines = new ArrayList<>(rows.size());
         for (DisplayRow row : rows) {
             if (row == null) continue;
-            lines.add(new Line(row.entry(), row.match(), keys.contains(row.key())));
+            lines.add(new Line(row.entry(), row.match()));
         }
         return List.copyOf(lines);
     }
 
     /**
-     * Search-query hits. Every line is a match; one is selected only when a loaded row with the same
-     * source and line is in the current selection.
+     * Search-query hits. Every line is a match.
      */
-    public static List<Line> fromQuery(List<ChatEntry> entries, Set<DisplayRow.RowKey> selectedKeys) {
+    public static List<Line> fromQuery(List<ChatEntry> entries) {
         if (entries == null || entries.isEmpty()) return List.of();
-        Set<DisplayRow.RowKey> keys = selectedKeys == null ? Set.of() : selectedKeys;
         List<Line> lines = new ArrayList<>(entries.size());
         for (ChatEntry entry : entries) {
             if (entry == null) continue;
-            DisplayRow.RowKey key = new DisplayRow.RowKey(entry.chatLog().source(), entry.lineIndex());
-            lines.add(new Line(entry, true, keys.contains(key)));
+            lines.add(new Line(entry, true));
         }
         return List.copyOf(lines);
     }
@@ -203,7 +196,6 @@ public final class MessageExport {
             addNullable(object, "server", entry.serverOrWorld());
             object.addProperty("message", message(entry));
             object.addProperty("match", line.match());
-            object.addProperty("selected", line.selected());
             JsonArray formatting = formatting(entry.formatting());
             if (formatting != null) object.add("formatting", formatting);
             array.add(object);

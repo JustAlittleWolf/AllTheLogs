@@ -34,7 +34,6 @@ import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -350,12 +349,11 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         long known = exportSize(scope);
         if (known > LARGE_EXPORT) showLargeExportWarning();
         else if (scope == BrowserToolsMenu.Scope.QUERY) countQueryForWarning(token);
-        Set<DisplayRow.RowKey> selected = list.selectedKeys();
         CompletableFuture<List<MessageExport.Line>> lines = switch (scope) {
-            case SELECTION -> CompletableFuture.completedFuture(MessageExport.fromRows(list.selectedRows(), selected));
-            case VISIBLE -> CompletableFuture.completedFuture(MessageExport.fromRows(list.visibleRows(), selected));
+            case SELECTION -> CompletableFuture.completedFuture(MessageExport.fromRows(list.selectedRows()));
+            case VISIBLE -> CompletableFuture.completedFuture(MessageExport.fromRows(list.visibleRows()));
             case QUERY -> AllTheLogsClient.worker().findEntries(queries.filter().toSummaryQuery())
-                .thenApply(entries -> MessageExport.fromQuery(entries, selected));
+                .thenApply(MessageExport::fromQuery);
         };
         CompletableFuture.delayedExecutor(100, TimeUnit.MILLISECONDS).execute(() ->
             Minecraft.getInstance().execute(() -> {

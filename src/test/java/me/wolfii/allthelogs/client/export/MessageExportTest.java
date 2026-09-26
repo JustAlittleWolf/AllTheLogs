@@ -16,7 +16,6 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -27,8 +26,8 @@ class MessageExportTest {
     @Test
     void textIsOneDatedLinePerMessageAndNothingElse() {
         String text = MessageExport.render(MessageExport.Format.TEXT, List.of(
-            line(LocalDateTime.of(2026, 9, 26, 14, 3, 1), "Notch", "hypixel.net", "Hello", null, true, false),
-            line(LocalDateTime.of(2026, 9, 26, 14, 3, 2, 123_000_000), "Notch", "hypixel.net", "café", null, true, true)
+            line(LocalDateTime.of(2026, 9, 26, 14, 3, 1), "Notch", "hypixel.net", "Hello", null, true),
+            line(LocalDateTime.of(2026, 9, 26, 14, 3, 2, 123_000_000), "Notch", "hypixel.net", "café", null, true)
         ));
         assertEquals("""
             [2026-09-26 14:03:01] Hello
@@ -43,8 +42,8 @@ class MessageExportTest {
     void jsonKeepsUserServerMessageFormattingAndMatchFlags() {
         long[] formatting = {PackedFormatting.run(0, 5, PackedFormatting.color(0xFF5555) | PackedFormatting.BOLD)};
         String json = MessageExport.render(MessageExport.Format.JSON, List.of(
-            line(LocalDateTime.of(2026, 9, 26, 14, 3, 1), "Notch", "hypixel.net", "Hello there", formatting, true, true),
-            line(LocalDateTime.of(2026, 9, 26, 14, 3, 2), null, null, "plain", null, false, false)
+            line(LocalDateTime.of(2026, 9, 26, 14, 3, 1), "Notch", "hypixel.net", "Hello there", formatting, true),
+            line(LocalDateTime.of(2026, 9, 26, 14, 3, 2), null, null, "plain", null, false)
         ));
         assertFalse(json.contains("latest.log"));
         assertFalse(json.contains("26.2"));
@@ -58,7 +57,7 @@ class MessageExportTest {
         assertEquals("hypixel.net", first.get("server").getAsString());
         assertEquals("Hello there", first.get("message").getAsString());
         assertTrue(first.get("match").getAsBoolean());
-        assertTrue(first.get("selected").getAsBoolean());
+        assertFalse(first.has("selected"));
         assertFalse(first.has("selection"));
         JsonArray ranges = first.getAsJsonArray("formatting");
         assertEquals(1, ranges.size());
@@ -77,7 +76,7 @@ class MessageExportTest {
         assertTrue(plain.get("user").isJsonNull());
         assertTrue(plain.get("server").isJsonNull());
         assertFalse(plain.get("match").getAsBoolean());
-        assertFalse(plain.get("selected").getAsBoolean());
+        assertFalse(plain.has("selected"));
         assertFalse(plain.has("formatting"));
         assertFalse(plain.has("selection"));
     }
@@ -86,8 +85,8 @@ class MessageExportTest {
     void csvKeepsTimestampAndMessageOnly() {
         long[] formatting = {PackedFormatting.run(0, 5, PackedFormatting.color(0xFF5555) | PackedFormatting.BOLD)};
         String csv = MessageExport.render(MessageExport.Format.CSV, List.of(
-            line(LocalDateTime.of(2026, 9, 26, 14, 3, 1), "Notch", "hypixel.net", "Hello", formatting, true, true),
-            line(LocalDateTime.of(2026, 9, 26, 14, 3, 2), "Alex", "world/hi", "say \"hi\", friend\nnext", null, false, false)
+            line(LocalDateTime.of(2026, 9, 26, 14, 3, 1), "Notch", "hypixel.net", "Hello", formatting, true),
+            line(LocalDateTime.of(2026, 9, 26, 14, 3, 2), "Alex", "world/hi", "say \"hi\", friend\nnext", null, false)
         ));
         assertEquals("""
             timestamp,message
@@ -114,7 +113,7 @@ class MessageExportTest {
 
         LocalDateTime stamp = LocalDateTime.of(2026, 9, 26, 14, 3, 1);
         Path first = MessageExport.save(temp, MessageExport.Format.TEXT, List.of(
-            line(stamp, null, null, "Hi", null, true, false)), stamp);
+            line(stamp, null, null, "Hi", null, true)), stamp);
         Path second = MessageExport.save(temp, MessageExport.Format.TEXT, List.of(), stamp);
         assertEquals("allthelogs-2026-09-26-14-03-01.txt", first.getFileName().toString());
         assertEquals("allthelogs-2026-09-26-14-03-01-2.txt", second.getFileName().toString());
@@ -122,40 +121,35 @@ class MessageExportTest {
     }
 
     @Test
-    void loadedRowsCarryMatchAndSelectionWithoutClippingTheMessage() {
+    void loadedRowsCarryMatchWithoutClippingTheMessage() {
         DisplayRow match = row("Hello there", 4, true);
         DisplayRow context = row("around", 5, false);
-        List<MessageExport.Line> lines = MessageExport.fromRows(List.of(match, context), Set.of(match.key()));
+        List<MessageExport.Line> lines = MessageExport.fromRows(List.of(match, context));
         assertEquals(2, lines.size());
         assertEquals("Hello there", lines.get(0).entry().message());
         assertTrue(lines.get(0).match());
-        assertTrue(lines.get(0).selected());
         assertEquals("around", lines.get(1).entry().message());
         assertFalse(lines.get(1).match());
-        assertFalse(lines.get(1).selected());
     }
 
     @Test
-    void queryLinesAreMatchesAndSelectedOnlyForTheLoadedSelection() {
+    void queryLinesAreMatches() {
         ChatEntry hit = entry(LocalDateTime.of(2026, 9, 26, 14, 3, 1), null, null, "Hello there", null, 4);
         ChatEntry other = entry(LocalDateTime.of(2026, 9, 26, 14, 3, 2), null, null, "other", null, 9);
-        DisplayRow.RowKey selected = new DisplayRow.RowKey(hit.chatLog().source(), hit.lineIndex());
         List<ChatEntry> entries = new ArrayList<>();
         entries.add(hit);
         entries.add(other);
         entries.add(null);
-        List<MessageExport.Line> lines = MessageExport.fromQuery(entries, Set.of(selected));
+        List<MessageExport.Line> lines = MessageExport.fromQuery(entries);
         assertEquals(2, lines.size());
         assertEquals("Hello there", lines.get(0).entry().message());
         assertTrue(lines.get(0).match());
-        assertTrue(lines.get(0).selected());
         assertTrue(lines.get(1).match());
-        assertFalse(lines.get(1).selected());
     }
 
     private static MessageExport.Line line(LocalDateTime time, String user, String server, String message,
-                                           long[] formatting, boolean match, boolean selected) {
-        return new MessageExport.Line(entry(time, user, server, message, formatting, 4), match, selected);
+                                           long[] formatting, boolean match) {
+        return new MessageExport.Line(entry(time, user, server, message, formatting, 4), match);
     }
 
     private static DisplayRow row(String message, int line, boolean match) {
