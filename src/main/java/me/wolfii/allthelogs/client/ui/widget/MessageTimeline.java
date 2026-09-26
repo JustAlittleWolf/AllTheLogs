@@ -25,7 +25,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -248,13 +247,6 @@ public final class MessageTimeline extends BaseUIComponent {
      */
     public List<DisplayRow> selectedRows() {
         return selection.selectedRows(window.rows());
-    }
-
-    /**
-     * Keys of the rows touched by the current selection.
-     */
-    public Set<DisplayRow.RowKey> selectedKeys() {
-        return selection.selectedKeys(window.rows());
     }
 
     /**

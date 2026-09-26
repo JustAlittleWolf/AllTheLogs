@@ -9,6 +9,7 @@ import me.wolfii.allthelogs.client.list.DisplayRow;
 import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.parse.PackedFormatting;
 
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -19,24 +20,26 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 
 /**
  * Writes chat lines to a downloads file. Log paths, archive entries, and session ids are left out.
  * <p>
- * Text is one message per line, each prefixed with a dated timestamp. JSON adds the user, server or
- * world, formatting as ranges into the message, whether the line is a search match, and whether that
- * whole message is part of the current selection. CSV keeps only the timestamp and the message.
+ * Each message is formatted and appended to the file on its own. The whole document is never built in memory.
+ * JSON entries are still individual Gson objects, written into a compact array one at a time.
+ * <p>
+ * Text is one message per line. The date and time stay readable and share one pair of square brackets.
+ * JSON adds the user, server or world, formatting as ranges into the message, and whether the line is a search match.
+ * JSON and CSV timestamps are ISO-8601 local date-times. CSV keeps only the timestamp and the message.
  * A selection exports each touched message in full, not the highlighted substring.
  */
 public final class MessageExport {
     private static final DateTimeFormatter DATED = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final DateTimeFormatter FILE_STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss");
     private static final Gson GSON = new GsonBuilder()
-        .setPrettyPrinting()
         .disableHtmlEscaping()
         .serializeNulls()
         .create();
@@ -63,10 +66,9 @@ public final class MessageExport {
 
     /**
      * One exported message. {@code match} is false for a context line around a search hit.
-     * {@code selected} is true when the current selection covers this message; the file still contains
-     * the whole message.
+     * The file contains the whole message.
      */
-    public record Line(ChatEntry entry, boolean match, boolean selected) {
+    public record Line(ChatEntry entry, boolean match) {
     }
 
     /**
@@ -88,45 +90,55 @@ public final class MessageExport {
     }
 
     public static Path save(Format format, List<Line> lines) {
-        return save(DownloadFolder.resolve(), format, lines, LocalDateTime.now());
+        return save(format, lines, null);
     }
 
     /**
-     * Loaded rows already limited to the export scope. A row is marked selected when its key is in
-     * {@code selectedKeys}.
+     * Writes {@code lines} straight to a new file. {@code progress} is notified as each message is appended,
+     * starting at zero written. It may be null. It runs on the caller thread.
      */
-    public static List<Line> fromRows(List<DisplayRow> rows, Set<DisplayRow.RowKey> selectedKeys) {
+    public static Path save(Format format, List<Line> lines, Consumer<ExportProgress> progress) {
+        return save(DownloadFolder.resolve(), format, lines, LocalDateTime.now(), progress);
+    }
+
+    /**
+     * Loaded rows already limited to the export scope.
+     */
+    public static List<Line> fromRows(List<DisplayRow> rows) {
         if (rows == null || rows.isEmpty()) return List.of();
-        Set<DisplayRow.RowKey> keys = selectedKeys == null ? Set.of() : selectedKeys;
         List<Line> lines = new ArrayList<>(rows.size());
         for (DisplayRow row : rows) {
             if (row == null) continue;
-            lines.add(new Line(row.entry(), row.match(), keys.contains(row.key())));
+            lines.add(new Line(row.entry(), row.match()));
         }
         return List.copyOf(lines);
     }
 
     /**
-     * Search-query hits. Every line is a match; one is selected only when a loaded row with the same
-     * source and line is in the current selection.
+     * Search-query hits. Every line is a match.
      */
-    public static List<Line> fromQuery(List<ChatEntry> entries, Set<DisplayRow.RowKey> selectedKeys) {
+    public static List<Line> fromQuery(List<ChatEntry> entries) {
         if (entries == null || entries.isEmpty()) return List.of();
-        Set<DisplayRow.RowKey> keys = selectedKeys == null ? Set.of() : selectedKeys;
         List<Line> lines = new ArrayList<>(entries.size());
         for (ChatEntry entry : entries) {
             if (entry == null) continue;
-            DisplayRow.RowKey key = new DisplayRow.RowKey(entry.chatLog().source(), entry.lineIndex());
-            lines.add(new Line(entry, true, keys.contains(key)));
+            lines.add(new Line(entry, true));
         }
         return List.copyOf(lines);
     }
 
     static Path save(Path directory, Format format, List<Line> lines, LocalDateTime exportedAt) {
+        return save(directory, format, lines, exportedAt, null);
+    }
+
+    static Path save(Path directory, Format format, List<Line> lines, LocalDateTime exportedAt,
+                     Consumer<ExportProgress> progress) {
         try {
             Files.createDirectories(directory);
             Path file = uniqueFile(directory, format, exportedAt);
-            Files.writeString(file, render(format, lines), StandardCharsets.UTF_8);
+            try (BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
+                write(format, lines, writer, progress);
+            }
             return file;
         } catch (IOException error) {
             throw new UncheckedIOException(error);
@@ -134,12 +146,29 @@ public final class MessageExport {
     }
 
     static String render(Format format, List<Line> lines) {
+        StringBuilder body = new StringBuilder();
+        try {
+            write(format, lines, body, null);
+        } catch (IOException error) {
+            throw new UncheckedIOException(error);
+        }
+        return body.toString();
+    }
+
+    private static void write(Format format, List<Line> lines, Appendable out, Consumer<ExportProgress> progress)
+        throws IOException {
         List<Line> present = present(lines);
-        return switch (format) {
-            case TEXT -> text(present);
-            case JSON -> json(present);
-            case CSV -> csv(present);
-        };
+        int total = present.size();
+        report(progress, 0, total);
+        switch (format) {
+            case TEXT -> writeText(present, out, progress);
+            case JSON -> writeJson(present, out, progress);
+            case CSV -> writeCsv(present, out, progress);
+        }
+    }
+
+    private static void report(Consumer<ExportProgress> progress, int written, int total) {
+        if (progress != null) progress.accept(new ExportProgress(written, total));
     }
 
     private static List<Line> present(List<Line> lines) {
@@ -151,11 +180,22 @@ public final class MessageExport {
         return present;
     }
 
-    static String timestamp(LocalDateTime time) {
+    /**
+     * Readable date and time for the text file, without brackets.
+     */
+    static String readableTimestamp(LocalDateTime time) {
         if (time == null) return "";
         String text = time.format(DATED);
         if (time.getNano() == 0) return text;
         return text + "." + String.format(Locale.ROOT, "%03d", time.getNano() / 1_000_000);
+    }
+
+    /**
+     * ISO-8601 local date-time for JSON and CSV, such as {@code 2026-09-26T14:03:02.123}.
+     */
+    static String isoTimestamp(LocalDateTime time) {
+        if (time == null) return "";
+        return time.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
     }
 
     private static Path uniqueFile(Path directory, Format format, LocalDateTime exportedAt) {
@@ -170,46 +210,55 @@ public final class MessageExport {
         return candidate;
     }
 
-    private static String text(List<Line> lines) {
-        if (lines.isEmpty()) return "";
-        StringBuilder body = new StringBuilder();
+    private static void writeText(List<Line> lines, Appendable out, Consumer<ExportProgress> progress)
+        throws IOException {
         for (int i = 0; i < lines.size(); i++) {
-            if (i > 0) body.append('\n');
+            if (i > 0) out.append('\n');
             ChatEntry entry = lines.get(i).entry();
-            body.append(timestamp(entry.timestamp()))
-                .append(' ')
+            out.append('[').append(readableTimestamp(entry.timestamp())).append("] ")
                 .append(message(entry));
+            report(progress, i + 1, lines.size());
         }
-        return body.append('\n').toString();
+        if (!lines.isEmpty()) out.append('\n');
     }
 
-    private static String json(List<Line> lines) {
-        JsonArray array = new JsonArray();
-        for (Line line : lines) {
-            ChatEntry entry = line.entry();
-            JsonObject object = new JsonObject();
-            object.addProperty("timestamp", timestamp(entry.timestamp()));
-            addNullable(object, "user", entry.minecraftUser());
-            addNullable(object, "server", entry.serverOrWorld());
-            object.addProperty("message", message(entry));
-            object.addProperty("match", line.match());
-            object.addProperty("selected", line.selected());
-            JsonArray formatting = formatting(entry.formatting());
-            if (formatting != null) object.add("formatting", formatting);
-            array.add(object);
+    private static void writeJson(List<Line> lines, Appendable out, Consumer<ExportProgress> progress)
+        throws IOException {
+        if (lines.isEmpty()) {
+            out.append("[]\n");
+            return;
         }
-        String rendered = GSON.toJson(array);
-        return rendered.endsWith("\n") ? rendered : rendered + "\n";
+        out.append('[');
+        for (int i = 0; i < lines.size(); i++) {
+            if (i > 0) out.append(',');
+            out.append(GSON.toJson(jsonObject(lines.get(i))));
+            report(progress, i + 1, lines.size());
+        }
+        out.append("]\n");
     }
 
-    private static String csv(List<Line> lines) {
-        StringBuilder body = new StringBuilder("timestamp,message\n");
-        for (Line line : lines) {
-            ChatEntry entry = line.entry();
-            body.append(field(timestamp(entry.timestamp()))).append(',')
+    private static JsonObject jsonObject(Line line) {
+        ChatEntry entry = line.entry();
+        JsonObject object = new JsonObject();
+        object.addProperty("timestamp", isoTimestamp(entry.timestamp()));
+        addNullable(object, "user", entry.minecraftUser());
+        addNullable(object, "server", entry.serverOrWorld());
+        object.addProperty("message", message(entry));
+        object.addProperty("match", line.match());
+        JsonArray formatting = formatting(entry.formatting());
+        if (formatting != null) object.add("formatting", formatting);
+        return object;
+    }
+
+    private static void writeCsv(List<Line> lines, Appendable out, Consumer<ExportProgress> progress)
+        throws IOException {
+        out.append("timestamp,message\n");
+        for (int i = 0; i < lines.size(); i++) {
+            ChatEntry entry = lines.get(i).entry();
+            out.append(field(isoTimestamp(entry.timestamp()))).append(',')
                 .append(field(message(entry))).append('\n');
+            report(progress, i + 1, lines.size());
         }
-        return body.toString();
     }
 
     private static void addNullable(JsonObject object, String key, String value) {

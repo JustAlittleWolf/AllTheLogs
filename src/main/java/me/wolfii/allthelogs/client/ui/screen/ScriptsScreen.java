@@ -28,6 +28,7 @@ import me.wolfii.allthelogs.client.script.ScriptRuntime;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
@@ -123,6 +124,14 @@ public final class ScriptsScreen extends BaseOwoScreen<FlowLayout> {
                 run.active(ScriptRuntime.isReady() && selected != null && !running);
             }
         }
+    }
+
+    @Override
+    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+        if (this.minecraft == null || this.minecraft.level != null) {
+            return;
+        }
+        this.extractPanorama(graphics, delta);
     }
 
     @Override
