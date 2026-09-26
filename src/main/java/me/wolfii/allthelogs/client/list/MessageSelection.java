@@ -1,7 +1,12 @@
 package me.wolfii.allthelogs.client.list;
 
+import me.wolfii.allthelogs.data.ChatEntry;
+
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Inclusive-start exclusive-end character range of selected message text, spanning one or more displayed rows.
@@ -155,6 +160,61 @@ public final class MessageSelection {
         if (startRow == endRow && startChar == endChar) {
             clear();
         }
+    }
+
+    /**
+     * Rows that contain at least one selected character, from top to bottom.
+     * A partial selection still counts the whole row.
+     */
+    public List<DisplayRow> selectedRows(List<DisplayRow> rows) {
+        if (empty || rows == null || rows.isEmpty()) return List.of();
+        int fromRow = Math.min(startRow, endRow);
+        int toRow = Math.max(startRow, endRow);
+        int fromChar = startRow <= endRow ? startChar : endChar;
+        int toChar = startRow <= endRow ? endChar : startChar;
+        if (fromRow >= rows.size() || toRow < 0) return List.of();
+        fromRow = Math.max(0, fromRow);
+        toRow = Math.min(rows.size() - 1, toRow);
+        boolean singleRow = Math.min(startRow, endRow) == Math.max(startRow, endRow);
+        List<DisplayRow> selected = new ArrayList<>();
+        for (int row = fromRow; row <= toRow; row++) {
+            int length = rows.get(row).message().length();
+            boolean include;
+            if (singleRow) {
+                include = Math.min(fromChar, toChar) != Math.max(fromChar, toChar);
+            } else if (row == fromRow) {
+                include = fromChar < length;
+            } else if (row == toRow) {
+                include = toChar > 0;
+            } else {
+                include = true;
+            }
+            if (include) selected.add(rows.get(row));
+        }
+        return List.copyOf(selected);
+    }
+
+    /**
+     * Stored messages for every row that contains at least one selected character, from top to bottom.
+     * A partial selection still exports the whole message.
+     */
+    public List<ChatEntry> selectedEntries(List<DisplayRow> rows) {
+        List<DisplayRow> selected = selectedRows(rows);
+        if (selected.isEmpty()) return List.of();
+        List<ChatEntry> entries = new ArrayList<>(selected.size());
+        for (DisplayRow row : selected) entries.add(row.entry());
+        return List.copyOf(entries);
+    }
+
+    /**
+     * Keys of the rows that contain at least one selected character.
+     */
+    public Set<DisplayRow.RowKey> selectedKeys(List<DisplayRow> rows) {
+        List<DisplayRow> selected = selectedRows(rows);
+        if (selected.isEmpty()) return Set.of();
+        Set<DisplayRow.RowKey> keys = new HashSet<>();
+        for (DisplayRow row : selected) keys.add(row.key());
+        return Set.copyOf(keys);
     }
 
     public String copy(List<DisplayRow> rows) {

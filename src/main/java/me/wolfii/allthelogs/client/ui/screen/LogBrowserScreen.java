@@ -4,14 +4,18 @@ import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.DropdownComponent;
+import io.wispforest.owo.ui.component.LabelComponent;
 import io.wispforest.owo.ui.component.TextBoxComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.*;
+import me.wolfii.allthelogs.client.AllTheLogsClient;
+import me.wolfii.allthelogs.client.AllTheLogsScreens;
 import me.wolfii.allthelogs.client.config.AllTheLogsConfig;
 import me.wolfii.allthelogs.client.config.BrowserSession;
+import me.wolfii.allthelogs.client.export.MessageExport;
 import me.wolfii.allthelogs.client.list.DisplayRow;
 import me.wolfii.allthelogs.client.list.MessageSelection;
 import me.wolfii.allthelogs.client.search.SearchDecorations;
@@ -28,7 +32,9 @@ import net.minecraft.util.FormattedCharSequence;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -47,6 +53,12 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     private FilterOverlay filters;
     private StackLayout overlays;
     private DropdownComponent messageMenu;
+    private BrowserToolsMenu tools;
+    private FlowLayout exporting;
+    private FlowLayout exportNotice;
+    private int exportToken;
+    private int noticeToken;
+    private boolean exportBusy;
 
     public LogBrowserScreen() {
         this(null);
@@ -67,6 +79,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     @Override
     protected void build(StackLayout root) {
         this.overlays = root;
+        root.allowOverflow(true);
         FlowLayout chrome = UIContainers.horizontalFlow(Sizing.fill(), Sizing.fill());
         chrome.gap(2);
         chrome.padding(Insets.none());
@@ -83,6 +96,9 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         list.setMessageFontSize(AllTheLogsConfig.get().messageFontSize());
         list.onContextMenu(this::openMessageMenu);
         list.onDismissContextMenu(this::closeMessageMenu);
+        tools = new BrowserToolsMenu(overlays, () -> this.width, () -> this.height,
+            () -> list.hasSelectedText(), () -> exportBusy, this::closeMessageMenu,
+            this::openScripts, this::openImport, this::startExport);
         FlowLayout toolbar = buildToolbar();
         queries.attach(list, infoButton);
         content.child(list.verticalSizing(Sizing.expand()));
@@ -115,6 +131,9 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+        if (tools != null && overlays != null) {
+            overlays.queue(() -> tools.sync(mouseX, mouseY));
+        }
         super.extractRenderState(graphics, mouseX, mouseY, delta);
         if (list != null && list.verticalCursor()) {
             graphics.requestCursor(CursorTypes.RESIZE_NS);
@@ -138,6 +157,10 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
+        if (event.isEscape() && tools != null && tools.isOpen()) {
+            tools.close();
+            return true;
+        }
         if (event.isSelectAll() && list != null && !searchHasFocus() && !filterOwnsFocus()) {
             return list.selectAllOnVisibleDate();
         }
@@ -172,19 +195,13 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
                 filters.toggle();
                 refreshSearchDecorations();
             }));
-        if (!AllTheLogsConfig.get().hideImportButton()) {
-            bar.child(UIComponents.button(Component.translatable("allthelogs.import.button"),
-                button -> {
-                    queries.markReload();
-                    Minecraft.getInstance().gui.setScreen(new ImportScreen(this));
-                }));
-        }
 
         infoButton = UIComponents.button(Component.translatable("allthelogs.meta.marker"), button -> {
         });
         infoButton.tooltip(List.of(Component.translatable("allthelogs.meta.loading")));
         infoButton.horizontalSizing(Sizing.fixed(20));
         bar.child(infoButton);
+        bar.child(tools.button());
         return bar;
     }
 
@@ -285,6 +302,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
 
     private void openMessageMenu(DisplayRow row, MessageSelection selection, List<DisplayRow> rows,
                                  double screenX, double screenY) {
+        if (tools != null) tools.close();
         closeMessageMenu();
         messageMenu = DropdownComponent.openContextMenu(this, overlays, StackLayout::child, screenX, screenY, menu -> {
             if (!selection.isEmpty()) {
@@ -308,5 +326,127 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
                 });
             }
         });
+    }
+
+    private void openScripts() {
+        AllTheLogsScreens.openScripts(this);
+    }
+
+    private void openImport() {
+        queries.markReload();
+        Minecraft.getInstance().gui.setScreen(new ImportScreen(this));
+    }
+
+    private void startExport(BrowserToolsMenu.Scope scope, MessageExport.Format format) {
+        if (overlays != null) {
+            overlays.queue(() -> performExport(scope, format));
+            return;
+        }
+        performExport(scope, format);
+    }
+
+    private void performExport(BrowserToolsMenu.Scope scope, MessageExport.Format format) {
+        tools.close();
+        hideExportNotice();
+        if (scope == BrowserToolsMenu.Scope.QUERY) {
+            Component blocked = queryBlockedReason();
+            if (blocked != null) {
+                showExportNotice(blocked, true);
+                return;
+            }
+        }
+        exportBusy = true;
+        int token = ++exportToken;
+        Set<DisplayRow.RowKey> selected = list.selectedKeys();
+        CompletableFuture<List<MessageExport.Line>> lines = switch (scope) {
+            case SELECTION -> CompletableFuture.completedFuture(MessageExport.fromRows(list.selectedRows(), selected));
+            case VISIBLE -> CompletableFuture.completedFuture(MessageExport.fromRows(list.visibleRows(), selected));
+            case QUERY -> AllTheLogsClient.worker().findEntries(queries.filter().toSummaryQuery())
+                .thenApply(entries -> MessageExport.fromQuery(entries, selected));
+        };
+        CompletableFuture.delayedExecutor(100, TimeUnit.MILLISECONDS).execute(() ->
+            Minecraft.getInstance().execute(() -> {
+                if (token != exportToken || !exportBusy || Minecraft.getInstance().gui.screen() != this) return;
+                showExporting();
+            }));
+        lines.thenApplyAsync(exported -> MessageExport.save(format, exported), MessageExport.executor())
+            .whenComplete((path, error) -> Minecraft.getInstance().execute(() -> finishExport(token, path, error)));
+    }
+
+    private Component queryBlockedReason() {
+        if (AllTheLogsClient.worker() == null || !AllTheLogsClient.worker().isOpen()) {
+            return Component.translatable("allthelogs.meta.unavailable");
+        }
+        if (!queries.filter().canQuery()) return Component.translatable("allthelogs.status.error");
+        return null;
+    }
+
+    private void finishExport(int token, Path path, Throwable error) {
+        if (token != exportToken) return;
+        exportBusy = false;
+        hideExporting();
+        if (Minecraft.getInstance().gui.screen() != this) return;
+        if (error != null) {
+            AllTheLogsClient.LOGGER.warn("Could not export messages", error);
+            showExportNotice(Component.translatable("allthelogs.export.failed"), true);
+            return;
+        }
+        showExportNotice(Component.translatable("allthelogs.export.saved", path.getFileName().toString()), false);
+    }
+
+    private void showExporting() {
+        if (exporting != null || overlays == null) return;
+        FlowLayout shade = UIContainers.verticalFlow(Sizing.fill(), Sizing.fill());
+        shade.surface(Surface.flat(0x88000000));
+        shade.padding(Insets.of(24));
+        shade.horizontalAlignment(HorizontalAlignment.CENTER);
+        shade.verticalAlignment(VerticalAlignment.CENTER);
+        shade.positioning(Positioning.absolute(0, 0));
+        shade.mouseDown().subscribe((mouse, doubled) -> true);
+        shade.mouseScroll().subscribe((x, y, amount) -> true);
+        FlowLayout card = UIContainers.verticalFlow(Sizing.content(), Sizing.content());
+        card.padding(Insets.of(16, 16, 28, 28)).surface(PanelSurfaces.card());
+        card.child(UIComponents.label(Component.translatable("allthelogs.export.exporting")));
+        shade.child(card);
+        overlays.child(shade);
+        exporting = shade;
+    }
+
+    private void hideExporting() {
+        if (exporting != null && overlays != null && overlays.children().contains(exporting)) {
+            overlays.removeChild(exporting);
+        }
+        exporting = null;
+    }
+
+    private void showExportNotice(Component text, boolean error) {
+        hideExportNotice();
+        if (overlays == null) return;
+        int token = ++noticeToken;
+        FlowLayout notice = UIContainers.verticalFlow(Sizing.content(), Sizing.content());
+        notice.padding(Insets.of(6, 6, 8, 8)).surface(PanelSurfaces.menu());
+        LabelComponent label = UIComponents.label(text);
+        if (error) label.color(Color.ofRgb(0xE8A8A8));
+        notice.child(label);
+        int width = Minecraft.getInstance().font.width(text) + 16;
+        int height = 22;
+        ButtonComponent anchor = tools.button();
+        int x = Math.max(4, anchor.x() + anchor.width() - width);
+        int y = Math.max(4, anchor.y() - height - 4);
+        notice.positioning(Positioning.absolute(x, y));
+        notice.horizontalSizing(Sizing.fixed(Math.max(width, 80)));
+        overlays.child(notice);
+        exportNotice = notice;
+        CompletableFuture.delayedExecutor(4, TimeUnit.SECONDS).execute(() ->
+            Minecraft.getInstance().execute(() -> {
+                if (token == noticeToken) hideExportNotice();
+            }));
+    }
+
+    private void hideExportNotice() {
+        if (exportNotice != null && overlays != null && overlays.children().contains(exportNotice)) {
+            overlays.removeChild(exportNotice);
+        }
+        exportNotice = null;
     }
 }
