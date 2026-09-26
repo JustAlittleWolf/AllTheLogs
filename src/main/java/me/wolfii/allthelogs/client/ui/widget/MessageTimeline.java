@@ -745,13 +745,18 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     private int thumbTop(int thumbHeight) {
+        boolean atStart = scrolledToStart();
+        boolean atEnd = scrolledToEnd();
+        int local;
         if (scrub.holdsPosition()) {
-            return y + scrub.heldThumbTopOffset(height, thumbHeight);
+            local = scrub.heldThumbTopOffset(height, thumbHeight);
+        } else {
+            LocalDateTime time = visibleTime();
+            if (time == null || scrubOldest() == null || scrubNewest() == null) return y;
+            double progress = ScrubberGeometry.pinnedProgress(thumbProgress(time), atStart, atEnd);
+            local = ScrubberGeometry.thumbOffset(height, progress, thumbHeight);
         }
-        LocalDateTime time = visibleTime();
-        if (time == null || scrubOldest() == null || scrubNewest() == null) return y;
-        double progress = ScrubberGeometry.pinnedProgress(thumbProgress(time), scrolledToStart(), scrolledToEnd());
-        return y + ScrubberGeometry.thumbOffset(height, progress, thumbHeight);
+        return y + ScrubberGeometry.reserveEndGap(local, height, thumbHeight, atStart, atEnd);
     }
 
     private double thumbProgress(LocalDateTime time) {

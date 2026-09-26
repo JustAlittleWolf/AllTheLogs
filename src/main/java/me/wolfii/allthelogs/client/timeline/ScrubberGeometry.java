@@ -50,6 +50,22 @@ public final class ScrubberGeometry {
     }
 
     /**
+     * Pulls a thumb at least one pixel in from a track end the viewport has not reached. A thumb sitting
+     * flush with the top or the bottom means the list is scrolled all the way there.
+     *
+     * @param thumbTop local y of the thumb top, before the gap
+     */
+    public static int reserveEndGap(int thumbTop, int trackHeight, int thumbHeight, boolean atStart, boolean atEnd) {
+        if (thumbHeight <= 0 || thumbHeight >= trackHeight) return 0;
+        int travel = trackHeight - thumbHeight;
+        int top = Math.clamp(thumbTop, 0, travel);
+        if (travel < 2) return top;
+        if (!atStart && top == 0) return 1;
+        if (!atEnd && top == travel) return travel - 1;
+        return top;
+    }
+
+    /**
      * Inverse of {@link #thumbOffset(int, double, int)}.
      */
     public static double progressFromThumb(int thumbTop, int trackHeight, int thumbHeight) {
