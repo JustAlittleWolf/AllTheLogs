@@ -20,8 +20,9 @@ import java.util.function.BooleanSupplier;
 import java.util.function.IntSupplier;
 
 /**
- * Hover menu on the messages toolbar. Moving onto the hamburger opens Scripts, Import, and Export
- * above it. Export opens to the side, then the chosen scope opens the file format beside that.
+ * Menu on the messages toolbar. Hovering or clicking the hamburger opens Scripts, Import, and Export
+ * above it. A click keeps the menu open so Import and Scripts can be chosen. Export opens to the side,
+ * then the chosen scope opens the file format beside that.
  */
 final class BrowserToolsMenu {
     private static final int CLOSE_DELAY_MS = 160;
@@ -51,6 +52,7 @@ final class BrowserToolsMenu {
     private boolean scopeIncludesSelection;
     private FlowLayout formatMenu;
     private Scope formatScope;
+    private boolean pinned;
     private long closeAt = Long.MAX_VALUE;
     private int placedActionsX = Integer.MIN_VALUE;
     private int placedActionsY = Integer.MIN_VALUE;
@@ -80,8 +82,7 @@ final class BrowserToolsMenu {
      */
     ButtonComponent button() {
         if (anchor != null) return anchor;
-        anchor = UIComponents.button(Component.empty(), pressed -> {
-        });
+        anchor = UIComponents.button(Component.empty(), pressed -> toggle());
         anchor.horizontalSizing(Sizing.fixed(20));
         anchor.renderer((graphics, widget, delta) -> {
             ButtonComponent.Renderer.VANILLA.draw(graphics, widget, delta);
@@ -101,7 +102,21 @@ final class BrowserToolsMenu {
         return actions != null;
     }
 
+    /**
+     * Opens the menu and keeps it open after the pointer leaves, until it is clicked again or closed.
+     */
+    void toggle() {
+        if (pinned) {
+            close();
+            return;
+        }
+        pinned = true;
+        closeAt = Long.MAX_VALUE;
+        ensureActions();
+    }
+
     void close() {
+        pinned = false;
         closeAt = Long.MAX_VALUE;
         closeFormat();
         closeScope();
@@ -117,7 +132,7 @@ final class BrowserToolsMenu {
             close();
             return;
         }
-        if (!inside(mouseX, mouseY)) {
+        if (!inside(mouseX, mouseY) && !pinned) {
             if (!isOpen()) return;
             if (closeAt == Long.MAX_VALUE) closeAt = System.currentTimeMillis() + CLOSE_DELAY_MS;
             if (System.currentTimeMillis() >= closeAt) close();

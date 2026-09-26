@@ -297,12 +297,29 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     }
 
     private void openScripts() {
+        if (overlays != null) {
+            overlays.queue(() -> {
+                if (tools != null) tools.close();
+                AllTheLogsScreens.openScripts(this);
+            });
+            return;
+        }
+        if (tools != null) tools.close();
         AllTheLogsScreens.openScripts(this);
     }
 
     private void openImport() {
+        if (overlays != null) {
+            overlays.queue(this::showImport);
+            return;
+        }
+        showImport();
+    }
+
+    private void showImport() {
+        if (tools != null) tools.close();
         queries.markReload();
-        Minecraft.getInstance().gui.setScreen(new ImportScreen(this));
+        AllTheLogsScreens.openImport(this);
     }
 
     private void startExport(BrowserToolsMenu.Scope scope, MessageExport.Format format) {
