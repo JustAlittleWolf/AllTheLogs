@@ -15,6 +15,18 @@ public final class ScrubberGeometry {
     }
 
     /**
+     * Height the thumb should treat as scrollable content. A loaded slice shorter than the viewport still
+     * has somewhere to go when more matches exist outside it, and hiding the thumb there made a drag to the
+     * oldest page (a short preview with nothing before it) drop the pill.
+     */
+    public static int thumbContentSpan(int contentHeight, int viewHeight, boolean hasBefore, boolean hasAfter) {
+        if ((hasBefore || hasAfter) && viewHeight > 0 && contentHeight <= viewHeight) {
+            return viewHeight + 1;
+        }
+        return Math.max(0, contentHeight);
+    }
+
+    /**
      * Small Immich-style scrubber thumb. Taller when few occupied days are in the query, shorter when many
      * are; independent of scroll position. {@code 0} when the loaded content already fits, so the draggable
      * thumb can be hidden.
