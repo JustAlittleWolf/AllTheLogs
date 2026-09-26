@@ -10,7 +10,6 @@ import dev.isxander.yacl3.config.v2.api.ConfigSerializer;
 import dev.isxander.yacl3.config.v2.api.FieldAccess;
 import dev.isxander.yacl3.config.v2.api.SerialEntry;
 import dev.isxander.yacl3.config.v2.api.autogen.AutoGen;
-import dev.isxander.yacl3.config.v2.api.autogen.Boolean;
 import dev.isxander.yacl3.config.v2.api.autogen.IntField;
 import dev.isxander.yacl3.config.v2.api.autogen.IntSlider;
 import dev.isxander.yacl3.config.v2.api.autogen.ListGroup;
@@ -57,11 +56,6 @@ public class AllTheLogsConfig {
     @IntField(min = 0, max = SearchFilter.MAX_CONTEXT_LINES, format = "%d lines")
     @SerialEntry(required = false)
     public int defaultContextLines = SearchFilter.DEFAULT_CONTEXT_LINES;
-
-    @AutoGen(category = "browser")
-    @Boolean(formatter = Boolean.Formatter.ON_OFF)
-    @SerialEntry
-    public boolean hideImportButton;
 
     @AutoGen(category = "browser")
     @IntSlider(min = MIN_MESSAGE_FONT_SIZE, max = MAX_MESSAGE_FONT_SIZE, step = 1)
@@ -137,14 +131,6 @@ public class AllTheLogsConfig {
 
     public void setDefaultContextLines(int defaultContextLines) {
         this.defaultContextLines = clampContextLines(defaultContextLines);
-    }
-
-    public boolean hideImportButton() {
-        return hideImportButton;
-    }
-
-    public void setHideImportButton(boolean hideImportButton) {
-        this.hideImportButton = hideImportButton;
     }
 
     public int messageFontSize() {
