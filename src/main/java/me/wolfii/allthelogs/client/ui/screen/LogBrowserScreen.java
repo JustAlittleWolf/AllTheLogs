@@ -5,7 +5,6 @@ import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.DropdownComponent;
 import io.wispforest.owo.ui.component.LabelComponent;
-import io.wispforest.owo.ui.component.TextBoxComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.StackLayout;
@@ -22,6 +21,7 @@ import me.wolfii.allthelogs.client.search.SearchDecorations;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
+import me.wolfii.allthelogs.client.ui.widget.DecoratedSearchField;
 import me.wolfii.allthelogs.client.ui.widget.MessageTimeline;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -47,7 +47,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     private final Screen parent;
     private final LogBrowserQueries queries;
     private MessageTimeline list;
-    private TextBoxComponent search;
+    private DecoratedSearchField search;
     private boolean syncingSearch;
     private ButtonComponent infoButton;
     private FilterOverlay filters;
@@ -113,12 +113,6 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     }
 
     @Override
-    public void tick() {
-        super.tick();
-        clampSearchCursor();
-    }
-
-    @Override
     protected void init() {
         super.init();
         if (search != null && search.focusHandler() != null) {
@@ -181,7 +175,9 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         FlowLayout bar = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
         bar.gap(4).verticalAlignment(VerticalAlignment.CENTER);
 
-        search = UIComponents.textBox(Sizing.expand(), SearchDecorations.wrap(queries.filter(), queries.filter().text()));
+        search = new DecoratedSearchField();
+        search.setValue(queries.filter().text());
+        search.setDecorations(SearchDecorations.prefix(queries.filter()), SearchDecorations.suffix(queries.filter()));
         search.setHint(Component.translatable("allthelogs.search.placeholder"));
         search.setMaxLength(256);
         search.addFormatter(this::formatSearch);
@@ -211,26 +207,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
 
     private void onSearchChanged(String shown) {
         if (syncingSearch) return;
-        SearchFilter current = queries.filter();
-        String expected = SearchDecorations.wrap(current, current.text());
-        if (!SearchDecorations.wraps(current)) {
-            applySearchText(shown);
-            return;
-        }
-        if (!shown.equals(expected)) {
-            String inner = SearchDecorations.unwrap(current, shown);
-            syncingSearch = true;
-            try {
-                search.setValue(SearchDecorations.wrap(current, inner));
-                search.setCursorPosition(SearchDecorations.clampCursor(current, search.getValue(),
-                    search.getCursorPosition()));
-            } finally {
-                syncingSearch = false;
-            }
-            applySearchText(inner);
-            return;
-        }
-        applySearchText(SearchDecorations.unwrap(current, shown));
+        applySearchText(shown == null ? "" : shown);
     }
 
     private void applySearchText(String text) {
@@ -264,26 +241,17 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
 
     private void syncSearchBox() {
         if (search == null) return;
-        String shown = SearchDecorations.wrap(queries.filter(), queries.filter().text());
-        if (shown.equals(search.getValue())) {
-            clampSearchCursor();
-            return;
-        }
+        SearchFilter filter = queries.filter();
+        search.setDecorations(SearchDecorations.prefix(filter), SearchDecorations.suffix(filter));
+        String shown = filter.text();
+        if (shown.equals(search.getValue())) return;
+        int cursor = Math.min(search.getCursorPosition(), shown.length());
         syncingSearch = true;
         try {
             search.setValue(shown);
+            search.setCursorPosition(cursor);
         } finally {
             syncingSearch = false;
-        }
-        clampSearchCursor();
-    }
-
-    private void clampSearchCursor() {
-        if (search == null || !SearchDecorations.wraps(queries.filter())) return;
-        int clamped = SearchDecorations.clampCursor(queries.filter(), search.getValue(), search.getCursorPosition());
-        if (clamped != search.getCursorPosition()) {
-            search.setCursorPosition(clamped);
-            search.setHighlightPos(clamped);
         }
     }
 
