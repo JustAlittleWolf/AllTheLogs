@@ -419,6 +419,16 @@ public final class MessageTimeline extends BaseUIComponent {
         scrub.finish();
     }
 
+    /**
+     * Ends a drag that landed on the first or last loaded row. A preview parked on the oldest messages is
+     * only a short slice with nothing before it, so the normal edge fetch has to run once the thumb is
+     * released or that slice stays shorter than the list and the thumb stays hidden.
+     */
+    private void finishScrubAtEnd() {
+        finishScrub();
+        maybeRequestMore();
+    }
+
     @Override
     public boolean canFocus(UIComponent.FocusSource source) {
         return true;
@@ -793,9 +803,13 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     private int thumbHeight() {
-        if (scrub.dragging() && scrub.capturedThumbHeight() > 0) return scrub.capturedThumbHeight();
+        if (scrub.capturedThumbHeight() > 0 && (scrub.dragging() || scrub.holdsPosition())) {
+            return scrub.capturedThumbHeight();
+        }
         if (window.rows().isEmpty() || height <= 0) return 0;
-        return ScrubberGeometry.thumbHeightForDays(height, matches.uniqueDates(), layout.contentHeight(), height);
+        int spanned = ScrubberGeometry.thumbContentSpan(layout.contentHeight(), height,
+            window.hasBefore(), window.hasAfter());
+        return ScrubberGeometry.thumbHeightForDays(height, matches.uniqueDates(), spanned, height);
     }
 
     private int thumbTop(int thumbHeight) {
@@ -836,7 +850,7 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     private boolean scrolledToStart() {
-        return !window.hasBefore() && scrollY <= 0.5 && layout.contentHeight() > height;
+        return !window.hasBefore() && scrollY <= 0.5;
     }
 
     private boolean scrolledToEnd() {
@@ -876,7 +890,7 @@ public final class MessageTimeline extends BaseUIComponent {
                 jump(new ScrubJump(scrubOldest(), 0, 0), commit);
                 return;
             }
-            if (commit) finishScrub();
+            if (commit) finishScrubAtEnd();
             return;
         }
         if (clamped >= 1) {
@@ -885,7 +899,7 @@ public final class MessageTimeline extends BaseUIComponent {
                 return;
             }
             scrollToEnd();
-            if (commit) finishScrub();
+            if (commit) finishScrubAtEnd();
             return;
         }
         LocalDateTime time = timeAtProgress(clamped);

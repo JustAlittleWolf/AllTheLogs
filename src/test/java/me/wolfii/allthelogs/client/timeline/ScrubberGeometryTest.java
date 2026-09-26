@@ -57,5 +57,11 @@ class ScrubberGeometryTest {
         assertTrue(fewDays <= 40);
         assertEquals(0, ScrubberGeometry.thumbHeightForDays(200, 8, 150, 200));
         assertEquals(someDays, ScrubberGeometry.thumbHeightForDays(200, 8, 800, 200));
+        assertEquals(150, ScrubberGeometry.thumbContentSpan(150, 200, false, false));
+        assertEquals(201, ScrubberGeometry.thumbContentSpan(150, 200, false, true));
+        assertEquals(201, ScrubberGeometry.thumbContentSpan(150, 200, true, false));
+        assertEquals(800, ScrubberGeometry.thumbContentSpan(800, 200, true, true));
+        assertTrue(ScrubberGeometry.thumbHeightForDays(200, 8,
+            ScrubberGeometry.thumbContentSpan(150, 200, false, true), 200) > 0);
     }
 }
