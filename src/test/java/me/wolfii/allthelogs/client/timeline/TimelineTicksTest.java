@@ -41,6 +41,29 @@ class TimelineTicksTest {
     }
 
     @Test
+    void aCollapsedFirstDayDoesNotDrawTheNextMonthOnTopOfIt() {
+        LocalDateTime january = LocalDateTime.of(2024, 1, 15, 9, 0);
+        List<MatchDay> days = new java.util.ArrayList<>();
+        days.add(new MatchDay(january.toLocalDate(), january, january, 3));
+        for (int day = 2; day <= 9; day++) {
+            LocalDateTime time = LocalDateTime.of(2024, 2, day, 12, 0);
+            days.add(new MatchDay(time.toLocalDate(), time, time, 1));
+        }
+        int height = 200;
+        List<TimelineTicks.DateTick> ticks = TimelineTicks.spacedTicks(
+            days.getFirst().oldest(), days.getLast().newest(), days, height, 16);
+        assertTrue(ticks.size() >= 2, () -> "expected the January and February labels, got " + ticks);
+        int previousY = Integer.MIN_VALUE / 2;
+        for (TimelineTicks.DateTick tick : ticks) {
+            int y = TimelineScale.yAtProgress(
+                TimelineScale.trackProgress(tick.at(), days.getFirst().oldest(), days.getLast().newest(), days),
+                0, height);
+            assertTrue(y - previousY >= 16, () -> tick.label() + " overlaps the previous date");
+            previousY = y;
+        }
+    }
+
+    @Test
     void spacedOccupiedDaysUseEqualSharePlacement() {
         LocalDateTime oldest = LocalDateTime.of(2025, 1, 15, 0, 0);
         LocalDateTime newest = LocalDateTime.of(2026, 1, 15, 0, 0);

@@ -67,9 +67,7 @@ final class TimelineTrackPainter {
         List<MatchDay> days = track.days();
         for (TimelineTicks.DateTick tick
             : TimelineTicks.spacedTicks(track.oldest(), track.newest(), days, view.height(), TICK_GAP_PX)) {
-            double progress = days.isEmpty()
-                ? TimelineScale.linearProgress(tick.at(), track.oldest(), track.newest())
-                : TimelineScale.matchDayProgress(tick.at(), days, 0);
+            double progress = TimelineScale.trackProgress(tick.at(), track.oldest(), track.newest(), days);
             int tickY = TimelineScale.yAtProgress(progress, view.y(), view.height());
             graphics.fill(trackX + 2, tickY, trackX + TRACK_WIDTH - 2, tickY + 1, Colors.TICK_DOT);
             graphics.drawText(Component.literal(tick.label()), trackX - 3, tickY + TICK_LABEL_OFFSET,

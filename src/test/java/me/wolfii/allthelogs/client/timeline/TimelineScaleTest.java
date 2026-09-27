@@ -81,5 +81,20 @@ class TimelineScaleTest {
         assertEquals(fiveAm, TimelineScale.timeAtProgress(0, days));
         assertEquals(nextDay, TimelineScale.timeAtProgress(1, days));
         assertEquals(days.get(1), TimelineScale.dayAtProgress(0.75, days));
+        assertEquals(1, TimelineScale.matchDayProgress(nextDay.plusDays(3), days, 0), 0.0001);
+    }
+
+    @Test
+    void aLaterDateSitsAtTheEndOfACollapsedDayRatherThanItsStart() {
+        LocalDateTime january = LocalDateTime.of(2024, 1, 15, 9, 0);
+        LocalDateTime march = LocalDateTime.of(2024, 3, 20, 12, 0);
+        List<MatchDay> days = List.of(
+            new MatchDay(january.toLocalDate(), january, january, 4),
+            new MatchDay(march.toLocalDate(), march, march, 1));
+        LocalDateTime february = LocalDateTime.of(2024, 2, 1, 0, 0);
+        assertEquals(0.5, TimelineScale.matchDayProgress(february, days, 0), 0.0001);
+        assertEquals(0.5, TimelineScale.trackProgress(february, january, march, days), 0.0001);
+        assertEquals(0, TimelineScale.trackProgress(january.toLocalDate().atStartOfDay(), january, march, days),
+            0.0001);
     }
 }

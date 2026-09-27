@@ -55,19 +55,19 @@ public final class TimelineTicks {
 
         List<DateTick> ordered = new ArrayList<>(raw);
         ordered.sort((a, b) -> Integer.compare(
-            tickY(a, oldest, newest, dates, byDay, height),
-            tickY(b, oldest, newest, dates, byDay, height)));
+            tickY(a, oldest, newest, days, height),
+            tickY(b, oldest, newest, days, height)));
         List<DateTick> kept = new ArrayList<>();
         int lastY = Integer.MIN_VALUE / 2;
         for (DateTick tick : ordered) {
-            int y = tickY(tick, oldest, newest, dates, byDay, height);
+            int y = tickY(tick, oldest, newest, days, height);
             if (kept.isEmpty() || Math.abs(y - lastY) >= minGapPx) {
                 kept.add(tick);
                 lastY = y;
             }
         }
         DateTick last = ordered.getLast();
-        int lastTickY = tickY(last, oldest, newest, dates, byDay, height);
+        int lastTickY = tickY(last, oldest, newest, days, height);
         if (!kept.getLast().equals(last) && Math.abs(lastTickY - lastY) >= minGapPx) {
             kept.add(last);
         }
@@ -141,12 +141,10 @@ public final class TimelineTicks {
         return months;
     }
 
-    private static int tickY(DateTick tick, LocalDateTime oldest, LocalDateTime newest, List<LocalDate> dates,
-                             boolean byDay, int height) {
-        double progress = byDay
-            ? TimelineScale.dayProgress(tick.at(), dates)
-            : TimelineScale.linearProgress(tick.at(), oldest, newest);
-        return TimelineScale.yAtProgress(progress, 0, height);
+    private static int tickY(DateTick tick, LocalDateTime oldest, LocalDateTime newest, List<MatchDay> days,
+                             int height) {
+        return TimelineScale.yAtProgress(
+            TimelineScale.trackProgress(tick.at(), oldest, newest, days), 0, height);
     }
 
     private static List<DateTick> dayTicks(List<LocalDate> days, DateTimeFormatter format) {
