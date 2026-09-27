@@ -15,13 +15,13 @@ public final class MessageCharacters {
     public static final char OBJECT_REPLACEMENT = '\uFFFC';
     public static final int OBJECT_REPLACEMENT_CODE_POINT = 0xFFFC;
 
-    private static volatile boolean dropPrivateUseCharacters = true;
+    private static volatile boolean dropPrivateUseCharacters = false;
 
     private MessageCharacters() {
     }
 
     /**
-     * Whether private-use characters are removed from messages. Defaults to {@code true}.
+     * Whether private-use characters are removed from messages. Defaults to {@code false}.
      * U+FFFC is removed either way.
      */
     public static boolean dropPrivateUseCharacters() {

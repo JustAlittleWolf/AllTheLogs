@@ -146,7 +146,7 @@
   "yacl3.config.minecraft:allthelogs.messageFontSize": "Message font size",
   "yacl3.config.minecraft:allthelogs.messageFontSize.desc": "Size of chat lines.",
   "yacl3.config.minecraft:allthelogs.contextMessageBrightness": "Context message brightness",
-  "yacl3.config.minecraft:allthelogs.contextMessageBrightness.desc": "How bright context lines are. 100% keeps the original colorin, 50% is makes context messages appear half as bright.",
-  "yacl3.config.minecraft:allthelogs.filterPrivateUseCharacters": "Filter private-use characters",
-  "yacl3.config.minecraft:allthelogs.filterPrivateUseCharacters.desc": "Remove Unicode private-use characters from chat messages. Mods use these for icons that show up as missing glyphs in a log. Player-face placeholders are always removed."
+  "yacl3.config.minecraft:allthelogs.contextMessageBrightness.desc": "How bright context lines are. 100% keeps the original color, 50% is makes context messages appear half as bright.",
+  "yacl3.config.minecraft:allthelogs.filterPrivateUseCharacters": "Filter private-use unicode characters",
+  "yacl3.config.minecraft:allthelogs.filterPrivateUseCharacters.desc": "Remove private-use unicode characters from chat messages. Servers often use these to display special symbols in chat, which can't be rendered in the messages screen, as they require a resource pack to view."
 }

@@ -22,7 +22,6 @@ import java.util.Map;
  * missing entry always means "forgotten", never "not needed".
  */
 public final class SchemaMigration {
-    private static final int PLACEHOLDER_BATCH = 1000;
     private static final Migration NO_OP = (_) -> {
     };
 
@@ -117,72 +116,62 @@ public final class SchemaMigration {
      * they are written, so this only rewrites an older database.
      */
     private static void migrate5To6StripPlaceholderCharacters(Statement statement) throws SQLException {
+        int batchSize = 1000;
         long afterRowId = -1;
         int updated = 0;
         while (true) {
-            ScannedPage page = nextPlaceholderPage(statement, afterRowId);
-            if (!page.changed().isEmpty()) {
-                updated += writeFilteredEntries(statement, page.changed());
+            List<Long> rowIds = new ArrayList<>();
+            List<String> messages = new ArrayList<>();
+            List<long[]> formatting = new ArrayList<>();
+            long lastRowId = afterRowId;
+            int scanned = 0;
+            String query = """
+                SELECT rowid, message, to_json(formatting)
+                FROM chat_entry
+                WHERE rowid > %d
+                  AND (contains(message, chr(%d)) OR regexp_matches(message, '\\p{Co}'))
+                ORDER BY rowid
+                LIMIT %d
+                """.formatted(afterRowId, MessageCharacters.OBJECT_REPLACEMENT_CODE_POINT, batchSize);
+            try (ResultSet result = statement.executeQuery(query)) {
+                while (result.next()) {
+                    scanned++;
+                    lastRowId = result.getLong(1);
+                    String message = result.getString(2);
+                    FormattingCodes.Parsed filtered = MessageCharacters.filter(
+                        new FormattingCodes.Parsed(message, PackedFormatting.fromSqlLiteral(result.getString(3))), true);
+                    if (message.equals(filtered.text())) continue;
+                    rowIds.add(lastRowId);
+                    messages.add(filtered.text());
+                    formatting.add(filtered.formatting());
+                }
             }
-            if (!page.full()) break;
-            afterRowId = page.lastRowId();
+            if (!rowIds.isEmpty()) {
+                try (PreparedStatement update = statement.getConnection().prepareStatement("""
+                    UPDATE chat_entry
+                    SET message = ?, formatting = CAST(? AS BIGINT[])
+                    WHERE rowid = ?""")) {
+                    for (int i = 0; i < rowIds.size(); i++) {
+                        update.setString(1, messages.get(i));
+                        String literal = PackedFormatting.toSqlLiteral(formatting.get(i));
+                        if (literal == null) {
+                            update.setNull(2, Types.VARCHAR);
+                        } else {
+                            update.setString(2, literal);
+                        }
+                        update.setLong(3, rowIds.get(i));
+                        update.addBatch();
+                    }
+                    update.executeBatch();
+                }
+                updated += rowIds.size();
+            }
+            if (scanned < batchSize) break;
+            afterRowId = lastRowId;
         }
         if (updated > 0) {
             System.out.println("[AllTheLogs] Removed placeholder characters from " + updated + " chat lines");
         }
-    }
-
-    private static ScannedPage nextPlaceholderPage(Statement statement, long afterRowId) throws SQLException {
-        List<FilteredEntry> changed = new ArrayList<>();
-        long lastRowId = afterRowId;
-        int scanned = 0;
-        String query = """
-            SELECT rowid, message, to_json(formatting)
-            FROM chat_entry
-            WHERE rowid > %d
-              AND (contains(message, chr(%d)) OR regexp_matches(message, '\\p{Co}'))
-            ORDER BY rowid
-            LIMIT %d
-            """.formatted(afterRowId, MessageCharacters.OBJECT_REPLACEMENT_CODE_POINT, PLACEHOLDER_BATCH);
-        try (ResultSet result = statement.executeQuery(query)) {
-            while (result.next()) {
-                scanned++;
-                lastRowId = result.getLong(1);
-                String message = result.getString(2);
-                FormattingCodes.Parsed filtered = MessageCharacters.filter(
-                    new FormattingCodes.Parsed(message, PackedFormatting.fromSqlLiteral(result.getString(3))), true);
-                if (message.equals(filtered.text())) continue;
-                changed.add(new FilteredEntry(lastRowId, filtered.text(), filtered.formatting()));
-            }
-        }
-        return new ScannedPage(lastRowId, scanned == PLACEHOLDER_BATCH, changed);
-    }
-
-    private static int writeFilteredEntries(Statement statement, List<FilteredEntry> batch) throws SQLException {
-        try (PreparedStatement update = statement.getConnection().prepareStatement("""
-            UPDATE chat_entry
-            SET message = ?, formatting = CAST(? AS BIGINT[])
-            WHERE rowid = ?""")) {
-            for (FilteredEntry entry : batch) {
-                update.setString(1, entry.message());
-                String formatting = PackedFormatting.toSqlLiteral(entry.formatting());
-                if (formatting == null) {
-                    update.setNull(2, Types.VARCHAR);
-                } else {
-                    update.setString(2, formatting);
-                }
-                update.setLong(3, entry.rowId());
-                update.addBatch();
-            }
-            update.executeBatch();
-        }
-        return batch.size();
-    }
-
-    private record FilteredEntry(long rowId, String message, long[] formatting) {
-    }
-
-    private record ScannedPage(long lastRowId, boolean full, List<FilteredEntry> changed) {
     }
 
     static int readVersion(Statement statement) throws SQLException {

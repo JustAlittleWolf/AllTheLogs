@@ -24,7 +24,7 @@ class AllTheLogsConfigTest {
         assertTrue(config.extraImportDirectories().isEmpty());
         assertEquals(AllTheLogsConfig.DEFAULT_CONTEXT_MESSAGE_BRIGHTNESS, config.contextMessageBrightness());
         assertEquals(92, config.contextMessageBrightness());
-        assertTrue(config.filterPrivateUseCharacters());
+        assertFalse(config.filterPrivateUseCharacters());
     }
 
     @Test
@@ -133,25 +133,25 @@ class AllTheLogsConfigTest {
     }
 
     @Test
-    void privateUseFilterDefaultsOnAndRoundTrips() throws Exception {
+    void privateUseFilterDefaultsOffAndRoundTrips() throws Exception {
         Path file = temp.resolve("private-use.json");
         AllTheLogsConfig loaded = AllTheLogsConfig.load(file);
-        assertTrue(loaded.filterPrivateUseCharacters());
+        assertFalse(loaded.filterPrivateUseCharacters());
         loaded.save();
-        assertTrue(Files.readString(file).contains("\"filterPrivateUseCharacters\": true"));
+        assertTrue(Files.readString(file).contains("\"filterPrivateUseCharacters\": false"));
 
         Files.writeString(file, """
             {
-              "filterPrivateUseCharacters": false
+              "filterPrivateUseCharacters": true
             }
             """);
-        AllTheLogsConfig disabled = AllTheLogsConfig.load(file);
-        assertFalse(disabled.filterPrivateUseCharacters());
-        assertTrue(MessageCharacters.dropPrivateUseCharacters());
-        disabled.setFilterPrivateUseCharacters(false);
-        assertTrue(MessageCharacters.dropPrivateUseCharacters());
-        disabled.save();
-        assertTrue(Files.readString(file).contains("\"filterPrivateUseCharacters\": false"));
+        AllTheLogsConfig enabled = AllTheLogsConfig.load(file);
+        assertTrue(enabled.filterPrivateUseCharacters());
+        assertFalse(MessageCharacters.dropPrivateUseCharacters());
+        enabled.setFilterPrivateUseCharacters(true);
+        assertFalse(MessageCharacters.dropPrivateUseCharacters());
+        enabled.save();
+        assertTrue(Files.readString(file).contains("\"filterPrivateUseCharacters\": true"));
     }
 
     @Test

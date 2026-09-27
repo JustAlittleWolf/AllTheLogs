@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class MessageCharactersTest {
     @AfterEach
     void restorePrivateUseFilter() {
-        MessageCharacters.setDropPrivateUseCharacters(true);
+        MessageCharacters.setDropPrivateUseCharacters(false);
     }
 
     @Test

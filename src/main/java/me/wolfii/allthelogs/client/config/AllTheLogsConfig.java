@@ -44,7 +44,7 @@ public class AllTheLogsConfig {
     public static final int MIN_CONTEXT_MESSAGE_BRIGHTNESS = 10;
     public static final int MAX_CONTEXT_MESSAGE_BRIGHTNESS = 100;
     public static final int DEFAULT_CONTEXT_MESSAGE_BRIGHTNESS = 92;
-    public static final boolean DEFAULT_FILTER_PRIVATE_USE_CHARACTERS = true;
+    public static final boolean DEFAULT_FILTER_PRIVATE_USE_CHARACTERS = false;
 
     private static ConfigClassHandler<AllTheLogsConfig> handler;
 
