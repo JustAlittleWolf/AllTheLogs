@@ -3,6 +3,8 @@ package me.wolfii.allthelogs.client;
 import me.wolfii.allthelogs.client.config.StartupLogImports;
 import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.ChatLog;
+import me.wolfii.allthelogs.data.store.StoreCancellation;
+import me.wolfii.allthelogs.data.store.StoreConnections;
 import net.minecraft.network.chat.Component;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -10,11 +12,15 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.zip.GZIPOutputStream;
@@ -96,6 +102,36 @@ class LogStoreBootTest {
             """.formatted(chat);
         try (var out = new GZIPOutputStream(Files.newOutputStream(file))) {
             out.write(body.getBytes(StandardCharsets.UTF_8));
+        }
+    }
+}
+
+class LogStoreWorkerCloseTest {
+    @Test
+    void closingDuringAQueryStopsTheWorkerThread() throws Exception {
+        LogStoreWorker worker = new LogStoreWorker();
+        CountDownLatch started = new CountDownLatch(1);
+        AtomicBoolean cancelled = new AtomicBoolean();
+        try {
+            worker.run(() -> {
+                try (var connection = StoreConnections.openInMemory();
+                     Statement statement = connection.createStatement()) {
+                    StoreCancellation.current().bind(statement);
+                    started.countDown();
+                    statement.execute("SELECT sum(random()) FROM range(1000000000)");
+                } catch (SQLException e) {
+                    cancelled.set(StoreCancellation.isClosedRequest(e));
+                    if (!cancelled.get()) throw new RuntimeException(e);
+                }
+            });
+            assertTrue(started.await(10, TimeUnit.SECONDS));
+            Thread.sleep(300);
+            long began = System.nanoTime();
+            worker.close();
+            assertTrue(System.nanoTime() - began < 10_000_000_000L, "close should not wait out the query");
+            assertTrue(cancelled.get(), "the running query should be cancelled");
+        } finally {
+            worker.close();
         }
     }
 }

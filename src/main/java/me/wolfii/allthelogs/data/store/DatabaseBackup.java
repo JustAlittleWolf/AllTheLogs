@@ -60,6 +60,9 @@ public final class DatabaseBackup {
      * A failed write leaves no archive behind.
      */
     public static Path create(Path database, int schemaVersion, Instant at) throws IOException {
+        if (StoreCancellation.stoppedOnThisThread()) {
+            throw new IOException(StoreCancellation.CLOSED_MESSAGE);
+        }
         Path target = backupPath(database, schemaVersion, at);
         Path partial = target.resolveSibling(target.getFileName() + ".tmp");
         System.out.println("[AllTheLogs] Backing up database to " + target.getFileName()
@@ -68,7 +71,14 @@ public final class DatabaseBackup {
             try (InputStream in = new BufferedInputStream(Files.newInputStream(database));
                  OutputStream file = new BufferedOutputStream(Files.newOutputStream(partial));
                  OutputStream gzip = new FastGzipOutputStream(file)) {
-                in.transferTo(gzip);
+                byte[] buffer = new byte[256 * 1024];
+                int read;
+                while ((read = in.read(buffer)) >= 0) {
+                    if (StoreCancellation.stoppedOnThisThread()) {
+                        throw new IOException(StoreCancellation.CLOSED_MESSAGE);
+                    }
+                    gzip.write(buffer, 0, read);
+                }
             }
             moveIntoPlace(partial, target);
         } catch (IOException e) {

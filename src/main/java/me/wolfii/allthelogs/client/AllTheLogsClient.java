@@ -4,6 +4,7 @@ import me.wolfii.allthelogs.client.config.AllTheLogsConfig;
 import me.wolfii.allthelogs.client.config.StartupLogImports;
 import me.wolfii.allthelogs.data.LogSource;
 import me.wolfii.allthelogs.data.store.SessionMarker;
+import me.wolfii.allthelogs.data.store.StoreCancellation;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
@@ -87,7 +88,11 @@ public final class AllTheLogsClient implements ClientModInitializer {
         boot.start(worker, AllTheLogsPaths.database(), minecraftVersion(), currentUsername())
             .whenComplete((log, error) -> {
                 if (error != null) {
-                    LOGGER.error("AllTheLogs failed to start", error);
+                    if (StoreCancellation.isClosedRequest(error)) {
+                        LOGGER.info("AllTheLogs stopped while the log store was opening");
+                    } else {
+                        LOGGER.error("AllTheLogs failed to start", error);
+                    }
                     return;
                 }
                 if (log != null && log.source() instanceof LogSource.Session session && session.id() != null) {

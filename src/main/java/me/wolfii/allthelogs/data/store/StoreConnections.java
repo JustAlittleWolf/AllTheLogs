@@ -27,6 +27,7 @@ public final class StoreConnections {
      * When an on-disk file still needs a schema upgrade, the database file is copied first.
      */
     public static DuckDBConnection openFile(Path absolutePath) throws SQLException {
+        StoreCancellation.throwIfStopped();
         DuckDBConnection connection = connect("jdbc:duckdb:" + absolutePath);
         try {
             int version = schemaVersion(connection);
@@ -35,9 +36,11 @@ public final class StoreConnections {
                 connection.close();
                 connection = null;
                 backupDatabase(absolutePath, version);
+                StoreCancellation.throwIfStopped();
                 connection = connect("jdbc:duckdb:" + absolutePath);
             }
             if (migrate(connection)) {
+                StoreCancellation.throwIfStopped();
                 connection = compact(connection, absolutePath);
             }
             return connection;
@@ -97,7 +100,13 @@ public final class StoreConnections {
 
     private static void checkpoint(DuckDBConnection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
-            statement.execute("CHECKPOINT");
+            bind(statement);
+            try {
+                StoreCancellation.throwIfStopped();
+                statement.execute("CHECKPOINT");
+            } finally {
+                unbind(statement);
+            }
         }
     }
 
@@ -109,13 +118,30 @@ public final class StoreConnections {
      */
     private static boolean migrate(DuckDBConnection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
-            boolean optimize = SchemaMigration.migrate(statement);
-            if (!optimize) return false;
-            System.out.println("[AllTheLogs] Optimizing the log store after schema migration");
-            Schema.clusterEntries(statement);
-            StoreOptimizer.analyzeAndCheckpoint(statement);
-            return true;
+            bind(statement);
+            try {
+                StoreCancellation.throwIfStopped();
+                boolean optimize = SchemaMigration.migrate(statement);
+                if (!optimize) return false;
+                StoreCancellation.throwIfStopped();
+                System.out.println("[AllTheLogs] Optimizing the log store after schema migration");
+                Schema.clusterEntries(statement);
+                StoreOptimizer.analyzeAndCheckpoint(statement);
+                return true;
+            } finally {
+                unbind(statement);
+            }
         }
+    }
+
+    private static void bind(Statement statement) {
+        StoreCancellation current = StoreCancellation.current();
+        if (current != null) current.bind(statement);
+    }
+
+    private static void unbind(Statement statement) {
+        StoreCancellation current = StoreCancellation.current();
+        if (current != null) current.unbind(statement);
     }
 
     /**

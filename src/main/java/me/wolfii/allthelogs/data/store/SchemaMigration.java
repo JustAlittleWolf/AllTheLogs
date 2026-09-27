@@ -71,6 +71,7 @@ public final class SchemaMigration {
         }
         boolean optimize = false;
         while (version < Schema.CURRENT_VERSION) {
+            StoreCancellation.throwIfStopped();
             Migration step = MIGRATIONS.get(version);
             if (step == null) {
                 throw new SQLException("no migration registered from schema version " + version
@@ -141,6 +142,7 @@ public final class SchemaMigration {
             """.formatted(MessageCharacters.OBJECT_REPLACEMENT_CODE_POINT);
         try (ResultSet result = statement.executeQuery(query)) {
             while (result.next()) {
+                if ((rowIds.size() & 1023) == 0) StoreCancellation.throwIfStopped();
                 long rowId = result.getLong(1);
                 String message = result.getString(2);
                 FormattingCodes.Parsed filtered = MessageCharacters.filter(
@@ -152,6 +154,7 @@ public final class SchemaMigration {
             }
         }
         if (rowIds.isEmpty()) return false;
+        StoreCancellation.throwIfStopped();
         System.out.println("[AllTheLogs] Removing placeholder characters from " + rowIds.size() + " chat lines");
         statement.execute("""
             CREATE TEMP TABLE chat_entry_rewrite (

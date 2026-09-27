@@ -143,17 +143,43 @@ public final class Schema {
             return;
         }
         report.accept(0.1);
-        statement.execute("DROP TABLE IF EXISTS chat_entry_sorted");
-        statement.execute("""
-            CREATE TABLE chat_entry_sorted AS
-            SELECT file_id, line_index, entry_time, message, formatting, minecraft_user, server_or_world
-            FROM chat_entry
-            ORDER BY entry_time, file_id, line_index""");
-        report.accept(0.75);
-        statement.execute("DROP TABLE chat_entry");
-        statement.execute("ALTER TABLE chat_entry_sorted RENAME TO chat_entry");
+        // One transaction so closing the game mid-rewrite cannot drop chat_entry and leave the
+        // replacement uncommitted. Each statement would otherwise commit on its own.
+        var connection = statement.getConnection();
+        boolean autoCommit = connection.getAutoCommit();
+        connection.setAutoCommit(false);
+        SQLException failure = null;
+        try {
+            StoreCancellation.throwIfStopped();
+            statement.execute("DROP TABLE IF EXISTS chat_entry_sorted");
+            statement.execute("""
+                CREATE TABLE chat_entry_sorted AS
+                SELECT file_id, line_index, entry_time, message, formatting, minecraft_user, server_or_world
+                FROM chat_entry
+                ORDER BY entry_time, file_id, line_index""");
+            report.accept(0.75);
+            StoreCancellation.throwIfStopped();
+            statement.execute("DROP TABLE chat_entry");
+            statement.execute("ALTER TABLE chat_entry_sorted RENAME TO chat_entry");
+            advanceClusterMarker(statement);
+            connection.commit();
+        } catch (SQLException e) {
+            failure = e;
+            try {
+                connection.rollback();
+            } catch (SQLException rollbackFailed) {
+                e.addSuppressed(rollbackFailed);
+            }
+        } finally {
+            try {
+                connection.setAutoCommit(autoCommit);
+            } catch (SQLException restoreFailed) {
+                if (failure == null) failure = restoreFailed;
+                else failure.addSuppressed(restoreFailed);
+            }
+        }
+        if (failure != null) throw failure;
         report.accept(1d);
-        advanceClusterMarker(statement);
     }
 
     /**
