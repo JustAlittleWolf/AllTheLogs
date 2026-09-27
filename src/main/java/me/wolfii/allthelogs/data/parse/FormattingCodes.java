@@ -6,6 +6,9 @@ import java.util.Arrays;
  * Minecraft legacy {@code §} formatting codes, as used in log files.
  * Codes are stripped from stored text; colour and style are kept as {@link PackedFormatting}.
  * Java Edition rules: a colour code clears styles; {@code §r} resets and is not stored.
+ * <p>
+ * {@link #parse} also drops U+FFFC and, when enabled, Unicode private-use characters.
+ * See {@link MessageCharacters}.
  */
 public final class FormattingCodes {
     private static final char SECTION = '\u00a7';
@@ -39,6 +42,10 @@ public final class FormattingCodes {
      * run (live chat), or {@code 0} for log files.
      */
     public static Parsed parse(String message, int initialFormat) {
+        return MessageCharacters.filter(parseFormatting(message, initialFormat));
+    }
+
+    private static Parsed parseFormatting(String message, int initialFormat) {
         if (message == null) return Parsed.plain("");
         if (message.indexOf(SECTION) < 0) {
             if (PackedFormatting.isEmpty(initialFormat) || message.isEmpty()) return Parsed.plain(message);

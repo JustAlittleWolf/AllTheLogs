@@ -1539,6 +1539,19 @@ class LogStoreTest {
     }
 
     @Test
+    void clientEntriesDropChatHeadPlaceholders() {
+        LocalDateTime at = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+        store.startSession("26.2", at);
+        int red = PackedFormatting.color(0xFF5555);
+        assertTrue(store.importSessionMessage("\uFFFCHello", new long[]{PackedFormatting.run(1, 5, red)}, at));
+
+        ChatEntry entry = store.allEntries().getFirst();
+        assertEquals("Hello", entry.message());
+        assertEquals(red, PackedFormatting.at(entry.formatting(), 0));
+        assertEquals(red, PackedFormatting.at(entry.formatting(), 4));
+    }
+
+    @Test
     void clientEntriesStripFormattingCodes() {
         store.startSession("26.2", LocalDateTime.of(2026, 8, 26, 12, 0, 0));
         store.importSessionMessage("\u00a7chello \u00a7aworld", LocalDateTime.of(2026, 8, 26, 12, 0, 0));

@@ -20,6 +20,15 @@ class LogParserTest {
     }
 
     @Test
+    void dropsChatHeadPlaceholdersFromImportedLines() throws IOException {
+        ParsedLog parsed = parse("""
+            [12:16:21] [Client thread/INFO]: [CHAT] \uFFFCJustAlittleWolf sagt: Test
+            """);
+        assertEquals(List.of("JustAlittleWolf sagt: Test"),
+            parsed.entries().stream().map(ParsedLog.Entry::message).toList());
+    }
+
+    @Test
     void keepsOnlyChatLinesAndStripsTheMarker() throws IOException {
         ParsedLog parsed = parse("""
             [12:16:21] [Client thread/INFO]: [CHAT] hello

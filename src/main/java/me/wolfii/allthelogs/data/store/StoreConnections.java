@@ -37,7 +37,9 @@ public final class StoreConnections {
                 backupDatabase(absolutePath, version);
                 connection = connect("jdbc:duckdb:" + absolutePath);
             }
-            migrate(connection);
+            if (migrate(connection)) {
+                connection = compact(connection, absolutePath);
+            }
             return connection;
         } catch (SQLException e) {
             if (connection != null) {
@@ -99,9 +101,32 @@ public final class StoreConnections {
         }
     }
 
-    private static void migrate(DuckDBConnection connection) throws SQLException {
+    /**
+     * Steps the schema forward on {@code connection}. When a step rewrote stored rows, clusters
+     * {@code chat_entry} on that same connection.
+     *
+     * @return {@code true} when the file should be compacted. Compacting closes {@code connection}.
+     */
+    private static boolean migrate(DuckDBConnection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
-            SchemaMigration.migrate(statement);
+            boolean optimize = SchemaMigration.migrate(statement);
+            if (!optimize) return false;
+            System.out.println("[AllTheLogs] Optimizing the log store after schema migration");
+            Schema.clusterEntries(statement);
+            StoreOptimizer.analyzeAndCheckpoint(statement);
+            return true;
+        }
+    }
+
+    /**
+     * Replaces {@code databasePath} with a packed copy. Closes {@code connection} and returns the
+     * connection open on the replacement file.
+     */
+    private static DuckDBConnection compact(DuckDBConnection connection, Path databasePath) throws SQLException {
+        try {
+            return StoreOptimizer.replaceWithCompactCopy(connection, databasePath);
+        } catch (IOException e) {
+            throw new SQLException("could not compact the log database after schema migration", e);
         }
     }
 

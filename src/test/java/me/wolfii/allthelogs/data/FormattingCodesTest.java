@@ -60,6 +60,26 @@ class FormattingCodesTest {
     }
 
     @Test
+    void dropsObjectReplacementCharactersAndKeepsFormattingOnTheRest() {
+        FormattingCodes.Parsed parsed = FormattingCodes.parse("\u00a7cAB\uFFFC\u00a7aCD");
+        assertEquals("ABCD", parsed.text());
+        int red = PackedFormatting.color(0xFF5555);
+        int green = PackedFormatting.color(0x55FF55);
+        assertEquals(red, PackedFormatting.at(parsed.formatting(), 0));
+        assertEquals(red, PackedFormatting.at(parsed.formatting(), 1));
+        assertEquals(green, PackedFormatting.at(parsed.formatting(), 2));
+        assertEquals(green, PackedFormatting.at(parsed.formatting(), 3));
+    }
+
+    @Test
+    void dropsALeadingObjectReplacementWithoutMovingTheFollowingColour() {
+        FormattingCodes.Parsed parsed = FormattingCodes.parse("\uFFFC\u00a7cHello");
+        assertEquals("Hello", parsed.text());
+        assertEquals(PackedFormatting.color(0xFF5555), PackedFormatting.at(parsed.formatting(), 0));
+        assertEquals(PackedFormatting.color(0xFF5555), PackedFormatting.at(parsed.formatting(), 4));
+    }
+
+    @Test
     void storesFlattenedColourAndStyleRunsAndOmitsReset() {
         FormattingCodes.Parsed parsed = FormattingCodes.parse(
             "\u00a7c\u00a7lHello \u00a79World\u00a7r!");

@@ -1,11 +1,15 @@
 package me.wolfii.allthelogs.client.config;
 
+import dev.isxander.yacl3.config.v2.api.autogen.AutoGen;
 import me.wolfii.allthelogs.client.search.SearchFilter;
+import me.wolfii.allthelogs.data.parse.MessageCharacters;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -20,6 +24,7 @@ class AllTheLogsConfigTest {
         assertTrue(config.extraImportDirectories().isEmpty());
         assertEquals(AllTheLogsConfig.DEFAULT_CONTEXT_MESSAGE_BRIGHTNESS, config.contextMessageBrightness());
         assertEquals(92, config.contextMessageBrightness());
+        assertFalse(config.filterPrivateUseCharacters());
     }
 
     @Test
@@ -125,5 +130,40 @@ class AllTheLogsConfigTest {
             }
             """);
         assertEquals(100, AllTheLogsConfig.load(file).contextMessageBrightness());
+    }
+
+    @Test
+    void privateUseFilterDefaultsOffAndRoundTrips() throws Exception {
+        Path file = temp.resolve("private-use.json");
+        AllTheLogsConfig loaded = AllTheLogsConfig.load(file);
+        assertFalse(loaded.filterPrivateUseCharacters());
+        loaded.save();
+        assertTrue(Files.readString(file).contains("\"filterPrivateUseCharacters\": false"));
+
+        Files.writeString(file, """
+            {
+              "filterPrivateUseCharacters": true
+            }
+            """);
+        AllTheLogsConfig enabled = AllTheLogsConfig.load(file);
+        assertTrue(enabled.filterPrivateUseCharacters());
+        assertFalse(MessageCharacters.dropPrivateUseCharacters());
+        enabled.setFilterPrivateUseCharacters(true);
+        assertFalse(MessageCharacters.dropPrivateUseCharacters());
+        enabled.save();
+        assertTrue(Files.readString(file).contains("\"filterPrivateUseCharacters\": true"));
+    }
+
+    @Test
+    void messagesCategoryComesBeforeAutoImport() {
+        List<String> categories = new ArrayList<>();
+        for (Field field : AllTheLogsConfig.class.getDeclaredFields()) {
+            AutoGen autoGen = field.getAnnotation(AutoGen.class);
+            if (autoGen == null) continue;
+            if (categories.isEmpty() || !categories.getLast().equals(autoGen.category())) {
+                categories.add(autoGen.category());
+            }
+        }
+        assertEquals(List.of("browser", "import"), categories);
     }
 }

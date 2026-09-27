@@ -2,6 +2,8 @@ package me.wolfii.allthelogs.data.store;
 
 import me.wolfii.allthelogs.data.LogDataException;
 import me.wolfii.allthelogs.data.LogStore;
+import me.wolfii.allthelogs.data.parse.MessageCharacters;
+import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -174,6 +176,68 @@ class SchemaMigrationTest {
     }
 
     @Test
+    void migratesVersion5DatabasesByStrippingPlaceholderCharacters() throws SQLException {
+        Path database = tempDir.resolve("v5.duckdb");
+        int red = PackedFormatting.color(0xFF5555);
+        String face = "\uFFFCHello\uE000" + new String(Character.toChars(0xF0000));
+        String middle = "AB" + MessageCharacters.OBJECT_REPLACEMENT + "CD";
+        try (var connection = StoreConnections.openFile(database);
+             Statement statement = connection.createStatement()) {
+            try (var insert = connection.prepareStatement("""
+                INSERT INTO chat_entry
+                    (file_id, line_index, entry_time, message, formatting, minecraft_user, server_or_world)
+                VALUES (1, ?, '2026-01-01 00:00:00', ?, CAST(? AS BIGINT[]), NULL, NULL)""")) {
+                insert.setInt(1, 0);
+                insert.setString(2, face);
+                insert.setString(3, PackedFormatting.toSqlLiteral(new long[]{PackedFormatting.run(1, 5, red)}));
+                insert.execute();
+                insert.setInt(1, 1);
+                insert.setString(2, middle);
+                insert.setString(3, PackedFormatting.toSqlLiteral(new long[]{PackedFormatting.run(0, 6, red)}));
+                insert.execute();
+                insert.setInt(1, 2);
+                insert.setString(2, String.valueOf(MessageCharacters.OBJECT_REPLACEMENT));
+                insert.setNull(3, java.sql.Types.VARCHAR);
+                insert.execute();
+                insert.setInt(1, 3);
+                insert.setString(2, "plain");
+                insert.setNull(3, java.sql.Types.VARCHAR);
+                insert.execute();
+            }
+            statement.execute("DELETE FROM " + Schema.META_TABLE
+                + " WHERE k = '" + Schema.VERSION_KEY + "'");
+            statement.execute("INSERT INTO " + Schema.META_TABLE + " VALUES ('"
+                + Schema.VERSION_KEY + "', '5')");
+        }
+
+        try (var connection = StoreConnections.openFile(database);
+             Statement statement = connection.createStatement()) {
+            assertEquals(Schema.CURRENT_VERSION, SchemaMigration.readVersion(statement));
+            try (ResultSet result = statement.executeQuery("""
+                SELECT message, to_json(formatting)
+                FROM chat_entry
+                ORDER BY line_index""")) {
+                assertTrue(result.next());
+                assertEquals("Hello", result.getString(1));
+                long[] hello = PackedFormatting.fromSqlLiteral(result.getString(2));
+                assertEquals(red, PackedFormatting.at(hello, 0));
+                assertEquals(red, PackedFormatting.at(hello, 4));
+                assertTrue(result.next());
+                assertEquals("ABCD", result.getString(1));
+                long[] letters = PackedFormatting.fromSqlLiteral(result.getString(2));
+                assertEquals(red, PackedFormatting.at(letters, 0));
+                assertEquals(red, PackedFormatting.at(letters, 3));
+                assertTrue(result.next());
+                assertEquals("", result.getString(1));
+                assertNull(PackedFormatting.fromSqlLiteral(result.getString(2)));
+                assertTrue(result.next());
+                assertEquals("plain", result.getString(1));
+                assertFalse(result.next());
+            }
+        }
+    }
+
+    @Test
     void newerDatabaseVersionIsRejected() throws SQLException {
         Path database = tempDir.resolve("future.duckdb");
         try (var connection = StoreConnections.openFile(database);
@@ -186,5 +250,94 @@ class SchemaMigrationTest {
 
         SQLException cause = openRejected(database);
         assertTrue(cause.getMessage().contains("newer than this mod supports"));
+    }
+
+    @Test
+    void placeholderRewriteAsksForAStoreOptimizeAndACleanDatabaseDoesNot() throws SQLException {
+        try (var connection = StoreConnections.openInMemory();
+             Statement statement = connection.createStatement()) {
+            statement.execute("""
+                INSERT INTO chat_entry VALUES (
+                    1, 0, TIMESTAMP '2026-01-01 00:00:00', 'plain', NULL, NULL, NULL)""");
+            SchemaMigration.setVersion(statement, 5);
+            assertFalse(SchemaMigration.migrate(statement));
+            assertEquals(Schema.CURRENT_VERSION, SchemaMigration.readVersion(statement));
+            assertEquals("0", clusterMarker(statement));
+        }
+
+        try (var connection = StoreConnections.openInMemory();
+             Statement statement = connection.createStatement()) {
+            statement.execute("""
+                INSERT INTO chat_entry VALUES (
+                    1, 0, TIMESTAMP '2026-01-01 00:00:00', '\uFFFCHi', NULL, NULL, NULL)""");
+            SchemaMigration.setVersion(statement, 5);
+            assertTrue(SchemaMigration.migrate(statement));
+            try (ResultSet result = statement.executeQuery("SELECT message FROM chat_entry")) {
+                assertTrue(result.next());
+                assertEquals("Hi", result.getString(1));
+            }
+            assertFalse(SchemaMigration.migrate(statement));
+        }
+    }
+
+    @Test
+    void rewrittenPlaceholderRowsAreClusteredWhenTheFileReopens() throws SQLException {
+        Path database = tempDir.resolve("optimize.duckdb");
+        try (var connection = StoreConnections.openFile(database);
+             Statement statement = connection.createStatement()) {
+            insertLogFile(statement, 1);
+            statement.execute("""
+                INSERT INTO chat_entry VALUES (
+                    1, 0, TIMESTAMP '2026-01-01 00:00:00', '\uFFFCHello', NULL, NULL, NULL)""");
+            SchemaMigration.setVersion(statement, 5);
+        }
+
+        try (var connection = StoreConnections.openFile(database);
+             Statement statement = connection.createStatement()) {
+            try (ResultSet result = statement.executeQuery("SELECT message FROM chat_entry")) {
+                assertTrue(result.next());
+                assertEquals("Hello", result.getString(1));
+            }
+            assertEquals("2", clusterMarker(statement));
+        }
+    }
+
+    @Test
+    void version5DatabaseWithoutPlaceholdersKeepsTheClusterMarker() throws SQLException {
+        Path database = tempDir.resolve("clean.duckdb");
+        try (var connection = StoreConnections.openFile(database);
+             Statement statement = connection.createStatement()) {
+            insertLogFile(statement, 1);
+            statement.execute("""
+                INSERT INTO chat_entry VALUES (
+                    1, 0, TIMESTAMP '2026-01-01 00:00:00', 'plain', NULL, NULL, NULL)""");
+            SchemaMigration.setVersion(statement, 5);
+        }
+
+        try (var connection = StoreConnections.openFile(database);
+             Statement statement = connection.createStatement()) {
+            try (ResultSet result = statement.executeQuery("SELECT message FROM chat_entry")) {
+                assertTrue(result.next());
+                assertEquals("plain", result.getString(1));
+            }
+            assertEquals("0", clusterMarker(statement));
+        }
+    }
+
+    private static void insertLogFile(Statement statement, long id) throws SQLException {
+        statement.execute("""
+            INSERT INTO log_file VALUES (
+                %d, 'chat.log', 'FILE', '/tmp/%d.log', '/tmp/%d.log',
+                DATE '2026-01-01', '26.2',
+                TIMESTAMP '2026-01-01 00:00:00', TIMESTAMP '2026-01-01 00:00:01', 1, NULL)"""
+            .formatted(id, id, id));
+    }
+
+    private static String clusterMarker(Statement statement) throws SQLException {
+        try (ResultSet result = statement.executeQuery(
+            "SELECT v FROM " + Schema.META_TABLE + " WHERE k = '" + Schema.CLUSTER_MARKER_KEY + "'")) {
+            assertTrue(result.next());
+            return result.getString(1);
+        }
     }
 }
