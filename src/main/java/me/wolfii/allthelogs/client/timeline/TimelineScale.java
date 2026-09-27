@@ -14,9 +14,10 @@ import java.util.List;
  * long stretches without matches still take up track. {@link #dayProgress} gives every occupied calendar day an
  * equal share and positions within a day by clock time. {@link #matchDayProgress} also gives every occupied day
  * an equal share, but positions within a day between that day's real first and last match, which is what the
- * scrubber uses. A day whose matches all share one timestamp is {@linkplain MatchDay#collapsed() collapsed} and
- * has to be addressed by match rank instead; see {@link #skipAtProgress}.
- */
+     * scrubber uses. A day whose matches all share one timestamp is {@linkplain MatchDay#collapsed() collapsed} and
+     * has to be addressed by match rank instead; see {@link #skipAtProgress}. Collapsed only removes the clock
+     * span inside that calendar day. A timestamp on a different day is still before or after it.
+     */
 public final class TimelineScale {
     private TimelineScale() {
     }
@@ -46,6 +47,19 @@ public final class TimelineScale {
         LocalDateTime last = later(oldest, newest);
         if (first == null || last == null) return first;
         return interpolate(first, last, progressFromTop);
+    }
+
+    /**
+     * Where a date label sits on the track. Occupied days use {@link #matchDayProgress}; an empty day list
+     * falls back to {@link #linearProgress}. The label cull and the painter both go through here, so a label
+     * that was kept for being far enough from its neighbour is far enough where it is drawn.
+     */
+    public static double trackProgress(LocalDateTime time, LocalDateTime oldest, LocalDateTime newest,
+                                       List<MatchDay> days) {
+        if (days != null && !days.isEmpty()) {
+            return matchDayProgress(time, days, 0);
+        }
+        return linearProgress(time, oldest, newest);
     }
 
     /**
@@ -160,13 +174,21 @@ public final class TimelineScale {
         return index;
     }
 
+    /**
+     * How far {@code time} sits through {@code day}, in {@code [0, 1]}.
+     * <p>
+     * {@code collapsedFraction} places a timestamp that is actually on a collapsed day, which has no clock
+     * span. It must not apply to a different calendar day: the next month's label falls after a collapsed
+     * day and used to be drawn at that day's start, on top of the label already there. At the top of the
+     * track that stacked the first two dates.
+     */
     static double dayFraction(LocalDateTime time, MatchDay day, double collapsedFraction) {
-        if (day.collapsed()) {
-            return Double.isNaN(collapsedFraction) ? 0 : Math.clamp(collapsedFraction, 0, 1);
-        }
         if (time == null) return 0;
         if (time.toLocalDate().isBefore(day.date())) return 0;
         if (time.toLocalDate().isAfter(day.date())) return 1;
+        if (day.collapsed()) {
+            return Double.isNaN(collapsedFraction) ? 0 : Math.clamp(collapsedFraction, 0, 1);
+        }
         return linearProgress(time, day.oldest(), day.newest());
     }
 
