@@ -1,6 +1,5 @@
 package me.wolfii.allthelogs.data.store;
 
-import org.apache.commons.compress.compressors.lz4.FramedLZ4CompressorInputStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -12,6 +11,7 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import java.time.Instant;
 import java.util.List;
+import java.util.zip.GZIPInputStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -20,14 +20,14 @@ class DatabaseBackupTest {
     Path tempDir;
 
     @Test
-    void createWritesAnLz4CopyOfTheDatabaseBytes() throws Exception {
+    void createWritesAGzipCopyOfTheDatabaseBytes() throws Exception {
         Path database = tempDir.resolve("logs.duckdb");
         Files.writeString(database, "duckdb-bytes");
         Instant at = Instant.parse("2026-09-22T13:15:00Z");
 
         Path backup = DatabaseBackup.create(database, 4, at);
 
-        assertEquals("logs.duckdb.v4.20260922T131500Z.lz4", backup.getFileName().toString());
+        assertEquals("logs.duckdb.v4.20260922T131500Z.gz", backup.getFileName().toString());
         assertEquals("duckdb-bytes", new String(decompress(backup)));
         assertFalse(Files.exists(backup.resolveSibling(backup.getFileName() + ".tmp")));
     }
@@ -106,6 +106,25 @@ class DatabaseBackupTest {
     }
 
     @Test
+    void listAndPruneStillSeeLegacyLz4Backups() throws Exception {
+        Path database = tempDir.resolve("logs.duckdb");
+        Files.writeString(database, "db");
+        Path legacy = database.resolveSibling("logs.duckdb.v4.20260101T000000Z.lz4");
+        Files.writeString(legacy, "old");
+        Path newer = DatabaseBackup.backupPath(database, 5, Instant.parse("2026-09-01T00:00:00Z"));
+        Files.writeString(newer, "new");
+
+        List<DatabaseBackup.Copy> listed = DatabaseBackup.list(database);
+        assertEquals(2, listed.size());
+        assertEquals(legacy, listed.getFirst().path());
+
+        DatabaseBackup.pruneExpired(database, Instant.parse("2026-09-22T12:00:00Z"));
+
+        assertFalse(Files.exists(legacy));
+        assertTrue(Files.exists(newer));
+    }
+
+    @Test
     void reopeningTheCurrentSchemaDoesNotWriteABackup() throws Exception {
         Path database = tempDir.resolve("logs.duckdb");
         try (var ignored = StoreConnections.openFile(database)) {
@@ -123,9 +142,9 @@ class DatabaseBackupTest {
 
     private static byte[] decompress(Path backup) throws Exception {
         try (InputStream file = Files.newInputStream(backup);
-             FramedLZ4CompressorInputStream lz4 = new FramedLZ4CompressorInputStream(file);
+             GZIPInputStream gzip = new GZIPInputStream(file);
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            lz4.transferTo(out);
+            gzip.transferTo(out);
             return out.toByteArray();
         }
     }

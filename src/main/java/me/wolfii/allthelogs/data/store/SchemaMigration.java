@@ -3,12 +3,12 @@ package me.wolfii.allthelogs.data.store;
 import me.wolfii.allthelogs.data.parse.FormattingCodes;
 import me.wolfii.allthelogs.data.parse.MessageCharacters;
 import me.wolfii.allthelogs.data.parse.PackedFormatting;
+import org.duckdb.DuckDBAppender;
+import org.duckdb.DuckDBConnection;
 
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -123,68 +123,70 @@ public final class SchemaMigration {
      * 5 → 6: removes U+FFFC and Unicode private-use characters from messages already stored, and
      * rebuilds formatting so colours stay on the characters that remain. New lines are filtered as
      * they are written, so this only rewrites an older database.
+     * <p>
+     * Matching rows are collected once, appended into a temporary table, and applied with a single
+     * {@code UPDATE}. Per-row updates rewrite DuckDB row groups one line at a time.
      *
      * @return {@code true} when a stored line changed. In-place string updates leave the old message
      * bytes in the table, and search scans that column, so the caller rewrites the store.
      */
     private static boolean migrate5To6StripPlaceholderCharacters(Statement statement) throws SQLException {
-        int batchSize = 1000;
-        long afterRowId = -1;
-        int updated = 0;
-        while (true) {
-            List<Long> rowIds = new ArrayList<>();
-            List<String> messages = new ArrayList<>();
-            List<long[]> formatting = new ArrayList<>();
-            long lastRowId = afterRowId;
-            int scanned = 0;
-            String query = """
-                SELECT rowid, message, to_json(formatting)
-                FROM chat_entry
-                WHERE rowid > %d
-                  AND (contains(message, chr(%d)) OR regexp_matches(message, '\\p{Co}'))
-                ORDER BY rowid
-                LIMIT %d
-                """.formatted(afterRowId, MessageCharacters.OBJECT_REPLACEMENT_CODE_POINT, batchSize);
-            try (ResultSet result = statement.executeQuery(query)) {
-                while (result.next()) {
-                    scanned++;
-                    lastRowId = result.getLong(1);
-                    String message = result.getString(2);
-                    FormattingCodes.Parsed filtered = MessageCharacters.filter(
-                        new FormattingCodes.Parsed(message, PackedFormatting.fromSqlLiteral(result.getString(3))), true);
-                    if (message.equals(filtered.text())) continue;
-                    rowIds.add(lastRowId);
-                    messages.add(filtered.text());
-                    formatting.add(filtered.formatting());
-                }
+        List<Long> rowIds = new ArrayList<>();
+        List<String> messages = new ArrayList<>();
+        List<long[]> formatting = new ArrayList<>();
+        String query = """
+            SELECT rowid, message, to_json(formatting)
+            FROM chat_entry
+            WHERE contains(message, chr(%d)) OR regexp_matches(message, '\\p{Co}')
+            """.formatted(MessageCharacters.OBJECT_REPLACEMENT_CODE_POINT);
+        try (ResultSet result = statement.executeQuery(query)) {
+            while (result.next()) {
+                long rowId = result.getLong(1);
+                String message = result.getString(2);
+                FormattingCodes.Parsed filtered = MessageCharacters.filter(
+                    new FormattingCodes.Parsed(message, PackedFormatting.fromSqlLiteral(result.getString(3))), true);
+                if (message.equals(filtered.text())) continue;
+                rowIds.add(rowId);
+                messages.add(filtered.text());
+                formatting.add(filtered.formatting());
             }
-            if (!rowIds.isEmpty()) {
-                try (PreparedStatement update = statement.getConnection().prepareStatement("""
-                    UPDATE chat_entry
-                    SET message = ?, formatting = CAST(? AS BIGINT[])
-                    WHERE rowid = ?""")) {
-                    for (int i = 0; i < rowIds.size(); i++) {
-                        update.setString(1, messages.get(i));
-                        String literal = PackedFormatting.toSqlLiteral(formatting.get(i));
-                        if (literal == null) {
-                            update.setNull(2, Types.VARCHAR);
-                        } else {
-                            update.setString(2, literal);
-                        }
-                        update.setLong(3, rowIds.get(i));
-                        update.addBatch();
+        }
+        if (rowIds.isEmpty()) return false;
+        System.out.println("[AllTheLogs] Removing placeholder characters from " + rowIds.size() + " chat lines");
+        statement.execute("""
+            CREATE TEMP TABLE chat_entry_rewrite (
+                rid BIGINT,
+                message VARCHAR,
+                formatting BIGINT[]
+            )""");
+        try {
+            DuckDBConnection connection = statement.getConnection().unwrap(DuckDBConnection.class);
+            // Temporary tables are stored in the temp catalog, not the database file's catalog.
+            try (DuckDBAppender appender = connection.createAppender(
+                "temp", DuckDBConnection.DEFAULT_SCHEMA, "chat_entry_rewrite")) {
+                for (int i = 0; i < rowIds.size(); i++) {
+                    appender.beginRow();
+                    appender.append(rowIds.get(i));
+                    appender.append(messages.get(i));
+                    long[] packed = formatting.get(i);
+                    if (packed == null) {
+                        appender.appendNull();
+                    } else {
+                        appender.append(packed);
                     }
-                    update.executeBatch();
+                    appender.endRow();
                 }
-                updated += rowIds.size();
             }
-            if (scanned < batchSize) break;
-            afterRowId = lastRowId;
+            statement.execute("""
+                UPDATE chat_entry
+                SET message = r.message,
+                    formatting = r.formatting
+                FROM chat_entry_rewrite r
+                WHERE chat_entry.rowid = r.rid""");
+        } finally {
+            statement.execute("DROP TABLE IF EXISTS chat_entry_rewrite");
         }
-        if (updated > 0) {
-            System.out.println("[AllTheLogs] Removed placeholder characters from " + updated + " chat lines");
-        }
-        return updated > 0;
+        return true;
     }
 
     static int readVersion(Statement statement) throws SQLException {
