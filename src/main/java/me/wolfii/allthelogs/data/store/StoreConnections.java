@@ -37,7 +37,7 @@ public final class StoreConnections {
                 backupDatabase(absolutePath, version);
                 connection = connect("jdbc:duckdb:" + absolutePath);
             }
-            migrate(connection);
+            connection = finishMigration(connection, absolutePath);
             return connection;
         } catch (SQLException e) {
             if (connection != null) {
@@ -57,7 +57,7 @@ public final class StoreConnections {
     public static DuckDBConnection openInMemory() throws SQLException {
         DuckDBConnection connection = connect("jdbc:duckdb:");
         try {
-            migrate(connection);
+            finishMigration(connection, null);
             return connection;
         } catch (SQLException e) {
             connection.close();
@@ -99,9 +99,26 @@ public final class StoreConnections {
         }
     }
 
-    private static void migrate(DuckDBConnection connection) throws SQLException {
+    /**
+     * Steps the schema forward. When a step rewrote stored rows, rewrites {@code chat_entry} oldest-first
+     * and, for a file database, copies the catalog into a fresh file so the old string bytes are released.
+     */
+    private static DuckDBConnection finishMigration(DuckDBConnection connection, Path databasePath)
+        throws SQLException {
+        boolean optimize;
         try (Statement statement = connection.createStatement()) {
-            SchemaMigration.migrate(statement);
+            optimize = SchemaMigration.migrate(statement);
+            if (optimize) {
+                System.out.println("[AllTheLogs] Optimizing the log store after schema migration");
+                Schema.clusterEntries(statement);
+                StoreOptimizer.analyzeAndCheckpoint(statement);
+            }
+        }
+        if (!optimize || databasePath == null) return connection;
+        try {
+            return StoreOptimizer.replaceWithCompactCopy(connection, databasePath);
+        } catch (IOException e) {
+            throw new SQLException("could not compact the log database after schema migration", e);
         }
     }
 

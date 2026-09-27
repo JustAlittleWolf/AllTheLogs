@@ -18,12 +18,12 @@ import java.util.Map;
  * <p>
  * A database with no version at all (predates versioning) or a version older than
  * {@link #MIGRATIONS}. A version bump that needs no data changes (a purely additive, backward-compatible
- * schema/behavior change) still gets an entry here — registered as {@code (statement) -> { }} — so a
- * missing entry always means "forgotten", never "not needed".
+ * schema/behavior change) still gets an entry here — registered as {@code (statement) -> false} — so a
+ * missing entry always means "forgotten", never "not needed". A step returns {@code true} when it
+ * rewrote stored rows and the whole store should be optimized afterwards.
  */
 public final class SchemaMigration {
-    private static final Migration NO_OP = (_) -> {
-    };
+    private static final Migration NO_OP = (_) -> false;
 
     /**
      * Step {@code v} takes a database from version {@code v} to {@code v + 1}. Applied in a loop by
@@ -40,7 +40,10 @@ public final class SchemaMigration {
 
     @FunctionalInterface
     private interface Migration {
-        void apply(Statement statement) throws SQLException;
+        /**
+         * @return {@code true} when this step rewrote stored rows and the whole store should be optimized
+         */
+        boolean apply(Statement statement) throws SQLException;
     }
 
     private SchemaMigration() {
@@ -48,13 +51,15 @@ public final class SchemaMigration {
 
     /**
      * Ensures a fresh database is at {@link Schema#CURRENT_VERSION}, or steps an existing one forward to it.
+     *
+     * @return {@code true} when a step rewrote stored rows and the caller should optimize the whole store
      */
-    public static void migrate(Statement statement) throws SQLException {
+    public static boolean migrate(Statement statement) throws SQLException {
         int version = readVersion(statement);
         if (version == 0) {
             Schema.create(statement);
             setVersion(statement, Schema.CURRENT_VERSION);
-            return;
+            return false;
         }
         if (version > Schema.CURRENT_VERSION) {
             throw new SQLException("database schema version " + version
@@ -64,6 +69,7 @@ public final class SchemaMigration {
             throw new SQLException("database schema version " + version
                 + " is too old to migrate; delete it and import again");
         }
+        boolean optimize = false;
         while (version < Schema.CURRENT_VERSION) {
             Migration step = MIGRATIONS.get(version);
             if (step == null) {
@@ -71,10 +77,11 @@ public final class SchemaMigration {
                     + " to " + (version + 1));
             }
             System.out.println("[AllTheLogs] Migrating schema from version " + version + " to " + (version + 1));
-            step.apply(statement);
+            optimize |= step.apply(statement);
             version++;
             setVersion(statement, version);
         }
+        return optimize;
     }
 
     /**
@@ -90,8 +97,9 @@ public final class SchemaMigration {
      * data gets optimized too, not just writes made from this point on. That first catch-up after upgrading
      * costs as much as a full cluster; every one after it is back to the normal, cheap, tail-only cost.
      */
-    private static void migrate3To4SeedClusterMarker(Statement statement) throws SQLException {
+    private static boolean migrate3To4SeedClusterMarker(Statement statement) throws SQLException {
         statement.execute("INSERT INTO " + Schema.META_TABLE + " VALUES ('" + Schema.CLUSTER_MARKER_KEY + "', '0')");
+        return false;
     }
 
     /**
@@ -100,7 +108,7 @@ public final class SchemaMigration {
      * (connect → leave → connect). Existing rows inherit {@code log_file.minecraft_user};
      * {@code server_or_world} is null until those logs are imported again.
      */
-    private static void migrate4To5PerEntryMetadata(Statement statement) throws SQLException {
+    private static boolean migrate4To5PerEntryMetadata(Statement statement) throws SQLException {
         statement.execute("ALTER TABLE chat_entry ADD COLUMN IF NOT EXISTS minecraft_user VARCHAR");
         statement.execute("ALTER TABLE chat_entry ADD COLUMN IF NOT EXISTS server_or_world VARCHAR");
         statement.execute("""
@@ -108,14 +116,18 @@ public final class SchemaMigration {
             SET minecraft_user = f.minecraft_user
             FROM log_file f
             WHERE e.file_id = f.id AND e.minecraft_user IS NULL AND f.minecraft_user IS NOT NULL""");
+        return false;
     }
 
     /**
      * 5 → 6: removes U+FFFC and Unicode private-use characters from messages already stored, and
      * rebuilds formatting so colours stay on the characters that remain. New lines are filtered as
      * they are written, so this only rewrites an older database.
+     *
+     * @return {@code true} when a stored line changed. In-place string updates leave the old message
+     * bytes in the table, and search scans that column, so the caller rewrites the store.
      */
-    private static void migrate5To6StripPlaceholderCharacters(Statement statement) throws SQLException {
+    private static boolean migrate5To6StripPlaceholderCharacters(Statement statement) throws SQLException {
         int batchSize = 1000;
         long afterRowId = -1;
         int updated = 0;
@@ -172,6 +184,7 @@ public final class SchemaMigration {
         if (updated > 0) {
             System.out.println("[AllTheLogs] Removed placeholder characters from " + updated + " chat lines");
         }
+        return updated > 0;
     }
 
     static int readVersion(Statement statement) throws SQLException {
