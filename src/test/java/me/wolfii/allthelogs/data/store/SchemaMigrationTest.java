@@ -2,6 +2,8 @@ package me.wolfii.allthelogs.data.store;
 
 import me.wolfii.allthelogs.data.LogDataException;
 import me.wolfii.allthelogs.data.LogStore;
+import me.wolfii.allthelogs.data.parse.MessageCharacters;
+import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -170,6 +172,68 @@ class SchemaMigrationTest {
             assertFalse(columnExists(statement, "log_file", "server_place"));
             assertTrue(columnExists(statement, "chat_entry", "server_or_world"));
             assertTrue(columnExists(statement, "chat_entry", "minecraft_user"));
+        }
+    }
+
+    @Test
+    void migratesVersion5DatabasesByStrippingPlaceholderCharacters() throws SQLException {
+        Path database = tempDir.resolve("v5.duckdb");
+        int red = PackedFormatting.color(0xFF5555);
+        String face = "\uFFFCHello\uE000" + new String(Character.toChars(0xF0000));
+        String middle = "AB" + MessageCharacters.OBJECT_REPLACEMENT + "CD";
+        try (var connection = StoreConnections.openFile(database);
+             Statement statement = connection.createStatement()) {
+            try (var insert = connection.prepareStatement("""
+                INSERT INTO chat_entry
+                    (file_id, line_index, entry_time, message, formatting, minecraft_user, server_or_world)
+                VALUES (1, ?, '2026-01-01 00:00:00', ?, CAST(? AS BIGINT[]), NULL, NULL)""")) {
+                insert.setInt(1, 0);
+                insert.setString(2, face);
+                insert.setString(3, PackedFormatting.toSqlLiteral(new long[]{PackedFormatting.run(1, 5, red)}));
+                insert.execute();
+                insert.setInt(1, 1);
+                insert.setString(2, middle);
+                insert.setString(3, PackedFormatting.toSqlLiteral(new long[]{PackedFormatting.run(0, 6, red)}));
+                insert.execute();
+                insert.setInt(1, 2);
+                insert.setString(2, String.valueOf(MessageCharacters.OBJECT_REPLACEMENT));
+                insert.setNull(3, java.sql.Types.VARCHAR);
+                insert.execute();
+                insert.setInt(1, 3);
+                insert.setString(2, "plain");
+                insert.setNull(3, java.sql.Types.VARCHAR);
+                insert.execute();
+            }
+            statement.execute("DELETE FROM " + Schema.META_TABLE
+                + " WHERE k = '" + Schema.VERSION_KEY + "'");
+            statement.execute("INSERT INTO " + Schema.META_TABLE + " VALUES ('"
+                + Schema.VERSION_KEY + "', '5')");
+        }
+
+        try (var connection = StoreConnections.openFile(database);
+             Statement statement = connection.createStatement()) {
+            assertEquals(Schema.CURRENT_VERSION, SchemaMigration.readVersion(statement));
+            try (ResultSet result = statement.executeQuery("""
+                SELECT message, to_json(formatting)
+                FROM chat_entry
+                ORDER BY line_index""")) {
+                assertTrue(result.next());
+                assertEquals("Hello", result.getString(1));
+                long[] hello = PackedFormatting.fromSqlLiteral(result.getString(2));
+                assertEquals(red, PackedFormatting.at(hello, 0));
+                assertEquals(red, PackedFormatting.at(hello, 4));
+                assertTrue(result.next());
+                assertEquals("ABCD", result.getString(1));
+                long[] letters = PackedFormatting.fromSqlLiteral(result.getString(2));
+                assertEquals(red, PackedFormatting.at(letters, 0));
+                assertEquals(red, PackedFormatting.at(letters, 3));
+                assertTrue(result.next());
+                assertEquals("", result.getString(1));
+                assertNull(PackedFormatting.fromSqlLiteral(result.getString(2)));
+                assertTrue(result.next());
+                assertEquals("plain", result.getString(1));
+                assertFalse(result.next());
+            }
         }
     }
 

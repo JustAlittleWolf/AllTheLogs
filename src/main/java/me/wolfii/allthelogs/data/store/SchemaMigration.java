@@ -1,8 +1,16 @@
 package me.wolfii.allthelogs.data.store;
 
+import me.wolfii.allthelogs.data.parse.FormattingCodes;
+import me.wolfii.allthelogs.data.parse.MessageCharacters;
+import me.wolfii.allthelogs.data.parse.PackedFormatting;
+
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -14,6 +22,7 @@ import java.util.Map;
  * missing entry always means "forgotten", never "not needed".
  */
 public final class SchemaMigration {
+    private static final int PLACEHOLDER_BATCH = 1000;
     private static final Migration NO_OP = (_) -> {
     };
 
@@ -26,7 +35,8 @@ public final class SchemaMigration {
         1, NO_OP,
         2, NO_OP,
         3, SchemaMigration::migrate3To4SeedClusterMarker,
-        4, SchemaMigration::migrate4To5PerEntryMetadata
+        4, SchemaMigration::migrate4To5PerEntryMetadata,
+        5, SchemaMigration::migrate5To6StripPlaceholderCharacters
     );
 
     @FunctionalInterface
@@ -99,6 +109,80 @@ public final class SchemaMigration {
             SET minecraft_user = f.minecraft_user
             FROM log_file f
             WHERE e.file_id = f.id AND e.minecraft_user IS NULL AND f.minecraft_user IS NOT NULL""");
+    }
+
+    /**
+     * 5 → 6: removes U+FFFC and Unicode private-use characters from messages already stored, and
+     * rebuilds formatting so colours stay on the characters that remain. New lines are filtered as
+     * they are written, so this only rewrites an older database.
+     */
+    private static void migrate5To6StripPlaceholderCharacters(Statement statement) throws SQLException {
+        long afterRowId = -1;
+        int updated = 0;
+        while (true) {
+            ScannedPage page = nextPlaceholderPage(statement, afterRowId);
+            if (!page.changed().isEmpty()) {
+                updated += writeFilteredEntries(statement, page.changed());
+            }
+            if (!page.full()) break;
+            afterRowId = page.lastRowId();
+        }
+        if (updated > 0) {
+            System.out.println("[AllTheLogs] Removed placeholder characters from " + updated + " chat lines");
+        }
+    }
+
+    private static ScannedPage nextPlaceholderPage(Statement statement, long afterRowId) throws SQLException {
+        List<FilteredEntry> changed = new ArrayList<>();
+        long lastRowId = afterRowId;
+        int scanned = 0;
+        String query = """
+            SELECT rowid, message, to_json(formatting)
+            FROM chat_entry
+            WHERE rowid > %d
+              AND (contains(message, chr(%d)) OR regexp_matches(message, '\\p{Co}'))
+            ORDER BY rowid
+            LIMIT %d
+            """.formatted(afterRowId, MessageCharacters.OBJECT_REPLACEMENT_CODE_POINT, PLACEHOLDER_BATCH);
+        try (ResultSet result = statement.executeQuery(query)) {
+            while (result.next()) {
+                scanned++;
+                lastRowId = result.getLong(1);
+                String message = result.getString(2);
+                FormattingCodes.Parsed filtered = MessageCharacters.filter(
+                    new FormattingCodes.Parsed(message, PackedFormatting.fromSqlLiteral(result.getString(3))), true);
+                if (message.equals(filtered.text())) continue;
+                changed.add(new FilteredEntry(lastRowId, filtered.text(), filtered.formatting()));
+            }
+        }
+        return new ScannedPage(lastRowId, scanned == PLACEHOLDER_BATCH, changed);
+    }
+
+    private static int writeFilteredEntries(Statement statement, List<FilteredEntry> batch) throws SQLException {
+        try (PreparedStatement update = statement.getConnection().prepareStatement("""
+            UPDATE chat_entry
+            SET message = ?, formatting = CAST(? AS BIGINT[])
+            WHERE rowid = ?""")) {
+            for (FilteredEntry entry : batch) {
+                update.setString(1, entry.message());
+                String formatting = PackedFormatting.toSqlLiteral(entry.formatting());
+                if (formatting == null) {
+                    update.setNull(2, Types.VARCHAR);
+                } else {
+                    update.setString(2, formatting);
+                }
+                update.setLong(3, entry.rowId());
+                update.addBatch();
+            }
+            update.executeBatch();
+        }
+        return batch.size();
+    }
+
+    private record FilteredEntry(long rowId, String message, long[] formatting) {
+    }
+
+    private record ScannedPage(long lastRowId, boolean full, List<FilteredEntry> changed) {
     }
 
     static int readVersion(Statement statement) throws SQLException {

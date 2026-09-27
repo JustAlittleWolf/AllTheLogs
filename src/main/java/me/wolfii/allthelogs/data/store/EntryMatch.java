@@ -1,15 +1,12 @@
 package me.wolfii.allthelogs.data.store;
 
-import me.wolfii.allthelogs.data.parse.MessageCharacters;
-
 import java.sql.SQLException;
 import java.sql.Statement;
 
 /**
  * Shared matching for metadata patches and import collision removal.
- * Two chat lines are the same event when their timestamps fall within {@link #WINDOW_SECONDS}
- * and their text matches after a stored {@code \n} pair is treated as a newline. Characters
- * {@link MessageCharacters} removes are ignored, so an older row still matches a newly stored line.
+ * Two chat lines are the same event when their text is identical after treating a stored {@code \n}
+ * pair as a real newline, and their timestamps fall within {@link #WINDOW_SECONDS}.
  */
 public final class EntryMatch {
     public static final int WINDOW_SECONDS = 3;
@@ -18,16 +15,10 @@ public final class EntryMatch {
     }
 
     /**
-     * SQL that treats a stored {@code \n} pair as a live newline and ignores characters
-     * {@link MessageCharacters} removes, so an older row still matches a newly stored line.
+     * SQL that treats a stored {@code \n} pair as the same character as a live newline.
      */
     public static String normalizedText(String column) {
-        String text = "replace(" + column + ", chr(92) || 'n', chr(10))";
-        text = "replace(" + text + ", chr(" + MessageCharacters.OBJECT_REPLACEMENT_CODE_POINT + "), '')";
-        if (MessageCharacters.dropPrivateUseCharacters()) {
-            text = "regexp_replace(" + text + ", '\\p{Co}', '', 'g')";
-        }
-        return text;
+        return "replace(" + column + ", chr(92) || 'n', chr(10))";
     }
 
     /**

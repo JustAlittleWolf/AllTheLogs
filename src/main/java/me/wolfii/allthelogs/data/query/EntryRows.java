@@ -3,8 +3,6 @@ package me.wolfii.allthelogs.data.query;
 import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.LogDataException;
-import me.wolfii.allthelogs.data.parse.FormattingCodes;
-import me.wolfii.allthelogs.data.parse.MessageCharacters;
 import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import org.duckdb.DuckDBDataChunkReader;
 import org.duckdb.DuckDBReadableVector;
@@ -89,9 +87,7 @@ final class EntryRows {
                 }
                 previousFileId = fileId;
             }
-            FormattingCodes.Parsed visible = MessageCharacters.filter(
-                new FormattingCodes.Parsed(messages.get(i), formattings.get(i)));
-            entries.add(new ChatEntry(log, timestamps.get(i), lineIndices[i], visible.text(), visible.formatting(),
+            entries.add(new ChatEntry(log, timestamps.get(i), lineIndices[i], messages.get(i), formattings.get(i),
                 users.get(i), places.get(i)));
         }
     }
