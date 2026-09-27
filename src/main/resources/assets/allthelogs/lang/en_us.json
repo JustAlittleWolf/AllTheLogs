@@ -138,13 +138,15 @@
   "allthelogs.settings.browse": "...",
   "allthelogs.settings.browse.logs": "Choose a logs folder",
   "yacl3.config.minecraft:allthelogs.title": "AllTheLogs settings",
-  "yacl3.config.minecraft:allthelogs.category.import": "Import",
   "yacl3.config.minecraft:allthelogs.category.browser": "Messages",
+  "yacl3.config.minecraft:allthelogs.category.import": "Auto import",
   "yacl3.config.minecraft:allthelogs.extraImportDirectories": "Auto import logs folders",
   "yacl3.config.minecraft:allthelogs.extraImportDirectories.desc": "Extra Minecraft logs folders scanned on start. Pick the logs directory itself, not the instance root. The current instance is always imported.",
   "yacl3.config.minecraft:allthelogs.defaultContextLines": "Default context lines",
   "yacl3.config.minecraft:allthelogs.messageFontSize": "Message font size",
   "yacl3.config.minecraft:allthelogs.messageFontSize.desc": "Size of chat lines.",
   "yacl3.config.minecraft:allthelogs.contextMessageBrightness": "Context message brightness",
-  "yacl3.config.minecraft:allthelogs.contextMessageBrightness.desc": "How bright context lines are. 100% keeps the original colorin, 50% is makes context messages appear half as bright."
+  "yacl3.config.minecraft:allthelogs.contextMessageBrightness.desc": "How bright context lines are. 100% keeps the original colorin, 50% is makes context messages appear half as bright.",
+  "yacl3.config.minecraft:allthelogs.filterPrivateUseCharacters": "Filter private-use characters",
+  "yacl3.config.minecraft:allthelogs.filterPrivateUseCharacters.desc": "Remove Unicode private-use characters from chat messages. Mods use these for icons that show up as missing glyphs in a log. Player-face placeholders are always removed."
 }

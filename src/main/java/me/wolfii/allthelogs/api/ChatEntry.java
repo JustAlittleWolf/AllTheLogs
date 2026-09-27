@@ -4,6 +4,8 @@ import java.time.LocalDateTime;
 
 /**
  * A single chat line from a Minecraft log, stored with legacy {@code §} codes stripped.
+ * The object replacement character is removed, and Unicode private-use characters are removed
+ * when that filter is enabled.
  */
 public interface ChatEntry {
     /**
@@ -24,7 +26,8 @@ public interface ChatEntry {
     int lineIndex();
 
     /**
-     * The chat text with legacy {@code §} codes stripped.
+     * The chat text with legacy {@code §} codes stripped. The object replacement character is removed,
+     * and Unicode private-use characters are removed when that filter is enabled.
      */
     String message();
 

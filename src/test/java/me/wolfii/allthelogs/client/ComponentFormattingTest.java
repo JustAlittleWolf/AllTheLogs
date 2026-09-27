@@ -38,4 +38,14 @@ class ComponentFormattingTest {
     void plainComponentsStoreNoFormatting() {
         assertNull(ComponentFormatting.flatten(Component.literal("hello")).formatting());
     }
+
+    @Test
+    void dropsChatHeadPlaceholdersAndKeepsTheFollowingStyle() {
+        Component message = Component.literal("\uFFFC")
+            .append(Component.literal("Hi").withStyle(Style.EMPTY.withColor(ChatFormatting.RED)));
+        FormattingCodes.Parsed parsed = ComponentFormatting.flatten(message);
+        assertEquals("Hi", parsed.text());
+        assertEquals(PackedFormatting.color(0xFF5555), PackedFormatting.at(parsed.formatting(), 0));
+        assertEquals(PackedFormatting.color(0xFF5555), PackedFormatting.at(parsed.formatting(), 1));
+    }
 }

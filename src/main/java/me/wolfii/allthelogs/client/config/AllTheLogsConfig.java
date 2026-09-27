@@ -13,10 +13,12 @@ import dev.isxander.yacl3.config.v2.api.autogen.AutoGen;
 import dev.isxander.yacl3.config.v2.api.autogen.IntField;
 import dev.isxander.yacl3.config.v2.api.autogen.IntSlider;
 import dev.isxander.yacl3.config.v2.api.autogen.ListGroup;
+import dev.isxander.yacl3.config.v2.api.autogen.TickBox;
 import dev.isxander.yacl3.config.v2.api.serializer.GsonConfigSerializerBuilder;
 import me.wolfii.allthelogs.client.AllTheLogsClient;
 import me.wolfii.allthelogs.client.list.MessageListLayout;
 import me.wolfii.allthelogs.client.search.SearchFilter;
+import me.wolfii.allthelogs.data.parse.MessageCharacters;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.resources.Identifier;
@@ -42,15 +44,11 @@ public class AllTheLogsConfig {
     public static final int MIN_CONTEXT_MESSAGE_BRIGHTNESS = 10;
     public static final int MAX_CONTEXT_MESSAGE_BRIGHTNESS = 100;
     public static final int DEFAULT_CONTEXT_MESSAGE_BRIGHTNESS = 92;
+    public static final boolean DEFAULT_FILTER_PRIVATE_USE_CHARACTERS = true;
 
     private static ConfigClassHandler<AllTheLogsConfig> handler;
 
     private transient Path file;
-
-    @AutoGen(category = "import")
-    @ListGroup(valueFactory = StringListFactory.class, controllerFactory = StringListFactory.class)
-    @SerialEntry
-    public List<String> extraImportDirectories = new ArrayList<>();
 
     @AutoGen(category = "browser")
     @IntField(min = 0, max = SearchFilter.MAX_CONTEXT_LINES, format = "%d lines")
@@ -66,6 +64,16 @@ public class AllTheLogsConfig {
     @IntSlider(min = MIN_CONTEXT_MESSAGE_BRIGHTNESS, max = MAX_CONTEXT_MESSAGE_BRIGHTNESS, step = 1, format = "%d%%")
     @SerialEntry(required = false)
     public int contextMessageBrightness = DEFAULT_CONTEXT_MESSAGE_BRIGHTNESS;
+
+    @AutoGen(category = "browser")
+    @TickBox
+    @SerialEntry(required = false)
+    public boolean filterPrivateUseCharacters = DEFAULT_FILTER_PRIVATE_USE_CHARACTERS;
+
+    @AutoGen(category = "import")
+    @ListGroup(valueFactory = StringListFactory.class, controllerFactory = StringListFactory.class)
+    @SerialEntry
+    public List<String> extraImportDirectories = new ArrayList<>();
 
     public static Path defaultPath() {
         return FabricLoader.getInstance().getConfigDir().resolve(FILE_NAME);
@@ -149,6 +157,15 @@ public class AllTheLogsConfig {
         this.contextMessageBrightness = clampContextMessageBrightness(contextMessageBrightness);
     }
 
+    public boolean filterPrivateUseCharacters() {
+        return filterPrivateUseCharacters;
+    }
+
+    public void setFilterPrivateUseCharacters(boolean filterPrivateUseCharacters) {
+        this.filterPrivateUseCharacters = filterPrivateUseCharacters;
+        publishCharacterFilter();
+    }
+
     /**
      * Brightness applied to context-line message text. Uses the default until config has been loaded.
      */
@@ -196,6 +213,13 @@ public class AllTheLogsConfig {
         messageFontSize = clampFontSize(messageFontSize == 0 ? DEFAULT_MESSAGE_FONT_SIZE : messageFontSize);
         contextMessageBrightness = clampContextMessageBrightness(
             contextMessageBrightness == 0 ? DEFAULT_CONTEXT_MESSAGE_BRIGHTNESS : contextMessageBrightness);
+        publishCharacterFilter();
+    }
+
+    private void publishCharacterFilter() {
+        if (handler != null && this == handler.instance()) {
+            MessageCharacters.setDropPrivateUseCharacters(filterPrivateUseCharacters);
+        }
     }
 
     static Gson gson() {

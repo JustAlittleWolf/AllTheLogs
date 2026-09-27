@@ -77,6 +77,12 @@ class LogStoreTest {
         }
     }
 
+    private java.sql.Connection storeConnection() throws Exception {
+        var field = LogStore.class.getDeclaredField("connection");
+        field.setAccessible(true);
+        return (java.sql.Connection) field.get(store);
+    }
+
     private static void writeCorruptGzipZip(Path archive, String entryPath) throws IOException {
         try (var zip = new java.util.zip.ZipOutputStream(Files.newOutputStream(archive))) {
             zip.putNextEntry(new java.util.zip.ZipEntry(entryPath));
@@ -1536,6 +1542,41 @@ class LogStoreTest {
         ChatEntry entry = store.findEntries(ChatQuery.all().withSubstring("now")).getFirst();
         assertFalse(entry.timestamp().plusSeconds(1).isBefore(before));
         assertFalse(entry.timestamp().minusSeconds(1).isAfter(LocalDateTime.now()));
+    }
+
+    @Test
+    void clientEntriesDropChatHeadPlaceholders() {
+        LocalDateTime at = LocalDateTime.of(2026, 8, 26, 12, 0, 0);
+        store.startSession("26.2", at);
+        int red = PackedFormatting.color(0xFF5555);
+        assertTrue(store.importSessionMessage("\uFFFCHello", new long[]{PackedFormatting.run(1, 5, red)}, at));
+
+        ChatEntry entry = store.allEntries().getFirst();
+        assertEquals("Hello", entry.message());
+        assertEquals(red, PackedFormatting.at(entry.formatting(), 0));
+        assertEquals(red, PackedFormatting.at(entry.formatting(), 4));
+    }
+
+    @Test
+    void storedChatHeadPlaceholdersStayHiddenAndDoNotDuplicateALaterImport() throws Exception {
+        LocalDateTime at = LocalDateTime.of(2026, 8, 26, 10, 0, 10);
+        store.startSession("26.2", at.minusMinutes(1));
+        assertTrue(store.importSessionMessage("Hello", at));
+        int red = PackedFormatting.color(0xFF5555);
+        try (var statement = storeConnection().createStatement()) {
+            statement.execute("UPDATE chat_entry SET message = chr(65532) || message, formatting = ["
+                + PackedFormatting.run(1, 5, red) + "]");
+        }
+
+        ChatEntry hidden = store.allEntries().getFirst();
+        assertEquals("Hello", hidden.message());
+        assertEquals(red, PackedFormatting.at(hidden.formatting(), 0));
+
+        LogFixtures.writeGzipped(tempDir.resolve("logs"), "2026-08-26-1.log.gz",
+            LogFixtures.modernLog("26.2", "Hello"));
+        store.importDirectory(tempDir);
+
+        assertEquals(List.of("Hello"), store.allEntries().stream().map(ChatEntry::message).toList());
     }
 
     @Test

@@ -5,6 +5,7 @@ import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.LogDataException;
 import me.wolfii.allthelogs.data.LogSource;
 import me.wolfii.allthelogs.data.parse.FormattingCodes;
+import me.wolfii.allthelogs.data.parse.MessageCharacters;
 import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import org.duckdb.DuckDBConnection;
 
@@ -168,7 +169,8 @@ public final class SessionCapture {
             return new StoredLine(parsed.text(), parsed.formatting(), stamp);
         }
         long[] packed = formatting.length == 0 ? null : formatting;
-        return new StoredLine(message, packed, stamp);
+        FormattingCodes.Parsed filtered = MessageCharacters.filter(new FormattingCodes.Parsed(message, packed));
+        return new StoredLine(filtered.text(), filtered.formatting(), stamp);
     }
 
     private record StoredLine(String text, long[] formatting, LocalDateTime timestamp) {
