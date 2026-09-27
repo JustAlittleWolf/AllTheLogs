@@ -37,7 +37,9 @@ public final class StoreConnections {
                 backupDatabase(absolutePath, version);
                 connection = connect("jdbc:duckdb:" + absolutePath);
             }
-            connection = finishMigration(connection, absolutePath);
+            if (migrate(connection)) {
+                connection = compact(connection, absolutePath);
+            }
             return connection;
         } catch (SQLException e) {
             if (connection != null) {
@@ -57,7 +59,7 @@ public final class StoreConnections {
     public static DuckDBConnection openInMemory() throws SQLException {
         DuckDBConnection connection = connect("jdbc:duckdb:");
         try {
-            finishMigration(connection, null);
+            migrate(connection);
             return connection;
         } catch (SQLException e) {
             connection.close();
@@ -100,21 +102,27 @@ public final class StoreConnections {
     }
 
     /**
-     * Steps the schema forward. When a step rewrote stored rows, rewrites {@code chat_entry} oldest-first
-     * and, for a file database, copies the catalog into a fresh file so the old string bytes are released.
+     * Steps the schema forward on {@code connection}. When a step rewrote stored rows, clusters
+     * {@code chat_entry} on that same connection.
+     *
+     * @return {@code true} when the file should be compacted. Compacting closes {@code connection}.
      */
-    private static DuckDBConnection finishMigration(DuckDBConnection connection, Path databasePath)
-        throws SQLException {
-        boolean optimize;
+    private static boolean migrate(DuckDBConnection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
-            optimize = SchemaMigration.migrate(statement);
-            if (optimize) {
-                System.out.println("[AllTheLogs] Optimizing the log store after schema migration");
-                Schema.clusterEntries(statement);
-                StoreOptimizer.analyzeAndCheckpoint(statement);
-            }
+            boolean optimize = SchemaMigration.migrate(statement);
+            if (!optimize) return false;
+            System.out.println("[AllTheLogs] Optimizing the log store after schema migration");
+            Schema.clusterEntries(statement);
+            StoreOptimizer.analyzeAndCheckpoint(statement);
+            return true;
         }
-        if (!optimize || databasePath == null) return connection;
+    }
+
+    /**
+     * Replaces {@code databasePath} with a packed copy. Closes {@code connection} and returns the
+     * connection open on the replacement file.
+     */
+    private static DuckDBConnection compact(DuckDBConnection connection, Path databasePath) throws SQLException {
         try {
             return StoreOptimizer.replaceWithCompactCopy(connection, databasePath);
         } catch (IOException e) {
