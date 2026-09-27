@@ -1,7 +1,5 @@
 package me.wolfii.allthelogs.data.store;
 
-import org.apache.commons.compress.compressors.lz4.FramedLZ4CompressorOutputStream;
-
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
@@ -22,18 +20,24 @@ import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.zip.Deflater;
+import java.util.zip.GZIPOutputStream;
 
 /**
  * Compressed copies of the DuckDB database file, taken immediately before a schema migration.
  * <p>
  * This is a copy of {@code logs.duckdb} itself, not a dump of the schema. The archive sits beside
- * the database as {@code <name>.v<schemaVersion>.<utc>.lz4}: the version is the schema that file
- * was still on, so it can be restored by decompressing it back over the database. Framed LZ4 is
- * used because Commons Compress ships it and it is fast on an already-compressed DuckDB file.
- * Old copies are only considered when another upgrade runs; the newest copy is always kept.
+ * the database as {@code <name>.v<schemaVersion>.<utc>.gz}: the version is the schema that file
+ * was still on, so it can be restored by decompressing it back over the database. Gzip at the
+ * fastest level is used because the DuckDB file is already compressed internally; a framed LZ4
+ * archive from Commons Compress encodes through a Java LZ77 matcher and rewrites a database this
+ * size at well under a megabyte per second. Older {@code .lz4} copies are still recognised so a
+ * later upgrade can prune them. Old copies are only considered when another upgrade runs; the
+ * newest copy is always kept.
  */
 public final class DatabaseBackup {
-    static final String EXTENSION = ".lz4";
+    static final String EXTENSION = ".gz";
+    private static final String LEGACY_EXTENSION = ".lz4";
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'")
         .withZone(ZoneOffset.UTC);
 
@@ -52,17 +56,29 @@ public final class DatabaseBackup {
     }
 
     /**
-     * Writes {@code database} to a sibling {@code <name>.v<schemaVersion>.<utc>.lz4} file.
+     * Writes {@code database} to a sibling {@code <name>.v<schemaVersion>.<utc>.gz} file.
      * A failed write leaves no archive behind.
      */
     public static Path create(Path database, int schemaVersion, Instant at) throws IOException {
+        if (StoreCancellation.stoppedOnThisThread()) {
+            throw new IOException(StoreCancellation.CLOSED_MESSAGE);
+        }
         Path target = backupPath(database, schemaVersion, at);
         Path partial = target.resolveSibling(target.getFileName() + ".tmp");
+        System.out.println("[AllTheLogs] Backing up database to " + target.getFileName()
+            + " before migrating from schema version " + schemaVersion);
         try {
             try (InputStream in = new BufferedInputStream(Files.newInputStream(database));
                  OutputStream file = new BufferedOutputStream(Files.newOutputStream(partial));
-                 FramedLZ4CompressorOutputStream lz4 = new FramedLZ4CompressorOutputStream(file)) {
-                in.transferTo(lz4);
+                 OutputStream gzip = new FastGzipOutputStream(file)) {
+                byte[] buffer = new byte[256 * 1024];
+                int read;
+                while ((read = in.read(buffer)) >= 0) {
+                    if (StoreCancellation.stoppedOnThisThread()) {
+                        throw new IOException(StoreCancellation.CLOSED_MESSAGE);
+                    }
+                    gzip.write(buffer, 0, read);
+                }
             }
             moveIntoPlace(partial, target);
         } catch (IOException e) {
@@ -118,7 +134,19 @@ public final class DatabaseBackup {
 
     private static Pattern pattern(Path database) {
         return Pattern.compile(Pattern.quote(database.getFileName().toString())
-            + "\\.v\\d+\\.(\\d{8}T\\d{6}Z)" + Pattern.quote(EXTENSION));
+            + "\\.v\\d+\\.(\\d{8}T\\d{6}Z)(?:"
+            + Pattern.quote(EXTENSION) + "|" + Pattern.quote(LEGACY_EXTENSION) + ")");
+    }
+
+    /**
+     * Gzip at {@link Deflater#BEST_SPEED}. The header is written by the superclass constructor,
+     * before the level change, and the header is not compressed.
+     */
+    private static final class FastGzipOutputStream extends GZIPOutputStream {
+        private FastGzipOutputStream(OutputStream out) throws IOException {
+            super(out, 1 << 16);
+            def.setLevel(Deflater.BEST_SPEED);
+        }
     }
 
     private static Optional<Copy> parse(Path path, Pattern pattern) {

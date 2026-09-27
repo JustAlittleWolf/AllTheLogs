@@ -3,6 +3,7 @@ package me.wolfii.allthelogs.client;
 import me.wolfii.allthelogs.api.PendingImportMessage;
 import me.wolfii.allthelogs.data.*;
 import me.wolfii.allthelogs.data.parse.FormattingCodes;
+import me.wolfii.allthelogs.data.store.StoreCancellation;
 import net.minecraft.network.chat.Component;
 
 import java.nio.file.Path;
@@ -28,20 +29,24 @@ import java.util.function.Consumer;
  */
 public final class LogStoreWorker implements AutoCloseable {
     private final ExecutorService executor;
+    private final StoreCancellation cancellation = StoreCancellation.create();
     private final AtomicBoolean cancelImport = new AtomicBoolean();
     private final AtomicBoolean liveFlushScheduled = new AtomicBoolean();
+    private final AtomicBoolean closed = new AtomicBoolean();
     private final Queue<PendingImportMessage> pendingLive = new ConcurrentLinkedQueue<>();
     private volatile LogStore store;
     private volatile boolean sessionStarted;
+    private volatile Thread workerThread;
 
     public LogStoreWorker() {
         this.executor = Executors.newSingleThreadExecutor(daemonFactory());
     }
 
-    private static ThreadFactory daemonFactory() {
+    private ThreadFactory daemonFactory() {
         return runnable -> {
             Thread thread = new Thread(runnable, "allthelogs-store");
             thread.setDaemon(true);
+            workerThread = thread;
             return thread;
         };
     }
@@ -112,7 +117,11 @@ public final class LogStoreWorker implements AutoCloseable {
      * or no session is active.
      */
     public void touchSessionEndTime() {
-        executor.execute(this::touchSessionEndTimeNow);
+        try {
+            executor.execute(this::touchSessionEndTimeNow);
+        } catch (RejectedExecutionException ignored) {
+            // The worker is already shut down with the game.
+        }
     }
 
     public boolean isOpen() {
@@ -171,20 +180,53 @@ public final class LogStoreWorker implements AutoCloseable {
         return submit(() -> requireStore().databasePath());
     }
 
+    /**
+     * Runs {@code task} on the store thread. Tests use this to hold the worker inside a query and
+     * then {@link #close()} it.
+     */
+    CompletableFuture<Void> run(Runnable task) {
+        return submit(task);
+    }
+
+    /**
+     * Stops the worker without waiting out a schema migration or import. Cancels the running
+     * DuckDB statement first, so native query threads exit instead of keeping the process up
+     * after the game window is gone. The database file is left as the last committed statement.
+     */
     @Override
     public void close() {
+        if (!closed.compareAndSet(false, true)) return;
+        cancelImport.set(true);
+        cancellation.requestStop();
+        Thread worker = workerThread;
+        if (worker != null) worker.interrupt();
         try {
-            submit(() -> {
+            Future<?> stopping = executor.submit(() -> {
+                Thread.interrupted();
                 storeQueuedLive();
                 touchSessionEndTimeNow();
-            }).join();
-            submit(this::closeStore).join();
-        } catch (CompletionException ignored) {
-            storeQueuedLive();
-            touchSessionEndTimeNow();
+                closeStore();
+            });
+            stopping.get(15, TimeUnit.SECONDS);
+        } catch (RejectedExecutionException e) {
             closeStore();
+        } catch (TimeoutException e) {
+            AllTheLogsClient.LOGGER.warn("The log store was still busy while the game was closing");
+        } catch (ExecutionException e) {
+            if (!StoreCancellation.isClosedRequest(e.getCause())) {
+                AllTheLogsClient.LOGGER.warn("Could not close the log store", e.getCause());
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         } finally {
             executor.shutdownNow();
+            try {
+                if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                    AllTheLogsClient.LOGGER.warn("The log store thread did not stop");
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 
@@ -242,16 +284,30 @@ public final class LogStoreWorker implements AutoCloseable {
     }
 
     private CompletableFuture<Void> submit(Runnable task) {
-        return CompletableFuture.runAsync(task, executor);
+        return CompletableFuture.runAsync(onWorker(task), executor);
     }
 
     private <T> CompletableFuture<T> submit(Callable<T> task) {
         return CompletableFuture.supplyAsync(() -> {
+            StoreCancellation.install(cancellation);
             try {
                 return task.call();
             } catch (Exception e) {
                 throw new CompletionException(e);
+            } finally {
+                StoreCancellation.clear();
             }
         }, executor);
+    }
+
+    private Runnable onWorker(Runnable task) {
+        return () -> {
+            StoreCancellation.install(cancellation);
+            try {
+                task.run();
+            } finally {
+                StoreCancellation.clear();
+            }
+        };
     }
 }

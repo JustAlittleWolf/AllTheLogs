@@ -238,6 +238,49 @@ class SchemaMigrationTest {
     }
 
     @Test
+    void stripsEveryPlaceholderRowNotJustTheFirstThousand() throws SQLException {
+        Path database = tempDir.resolve("v5-many.duckdb");
+        int rows = 1500;
+        try (var connection = StoreConnections.openFile(database);
+             Statement statement = connection.createStatement()) {
+            try (var insert = connection.prepareStatement("""
+                INSERT INTO chat_entry
+                    (file_id, line_index, entry_time, message, formatting, minecraft_user, server_or_world)
+                VALUES (1, ?, TIMESTAMP '2026-01-01 00:00:00', ?, NULL, NULL, NULL)""")) {
+                for (int i = 0; i < rows; i++) {
+                    insert.setInt(1, i);
+                    insert.setString(2, "line" + i + MessageCharacters.OBJECT_REPLACEMENT);
+                    insert.addBatch();
+                }
+                insert.setInt(1, rows);
+                insert.setString(2, "plain");
+                insert.addBatch();
+                insert.executeBatch();
+            }
+            SchemaMigration.setVersion(statement, 5);
+        }
+
+        try (var connection = StoreConnections.openFile(database);
+             Statement statement = connection.createStatement()) {
+            try (ResultSet result = statement.executeQuery(
+                "SELECT count(*) FROM chat_entry WHERE contains(message, chr(65532))")) {
+                assertTrue(result.next());
+                assertEquals(0, result.getLong(1));
+            }
+            try (ResultSet result = statement.executeQuery(
+                "SELECT message FROM chat_entry WHERE line_index = 1499")) {
+                assertTrue(result.next());
+                assertEquals("line1499", result.getString(1));
+            }
+            try (ResultSet result = statement.executeQuery(
+                "SELECT count(*) FROM chat_entry WHERE message = 'plain'")) {
+                assertTrue(result.next());
+                assertEquals(1, result.getLong(1));
+            }
+        }
+    }
+
+    @Test
     void newerDatabaseVersionIsRejected() throws SQLException {
         Path database = tempDir.resolve("future.duckdb");
         try (var connection = StoreConnections.openFile(database);

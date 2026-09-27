@@ -44,6 +44,7 @@ public final class StoreOptimizer {
 
         try {
             copyCatalogTo(connection, compactPath);
+            StoreCancellation.throwIfStopped();
         } catch (SQLException e) {
             deleteQuietly(compactPath);
             deleteQuietly(compactWal);
@@ -69,15 +70,22 @@ public final class StoreOptimizer {
 
     private static void copyCatalogTo(DuckDBConnection connection, Path compactPath) throws SQLException {
         try (Statement statement = connection.createStatement()) {
-            statement.execute("CHECKPOINT");
-            String source = currentDatabase(statement);
-            statement.execute("ATTACH " + sqlLiteral(compactPath) + " AS " + COMPACT_ALIAS
-                + " (STORAGE_VERSION 'latest')");
+            StoreCancellation current = StoreCancellation.current();
+            if (current != null) current.bind(statement);
             try {
-                statement.execute("COPY FROM DATABASE " + quoteIdent(source) + " TO " + COMPACT_ALIAS);
-                statement.execute("CHECKPOINT " + COMPACT_ALIAS);
+                StoreCancellation.throwIfStopped();
+                statement.execute("CHECKPOINT");
+                String source = currentDatabase(statement);
+                statement.execute("ATTACH " + sqlLiteral(compactPath) + " AS " + COMPACT_ALIAS
+                    + " (STORAGE_VERSION 'latest')");
+                try {
+                    statement.execute("COPY FROM DATABASE " + quoteIdent(source) + " TO " + COMPACT_ALIAS);
+                    statement.execute("CHECKPOINT " + COMPACT_ALIAS);
+                } finally {
+                    statement.execute("DETACH " + COMPACT_ALIAS);
+                }
             } finally {
-                statement.execute("DETACH " + COMPACT_ALIAS);
+                if (current != null) current.unbind(statement);
             }
         }
     }
