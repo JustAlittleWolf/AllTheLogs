@@ -15,4 +15,10 @@ public interface EditBoxAccessor {
 
     @Accessor("textX")
     void allthelogs$setTextX(int textX);
+
+    @Accessor("displayPos")
+    int allthelogs$getDisplayPos();
+
+    @Accessor("displayPos")
+    void allthelogs$setDisplayPos(int displayPos);
 }
