@@ -44,6 +44,10 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
     static final String GRAALJS_ABOUT_KEY = "allthelogs.scripts.about";
     static final String DUCKDB_ABOUT_URL = "https://duckdb.org";
     static final String GRAALJS_ABOUT_URL = "https://www.graalvm.org/javascript/";
+    /**
+     * Vanilla gray, a step darker than the body copy.
+     */
+    static final int ABOUT_COLOR = 0xAAAAAA;
 
     private final Text text;
     private final Supplier<Snapshot> progress;
@@ -136,6 +140,13 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
             case READY -> openingAfterReady ? Phase.OPENING : Phase.FINISHED;
             case DOWNLOADING, VERIFYING, LOADING -> Phase.WORKING;
         };
+    }
+
+    /**
+     * The about link is only on the prompt. Downloading, verifying, and loading replace it with progress.
+     */
+    static boolean showsAbout(Phase phase) {
+        return phase == Phase.PROMPT;
     }
 
     /**
@@ -248,7 +259,9 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
     private void showPrompt() {
         title(text.title());
         body(text.body(), Colors.SEARCH_TEXT);
-        aboutLine();
+        if (showsAbout(Phase.PROMPT)) {
+            aboutLine();
+        }
         rule();
         FlowLayout actions = actions();
         actions.child(button("allthelogs.download.start", this::beginDownload));
@@ -258,7 +271,9 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
 
     private void showWorking(Snapshot snapshot) {
         title(text.title());
-        aboutLine();
+        if (showsAbout(Phase.WORKING)) {
+            aboutLine();
+        }
         status = body(statusText(snapshot), Colors.SEARCH_TEXT);
         card.child(progressTrack());
         rule();
@@ -314,12 +329,13 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
 
     /**
      * "More about DuckDB: https://duckdb.org", with the address underlined and opened through the
-     * vanilla confirm-link screen. The label's default click handler reads that click event.
+     * vanilla confirm-link screen. The label click handler must call {@code clickUrlAction}: owo's
+     * default goes through {@code defaultHandleGameClickEvent}, which requires a player.
      */
     static Component aboutLink(String key, String url) {
         URI uri = URI.create(url);
         Component link = Component.literal(url).withStyle(Style.EMPTY
-            .withColor(Colors.INFO_VERSION)
+            .withColor(ABOUT_COLOR)
             .withUnderlined(true)
             .withClickEvent(new ClickEvent.OpenUrl(uri))
             .withHoverEvent(new HoverEvent.ShowText(Component.literal(url))));
@@ -327,7 +343,13 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
     }
 
     private void aboutLine() {
-        body(text.about(), Colors.SEARCH_TEXT);
+        LabelComponent label = body(text.about(), ABOUT_COLOR);
+        label.textClickHandler(style -> {
+            if (style == null || !(style.getClickEvent() instanceof ClickEvent.OpenUrl open)) {
+                return false;
+            }
+            return clickUrlAction(this.minecraft, this, open.uri());
+        });
     }
 
     private void rule() {
