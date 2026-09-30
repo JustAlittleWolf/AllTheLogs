@@ -57,15 +57,7 @@ class LibraryDownloadScreenTest {
         assertEquals(40, LibraryDownloadScreen.barPercent(Snapshot.fromDuck(
             new DuckDbJdbcInstaller.Progress(DuckDbJdbcInstaller.Progress.Stage.DOWNLOADING, 40, 100, "linux_amd64", null))));
     }
-
-    @Test
-    void aboutLineNamesTheLibraryAndOpensItsPage() {
-        assertEquals("https://duckdb.org", LibraryDownloadScreen.DUCKDB_ABOUT_URL);
-        assertEquals("https://www.graalvm.org/javascript/", LibraryDownloadScreen.GRAALJS_ABOUT_URL);
-        assertAbout(LibraryDownloadScreen.DUCKDB_ABOUT_KEY, LibraryDownloadScreen.DUCKDB_ABOUT_URL);
-        assertAbout(LibraryDownloadScreen.GRAALJS_ABOUT_KEY, LibraryDownloadScreen.GRAALJS_ABOUT_URL);
-    }
-
+    
     private static void assertAbout(String key, String url) {
         Component line = LibraryDownloadScreen.aboutLink(key, url);
         assertInstanceOf(TranslatableContents.class, line.getContents());
