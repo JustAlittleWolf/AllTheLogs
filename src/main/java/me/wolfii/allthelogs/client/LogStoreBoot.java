@@ -11,17 +11,34 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * live session. Directory import runs afterwards on the store worker and does not keep the vanilla
  * loading overlay up.
  * <p>
- * {@link #isSettled()} is true once the session exists (or startup failed), so the overlay can fade
- * while logs from this instance and extra folders are still being scanned. Live chat that arrives
+ * {@link #isSettled()} is true once the session exists (or startup failed). The loading overlay
+ * uses {@link #isOverlayReleased(boolean)} instead, so it can fade while the driver download screen
+ * is up and still stay down for the store boot that follows. Directory import keeps running after
+ * the session exists. Live chat that arrives
  * during that import is queued on the worker with its capture time, as {@link LogStoreWorker} already
  * does for lines that beat {@link LogStoreWorker#startSession(String, String)}.
  */
 public final class LogStoreBoot {
     private final AtomicBoolean settled = new AtomicBoolean();
     private final AtomicBoolean started = new AtomicBoolean();
+    private final AtomicBoolean downloadPromptReleased = new AtomicBoolean();
 
     public boolean isSettled() {
         return settled.get();
+    }
+
+    /**
+     * Whether the vanilla loading overlay may fade. Offering the driver download releases it, and
+     * starting that download does not bring the overlay back. {@link #isSettled()} still waits for
+     * the store.
+     */
+    public boolean isOverlayReleased(boolean awaitsDownload) {
+        if (settled.get()) return true;
+        if (awaitsDownload) {
+            downloadPromptReleased.set(true);
+            return true;
+        }
+        return downloadPromptReleased.get();
     }
 
     /**

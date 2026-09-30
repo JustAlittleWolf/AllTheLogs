@@ -1,21 +1,23 @@
 package me.wolfii.allthelogs.client;
 
-import me.wolfii.allthelogs.client.ui.screen.DuckDbSetupScreen;
+import me.wolfii.allthelogs.client.ui.screen.LibraryDownloadScreen;
 import me.wolfii.allthelogs.data.duckdb.DuckDbJdbc;
 import me.wolfii.allthelogs.data.duckdb.DuckDbJdbcInstaller;
 import me.wolfii.allthelogs.data.duckdb.DuckDbJdbcInstaller.Progress;
 import me.wolfii.allthelogs.data.duckdb.FabricClassPath;
 import net.minecraft.client.Minecraft;
 
+import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Loads the architecture-specific DuckDB native jar before the log store opens.
+ * When the jar is not already on the classpath, nothing is downloaded until the player asks.
  */
 public final class DuckDbRuntime {
-    private static final AtomicReference<Progress> PROGRESS = new AtomicReference<>(new Progress(Progress.Stage.LOADING, 0, 0, DuckDbJdbc.classifier(), null));
+    private static final AtomicReference<Progress> PROGRESS = new AtomicReference<>(Progress.idle());
     private static final Object LOCK = new Object();
     private static CompletableFuture<Void> inflight;
 
@@ -39,9 +41,41 @@ public final class DuckDbRuntime {
     }
 
     /**
+     * The native jar is not on the classpath yet, and nobody has started the download.
+     * The title screen stays hidden until the player chooses to download or quit.
+     */
+    public static boolean awaitsDownload() {
+        return awaitsDownload(PROGRESS.get(), DuckDbJdbcInstaller.nativeLibraryPresent());
+    }
+
+    static boolean awaitsDownload(Progress progress, boolean nativeLibraryPresent) {
+        if (progress == null || nativeLibraryPresent) return false;
+        return progress.stage() == Progress.Stage.IDLE;
+    }
+
+    /**
+     * The cache already has a jar and a checksum file. They are checked on the loader thread, not here.
+     */
+    public static boolean cacheFilesPresent() {
+        return DuckDbJdbcInstaller.cacheFilesPresent(cacheDirectory());
+    }
+
+    /**
      * Starts or retries the download. Completes when the native library is on the classpath.
      */
     public static CompletableFuture<Void> ensure() {
+        return ensure(true);
+    }
+
+    /**
+     * Puts a cached jar on the classpath. Does not download; a missing or bad cache fails and leaves
+     * the choice to {@link #ensure()}.
+     */
+    public static CompletableFuture<Void> loadCached() {
+        return ensure(false);
+    }
+
+    private static CompletableFuture<Void> ensure(boolean allowDownload) {
         synchronized (LOCK) {
             if (isReady()) {
                 return CompletableFuture.completedFuture(null);
@@ -53,10 +87,14 @@ public final class DuckDbRuntime {
             if (inflight != null && !inflight.isDone()) {
                 return inflight;
             }
+            if (!allowDownload && !cacheFilesPresent()) {
+                return CompletableFuture.completedFuture(null);
+            }
             PROGRESS.set(new Progress(Progress.Stage.LOADING, 0, 0, DuckDbJdbc.classifier(), null));
+            boolean download = allowDownload;
             inflight = CompletableFuture.runAsync(() -> {
                 try {
-                    installer().install(DuckDbRuntime::setProgress);
+                    installer().install(DuckDbRuntime::setProgress, download);
                 } catch (Exception e) {
                     String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
                     setProgress(Progress.failed(message));
@@ -68,18 +106,21 @@ public final class DuckDbRuntime {
         }
     }
 
+    private static Path cacheDirectory() {
+        return DuckDbJdbc.cacheDirectory(AllTheLogsPaths.gameDirectory());
+    }
+
     private static void setProgress(Progress snapshot) {
         PROGRESS.set(snapshot);
-        if (snapshot.stage() != Progress.Stage.READY && snapshot.stage() != Progress.Stage.FAILED) {
-            return;
-        }
         Minecraft client = Minecraft.getInstance();
         if (client == null) return;
         client.execute(() -> {
-            if (client.gui.screen() instanceof DuckDbSetupScreen screen) {
+            if (client.gui.screen() instanceof LibraryDownloadScreen screen) {
                 screen.refresh();
-            } else if (snapshot.stage() == Progress.Stage.FAILED && client.gui.overlay() == null && !(client.gui.screen() instanceof DuckDbSetupScreen)) {
-                client.gui.setScreen(new DuckDbSetupScreen());
+                return;
+            }
+            if (snapshot.stage() == Progress.Stage.FAILED && client.gui.overlay() == null) {
+                client.gui.setScreen(LibraryDownloadScreen.duckDb());
             }
         });
     }

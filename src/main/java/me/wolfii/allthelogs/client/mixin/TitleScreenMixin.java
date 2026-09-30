@@ -10,7 +10,7 @@ import com.llamalad7.mixinextras.sugar.ref.LocalBooleanRef;
 import com.llamalad7.mixinextras.sugar.ref.LocalIntRef;
 import me.wolfii.allthelogs.client.AllTheLogsScreens;
 import me.wolfii.allthelogs.client.DuckDbRuntime;
-import me.wolfii.allthelogs.client.ui.screen.DuckDbSetupScreen;
+import me.wolfii.allthelogs.client.ui.screen.LibraryDownloadScreen;
 import net.fabricmc.fabric.api.client.screen.v1.Screens;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -22,7 +22,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Holds the title menu until DuckDB is ready. On failure the warning screen replaces it.
+ * Holds the title menu until DuckDB is ready. The download screen replaces it until the driver is
+ * loaded, including before the download starts and after it fails.
  */
 @Mixin(TitleScreen.class)
 public abstract class TitleScreenMixin {
@@ -33,13 +34,16 @@ public abstract class TitleScreenMixin {
     private void allthelogs$requireDuckDb(CallbackInfo ci) {
         if (DuckDbRuntime.isReady()) return;
         ci.cancel();
-        if (!DuckDbRuntime.hasFailed()) return;
         Minecraft client = Minecraft.getInstance();
         client.execute(() -> {
             if (DuckDbRuntime.isReady()) {
-                client.gui.setScreen(new TitleScreen());
-            } else if (DuckDbRuntime.hasFailed() && !(client.gui.screen() instanceof DuckDbSetupScreen)) {
-                client.gui.setScreen(new DuckDbSetupScreen());
+                if (!(client.gui.screen() instanceof TitleScreen)) {
+                    client.gui.setScreen(new TitleScreen());
+                }
+                return;
+            }
+            if (!(client.gui.screen() instanceof LibraryDownloadScreen)) {
+                client.gui.setScreen(LibraryDownloadScreen.duckDb());
             }
         });
     }

@@ -3,6 +3,7 @@ package me.wolfii.allthelogs.client.script;
 import me.wolfii.allthelogs.client.AllTheLogsClient;
 import me.wolfii.allthelogs.client.AllTheLogsPaths;
 import me.wolfii.allthelogs.client.script.GraalJsInstaller.Progress;
+import me.wolfii.allthelogs.client.ui.screen.LibraryDownloadScreen;
 import me.wolfii.allthelogs.client.ui.screen.ScriptsScreen;
 import me.wolfii.allthelogs.data.duckdb.FabricClassPath;
 import net.minecraft.client.Minecraft;
@@ -67,7 +68,9 @@ public final class ScriptRuntime {
         Minecraft client = Minecraft.getInstance();
         if (client == null) return;
         client.execute(() -> {
-            if (client.gui.screen() instanceof ScriptsScreen screen) {
+            if (client.gui.screen() instanceof LibraryDownloadScreen screen) {
+                screen.refresh();
+            } else if (client.gui.screen() instanceof ScriptsScreen screen) {
                 screen.refresh();
             }
         });

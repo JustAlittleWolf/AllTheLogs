@@ -97,6 +97,26 @@ class DuckDbJdbcTest {
     }
 
     @Test
+    void cacheFilesPresentRequiresBothTheJarAndItsChecksum() throws Exception {
+        assertFalse(DuckDbJdbcInstaller.cacheFilesPresent(null));
+        assertFalse(DuckDbJdbcInstaller.cacheFilesPresent(tempDir));
+        Path jar = tempDir.resolve(DuckDbJdbc.jarFileName(DuckDbJdbc.classifier()));
+        Files.writeString(jar, "jar");
+        assertFalse(DuckDbJdbcInstaller.cacheFilesPresent(tempDir));
+        Files.writeString(jar.resolveSibling(jar.getFileName() + ".sha256"), "abc");
+        assertTrue(DuckDbJdbcInstaller.cacheFilesPresent(tempDir));
+    }
+
+    @Test
+    void aCacheOnlyInstallDoesNotDownloadWhenTheJarIsMissing() {
+        DuckDbJdbcInstaller installer = new DuckDbJdbcInstaller(
+            tempDir, "http://127.0.0.1:1", path -> fail("should not add " + path), () -> false);
+        IOException error = assertThrows(IOException.class, () -> installer.install(progress -> {
+        }, false));
+        assertTrue(error.getMessage().contains("cached"));
+    }
+
+    @Test
     void skipsDownloadWhenNativeLibraryIsAlreadyPresent() throws Exception {
         DuckDbJdbcInstaller installer = new DuckDbJdbcInstaller(
             tempDir, "http://127.0.0.1:1", path -> fail("should not add " + path), () -> true);

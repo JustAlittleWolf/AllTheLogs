@@ -82,6 +82,15 @@ class LogStoreBootTest {
     }
 
     @Test
+    void theDownloadPromptReleasesTheOverlayAndStartingTheDownloadDoesNotHoldIt() {
+        LogStoreBoot boot = new LogStoreBoot();
+        assertFalse(boot.isOverlayReleased(false), "loading overlay should hold before the prompt");
+        assertTrue(boot.isOverlayReleased(true));
+        assertTrue(boot.isOverlayReleased(false), "starting the download must not bring the overlay back");
+        assertFalse(boot.isSettled(), "the store itself is still closed");
+    }
+
+    @Test
     void duckDbFailureReleasesTheOverlayWithoutOpeningAStore() {
         LogStoreBoot boot = new LogStoreBoot();
         boot.markSettled();

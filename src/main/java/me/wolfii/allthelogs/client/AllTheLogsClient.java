@@ -3,6 +3,7 @@ package me.wolfii.allthelogs.client;
 import me.wolfii.allthelogs.client.config.AllTheLogsConfig;
 import me.wolfii.allthelogs.client.config.StartupLogImports;
 import me.wolfii.allthelogs.data.LogSource;
+import me.wolfii.allthelogs.data.duckdb.DuckDbJdbcInstaller;
 import me.wolfii.allthelogs.data.store.SessionMarker;
 import me.wolfii.allthelogs.data.store.StoreCancellation;
 import net.fabricmc.api.ClientModInitializer;
@@ -34,11 +35,21 @@ public final class AllTheLogsClient implements ClientModInitializer {
     }
 
     /**
-     * Whether startup has finished far enough for the vanilla loading overlay to fade: DuckDB failed
-     * to load, or the store is open and the live session has started. Instance log import may still
-     * be running on the store worker after this is true.
+     * Whether startup has finished far enough for the vanilla loading overlay to fade. That is true
+     * once the store is open and the live session has started, or while the player still has to
+     * choose the driver download. After that choice is offered the overlay stays down, including
+     * while the download itself runs. Instance log import may still be running on the store worker
+     * after the store is open.
      */
     public static boolean isBootSettled() {
+        return boot.isOverlayReleased(DuckDbRuntime.awaitsDownload());
+    }
+
+    /**
+     * Whether the log store has finished opening. Independent of the loading overlay, which fades
+     * earlier so the driver download screen can be used.
+     */
+    public static boolean isStoreBootSettled() {
         return boot.isSettled();
     }
 
@@ -110,13 +121,15 @@ public final class AllTheLogsClient implements ClientModInitializer {
     public void onInitializeClient() {
         worker = new LogStoreWorker();
         AllTheLogsConfig.loadDefault();
-        DuckDbRuntime.ensure().whenComplete((ignored, error) -> {
-            if (error != null || DuckDbRuntime.hasFailed()) {
-                boot.markSettled();
-                return;
-            }
-            onDriverReady();
-        });
+        if (DuckDbJdbcInstaller.nativeLibraryPresent() || DuckDbRuntime.cacheFilesPresent()) {
+            DuckDbRuntime.loadCached().whenComplete((ignored, error) -> {
+                if (error != null || DuckDbRuntime.hasFailed() || !DuckDbRuntime.isReady()) {
+                    boot.markSettled();
+                    return;
+                }
+                onDriverReady();
+            });
+        }
 
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
             AllTheLogsCommands.register(dispatcher));
