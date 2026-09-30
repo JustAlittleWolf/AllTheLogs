@@ -27,14 +27,13 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.net.URI;
-import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
 /**
  * Download prompt shared by the DuckDB driver and the GraalJS engine. The card, progress bar, and
  * failure actions are the same. Title, explanation, about link, and the decline button are supplied
- * for each library. DuckDB stays here until the log store opens and decline quits the game. GraalJS
- * returns to the screen that opened it, then shows the script editor once the engine is ready.
+ * for each library. Once the download is ready the next screen opens on its own: the title menu for
+ * DuckDB, the script editor for GraalJS. Decline quits the game for DuckDB and returns for GraalJS.
  */
 public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
     private static final int RETRY_THROTTLE_MS = 1000;
@@ -44,6 +43,10 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
     static final String GRAALJS_ABOUT_KEY = "allthelogs.scripts.about";
     static final String DUCKDB_ABOUT_URL = "https://duckdb.org";
     static final String GRAALJS_ABOUT_URL = "https://www.graalvm.org/javascript/";
+    /**
+     * Vanilla gray, a step darker than the body copy.
+     */
+    static final int ABOUT_COLOR = 0xAAAAAA;
 
     private final Text text;
     private final Supplier<Snapshot> progress;
@@ -51,7 +54,6 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
     private final Runnable onDecline;
     private final Runnable onReady;
     private final Runnable onFinished;
-    private final BooleanSupplier finished;
     private final boolean closeOnEscape;
 
     private FlowLayout card;
@@ -72,7 +74,6 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
         Runnable onDecline,
         Runnable onReady,
         Runnable onFinished,
-        BooleanSupplier finished,
         boolean closeOnEscape
     ) {
         super(screenTitle);
@@ -82,7 +83,6 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
         this.onDecline = onDecline;
         this.onReady = onReady;
         this.onFinished = onFinished;
-        this.finished = finished;
         this.closeOnEscape = closeOnEscape;
     }
 
@@ -93,8 +93,6 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
                 Component.translatable("allthelogs.duckdb.download.title"),
                 Component.translatable("allthelogs.duckdb.download.body"),
                 Component.translatable("allthelogs.duckdb.quit"),
-                Component.translatable("allthelogs.duckdb.opening"),
-                Component.translatable("allthelogs.duckdb.opening.detail"),
                 aboutLink(DUCKDB_ABOUT_KEY, DUCKDB_ABOUT_URL)
             ),
             () -> Snapshot.fromDuck(DuckDbRuntime.progress()),
@@ -102,7 +100,6 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
             () -> Minecraft.getInstance().stop(),
             AllTheLogsClient::onDriverReady,
             () -> Minecraft.getInstance().gui.setScreen(new TitleScreen()),
-            AllTheLogsClient::isStoreBootSettled,
             false
         );
     }
@@ -114,8 +111,6 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
                 Component.translatable("allthelogs.scripts.download.title"),
                 Component.translatable("allthelogs.scripts.download.body"),
                 Component.translatable("allthelogs.done"),
-                null,
-                null,
                 aboutLink(GRAALJS_ABOUT_KEY, GRAALJS_ABOUT_URL)
             ),
             () -> Snapshot.fromGraal(ScriptRuntime.progress()),
@@ -124,18 +119,24 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
             () -> {
             },
             () -> Minecraft.getInstance().gui.setScreen(new ScriptsScreen(parent)),
-            () -> true,
             true
         );
     }
 
-    static Phase phase(Snapshot.Stage stage, boolean openingAfterReady) {
+    static Phase phase(Snapshot.Stage stage) {
         return switch (stage) {
             case IDLE -> Phase.PROMPT;
             case FAILED -> Phase.FAILED;
-            case READY -> openingAfterReady ? Phase.OPENING : Phase.FINISHED;
+            case READY -> Phase.FINISHED;
             case DOWNLOADING, VERIFYING, LOADING -> Phase.WORKING;
         };
+    }
+
+    /**
+     * The about link is only on the prompt. Downloading, verifying, and loading replace it with progress.
+     */
+    static boolean showsAbout(Phase phase) {
+        return phase == Phase.PROMPT;
     }
 
     /**
@@ -178,7 +179,7 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
             .surface(PanelSurfaces.card())
             .horizontalAlignment(HorizontalAlignment.LEFT);
         root.child(card);
-        show(phase(progress.get().stage(), text.opensAfterDownload()));
+        show(phase(progress.get().stage()));
     }
 
     @Override
@@ -194,12 +195,10 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
                 readyNotified = true;
                 onReady.run();
             }
-            if (!text.opensAfterDownload() || finished.getAsBoolean()) {
-                onFinished.run();
-                return;
-            }
+            onFinished.run();
+            return;
         }
-        Phase next = phase(snapshot.stage(), text.opensAfterDownload());
+        Phase next = phase(snapshot.stage());
         if (next != shown) {
             show(next);
             return;
@@ -239,7 +238,6 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
             case PROMPT -> showPrompt();
             case WORKING -> showWorking(snapshot);
             case FAILED -> showFailed(snapshot);
-            case OPENING -> showOpening();
             case FINISHED -> {
             }
         }
@@ -248,7 +246,9 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
     private void showPrompt() {
         title(text.title());
         body(text.body(), Colors.SEARCH_TEXT);
-        aboutLine();
+        if (showsAbout(Phase.PROMPT)) {
+            aboutLine();
+        }
         rule();
         FlowLayout actions = actions();
         actions.child(button("allthelogs.download.start", this::beginDownload));
@@ -258,7 +258,9 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
 
     private void showWorking(Snapshot snapshot) {
         title(text.title());
-        aboutLine();
+        if (showsAbout(Phase.WORKING)) {
+            aboutLine();
+        }
         status = body(statusText(snapshot), Colors.SEARCH_TEXT);
         card.child(progressTrack());
         rule();
@@ -283,17 +285,6 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
         updateWorking(snapshot);
     }
 
-    private void showOpening() {
-        title(text.openingTitle());
-        body(text.openingDetail(), Colors.SEARCH_TEXT);
-        card.child(progressTrack());
-        rule();
-        FlowLayout actions = actions();
-        actions.child(declineButton());
-        card.child(actions);
-        updateWorking(progress.get());
-    }
-
     private void title(Component title) {
         LabelComponent label = UIComponents.label(title);
         label.shadow(true);
@@ -314,12 +305,13 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
 
     /**
      * "More about DuckDB: https://duckdb.org", with the address underlined and opened through the
-     * vanilla confirm-link screen. The label's default click handler reads that click event.
+     * vanilla confirm-link screen. The label click handler must call {@code clickUrlAction}: owo's
+     * default goes through {@code defaultHandleGameClickEvent}, which requires a player.
      */
     static Component aboutLink(String key, String url) {
         URI uri = URI.create(url);
         Component link = Component.literal(url).withStyle(Style.EMPTY
-            .withColor(Colors.INFO_VERSION)
+            .withColor(ABOUT_COLOR)
             .withUnderlined(true)
             .withClickEvent(new ClickEvent.OpenUrl(uri))
             .withHoverEvent(new HoverEvent.ShowText(Component.literal(url))));
@@ -327,7 +319,13 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
     }
 
     private void aboutLine() {
-        body(text.about(), Colors.SEARCH_TEXT);
+        LabelComponent label = body(text.about(), ABOUT_COLOR);
+        label.textClickHandler(style -> {
+            if (style == null || !(style.getClickEvent() instanceof ClickEvent.OpenUrl open)) {
+                return false;
+            }
+            return clickUrlAction(this.minecraft, this, open.uri());
+        });
     }
 
     private void rule() {
@@ -395,13 +393,8 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
         Component title,
         Component body,
         Component decline,
-        @Nullable Component openingTitle,
-        @Nullable Component openingDetail,
         Component about
     ) {
-        boolean opensAfterDownload() {
-            return openingTitle != null;
-        }
     }
 
     record Snapshot(Stage stage, int percent, @Nullable String error) {
@@ -451,7 +444,6 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
         PROMPT,
         WORKING,
         FAILED,
-        OPENING,
         FINISHED
     }
 }

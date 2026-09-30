@@ -12,20 +12,23 @@ import org.junit.jupiter.api.Test;
 import java.net.URI;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LibraryDownloadScreenTest {
     @Test
     void duckDbAndGraalShareTheSamePhases() {
-        assertEquals(Phase.PROMPT, LibraryDownloadScreen.phase(Snapshot.Stage.IDLE, true));
-        assertEquals(Phase.PROMPT, LibraryDownloadScreen.phase(Snapshot.Stage.IDLE, false));
-        assertEquals(Phase.WORKING, LibraryDownloadScreen.phase(Snapshot.Stage.DOWNLOADING, true));
-        assertEquals(Phase.WORKING, LibraryDownloadScreen.phase(Snapshot.Stage.VERIFYING, false));
-        assertEquals(Phase.WORKING, LibraryDownloadScreen.phase(Snapshot.Stage.LOADING, true));
-        assertEquals(Phase.FAILED, LibraryDownloadScreen.phase(Snapshot.Stage.FAILED, false));
-        assertEquals(Phase.OPENING, LibraryDownloadScreen.phase(Snapshot.Stage.READY, true));
-        assertEquals(Phase.FINISHED, LibraryDownloadScreen.phase(Snapshot.Stage.READY, false));
+        assertEquals(Phase.PROMPT, LibraryDownloadScreen.phase(Snapshot.Stage.IDLE));
+        assertEquals(Phase.WORKING, LibraryDownloadScreen.phase(Snapshot.Stage.DOWNLOADING));
+        assertEquals(Phase.WORKING, LibraryDownloadScreen.phase(Snapshot.Stage.VERIFYING));
+        assertEquals(Phase.WORKING, LibraryDownloadScreen.phase(Snapshot.Stage.LOADING));
+        assertEquals(Phase.FAILED, LibraryDownloadScreen.phase(Snapshot.Stage.FAILED));
+        assertEquals(Phase.FINISHED, LibraryDownloadScreen.phase(Snapshot.Stage.READY));
+        assertTrue(LibraryDownloadScreen.showsAbout(Phase.PROMPT));
+        assertFalse(LibraryDownloadScreen.showsAbout(Phase.WORKING));
+        assertFalse(LibraryDownloadScreen.showsAbout(Phase.FAILED));
+        assertFalse(LibraryDownloadScreen.showsAbout(Phase.FINISHED));
     }
 
     @Test
@@ -72,6 +75,7 @@ class LibraryDownloadScreenTest {
         assertInstanceOf(Component.class, contents.getArgs()[0]);
         Component link = (Component) contents.getArgs()[0];
         assertEquals(url, link.getString());
+        assertEquals(LibraryDownloadScreen.ABOUT_COLOR, link.getStyle().getColor().getValue());
         assertTrue(link.getStyle().isUnderlined());
         assertInstanceOf(ClickEvent.OpenUrl.class, link.getStyle().getClickEvent());
         assertEquals(URI.create(url), ((ClickEvent.OpenUrl) link.getStyle().getClickEvent()).uri());

@@ -115,8 +115,6 @@
   "allthelogs.screen.duckdb": "Database driver",
   "allthelogs.duckdb.download.title": "Database driver",
   "allthelogs.duckdb.download.body": "AllTheLogs requires the DuckDB database driver to be downloaded on first boot. The download may take a moment and needs an internet connection.",
-  "allthelogs.duckdb.opening": "Opening logs...",
-  "allthelogs.duckdb.opening.detail": "The driver is ready. The message database is opening.",
   "allthelogs.duckdb.quit": "Quit game",
   "allthelogs.duckdb.about": "More about DuckDB: %s",
   "allthelogs.download.start": "Download",
