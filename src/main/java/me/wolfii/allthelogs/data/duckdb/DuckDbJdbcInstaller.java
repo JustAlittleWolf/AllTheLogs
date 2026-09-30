@@ -58,6 +58,15 @@ public final class DuckDbJdbcInstaller {
         return DuckDBDriver.class.getResource("/" + DuckDbJdbc.nativeLibraryResource()) != null;
     }
 
+    /**
+     * The jar and its checksum file are both in the cache. The checksum is not read here.
+     */
+    public static boolean cacheFilesPresent(Path cacheDirectory) {
+        if (cacheDirectory == null) return false;
+        Path jar = cacheDirectory.resolve(DuckDbJdbc.jarFileName(DuckDbJdbc.classifier()));
+        return Files.isRegularFile(jar) && Files.isRegularFile(shaPath(jar));
+    }
+
     private static String sha256(Path file, Consumer<Progress> progress, String classifier, long total)
         throws Exception {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -89,6 +98,13 @@ public final class DuckDbJdbcInstaller {
      * Ensures the native library is on the classpath, downloading the platform jar when needed.
      */
     public void install(Consumer<Progress> progress) throws Exception {
+        install(progress, true);
+    }
+
+    /**
+     * @param allowDownload when false, a missing or checksum-mismatched cache fails instead of fetching the jar
+     */
+    public void install(Consumer<Progress> progress, boolean allowDownload) throws Exception {
         if (alreadyPresent.getAsBoolean()) {
             notify(progress, Progress.ready());
             return;
@@ -97,6 +113,9 @@ public final class DuckDbJdbcInstaller {
         Files.createDirectories(cacheDirectory);
         Path jar = cacheDirectory.resolve(DuckDbJdbc.jarFileName(classifier));
         if (!isValidCache(jar, classifier, progress)) {
+            if (!allowDownload) {
+                throw new IOException("cached DuckDB driver is missing or does not match its checksum");
+            }
             download(jar, classifier, progress);
         }
         notify(progress, new Progress(Progress.Stage.LOADING, Files.size(jar), Files.size(jar), classifier, null));
@@ -197,6 +216,10 @@ public final class DuckDbJdbcInstaller {
             return new Progress(Stage.READY, 0, 0, DuckDbJdbc.classifier(), null);
         }
 
+        public static Progress idle() {
+            return new Progress(Stage.IDLE, 0, 0, DuckDbJdbc.classifier(), null);
+        }
+
         public static Progress failed(String message) {
             return new Progress(Stage.FAILED, 0, 0, DuckDbJdbc.classifier(), message);
         }
@@ -207,6 +230,7 @@ public final class DuckDbJdbcInstaller {
         }
 
         public enum Stage {
+            IDLE,
             DOWNLOADING,
             VERIFYING,
             LOADING,

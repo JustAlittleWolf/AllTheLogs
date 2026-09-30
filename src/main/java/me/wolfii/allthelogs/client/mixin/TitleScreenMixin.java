@@ -22,7 +22,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Holds the title menu until DuckDB is ready. On failure the warning screen replaces it.
+ * Holds the title menu until DuckDB is ready. The download screen replaces it until the driver is
+ * loaded, including before the download starts and after it fails.
  */
 @Mixin(TitleScreen.class)
 public abstract class TitleScreenMixin {
@@ -33,12 +34,15 @@ public abstract class TitleScreenMixin {
     private void allthelogs$requireDuckDb(CallbackInfo ci) {
         if (DuckDbRuntime.isReady()) return;
         ci.cancel();
-        if (!DuckDbRuntime.hasFailed()) return;
         Minecraft client = Minecraft.getInstance();
         client.execute(() -> {
             if (DuckDbRuntime.isReady()) {
-                client.gui.setScreen(new TitleScreen());
-            } else if (DuckDbRuntime.hasFailed() && !(client.gui.screen() instanceof DuckDbSetupScreen)) {
+                if (!(client.gui.screen() instanceof TitleScreen)) {
+                    client.gui.setScreen(new TitleScreen());
+                }
+                return;
+            }
+            if (!(client.gui.screen() instanceof DuckDbSetupScreen)) {
                 client.gui.setScreen(new DuckDbSetupScreen());
             }
         });
