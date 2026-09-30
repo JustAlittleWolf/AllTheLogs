@@ -57,19 +57,4 @@ class LibraryDownloadScreenTest {
         assertEquals(40, LibraryDownloadScreen.barPercent(Snapshot.fromDuck(
             new DuckDbJdbcInstaller.Progress(DuckDbJdbcInstaller.Progress.Stage.DOWNLOADING, 40, 100, "linux_amd64", null))));
     }
-    
-    private static void assertAbout(String key, String url) {
-        Component line = LibraryDownloadScreen.aboutLink(key, url);
-        assertInstanceOf(TranslatableContents.class, line.getContents());
-        TranslatableContents contents = (TranslatableContents) line.getContents();
-        assertEquals(key, contents.getKey());
-        assertEquals(1, contents.getArgs().length);
-        assertInstanceOf(Component.class, contents.getArgs()[0]);
-        Component link = (Component) contents.getArgs()[0];
-        assertEquals(url, link.getString());
-        assertEquals(LibraryDownloadScreen.ABOUT_COLOR, link.getStyle().getColor().getValue());
-        assertTrue(link.getStyle().isUnderlined());
-        assertInstanceOf(ClickEvent.OpenUrl.class, link.getStyle().getClickEvent());
-        assertEquals(URI.create(url), ((ClickEvent.OpenUrl) link.getStyle().getClickEvent()).uri());
-    }
 }
