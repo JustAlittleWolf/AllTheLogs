@@ -315,7 +315,7 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
             .withUnderlined(true)
             .withClickEvent(new ClickEvent.OpenUrl(uri))
             .withHoverEvent(new HoverEvent.ShowText(Component.literal(url))));
-        return Component.translatable(key, link);
+        return Component.literal("\n").append(Component.translatable(key, link));
     }
 
     private void aboutLine() {
