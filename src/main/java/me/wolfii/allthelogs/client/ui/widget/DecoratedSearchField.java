@@ -22,6 +22,28 @@ public final class DecoratedSearchField extends TextBoxComponent {
         super(Sizing.expand());
     }
 
+    /**
+     * The box scrolled to the end of {@code value} while it had no room, so the field draws nothing.
+     * {@code displayPos} is the first visible character. It only lands on the length when the inner width
+     * fitted zero characters, which is what happens if the restored query is applied before layout.
+     */
+    static boolean hidesText(String value, int displayPos) {
+        return value != null && !value.isEmpty() && displayPos >= value.length();
+    }
+
+    /**
+     * Scrolls the stored query into the visible window after the box has a real width.
+     */
+    public void revealValue() {
+        String value = getValue();
+        if (value.isEmpty() || getWidth() <= 0) return;
+        EditBoxAccessor access = (EditBoxAccessor) (EditBox) this;
+        if (!hidesText(value, access.allthelogs$getDisplayPos())) return;
+        int cursor = Math.min(getCursorPosition(), value.length());
+        setCursorPosition(0);
+        setCursorPosition(cursor);
+    }
+
     public void setDecorations(String prefix, String suffix) {
         String nextPrefix = prefix == null ? "" : prefix;
         String nextSuffix = suffix == null ? "" : suffix;
@@ -77,6 +99,7 @@ public final class DecoratedSearchField extends TextBoxComponent {
 
     @Override
     public void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+        revealIfHidden();
         applyTextInset();
         super.extractWidgetRenderState(graphics, mouseX, mouseY, delta);
         Font font = Minecraft.getInstance().font;
@@ -89,6 +112,13 @@ public final class DecoratedSearchField extends TextBoxComponent {
             int x = getX() + getWidth() - horizontalPadding() - font.width(suffix);
             drawDecoration(graphics, font, suffix, x, textY);
         }
+    }
+
+    private void revealIfHidden() {
+        EditBoxAccessor access = (EditBoxAccessor) (EditBox) this;
+        if (!hidesText(getValue(), access.allthelogs$getDisplayPos())) return;
+        if (getInnerWidth() <= 4) return;
+        access.allthelogs$setDisplayPos(0);
     }
 
     private void applyTextInset() {

@@ -129,6 +129,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     @Override
     protected void init() {
         super.init();
+        revealSearchQuery();
         if (search != null && search.focusHandler() != null) {
             search.focusHandler().focus(search, UIComponent.FocusSource.KEYBOARD_CYCLE);
         }
@@ -196,10 +197,10 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         bar.gap(4).verticalAlignment(VerticalAlignment.CENTER);
 
         search = new DecoratedSearchField();
+        search.setMaxLength(256);
         search.setValue(queries.filter().text());
         search.setDecorations(SearchDecorations.prefix(queries.filter()), SearchDecorations.suffix(queries.filter()));
         search.setHint(Component.translatable("allthelogs.search.placeholder"));
-        search.setMaxLength(256);
         search.addFormatter(this::formatSearch);
         search.onChanged().subscribe(this::onSearchChanged);
         refreshSearchColor();
@@ -252,6 +253,26 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     private void refreshSearchDecorations() {
         syncSearchBox();
         refreshSearchColor();
+    }
+
+    /**
+     * The toolbar builds the search box before it is laid out, so a restored query is applied at width 0
+     * and the box scrolls it out of sight. The filter still runs. Put the text back once the box has a width,
+     * including a query that was cut off by the edit box's default length.
+     */
+    private void revealSearchQuery() {
+        if (search == null) return;
+        String shown = queries.filter().text();
+        search.setMaxLength(256);
+        if (!shown.equals(search.getValue())) {
+            syncingSearch = true;
+            try {
+                search.setValue(shown);
+            } finally {
+                syncingSearch = false;
+            }
+        }
+        search.revealValue();
     }
 
     private void syncSearchBox() {
