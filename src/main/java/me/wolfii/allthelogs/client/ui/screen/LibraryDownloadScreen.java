@@ -27,14 +27,13 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.net.URI;
-import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
 /**
  * Download prompt shared by the DuckDB driver and the GraalJS engine. The card, progress bar, and
  * failure actions are the same. Title, explanation, about link, and the decline button are supplied
- * for each library. DuckDB stays here until the log store opens and decline quits the game. GraalJS
- * returns to the screen that opened it, then shows the script editor once the engine is ready.
+ * for each library. Once the download is ready the next screen opens on its own: the title menu for
+ * DuckDB, the script editor for GraalJS. Decline quits the game for DuckDB and returns for GraalJS.
  */
 public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
     private static final int RETRY_THROTTLE_MS = 1000;
@@ -55,7 +54,6 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
     private final Runnable onDecline;
     private final Runnable onReady;
     private final Runnable onFinished;
-    private final BooleanSupplier finished;
     private final boolean closeOnEscape;
 
     private FlowLayout card;
@@ -76,7 +74,6 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
         Runnable onDecline,
         Runnable onReady,
         Runnable onFinished,
-        BooleanSupplier finished,
         boolean closeOnEscape
     ) {
         super(screenTitle);
@@ -86,7 +83,6 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
         this.onDecline = onDecline;
         this.onReady = onReady;
         this.onFinished = onFinished;
-        this.finished = finished;
         this.closeOnEscape = closeOnEscape;
     }
 
@@ -97,8 +93,6 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
                 Component.translatable("allthelogs.duckdb.download.title"),
                 Component.translatable("allthelogs.duckdb.download.body"),
                 Component.translatable("allthelogs.duckdb.quit"),
-                Component.translatable("allthelogs.duckdb.opening"),
-                Component.translatable("allthelogs.duckdb.opening.detail"),
                 aboutLink(DUCKDB_ABOUT_KEY, DUCKDB_ABOUT_URL)
             ),
             () -> Snapshot.fromDuck(DuckDbRuntime.progress()),
@@ -106,7 +100,6 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
             () -> Minecraft.getInstance().stop(),
             AllTheLogsClient::onDriverReady,
             () -> Minecraft.getInstance().gui.setScreen(new TitleScreen()),
-            AllTheLogsClient::isStoreBootSettled,
             false
         );
     }
@@ -118,8 +111,6 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
                 Component.translatable("allthelogs.scripts.download.title"),
                 Component.translatable("allthelogs.scripts.download.body"),
                 Component.translatable("allthelogs.done"),
-                null,
-                null,
                 aboutLink(GRAALJS_ABOUT_KEY, GRAALJS_ABOUT_URL)
             ),
             () -> Snapshot.fromGraal(ScriptRuntime.progress()),
@@ -128,16 +119,15 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
             () -> {
             },
             () -> Minecraft.getInstance().gui.setScreen(new ScriptsScreen(parent)),
-            () -> true,
             true
         );
     }
 
-    static Phase phase(Snapshot.Stage stage, boolean openingAfterReady) {
+    static Phase phase(Snapshot.Stage stage) {
         return switch (stage) {
             case IDLE -> Phase.PROMPT;
             case FAILED -> Phase.FAILED;
-            case READY -> openingAfterReady ? Phase.OPENING : Phase.FINISHED;
+            case READY -> Phase.FINISHED;
             case DOWNLOADING, VERIFYING, LOADING -> Phase.WORKING;
         };
     }
@@ -189,7 +179,7 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
             .surface(PanelSurfaces.card())
             .horizontalAlignment(HorizontalAlignment.LEFT);
         root.child(card);
-        show(phase(progress.get().stage(), text.opensAfterDownload()));
+        show(phase(progress.get().stage()));
     }
 
     @Override
@@ -205,12 +195,10 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
                 readyNotified = true;
                 onReady.run();
             }
-            if (!text.opensAfterDownload() || finished.getAsBoolean()) {
-                onFinished.run();
-                return;
-            }
+            onFinished.run();
+            return;
         }
-        Phase next = phase(snapshot.stage(), text.opensAfterDownload());
+        Phase next = phase(snapshot.stage());
         if (next != shown) {
             show(next);
             return;
@@ -250,7 +238,6 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
             case PROMPT -> showPrompt();
             case WORKING -> showWorking(snapshot);
             case FAILED -> showFailed(snapshot);
-            case OPENING -> showOpening();
             case FINISHED -> {
             }
         }
@@ -296,17 +283,6 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
         actions.child(declineButton());
         card.child(actions);
         updateWorking(snapshot);
-    }
-
-    private void showOpening() {
-        title(text.openingTitle());
-        body(text.openingDetail(), Colors.SEARCH_TEXT);
-        card.child(progressTrack());
-        rule();
-        FlowLayout actions = actions();
-        actions.child(declineButton());
-        card.child(actions);
-        updateWorking(progress.get());
     }
 
     private void title(Component title) {
@@ -417,13 +393,8 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
         Component title,
         Component body,
         Component decline,
-        @Nullable Component openingTitle,
-        @Nullable Component openingDetail,
         Component about
     ) {
-        boolean opensAfterDownload() {
-            return openingTitle != null;
-        }
     }
 
     record Snapshot(Stage stage, int percent, @Nullable String error) {
@@ -473,7 +444,6 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
         PROMPT,
         WORKING,
         FAILED,
-        OPENING,
         FINISHED
     }
 }
