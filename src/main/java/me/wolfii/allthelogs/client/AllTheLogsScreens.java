@@ -1,8 +1,11 @@
 package me.wolfii.allthelogs.client;
 
 import me.wolfii.allthelogs.client.config.AllTheLogsConfig;
+import me.wolfii.allthelogs.client.script.GraalJs;
 import me.wolfii.allthelogs.client.script.ScriptFiles;
+import me.wolfii.allthelogs.client.script.ScriptRuntime;
 import me.wolfii.allthelogs.client.ui.screen.ImportScreen;
+import me.wolfii.allthelogs.client.ui.screen.LibraryDownloadScreen;
 import me.wolfii.allthelogs.client.ui.screen.LogBrowserScreen;
 import me.wolfii.allthelogs.client.ui.screen.ScriptsScreen;
 import me.wolfii.allthelogs.client.ui.widget.IconButtonWidget;
@@ -39,7 +42,11 @@ public final class AllTheLogsScreens {
 
     public static void openScripts(@Nullable Screen parent) {
         ScriptFiles.ensureExample(AllTheLogsPaths.scripts());
-        Minecraft.getInstance().gui.setScreen(new ScriptsScreen(parent));
+        if (ScriptRuntime.isReady() || GraalJs.enginePresent()) {
+            Minecraft.getInstance().gui.setScreen(new ScriptsScreen(parent));
+            return;
+        }
+        Minecraft.getInstance().gui.setScreen(LibraryDownloadScreen.scripts(parent));
     }
 
     public static void openSettings(@Nullable Screen parent) {

@@ -1,7 +1,6 @@
 package me.wolfii.allthelogs.client.ui.screen;
 
 import io.wispforest.owo.ui.base.BaseOwoScreen;
-import io.wispforest.owo.ui.component.BoxComponent;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.LabelComponent;
 import io.wispforest.owo.ui.component.TextBoxComponent;
@@ -43,8 +42,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Lists {@code .ts}/{@code .js} scripts after the GraalJS engine is present. First open asks before
- * downloading, then shows a single progress bar until the editor is ready.
+ * Lists {@code .ts}/{@code .js} scripts after the GraalJS engine is present. The download itself is
+ * {@link LibraryDownloadScreen}.
  */
 public final class ScriptsScreen extends BaseOwoScreen<FlowLayout> {
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(runnable -> {
@@ -61,14 +60,11 @@ public final class ScriptsScreen extends BaseOwoScreen<FlowLayout> {
     private LabelComponent outputPath;
     private FlowLayout scriptList;
     private TextBoxComponent search;
-    private BoxComponent progressFill;
     private ButtonComponent run;
-    private ButtonComponent download;
     private @Nullable Path selected;
     private String query = "";
     private long retryLockoutUntilMs;
     private boolean running;
-    private boolean showingEditor;
 
     public ScriptsScreen(@Nullable Screen parent) {
         super(Component.translatable("allthelogs.screen.scripts"));
@@ -93,31 +89,23 @@ public final class ScriptsScreen extends BaseOwoScreen<FlowLayout> {
             .padding(Insets.of(12))
             .surface(PanelSurfaces.card());
         root.child(card);
-        showAppropriateCard();
+        showEditor();
     }
 
     @Override
     public void tick() {
         super.tick();
-        if (!showingEditor && ScriptRuntime.isReady()) {
-            showAppropriateCard();
-            return;
-        }
         refresh();
     }
 
     public void refresh() {
-        if (!showingEditor) {
-            refreshSetup();
-            return;
-        }
         if (engineStatus != null) {
             engineStatus.text(engineStatusText());
         }
         if (run != null) {
             if (ScriptRuntime.hasFailed()) {
                 boolean locked = System.currentTimeMillis() < retryLockoutUntilMs;
-                run.setMessage(Component.translatable("allthelogs.scripts.retry"));
+                run.setMessage(Component.translatable("allthelogs.download.retry"));
                 run.active(!locked);
             } else {
                 run.setMessage(Component.translatable("allthelogs.scripts.run"));
@@ -139,65 +127,10 @@ public final class ScriptsScreen extends BaseOwoScreen<FlowLayout> {
         Minecraft.getInstance().gui.setScreen(parent);
     }
 
-    private void showAppropriateCard() {
-        if (ScriptRuntime.isReady() || GraalJs.enginePresent()) {
-            if (GraalJs.enginePresent() && !ScriptRuntime.isReady()) {
-                ScriptRuntime.ensure();
-            }
-            showEditor();
-            return;
-        }
-        Progress progress = ScriptRuntime.progress();
-        if (progress.stage() == Progress.Stage.IDLE) {
-            showDownloadPrompt();
-        } else {
-            showDownloadProgress();
-        }
-    }
-
-    private void showDownloadPrompt() {
-        showingEditor = false;
-        card.clearChildren();
-        card.horizontalAlignment(HorizontalAlignment.LEFT);
-        card.child(UIComponents.label(Component.translatable("allthelogs.scripts.download.title")));
-        LabelComponent body = UIComponents.label(Component.translatable("allthelogs.scripts.download.body"));
-        body.color(Color.ofRgb(0xA0A0A0));
-        body.sizing(Sizing.fill(100), Sizing.content());
-        card.child(body);
-        FlowLayout actions = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
-        actions.gap(8).verticalAlignment(VerticalAlignment.CENTER);
-        download = UIComponents.button(Component.translatable("allthelogs.scripts.download.start"),
-            button -> startDownload());
-        actions.child(download);
-        actions.child(UIContainers.horizontalFlow(Sizing.expand(), Sizing.content()));
-        actions.child(UIComponents.button(Component.translatable("allthelogs.done"),
-            button -> Minecraft.getInstance().gui.setScreen(parent)));
-        card.child(actions);
-    }
-
-    private void showDownloadProgress() {
-        showingEditor = false;
-        card.clearChildren();
-        engineStatus = UIComponents.label(engineStatusText());
-        engineStatus.color(Color.ofRgb(0xA0A0A0));
-        engineStatus.sizing(Sizing.fill(100), Sizing.content());
-        card.child(engineStatus);
-        FlowLayout track = UIContainers.horizontalFlow(Sizing.fill(), Sizing.fixed(10));
-        track.surface(Surface.flat(0xFF1A1A1A).and(Surface.outline(0xFF3C3C3C)));
-        progressFill = UIComponents.box(Sizing.fill(1), Sizing.fill());
-        progressFill.fill(true).color(Color.ofRgb(0x7CB342));
-        track.child(progressFill);
-        card.child(track);
-        FlowLayout actions = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
-        actions.child(UIContainers.horizontalFlow(Sizing.expand(), Sizing.content()));
-        actions.child(UIComponents.button(Component.translatable("allthelogs.done"),
-            button -> Minecraft.getInstance().gui.setScreen(parent)));
-        card.child(actions);
-        refreshSetup();
-    }
-
     private void showEditor() {
-        showingEditor = true;
+        if (GraalJs.enginePresent() && !ScriptRuntime.isReady()) {
+            ScriptRuntime.ensure();
+        }
         card.clearChildren();
         card.gap(8);
         card.verticalAlignment(VerticalAlignment.TOP);
@@ -256,27 +189,6 @@ public final class ScriptsScreen extends BaseOwoScreen<FlowLayout> {
 
         reloadScripts();
         refresh();
-    }
-
-    private void startDownload() {
-        showDownloadProgress();
-        ScriptRuntime.ensure();
-    }
-
-    private void refreshSetup() {
-        if (engineStatus != null) {
-            engineStatus.text(engineStatusText());
-        }
-        if (progressFill != null) {
-            int percent = ScriptRuntime.progress().percent();
-            if (ScriptRuntime.hasFailed()) percent = 1;
-            else percent = Math.max(1, percent);
-            progressFill.horizontalSizing(Sizing.fill(percent));
-        }
-        if (ScriptRuntime.hasFailed() && download != null) {
-            download.setMessage(Component.translatable("allthelogs.scripts.retry"));
-            download.active(System.currentTimeMillis() >= retryLockoutUntilMs);
-        }
     }
 
     private void primaryAction() {
@@ -377,18 +289,11 @@ public final class ScriptsScreen extends BaseOwoScreen<FlowLayout> {
         Progress progress = ScriptRuntime.progress();
         return switch (progress.stage()) {
             case READY, IDLE -> Component.empty();
-            case FAILED -> Component.translatable("allthelogs.scripts.engine.failed",
+            case FAILED -> Component.translatable("allthelogs.download.failed.detail",
                 progress.error() == null ? "" : progress.error());
-            case DOWNLOADING -> Component.translatable("allthelogs.scripts.engine.downloading",
-                currentDownload(progress), progress.downloads(), progress.percent());
-            case VERIFYING -> Component.translatable("allthelogs.scripts.engine.verifying",
-                currentDownload(progress), progress.downloads(), progress.percent());
-            case LOADING -> Component.translatable("allthelogs.scripts.engine.loading");
+            case DOWNLOADING -> Component.translatable("allthelogs.download.downloading", progress.percent());
+            case VERIFYING -> Component.translatable("allthelogs.download.verifying", progress.percent());
+            case LOADING -> Component.translatable("allthelogs.download.loading");
         };
-    }
-
-    private static int currentDownload(Progress progress) {
-        if (progress.downloads() <= 0) return 1;
-        return Math.min(progress.downloads(), progress.completed() + 1);
     }
 }

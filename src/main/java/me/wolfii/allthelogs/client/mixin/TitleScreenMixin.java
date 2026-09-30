@@ -10,7 +10,7 @@ import com.llamalad7.mixinextras.sugar.ref.LocalBooleanRef;
 import com.llamalad7.mixinextras.sugar.ref.LocalIntRef;
 import me.wolfii.allthelogs.client.AllTheLogsScreens;
 import me.wolfii.allthelogs.client.DuckDbRuntime;
-import me.wolfii.allthelogs.client.ui.screen.DuckDbSetupScreen;
+import me.wolfii.allthelogs.client.ui.screen.LibraryDownloadScreen;
 import net.fabricmc.fabric.api.client.screen.v1.Screens;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -42,8 +42,8 @@ public abstract class TitleScreenMixin {
                 }
                 return;
             }
-            if (!(client.gui.screen() instanceof DuckDbSetupScreen)) {
-                client.gui.setScreen(new DuckDbSetupScreen());
+            if (!(client.gui.screen() instanceof LibraryDownloadScreen)) {
+                client.gui.setScreen(LibraryDownloadScreen.duckDb());
             }
         });
     }

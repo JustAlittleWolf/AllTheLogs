@@ -1,6 +1,6 @@
 package me.wolfii.allthelogs.client;
 
-import me.wolfii.allthelogs.client.ui.screen.DuckDbSetupScreen;
+import me.wolfii.allthelogs.client.ui.screen.LibraryDownloadScreen;
 import me.wolfii.allthelogs.data.duckdb.DuckDbJdbc;
 import me.wolfii.allthelogs.data.duckdb.DuckDbJdbcInstaller;
 import me.wolfii.allthelogs.data.duckdb.DuckDbJdbcInstaller.Progress;
@@ -115,12 +115,12 @@ public final class DuckDbRuntime {
         Minecraft client = Minecraft.getInstance();
         if (client == null) return;
         client.execute(() -> {
-            if (client.gui.screen() instanceof DuckDbSetupScreen screen) {
+            if (client.gui.screen() instanceof LibraryDownloadScreen screen) {
                 screen.refresh();
                 return;
             }
             if (snapshot.stage() == Progress.Stage.FAILED && client.gui.overlay() == null) {
-                client.gui.setScreen(new DuckDbSetupScreen());
+                client.gui.setScreen(LibraryDownloadScreen.duckDb());
             }
         });
     }
