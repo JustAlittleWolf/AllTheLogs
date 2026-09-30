@@ -14,29 +14,36 @@ import me.wolfii.allthelogs.client.script.GraalJsInstaller;
 import me.wolfii.allthelogs.client.script.ScriptRuntime;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
-import me.wolfii.allthelogs.data.duckdb.DuckDbJdbc;
 import me.wolfii.allthelogs.data.duckdb.DuckDbJdbcInstaller;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.network.chat.Style;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.net.URI;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
 /**
  * Download prompt shared by the DuckDB driver and the GraalJS engine. The card, progress bar, and
- * failure actions are the same. Title, explanation, and the decline button are supplied for each library.
- * DuckDB stays here until the log store opens and decline quits the game. GraalJS returns to the
- * screen that opened it, then shows the script editor once the engine is ready.
+ * failure actions are the same. Title, explanation, about link, and the decline button are supplied
+ * for each library. DuckDB stays here until the log store opens and decline quits the game. GraalJS
+ * returns to the screen that opened it, then shows the script editor once the engine is ready.
  */
 public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
     private static final int RETRY_THROTTLE_MS = 1000;
     private static final int CARD_WIDTH = 420;
     private static final int BUTTON_WIDTH = 128;
+    static final String DUCKDB_ABOUT_KEY = "allthelogs.duckdb.about";
+    static final String GRAALJS_ABOUT_KEY = "allthelogs.scripts.about";
+    static final String DUCKDB_ABOUT_URL = "https://duckdb.org";
+    static final String GRAALJS_ABOUT_URL = "https://www.graalvm.org/javascript/";
 
     private final Text text;
     private final Supplier<Snapshot> progress;
@@ -51,7 +58,6 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
     private int cardPixels = CARD_WIDTH;
     private LabelComponent status;
     private LabelComponent detail;
-    private LabelComponent fileLabel;
     private BoxComponent progressFill;
     private ButtonComponent primary;
     private Phase shown;
@@ -88,7 +94,8 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
                 Component.translatable("allthelogs.duckdb.download.body"),
                 Component.translatable("allthelogs.duckdb.quit"),
                 Component.translatable("allthelogs.duckdb.opening"),
-                Component.translatable("allthelogs.duckdb.opening.detail")
+                Component.translatable("allthelogs.duckdb.opening.detail"),
+                aboutLink(DUCKDB_ABOUT_KEY, DUCKDB_ABOUT_URL)
             ),
             () -> Snapshot.fromDuck(DuckDbRuntime.progress()),
             DuckDbRuntime::ensure,
@@ -108,7 +115,8 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
                 Component.translatable("allthelogs.scripts.download.body"),
                 Component.translatable("allthelogs.done"),
                 null,
-                null
+                null,
+                aboutLink(GRAALJS_ABOUT_KEY, GRAALJS_ABOUT_URL)
             ),
             () -> Snapshot.fromGraal(ScriptRuntime.progress()),
             ScriptRuntime::ensure,
@@ -224,12 +232,11 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
         card.clearChildren();
         status = null;
         detail = null;
-        fileLabel = null;
         progressFill = null;
         primary = null;
         Snapshot snapshot = progress.get();
         switch (next) {
-            case PROMPT -> showPrompt(snapshot);
+            case PROMPT -> showPrompt();
             case WORKING -> showWorking(snapshot);
             case FAILED -> showFailed(snapshot);
             case OPENING -> showOpening();
@@ -238,10 +245,10 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
         }
     }
 
-    private void showPrompt(Snapshot snapshot) {
+    private void showPrompt() {
         title(text.title());
         body(text.body(), Colors.SEARCH_TEXT);
-        fileLine(snapshot);
+        aboutLine();
         rule();
         FlowLayout actions = actions();
         actions.child(button("allthelogs.download.start", this::beginDownload));
@@ -251,7 +258,7 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
 
     private void showWorking(Snapshot snapshot) {
         title(text.title());
-        fileLine(snapshot);
+        aboutLine();
         status = body(statusText(snapshot), Colors.SEARCH_TEXT);
         card.child(progressTrack());
         rule();
@@ -305,10 +312,22 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
         return label;
     }
 
-    private void fileLine(Snapshot snapshot) {
-        String file = snapshot.file();
-        if (file == null || file.isBlank()) return;
-        fileLabel = body(Component.translatable("allthelogs.download.file", file), Colors.INFO_VERSION);
+    /**
+     * "More about DuckDB: https://duckdb.org", with the address underlined and opened through the
+     * vanilla confirm-link screen. The label's default click handler reads that click event.
+     */
+    static Component aboutLink(String key, String url) {
+        URI uri = URI.create(url);
+        Component link = Component.literal(url).withStyle(Style.EMPTY
+            .withColor(Colors.INFO_VERSION)
+            .withUnderlined(true)
+            .withClickEvent(new ClickEvent.OpenUrl(uri))
+            .withHoverEvent(new HoverEvent.ShowText(Component.literal(url))));
+        return Component.translatable(key, link);
+    }
+
+    private void aboutLine() {
+        body(text.about(), Colors.SEARCH_TEXT);
     }
 
     private void rule() {
@@ -350,12 +369,6 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
         if (status != null) {
             status.text(statusText(snapshot));
         }
-        if (fileLabel != null) {
-            String file = snapshot.file();
-            fileLabel.text(file == null || file.isBlank()
-                ? Component.empty()
-                : Component.translatable("allthelogs.download.file", file));
-        }
         if (detail != null && snapshot.stage() == Snapshot.Stage.FAILED) {
             String error = snapshot.error();
             detail.text(Component.translatable("allthelogs.download.failed.detail", error == null ? "" : error));
@@ -383,30 +396,23 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
         Component body,
         Component decline,
         @Nullable Component openingTitle,
-        @Nullable Component openingDetail
+        @Nullable Component openingDetail,
+        Component about
     ) {
         boolean opensAfterDownload() {
             return openingTitle != null;
         }
     }
 
-    record Snapshot(Stage stage, int percent, @Nullable String error, String file) {
+    record Snapshot(Stage stage, int percent, @Nullable String error) {
         static Snapshot fromDuck(@Nullable DuckDbJdbcInstaller.Progress progress) {
-            if (progress == null) return new Snapshot(Stage.IDLE, 0, null, "");
-            return new Snapshot(duckStage(progress.stage()), progress.percent(), progress.error(),
-                DuckDbJdbc.jarFileName(DuckDbJdbc.classifier()));
+            if (progress == null) return new Snapshot(Stage.IDLE, 0, null);
+            return new Snapshot(duckStage(progress.stage()), progress.percent(), progress.error());
         }
 
         static Snapshot fromGraal(@Nullable GraalJsInstaller.Progress progress) {
-            if (progress == null) return new Snapshot(Stage.IDLE, 0, null, "");
-            return new Snapshot(graalStage(progress.stage()), progress.percent(), progress.error(), graalFile(progress));
-        }
-
-        private static String graalFile(GraalJsInstaller.Progress progress) {
-            return switch (progress.stage()) {
-                case DOWNLOADING, VERIFYING, LOADING -> progress.artifact() == null ? "" : progress.artifact();
-                case IDLE, READY, FAILED -> "";
-            };
+            if (progress == null) return new Snapshot(Stage.IDLE, 0, null);
+            return new Snapshot(graalStage(progress.stage()), progress.percent(), progress.error());
         }
 
         private static Stage duckStage(DuckDbJdbcInstaller.Progress.Stage stage) {
