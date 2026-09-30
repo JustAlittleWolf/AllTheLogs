@@ -3,11 +3,17 @@ package me.wolfii.allthelogs.client.ui.screen;
 import me.wolfii.allthelogs.client.script.GraalJsInstaller;
 import me.wolfii.allthelogs.client.ui.screen.LibraryDownloadScreen.Phase;
 import me.wolfii.allthelogs.client.ui.screen.LibraryDownloadScreen.Snapshot;
-import me.wolfii.allthelogs.data.duckdb.DuckDbJdbc;
 import me.wolfii.allthelogs.data.duckdb.DuckDbJdbcInstaller;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import org.junit.jupiter.api.Test;
 
+import java.net.URI;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LibraryDownloadScreenTest {
     @Test
@@ -28,14 +34,11 @@ class LibraryDownloadScreenTest {
         Snapshot graal = Snapshot.fromGraal(GraalJsInstaller.Progress.idle());
         assertEquals(Snapshot.Stage.IDLE, duck.stage());
         assertEquals(Snapshot.Stage.IDLE, graal.stage());
-        assertEquals(DuckDbJdbc.jarFileName(DuckDbJdbc.classifier()), duck.file());
-        assertEquals("", graal.file());
 
         Snapshot downloading = Snapshot.fromGraal(new GraalJsInstaller.Progress(
             GraalJsInstaller.Progress.Stage.DOWNLOADING, 1, 2, 0, 100, "js-language", null));
         assertEquals(Snapshot.Stage.DOWNLOADING, downloading.stage());
         assertEquals(50, downloading.percent());
-        assertEquals("js-language", downloading.file());
 
         Snapshot ready = Snapshot.fromDuck(DuckDbJdbcInstaller.Progress.ready());
         assertEquals(Snapshot.Stage.READY, ready.stage());
@@ -50,5 +53,27 @@ class LibraryDownloadScreenTest {
         assertEquals(100, LibraryDownloadScreen.barPercent(Snapshot.fromDuck(DuckDbJdbcInstaller.Progress.ready())));
         assertEquals(40, LibraryDownloadScreen.barPercent(Snapshot.fromDuck(
             new DuckDbJdbcInstaller.Progress(DuckDbJdbcInstaller.Progress.Stage.DOWNLOADING, 40, 100, "linux_amd64", null))));
+    }
+
+    @Test
+    void aboutLineNamesTheLibraryAndOpensItsPage() {
+        assertEquals("https://duckdb.org", LibraryDownloadScreen.DUCKDB_ABOUT_URL);
+        assertEquals("https://www.graalvm.org/javascript/", LibraryDownloadScreen.GRAALJS_ABOUT_URL);
+        assertAbout(LibraryDownloadScreen.DUCKDB_ABOUT_KEY, LibraryDownloadScreen.DUCKDB_ABOUT_URL);
+        assertAbout(LibraryDownloadScreen.GRAALJS_ABOUT_KEY, LibraryDownloadScreen.GRAALJS_ABOUT_URL);
+    }
+
+    private static void assertAbout(String key, String url) {
+        Component line = LibraryDownloadScreen.aboutLink(key, url);
+        assertInstanceOf(TranslatableContents.class, line.getContents());
+        TranslatableContents contents = (TranslatableContents) line.getContents();
+        assertEquals(key, contents.getKey());
+        assertEquals(1, contents.getArgs().length);
+        assertInstanceOf(Component.class, contents.getArgs()[0]);
+        Component link = (Component) contents.getArgs()[0];
+        assertEquals(url, link.getString());
+        assertTrue(link.getStyle().isUnderlined());
+        assertInstanceOf(ClickEvent.OpenUrl.class, link.getStyle().getClickEvent());
+        assertEquals(URI.create(url), ((ClickEvent.OpenUrl) link.getStyle().getClickEvent()).uri());
     }
 }
