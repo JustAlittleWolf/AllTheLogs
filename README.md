@@ -4,4 +4,4 @@ A Fabric client mod for Minecraft **26.2** that allows you to easily search all 
 
 Messages from logs that were deleted, or when the game was started more than 7 times on a day (see https://bugs.mojang.com/browse/MC/issues/MC-100524) can not be recovered.
 
-Available on modrinth: https://modrinth.com/mod/allthelogs
+Available on modrinth: https://modrinth.com/mod/all-the-logs
