@@ -27,7 +27,8 @@ import java.util.function.IntSupplier;
  * above it, top to bottom, with a ? button under those actions. Hovering ? shows the database summary.
  * A click keeps the menu open so Import and Scripts can be chosen. Export opens to the side, then the
  * chosen scope opens the file format beside that. The scope row stays highlighted while its format menu
- * is open.
+ * is open. Dragging the timeline scrollbar does not count as a hover, including the moment that drag
+ * is released on the button.
  */
 final class BrowserToolsMenu {
     private static final int CLOSE_DELAY_MS = 160;
@@ -60,6 +61,7 @@ final class BrowserToolsMenu {
     private FlowLayout formatMenu;
     private Scope formatScope;
     private boolean pinned;
+    private boolean blockHoverOpen;
     private long closeAt = Long.MAX_VALUE;
     private int placedActionsX = Integer.MIN_VALUE;
     private int placedActionsY = Integer.MIN_VALUE;
@@ -135,11 +137,14 @@ final class BrowserToolsMenu {
         placedActionsY = Integer.MIN_VALUE;
     }
 
-    void sync(int mouseX, int mouseY) {
+    void sync(int mouseX, int mouseY, boolean scrollbarDrag) {
         if (suppressed.getAsBoolean()) {
+            blockHoverOpen = false;
             close();
             return;
         }
+        blockHoverOpen = blockHoverOpen(blockHoverOpen, scrollbarDrag, hit(anchor, mouseX, mouseY));
+        if (blockHoverOpen && !isOpen()) return;
         if (!inside(mouseX, mouseY) && !pinned) {
             if (!isOpen()) return;
             if (closeAt == Long.MAX_VALUE) closeAt = System.currentTimeMillis() + CLOSE_DELAY_MS;
@@ -158,6 +163,15 @@ final class BrowserToolsMenu {
             closeFormat();
         }
         if (!wasOpen && isOpen()) onOpened.run();
+    }
+
+    /**
+     * Hover must not open the menu while the timeline scrollbar is held. Releasing that drag on the
+     * button keeps the block until the pointer leaves, so the menu does not pop open on mouse-up.
+     */
+    static boolean blockHoverOpen(boolean blocking, boolean scrollbarDrag, boolean overAnchor) {
+        if (scrollbarDrag) return true;
+        return blocking && overAnchor;
     }
 
     private boolean inside(int mouseX, int mouseY) {

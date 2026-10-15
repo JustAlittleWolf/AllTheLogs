@@ -141,7 +141,8 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         if (tools != null && overlays != null) {
-            overlays.queue(() -> tools.sync(mouseX, mouseY));
+            boolean scrollbarDrag = list != null && list.draggingScrollbar();
+            overlays.queue(() -> tools.sync(mouseX, mouseY, scrollbarDrag));
         }
         super.extractRenderState(graphics, mouseX, mouseY, delta);
         if (list != null && list.verticalCursor()) {
