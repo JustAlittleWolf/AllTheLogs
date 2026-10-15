@@ -79,29 +79,65 @@ public final class ContextPeeks {
                 if (neighbor != null) gapVisible.add(neighbor);
             }
         }
-        Set<DisplayRow> covered = coveredGapProbes(gapVisible, probes);
+        int probeDistance = contextLines + 1;
+        Map<LogDay, List<DisplayRow>> chains = chains(gapVisible, probes);
+        Set<DisplayRow> covered = coveredGapProbes(chains, rankFromHit, probeDistance);
         List<DisplayRow> visible = new ArrayList<>();
         List<DisplayRow> peeks = new ArrayList<>();
         for (DisplayRow row : rows) {
             int distance = rankFromHit.getOrDefault(row, Integer.MAX_VALUE);
             if (row.match() || distance <= contextLines || covered.contains(row)) {
                 visible.add(row);
-            } else if (distance == contextLines + 1) {
+            } else if (distance == probeDistance) {
                 peeks.add(row);
             }
         }
         for (DisplayRow peek : peeks) {
-            markNearestEdges(visible, peek);
+            markNearestEdges(visible, peek, chains.get(logDay(peek)), rankFromHit, probeDistance);
         }
         return List.copyOf(visible);
     }
 
     /**
-     * Every visible row at the closest distance gets the caret. A tie used to keep only the earlier row, so a
-     * gap showed a down arrow and no up arrow. A second probe on the same row also has to update the row
-     * already replaced by the first probe; matching the original instance misses it once its flags change.
+     * Fetched rows of one log and day, oldest line first. Rows already on the page are included so a probe
+     * can fill the hole up to them.
      */
-    private static void markNearestEdges(List<DisplayRow> visible, DisplayRow peek) {
+    private static Map<LogDay, List<DisplayRow>> chains(List<DisplayRow> visible, List<DisplayRow> probes) {
+        Map<LogDay, List<DisplayRow>> chains = new HashMap<>();
+        for (DisplayRow row : visible) {
+            if (row != null) chains.computeIfAbsent(logDay(row), key -> new ArrayList<>()).add(row);
+        }
+        for (DisplayRow row : probes) {
+            if (row != null) chains.computeIfAbsent(logDay(row), key -> new ArrayList<>()).add(row);
+        }
+        for (List<DisplayRow> chain : chains.values()) {
+            chain.sort(Comparator.comparingInt(DisplayRow::lineIndex));
+        }
+        return chains;
+    }
+
+    /**
+     * Every visible row at the closest stored-chat distance gets the caret. Distance walks the fetched
+     * lines, so a line-index hole left by dedup does not pull the caret onto only the nearer index.
+     * A tie used to keep only the earlier row, so a gap showed a down arrow and no up arrow. A second
+     * probe on the same row also has to update the row already replaced by the first probe; matching the
+     * original instance misses it once its flags change.
+     */
+    private static void markNearestEdges(List<DisplayRow> visible, DisplayRow peek, List<DisplayRow> chain,
+                                         Map<DisplayRow, Integer> rank, int probeDistance) {
+        if (chain == null || chain.isEmpty()) return;
+        int peekAt = -1;
+        Map<Integer, Integer> position = new HashMap<>();
+        for (int i = 0; i < chain.size(); i++) {
+            DisplayRow row = chain.get(i);
+            if (row == peek) peekAt = i;
+            position.putIfAbsent(row.lineIndex(), i);
+        }
+        if (peekAt < 0) {
+            Integer fallback = position.get(peek.lineIndex());
+            if (fallback == null) return;
+            peekAt = fallback;
+        }
         LocalDate peekDay = peek.entry().timestamp().toLocalDate();
         int best = Integer.MAX_VALUE;
         List<Integer> edges = new ArrayList<>();
@@ -109,11 +145,12 @@ public final class ContextPeeks {
             DisplayRow row = visible.get(i);
             if (!row.sameLog(peek)) continue;
             if (!row.entry().timestamp().toLocalDate().equals(peekDay)) continue;
-            int gap = row.lineIndex() - peek.lineIndex();
-            int abs = Math.abs(gap);
-            if (abs == 0 || abs > best) continue;
-            if (abs < best) {
-                best = abs;
+            Integer at = position.get(row.lineIndex());
+            if (at == null || at == peekAt) continue;
+            int gap = storedDistance(chain, peekAt, at, rank, probeDistance);
+            if (gap <= 0 || gap > best) continue;
+            if (gap < best) {
+                best = gap;
                 edges.clear();
             }
             edges.add(i);
@@ -123,6 +160,41 @@ public final class ContextPeeks {
             boolean moreBefore = edge.lineIndex() > peek.lineIndex();
             visible.set(index, addFileExpand(edge, moreBefore, !moreBefore));
         }
+    }
+
+    /**
+     * Steps along the fetched chain. A stored neighbour counts as one chat line. A hole between two probe
+     * rows counts as the raw index span, because chat outside every context window was not fetched.
+     */
+    private static int storedDistance(List<DisplayRow> chain, int from, int to, Map<DisplayRow, Integer> rank,
+                                     int probeDistance) {
+        int step = from < to ? 1 : -1;
+        int distance = 0;
+        for (int i = from; i != to; i += step) {
+            DisplayRow first = chain.get(i);
+            DisplayRow second = chain.get(i + step);
+            if (storedAdjacent(first, second, rank, probeDistance)) {
+                distance++;
+            } else {
+                distance += Math.abs(second.lineIndex() - first.lineIndex());
+            }
+        }
+        return distance;
+    }
+
+    /**
+     * Nothing stored sits between these two fetched rows. Consecutive indices always touch. A line-index
+     * hole inside a context window is a row dedup removed, so the next fetched line is still the next chat
+     * line. A hole with a probe on both sides can hide chat that no window reached.
+     */
+    private static boolean storedAdjacent(DisplayRow left, DisplayRow right, Map<DisplayRow, Integer> rank,
+                                         int probeDistance) {
+        if (!left.sameLog(right)) return false;
+        if (Math.abs(right.lineIndex() - left.lineIndex()) <= 1) return true;
+        int leftRank = rank.getOrDefault(left, Integer.MAX_VALUE);
+        int rightRank = rank.getOrDefault(right, Integer.MAX_VALUE);
+        if (leftRank == Integer.MAX_VALUE || rightRank == Integer.MAX_VALUE) return false;
+        return leftRank < probeDistance || rightRank < probeDistance;
     }
 
     /**
@@ -194,54 +266,35 @@ public final class ContextPeeks {
 
     /**
      * Probe lines that already fill the hole between two visible rows. Hiding them draws an expand caret for a
-     * message the page fetched, and when the hole is a single line the nearer-edge tie keeps only the down caret.
+     * message the page fetched. The hole is measured in stored chat, not raw line indices: dedup deletes rows
+     * and leaves holes, and those missing indices are not chat the page failed to fetch.
      */
-    private static Set<DisplayRow> coveredGapProbes(List<DisplayRow> visible, List<DisplayRow> probes) {
-        if (visible.size() < 2 || probes.isEmpty()) return Set.of();
-        Map<LogDay, List<DisplayRow>> visibleByDay = new HashMap<>();
-        Map<LogDay, List<DisplayRow>> probesByDay = new HashMap<>();
-        for (DisplayRow row : visible) {
-            visibleByDay.computeIfAbsent(logDay(row), key -> new ArrayList<>()).add(row);
-        }
-        for (DisplayRow row : probes) {
-            probesByDay.computeIfAbsent(logDay(row), key -> new ArrayList<>()).add(row);
-        }
+    private static Set<DisplayRow> coveredGapProbes(Map<LogDay, List<DisplayRow>> chains,
+                                                   Map<DisplayRow, Integer> rank, int probeDistance) {
         Set<DisplayRow> covered = Collections.newSetFromMap(new IdentityHashMap<>());
-        for (Map.Entry<LogDay, List<DisplayRow>> entry : probesByDay.entrySet()) {
-            List<DisplayRow> dayVisible = visibleByDay.get(entry.getKey());
-            if (dayVisible == null || dayVisible.size() < 2) continue;
-            List<DisplayRow> sortedVisible = new ArrayList<>(dayVisible);
-            sortedVisible.sort(Comparator.comparingInt(DisplayRow::lineIndex));
-            List<DisplayRow> sortedProbes = new ArrayList<>(entry.getValue());
-            sortedProbes.sort(Comparator.comparingInt(DisplayRow::lineIndex));
-            int probeIndex = 0;
-            for (int i = 1; i < sortedVisible.size(); i++) {
-                int left = sortedVisible.get(i - 1).lineIndex();
-                int right = sortedVisible.get(i).lineIndex();
-                while (probeIndex < sortedProbes.size() && sortedProbes.get(probeIndex).lineIndex() <= left) {
-                    probeIndex++;
-                }
-                int start = probeIndex;
-                while (probeIndex < sortedProbes.size() && sortedProbes.get(probeIndex).lineIndex() < right) {
-                    probeIndex++;
-                }
-                if (probeIndex - start != right - left - 1) continue;
-                int expected = left + 1;
-                boolean full = true;
-                for (int probe = start; probe < probeIndex; probe++) {
-                    if (sortedProbes.get(probe).lineIndex() != expected) {
-                        full = false;
-                        break;
-                    }
-                    expected++;
-                }
-                if (!full) continue;
-                for (int probe = start; probe < probeIndex; probe++) {
-                    covered.add(sortedProbes.get(probe));
-                }
+        for (List<DisplayRow> chain : chains.values()) {
+            List<Integer> anchors = new ArrayList<>();
+            for (int i = 0; i < chain.size(); i++) {
+                int distance = rank.getOrDefault(chain.get(i), Integer.MAX_VALUE);
+                if (distance != probeDistance) anchors.add(i);
+            }
+            for (int a = 1; a < anchors.size(); a++) {
+                int left = anchors.get(a - 1);
+                int right = anchors.get(a);
+                if (right == left + 1) continue;
+                if (!filledStoredGap(chain, left, right, rank, probeDistance)) continue;
+                for (int i = left + 1; i < right; i++) covered.add(chain.get(i));
             }
         }
         return covered;
+    }
+
+    private static boolean filledStoredGap(List<DisplayRow> chain, int left, int right,
+                                          Map<DisplayRow, Integer> rank, int probeDistance) {
+        for (int i = left; i < right; i++) {
+            if (!storedAdjacent(chain.get(i), chain.get(i + 1), rank, probeDistance)) return false;
+        }
+        return true;
     }
 
     private static boolean probeFillsLoadedGap(DisplayRow peek, DisplayRow far, List<DisplayRow> already,

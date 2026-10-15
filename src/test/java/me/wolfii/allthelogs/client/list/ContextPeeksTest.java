@@ -248,27 +248,28 @@ class ContextPeeksTest {
             row(log, 9, "before", false),
             row(log, 10, "hit", true),
             row(log, 11, "after", false),
-            row(log, 14, "later", true));
+            row(log, 19, "later-before", false),
+            row(log, 20, "later", true));
         List<DisplayRow> visible = ContextPeeks.strip(rows, 0, true);
-        assertEquals(List.of(10, 14), visible.stream().map(DisplayRow::lineIndex).toList());
+        assertEquals(List.of(10, 20), visible.stream().map(DisplayRow::lineIndex).toList());
         assertTrue(visible.getFirst().expandUp());
         assertTrue(visible.getFirst().expandDown());
-        assertFalse(visible.getLast().expandUp());
+        assertTrue(visible.getLast().expandUp());
+        assertFalse(visible.getLast().expandDown());
     }
 
     @Test
-    void marksBothSidesWhenAProbeSitsHalfwayAcrossARealGap() {
+    void showsAProbeThatIsTheOnlyStoredLineAcrossALineIndexHole() {
         ChatLog log = log("a.log");
         List<DisplayRow> rows = List.of(
             row(log, 10, "hit", true),
             row(log, 15, "middle", false),
             row(log, 20, "hit", true));
         List<DisplayRow> visible = ContextPeeks.strip(rows, 0, true);
-        assertEquals(List.of(10, 20), visible.stream().map(DisplayRow::lineIndex).toList());
-        assertTrue(visible.getFirst().expandDown());
-        assertFalse(visible.getFirst().expandUp());
-        assertTrue(visible.getLast().expandUp());
-        assertFalse(visible.getLast().expandDown());
+        assertEquals(List.of(10, 15, 20), visible.stream().map(DisplayRow::lineIndex).toList());
+        assertFalse(visible.getFirst().expandDown());
+        assertFalse(visible.get(1).expandUp() || visible.get(1).expandDown());
+        assertFalse(visible.getLast().expandUp());
     }
 
     @Test
@@ -344,17 +345,43 @@ class ContextPeeksTest {
     }
 
     @Test
-    void keepsTheDownCaretWhenTheGapIsMoreThanTheFetchedProbe() {
+    void keepsTheNearerCaretWhenUnfetchedChatSeparatesClusters() {
         ChatLog log = log("a.log");
         List<DisplayRow> rows = List.of(
             row(log, 10, "hit", true),
             row(log, 11, "probe", false),
-            row(log, 13, "hit", true),
-            row(log, 14, "after", false));
+            row(log, 19, "probe", false),
+            row(log, 20, "hit", true));
         List<DisplayRow> visible = ContextPeeks.strip(rows, 0, true);
-        assertEquals(List.of(10, 13), visible.stream().map(DisplayRow::lineIndex).toList());
+        assertEquals(List.of(10, 20), visible.stream().map(DisplayRow::lineIndex).toList());
         assertTrue(visible.getFirst().expandDown());
-        assertFalse(visible.getLast().expandUp());
+        assertFalse(visible.getFirst().expandUp());
+        assertTrue(visible.getLast().expandUp());
+        assertFalse(visible.getLast().expandDown());
+    }
+
+    /**
+     * Search {@code livemazzy} on 2022-07-21 with context 3. Lines 1353 and 1354 were deleted as duplicate
+     * imports, so 1355 is the only stored chat line between the clusters. It used to stay hidden, and the
+     * index hole made 1356 (21:42:10) look closer, so the separator showed only an up caret.
+     */
+    @Test
+    void july21SearchShowsTheLineAcrossADeletedIndexHole() {
+        ChatLog log = log("2022-07-21-4.log.gz");
+        int[] lines = {1349, 1350, 1351, 1352, 1355, 1356, 1357, 1358, 1359};
+        Set<Integer> hits = Set.of(1349, 1359);
+        List<DisplayRow> rows = new ArrayList<>();
+        for (int line : lines) {
+            rows.add(row(log, line, "m" + line, hits.contains(line)));
+        }
+        List<DisplayRow> visible = ContextPeeks.strip(rows, 3, true);
+        assertEquals(List.of(1349, 1350, 1351, 1352, 1355, 1356, 1357, 1358, 1359),
+            visible.stream().map(DisplayRow::lineIndex).toList());
+        assertFalse(rowAt(visible, 1352).expandDown());
+        assertFalse(rowAt(visible, 1355).expandUp() || rowAt(visible, 1355).expandDown());
+        assertFalse(rowAt(visible, 1356).expandUp());
+        assertEquals(0, MessageListLayout.of(visible, 3).separators().stream()
+            .filter(separator -> separator.expandUp() || separator.expandDown()).count());
     }
 
     /**
