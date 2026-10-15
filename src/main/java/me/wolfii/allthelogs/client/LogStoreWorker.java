@@ -2,6 +2,7 @@ package me.wolfii.allthelogs.client;
 
 import me.wolfii.allthelogs.api.PendingImportMessage;
 import me.wolfii.allthelogs.data.*;
+import me.wolfii.allthelogs.data.playtime.PlaytimeSpan;
 import me.wolfii.allthelogs.data.parse.FormattingCodes;
 import me.wolfii.allthelogs.data.store.StoreCancellation;
 import net.minecraft.network.chat.Component;
@@ -174,6 +175,10 @@ public final class LogStoreWorker implements AutoCloseable {
 
     public CompletableFuture<LogStoreMetadata> browserMetadata() {
         return submit(() -> requireStore().browserMetadata());
+    }
+
+    public CompletableFuture<List<PlaytimeSpan>> playtime() {
+        return submit(() -> requireStore().playtime());
     }
 
     public CompletableFuture<Optional<Path>> databasePath() {
