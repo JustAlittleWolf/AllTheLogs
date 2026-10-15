@@ -46,25 +46,4 @@ public final class ActiveFilters {
         if (count <= 0) return Component.translatable("allthelogs.filter");
         return Component.translatable("allthelogs.filter.count", count);
     }
-
-    public static List<Component> tooltip(List<Entry> entries) {
-        List<Component> lines = new ArrayList<>();
-        if (entries == null) return lines;
-        for (Entry entry : entries) {
-            lines.add(line(entry));
-        }
-        return lines;
-    }
-
-    private static Component line(Entry entry) {
-        return switch (entry.kind()) {
-            case REGEX -> Component.translatable("allthelogs.filter.regex");
-            case CASE_SENSITIVE -> Component.translatable("allthelogs.filter.case_sensitive");
-            case CONTEXT -> Component.translatable("allthelogs.filter.summary.context", entry.detail());
-            case FROM -> Component.translatable("allthelogs.filter.summary.from", entry.detail());
-            case UNTIL -> Component.translatable("allthelogs.filter.summary.until", entry.detail());
-            case VERSION -> Component.translatable("allthelogs.filter.summary.version", entry.detail());
-            case SERVER -> Component.translatable("allthelogs.filter.summary.server", entry.detail());
-        };
-    }
 }

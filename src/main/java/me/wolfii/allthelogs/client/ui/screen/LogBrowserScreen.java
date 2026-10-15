@@ -270,7 +270,6 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
             ParentUIComponent parent = filterButton.parent();
             if (parent != null) parent.onChildMutated(filterButton);
         }
-        filterButton.tooltip(ActiveFilters.tooltip(active));
     }
 
     /**
