@@ -20,6 +20,7 @@ import me.wolfii.allthelogs.client.export.ExportProgress;
 import me.wolfii.allthelogs.client.export.MessageExport;
 import me.wolfii.allthelogs.client.list.DisplayRow;
 import me.wolfii.allthelogs.client.list.MessageSelection;
+import me.wolfii.allthelogs.client.search.ActiveFilters;
 import me.wolfii.allthelogs.client.search.SearchDecorations;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
@@ -55,6 +56,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     private final LogBrowserQueries queries;
     private MessageTimeline list;
     private DecoratedSearchField search;
+    private ButtonComponent filterButton;
     private boolean syncingSearch;
     private FilterOverlay filters;
     private StackLayout overlays;
@@ -208,11 +210,13 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
 
         bar.child(search);
 
-        bar.child(UIComponents.button(Component.translatable("allthelogs.filter"),
+        filterButton = UIComponents.button(ActiveFilters.buttonLabel(ActiveFilters.of(queries.filter()).size()),
             button -> {
                 filters.toggle();
                 refreshSearchDecorations();
-            }));
+            });
+        bar.child(filterButton);
+        refreshFilterButton();
 
         bar.child(tools.button());
         return bar;
@@ -254,6 +258,19 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     private void refreshSearchDecorations() {
         syncSearchBox();
         refreshSearchColor();
+        refreshFilterButton();
+    }
+
+    private void refreshFilterButton() {
+        if (filterButton == null) return;
+        List<ActiveFilters.Entry> active = ActiveFilters.of(queries.filter());
+        Component label = ActiveFilters.buttonLabel(active.size());
+        if (!label.getString().equals(filterButton.getMessage().getString())) {
+            filterButton.setMessage(label);
+            ParentUIComponent parent = filterButton.parent();
+            if (parent != null) parent.onChildMutated(filterButton);
+        }
+        filterButton.tooltip(ActiveFilters.tooltip(active));
     }
 
     /**
