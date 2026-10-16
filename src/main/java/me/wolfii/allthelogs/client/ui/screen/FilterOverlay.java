@@ -208,7 +208,7 @@ final class FilterOverlay {
     /**
      * Label with a narrow X on the right. The X is a Minecraft font glyph, and the button clears that one field.
      */
-    private FlowLayout resetHeader(String key, Runnable reset) {
+    static FlowLayout resetHeader(String key, Runnable reset) {
         FlowLayout header = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
         header.gap(4).verticalAlignment(VerticalAlignment.CENTER);
         header.child(UIComponents.label(Component.translatable(key)).horizontalSizing(Sizing.expand()));

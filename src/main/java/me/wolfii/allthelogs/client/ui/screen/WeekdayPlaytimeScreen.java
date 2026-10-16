@@ -147,15 +147,15 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
     }
 
     /**
-     * Label and text box for one end of the period. Text that is not a date yet is ignored; empty text
-     * removes that bound.
+     * Label with a clear button, and a text box for one end of the period, like the message filters. Text
+     * that is not a date yet is ignored; empty text removes that bound.
      */
     private FlowLayout dateField(String key, String value, Function<String, Optional<LocalDateTime>> parse,
                                  Consumer<LocalDateTime> apply) {
         FlowLayout row = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
         row.gap(2);
-        row.child(UIComponents.label(Component.translatable(key)));
         TextBoxComponent box = UIComponents.textBox(Sizing.fill(), value);
+        row.child(FilterOverlay.resetHeader(key, () -> box.setValue("")));
         box.setMaxLength(32);
         box.setHint(Component.translatable("allthelogs.filter.date_hint"));
         box.onChanged().subscribe(text -> {
