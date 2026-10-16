@@ -11,7 +11,7 @@ import java.util.function.Consumer;
 
 /**
  * Client commands that open each screen: {@code /allthelogs gui}, {@code import}, {@code playtime},
- * {@code playtime weekdays}, {@code cleanup}, {@code scripts}, and {@code settings}.
+ * {@code cleanup}, {@code scripts}, and {@code settings}.
  */
 public final class AllTheLogsCommands {
     private AllTheLogsCommands() {
@@ -21,8 +21,7 @@ public final class AllTheLogsCommands {
         dispatcher.register(ClientCommands.literal("allthelogs")
             .then(opens("gui", AllTheLogsScreens::openBrowser))
             .then(opens("import", AllTheLogsScreens::openImport))
-            .then(opens("playtime", AllTheLogsScreens::openPlaytime)
-                .then(opens("weekdays", AllTheLogsScreens::openWeekdayPlaytime)))
+            .then(opens("playtime", AllTheLogsScreens::openPlaytime))
             .then(opens("cleanup", AllTheLogsScreens::openCleanup))
             .then(opens("scripts", AllTheLogsScreens::openScripts))
             .then(opens("settings", AllTheLogsScreens::openSettings)));

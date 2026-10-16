@@ -21,6 +21,5 @@ class AllTheLogsCommandsTest {
             assertNotNull(root.getChild(screen), screen);
             assertNotNull(root.getChild(screen).getCommand(), screen);
         }
-        assertNotNull(root.getChild("playtime").getChild("weekdays").getCommand());
     }
 }
