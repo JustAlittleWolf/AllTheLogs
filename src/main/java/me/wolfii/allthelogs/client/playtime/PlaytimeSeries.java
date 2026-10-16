@@ -14,27 +14,39 @@ import java.util.regex.Pattern;
 
 /**
  * One colored slice of a bar. The {@code pattern} is drawn over the color where bars are wide enough, so
- * series with similar colors still look different. {@code version} is null when the chart is grouped only by server.
- * {@code serverKey} is null when it is grouped only by version, and {@link PlaytimeFilter#UNKNOWN_SERVER}
- * when a combined or server chart has no place.
+ * series with similar colors still look different. Each key is null when the chart is not grouped by it:
+ * {@code version}, {@code serverKey}, which is {@link PlaytimeFilter#UNKNOWN_SERVER} for no place, and
+ * {@code playerKey}, which is {@link PlaytimeFilter#UNKNOWN_PLAYER} for no player.
  */
-public record PlaytimeSeries(String version, String serverKey, int color, PlaytimePattern pattern) {
+public record PlaytimeSeries(String version, String serverKey, String playerKey, int color, PlaytimePattern pattern) {
     /** Longest name shown in hover cards before it is cut with an ellipsis. */
     public static final int MAX_LABEL_LENGTH = 32;
     public static final Comparator<PlaytimeSeries> STACK_ORDER = (left, right) -> {
         int versionOrder = compareVersion(left.version(), right.version());
         if (versionOrder != 0) return versionOrder;
-        return compareServer(left.serverKey(), right.serverKey());
+        int serverOrder = compareName(left.serverKey(), right.serverKey(), PlaytimeFilter.UNKNOWN_SERVER);
+        if (serverOrder != 0) return serverOrder;
+        return compareName(left.playerKey(), right.playerKey(), PlaytimeFilter.UNKNOWN_PLAYER);
     };
     private static final Pattern FORMATTING = Pattern.compile("§.?");
 
     /**
      * Uncolored series for {@code breakdown}. Used as a lookup key; {@link #collect} assigns the colors.
      */
+    public static PlaytimeSeries of(PlaytimeBreakdown breakdown, String version, String server, String player) {
+        return new PlaytimeSeries(
+            breakdown.byVersion() ? version : null,
+            breakdown.byServer() ? PlaytimeFilter.serverKey(server) : null,
+            breakdown.byPlayer() ? PlaytimeFilter.playerKey(player) : null,
+            0, PlaytimePattern.SOLID);
+    }
+
     public static PlaytimeSeries of(PlaytimeBreakdown breakdown, String version, String server) {
-        String versionKey = breakdown == PlaytimeBreakdown.SERVER ? null : version;
-        String place = breakdown == PlaytimeBreakdown.VERSION ? null : PlaytimeFilter.serverKey(server);
-        return new PlaytimeSeries(versionKey, place, 0, PlaytimePattern.SOLID);
+        return of(breakdown, version, server, null);
+    }
+
+    public static PlaytimeSeries of(PlaytimeBreakdown breakdown, PlaytimeSpan span) {
+        return of(breakdown, span.version(), span.server(), span.player());
     }
 
     /**
@@ -42,7 +54,7 @@ public record PlaytimeSeries(String version, String serverKey, int color, Playti
      */
     public static Index collect(List<PlaytimeSpan> kept, List<PlaytimeSpan> all, PlaytimeBreakdown breakdown) {
         Map<PlaytimeSeries, Boolean> found = new LinkedHashMap<>();
-        for (PlaytimeSpan span : kept) found.put(of(breakdown, span.version(), span.server()), Boolean.TRUE);
+        for (PlaytimeSpan span : kept) found.put(of(breakdown, span), Boolean.TRUE);
         Map<PlaytimeSeries, Integer> ranks = ranks(all == null ? kept : all, breakdown);
         List<PlaytimeSeries> keys = new ArrayList<>(found.keySet());
         keys.sort(STACK_ORDER);
@@ -51,23 +63,30 @@ public record PlaytimeSeries(String version, String serverKey, int color, Playti
         for (PlaytimeSeries key : keys) {
             index.put(key, series.size());
             int rank = ranks.getOrDefault(key, -1);
-            series.add(new PlaytimeSeries(key.version, key.serverKey, key.colorFor(rank),
+            series.add(new PlaytimeSeries(key.version, key.serverKey, key.playerKey, key.colorFor(rank),
                 rank >= 0 ? PlaytimeColors.pattern(rank) : PlaytimePattern.SOLID));
         }
         return new Index(List.copyOf(series), index, breakdown);
     }
 
-    public String label(String unknownServer) {
-        if (version == null) return serverLabel(unknownServer);
-        if (serverKey == null) return version;
-        return version + " - " + serverLabel(unknownServer);
+    /**
+     * The grouped names joined with " - ", version first, then server, then player.
+     *
+     * @param unknown shown for a server or player that is not known
+     */
+    public String label(String unknown) {
+        List<String> parts = new ArrayList<>(3);
+        if (version != null) parts.add(version);
+        if (serverKey != null) parts.add(nameLabel(serverKey, PlaytimeFilter.UNKNOWN_SERVER, unknown));
+        if (playerKey != null) parts.add(nameLabel(playerKey, PlaytimeFilter.UNKNOWN_PLAYER, unknown));
+        return String.join(" - ", parts);
     }
 
     /**
      * {@link #label} cut to {@link #MAX_LABEL_LENGTH} characters.
      */
-    public String shortLabel(String unknownServer) {
-        return shorten(label(unknownServer), MAX_LABEL_LENGTH);
+    public String shortLabel(String unknown) {
+        return shorten(label(unknown), MAX_LABEL_LENGTH);
     }
 
     public boolean canFilterVersion() {
@@ -91,18 +110,22 @@ public record PlaytimeSeries(String version, String serverKey, int color, Playti
     }
 
     /**
-     * Gray when nothing is known, a desaturated color when only one half of a combined series is known.
+     * Gray when nothing is known, a desaturated color when only part of a combined series is known.
      */
     private int colorFor(int rank) {
         if (rank < 0) return PlaytimeColors.UNKNOWN;
         boolean partlyUnknown = (version != null && isUnknown(version))
-            || (serverKey != null && !canFilterServer());
+            || (serverKey != null && !canFilterServer())
+            || (playerKey != null && !knowsPlayer());
         return partlyUnknown ? PlaytimeColors.ofRankMuted(rank) : PlaytimeColors.ofRank(rank);
     }
 
-    private String serverLabel(String unknownServer) {
-        if (serverKey == null || serverKey.equals(PlaytimeFilter.UNKNOWN_SERVER)) return unknownServer;
-        return displayName(serverKey);
+    private boolean knowsPlayer() {
+        return playerKey != null && !playerKey.equals(PlaytimeFilter.UNKNOWN_PLAYER);
+    }
+
+    private static String nameLabel(String key, String unknownKey, String unknown) {
+        return key.equals(unknownKey) ? unknown : displayName(key);
     }
 
     private static Map<PlaytimeSeries, Integer> ranks(List<PlaytimeSpan> spans, PlaytimeBreakdown breakdown) {
@@ -110,8 +133,10 @@ public record PlaytimeSeries(String version, String serverKey, int color, Playti
         byStart.sort(Comparator.comparing(PlaytimeSpan::start));
         Map<PlaytimeSeries, Integer> ranks = new HashMap<>();
         for (PlaytimeSpan span : byStart) {
-            PlaytimeSeries key = of(breakdown, span.version(), span.server());
-            if (!key.canFilterServer() && (key.version == null || isUnknown(key.version))) continue;
+            PlaytimeSeries key = of(breakdown, span);
+            if (!key.canFilterServer() && !key.knowsPlayer() && (key.version == null || isUnknown(key.version))) {
+                continue;
+            }
             ranks.putIfAbsent(key, ranks.size());
         }
         return ranks;
@@ -127,9 +152,12 @@ public record PlaytimeSeries(String version, String serverKey, int color, Playti
         return MinecraftVersions.newestFirstOrder().reversed().compare(left, right);
     }
 
-    private static int compareServer(String left, String right) {
-        boolean leftUnknown = left == null || left.equals(PlaytimeFilter.UNKNOWN_SERVER);
-        boolean rightUnknown = right == null || right.equals(PlaytimeFilter.UNKNOWN_SERVER);
+    /**
+     * Server or player names alphabetically, unknown last.
+     */
+    private static int compareName(String left, String right, String unknownKey) {
+        boolean leftUnknown = left == null || left.equals(unknownKey);
+        boolean rightUnknown = right == null || right.equals(unknownKey);
         if (leftUnknown != rightUnknown) return leftUnknown ? 1 : -1;
         if (leftUnknown) return 0;
         return left.compareToIgnoreCase(right);
@@ -145,7 +173,7 @@ public record PlaytimeSeries(String version, String serverKey, int color, Playti
     public record Index(List<PlaytimeSeries> series, Map<PlaytimeSeries, Integer> positions,
                         PlaytimeBreakdown breakdown) {
         public int of(PlaytimeSpan span) {
-            return positions.get(PlaytimeSeries.of(breakdown, span.version(), span.server()));
+            return positions.get(PlaytimeSeries.of(breakdown, span));
         }
 
         public int size() {

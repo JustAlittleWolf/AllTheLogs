@@ -41,7 +41,7 @@ public final class PlaytimeQueries {
         List<FileSession> files = new ArrayList<>();
         try (Statement statement = connection.createStatement();
              ResultSet result = statement.executeQuery("""
-                 SELECT id, minecraft_version, start_time, end_time
+                 SELECT id, minecraft_version, start_time, end_time, minecraft_user
                  FROM log_file
                  WHERE end_time > start_time
                  ORDER BY id""")) {
@@ -50,37 +50,39 @@ public final class PlaytimeQueries {
                     result.getLong(1),
                     result.getString(2),
                     result.getTimestamp(3).toLocalDateTime(),
-                    result.getTimestamp(4).toLocalDateTime()));
+                    result.getTimestamp(4).toLocalDateTime(),
+                    result.getString(5)));
             }
         }
         return files;
     }
 
     /**
-     * One row per place change inside a file, including a change to no place. The first tagged message is a
-     * change from nothing, so time before that message stays unassigned.
+     * One row per place or player change inside a file, including a change to no place. The first tagged message
+     * is a change from nothing, so time before that message stays unassigned.
      */
     private List<PlaceMark> places() throws SQLException {
         List<PlaceMark> marks = new ArrayList<>();
         try (Statement statement = connection.createStatement();
              ResultSet result = statement.executeQuery("""
-                 SELECT file_id, entry_time, line_index, server_or_world
+                 SELECT file_id, entry_time, line_index, server_or_world, minecraft_user
                  FROM (
-                     SELECT file_id, entry_time, line_index, server_or_world,
-                            lag(server_or_world) OVER (
-                                PARTITION BY file_id
-                                ORDER BY entry_time, line_index
-                            ) AS prev_server
+                     SELECT file_id, entry_time, line_index, server_or_world, minecraft_user,
+                            lag(server_or_world) OVER per_file AS prev_server,
+                            lag(minecraft_user) OVER per_file AS prev_user
                      FROM chat_entry
+                     WINDOW per_file AS (PARTITION BY file_id ORDER BY entry_time, line_index)
                  ) marked
                  WHERE server_or_world IS DISTINCT FROM prev_server
+                    OR minecraft_user IS DISTINCT FROM prev_user
                  ORDER BY file_id, entry_time, line_index""")) {
             while (result.next()) {
                 marks.add(new PlaceMark(
                     result.getLong(1),
                     result.getTimestamp(2).toLocalDateTime(),
                     result.getInt(3),
-                    result.getString(4)));
+                    result.getString(4),
+                    result.getString(5)));
             }
         }
         return marks;

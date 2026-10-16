@@ -29,6 +29,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -40,9 +41,7 @@ import java.util.function.IntSupplier;
  */
 final class PlaytimeScreenSupport {
     static final int SIDE_WIDTH = 140;
-    static final PlaytimeBreakdown[] GROUPS = {
-        PlaytimeBreakdown.VERSION, PlaytimeBreakdown.SERVER, PlaytimeBreakdown.COMBINED
-    };
+    static final PlaytimeBreakdown[] GROUPS = PlaytimeBreakdown.values();
     /** Space a vanilla button keeps around its label. */
     private static final int BUTTON_PADDING = 12;
 
@@ -203,21 +202,21 @@ final class PlaytimeScreenSupport {
     }
 
     static List<Component> groupLabels() {
-        return List.of(groupLabel(PlaytimeBreakdown.VERSION), groupLabel(PlaytimeBreakdown.SERVER),
-            groupLabel(PlaytimeBreakdown.COMBINED));
+        return Arrays.stream(GROUPS).map(PlaytimeScreenSupport::groupLabel).toList();
     }
 
     static List<Component> groupChoices() {
-        return List.of(Component.translatable(groupKey(PlaytimeBreakdown.VERSION)),
-            Component.translatable(groupKey(PlaytimeBreakdown.SERVER)),
-            Component.translatable(groupKey(PlaytimeBreakdown.COMBINED)));
+        return Arrays.stream(GROUPS).map(group -> (Component) Component.translatable(groupKey(group))).toList();
     }
 
     private static String groupKey(PlaytimeBreakdown breakdown) {
         return switch (breakdown) {
             case VERSION -> "allthelogs.playtime.breakdown.version";
+            case VERSION_SERVER -> "allthelogs.playtime.breakdown.version_server";
+            case VERSION_PLAYER -> "allthelogs.playtime.breakdown.version_player";
             case SERVER -> "allthelogs.playtime.breakdown.server";
-            case COMBINED -> "allthelogs.playtime.breakdown.combined";
+            case SERVER_PLAYER -> "allthelogs.playtime.breakdown.server_player";
+            case PLAYER -> "allthelogs.playtime.breakdown.player";
         };
     }
 

@@ -5,10 +5,12 @@ import java.time.LocalDateTime;
 import java.util.Objects;
 
 /**
- * One stretch of estimated playtime where the Minecraft version and the server or world stay the same.
- * {@code end} is exclusive. {@code serverOrWorld} is null when no chat line in the stretch names a place.
+ * One stretch of estimated playtime where the Minecraft version, the server or world, and the player stay the
+ * same. {@code end} is exclusive. {@code serverOrWorld} is null when no chat line in the stretch names a place,
+ * {@code minecraftUser} when the log names no player.
  */
-public record Playtime(LocalDateTime start, LocalDateTime end, String minecraftVersion, String serverOrWorld) {
+public record Playtime(LocalDateTime start, LocalDateTime end, String minecraftVersion, String serverOrWorld,
+                       String minecraftUser) {
     public Playtime {
         Objects.requireNonNull(start, "start");
         Objects.requireNonNull(end, "end");

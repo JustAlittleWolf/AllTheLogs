@@ -6,7 +6,8 @@ import java.time.LocalDateTime;
 
 /**
  * Search filter produced by the playtime bar menu. The period is always applied. A colored section also
- * restricts the version, the server, or both, matching the chart's grouping.
+ * restricts the version and the server it stands for, when the chart groups by them and they are known.
+ * Messages cannot be filtered by player, so a player grouping only narrows the period.
  */
 public final class PlaytimeMessageFilter {
     private PlaytimeMessageFilter() {
@@ -21,15 +22,9 @@ public final class PlaytimeMessageFilter {
                                         PlaytimeBreakdown breakdown, PlaytimeSeries series) {
         SearchFilter ranged = period(current, start, end);
         if (series == null || breakdown == null) return ranged;
-        return switch (breakdown) {
-            case VERSION -> series.canFilterVersion() ? ranged.withVersion(series.version()) : ranged;
-            case SERVER -> series.canFilterServer() ? ranged.withServerOrWorld(series.serverKey()) : ranged;
-            case COMBINED -> {
-                SearchFilter next = ranged;
-                if (series.canFilterVersion()) next = next.withVersion(series.version());
-                if (series.canFilterServer()) next = next.withServerOrWorld(series.serverKey());
-                yield next;
-            }
-        };
+        SearchFilter next = ranged;
+        if (breakdown.byVersion() && series.canFilterVersion()) next = next.withVersion(series.version());
+        if (breakdown.byServer() && series.canFilterServer()) next = next.withServerOrWorld(series.serverKey());
+        return next;
     }
 }

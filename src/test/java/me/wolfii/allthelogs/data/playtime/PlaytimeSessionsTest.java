@@ -31,6 +31,23 @@ class PlaytimeSessionsTest {
     }
 
     @Test
+    void playerStartsFromTheFileAndSplitsWhereMessagesNameAnotherOne() {
+        List<PlaytimeSpan> spans = PlaytimeSessions.build(
+            List.of(new FileSession(4, "1.21.1", at(10, 0), at(12, 0), "Steve")),
+            List.of(
+                new PlaceMark(4, at(10, 30), 1, "hypixel.net", null),
+                new PlaceMark(4, at(11, 0), 2, "hypixel.net", "Alex")
+            ));
+
+        assertEquals(3, spans.size());
+        assertEquals("Steve", spans.get(0).player());
+        assertEquals("Steve", spans.get(1).player());
+        assertEquals("hypixel.net", spans.get(1).server());
+        assertEquals("Alex", spans.get(2).player());
+        assertEquals(at(11, 0), spans.get(2).start());
+    }
+
+    @Test
     void blankVersionBecomesUnknownAndZeroLengthFilesAreDropped() {
         List<PlaytimeSpan> spans = PlaytimeSessions.build(List.of(
             new FileSession(1, "  ", at(10, 0), at(11, 0)),

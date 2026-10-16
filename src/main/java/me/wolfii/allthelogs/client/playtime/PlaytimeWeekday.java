@@ -197,6 +197,6 @@ public final class PlaytimeWeekday {
         LocalDateTime end = until != null && span.end().isAfter(until) ? until : span.end();
         if (!end.isAfter(start)) return null;
         if (start.equals(span.start()) && end.equals(span.end())) return span;
-        return new PlaytimeSpan(start, end, span.version(), span.server());
+        return span.withStartAndEnd(start, end);
     }
 }

@@ -288,22 +288,16 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         });
     }
 
-    private boolean offersCategory(PlaytimeSeries series) {
-        return switch (chart.breakdown()) {
-            case VERSION -> series.canFilterVersion();
-            case SERVER -> series.canFilterServer();
-            case COMBINED -> series.canFilterVersion() || series.canFilterServer();
-        };
+    /**
+     * Whether the section names a version or a server that messages can be filtered by. Players cannot.
+     */
+    private static boolean offersCategory(PlaytimeSeries series) {
+        return series.canFilterVersion() || series.canFilterServer();
     }
 
-    private String categoryKey(PlaytimeSeries series) {
-        return switch (chart.breakdown()) {
-            case VERSION -> "allthelogs.playtime.menu.version";
-            case SERVER -> "allthelogs.playtime.menu.server";
-            case COMBINED -> series.canFilterVersion() && series.canFilterServer()
-                ? "allthelogs.playtime.menu.both"
-                : series.canFilterVersion() ? "allthelogs.playtime.menu.version" : "allthelogs.playtime.menu.server";
-        };
+    private static String categoryKey(PlaytimeSeries series) {
+        if (series.canFilterVersion() && series.canFilterServer()) return "allthelogs.playtime.menu.both";
+        return series.canFilterVersion() ? "allthelogs.playtime.menu.version" : "allthelogs.playtime.menu.server";
     }
 
     private void applyMessages(SearchFilter filter) {
