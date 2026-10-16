@@ -1,6 +1,6 @@
 package me.wolfii.allthelogs.data;
 
-import me.wolfii.allthelogs.data.store.SessionMarker;
+import me.wolfii.allthelogs.data.session.SessionMarker;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;

@@ -1,4 +1,4 @@
-package me.wolfii.allthelogs.data;
+package me.wolfii.allthelogs.data.importer;
 
 import java.time.ZoneId;
 import java.util.Objects;

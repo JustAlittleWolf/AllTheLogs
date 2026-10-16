@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.data;
 
+import me.wolfii.allthelogs.data.importer.ImportOptions;
 import me.wolfii.allthelogs.data.playtime.PlaytimeSpan;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

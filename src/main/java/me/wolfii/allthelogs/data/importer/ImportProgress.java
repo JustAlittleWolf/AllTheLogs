@@ -1,4 +1,7 @@
-package me.wolfii.allthelogs.data;
+package me.wolfii.allthelogs.data.importer;
+
+import me.wolfii.allthelogs.data.LogSource;
+import me.wolfii.allthelogs.data.LogStore;
 
 /**
  * Live snapshot of an import run, delivered to the callback passed to

@@ -1,5 +1,7 @@
-package me.wolfii.allthelogs.data.store;
+package me.wolfii.allthelogs.data.store.schema;
 
+import me.wolfii.allthelogs.data.store.StoreCancellation;
+import me.wolfii.allthelogs.data.store.StoreConnections;
 import org.duckdb.DuckDBConnection;
 
 import java.io.IOException;

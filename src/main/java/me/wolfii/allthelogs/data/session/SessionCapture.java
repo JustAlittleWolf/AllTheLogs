@@ -1,4 +1,4 @@
-package me.wolfii.allthelogs.data.store;
+package me.wolfii.allthelogs.data.session;
 
 import me.wolfii.allthelogs.api.PendingImportMessage;
 import me.wolfii.allthelogs.data.ChatLog;
@@ -8,6 +8,10 @@ import me.wolfii.allthelogs.data.parse.FormattingCodes;
 import me.wolfii.allthelogs.data.parse.IngestFilter;
 import me.wolfii.allthelogs.data.parse.MessageCharacters;
 import me.wolfii.allthelogs.data.parse.PackedFormatting;
+import me.wolfii.allthelogs.data.store.SourceKind;
+import me.wolfii.allthelogs.data.store.StoredSources;
+import me.wolfii.allthelogs.data.store.write.EntryMatch;
+import me.wolfii.allthelogs.data.store.write.LogWriter;
 import org.duckdb.DuckDBConnection;
 
 import java.sql.*;

@@ -1,5 +1,6 @@
-package me.wolfii.allthelogs.data;
+package me.wolfii.allthelogs.data.query;
 
+import me.wolfii.allthelogs.data.ChatEntry;
 import java.util.List;
 
 /**

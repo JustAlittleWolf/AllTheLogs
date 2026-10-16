@@ -1,15 +1,21 @@
 package me.wolfii.allthelogs.data;
 
 import me.wolfii.allthelogs.api.PendingImportMessage;
+import me.wolfii.allthelogs.data.importer.ImportOptions;
+import me.wolfii.allthelogs.data.importer.ImportPhase;
+import me.wolfii.allthelogs.data.importer.ImportProgress;
+import me.wolfii.allthelogs.data.importer.ImportResult;
 import me.wolfii.allthelogs.data.importer.LogImporter;
 import me.wolfii.allthelogs.data.playtime.PlaytimeSpan;
 import me.wolfii.allthelogs.data.query.ChatQueries;
+import me.wolfii.allthelogs.data.query.CleanupPreview;
+import me.wolfii.allthelogs.data.query.MatchSummary;
 import me.wolfii.allthelogs.data.query.MessageCleanup;
 import me.wolfii.allthelogs.data.query.PlaytimeQueries;
-import me.wolfii.allthelogs.data.store.Schema;
-import me.wolfii.allthelogs.data.store.SessionCapture;
+import me.wolfii.allthelogs.data.session.SessionCapture;
 import me.wolfii.allthelogs.data.store.StoreConnections;
-import me.wolfii.allthelogs.data.store.StoreOptimizer;
+import me.wolfii.allthelogs.data.store.schema.Schema;
+import me.wolfii.allthelogs.data.store.schema.StoreOptimizer;
 import org.duckdb.DuckDBConnection;
 
 import java.io.IOException;
@@ -291,7 +297,7 @@ public final class LogStore implements AutoCloseable {
      * Starting another session leaves the previous log in place and switches subsequent imports to the new one.
      * <p>
      * The log's {@link ChatLog#source()} is a {@link LogSource.Session} with a unique id. Callers that capture from
-     * a running game should write {@link me.wolfii.allthelogs.data.store.SessionMarker#message(String)} to the Minecraft log (not as chat) so a later
+     * a running game should write {@link me.wolfii.allthelogs.data.session.SessionMarker#message(String)} to the Minecraft log (not as chat) so a later
      * import of that file is skipped when this session is already stored.
      *
      * @param minecraftVersion the version of the running game
@@ -325,8 +331,8 @@ public final class LogStore implements AutoCloseable {
      * <p>
      * Live rows are always stored, including two identical lines a few seconds apart. A later file import
      * that repeats text already stored before that import, within
-     * {@link me.wolfii.allthelogs.data.store.EntryMatch#WINDOW_SECONDS}, is the copy that is removed.
-     * A log that contains this session's {@link me.wolfii.allthelogs.data.store.SessionMarker} is skipped
+     * {@link me.wolfii.allthelogs.data.store.write.EntryMatch#WINDOW_SECONDS}, is the copy that is removed.
+     * A log that contains this session's {@link me.wolfii.allthelogs.data.session.SessionMarker} is skipped
      * entirely.
      *
      * @param message    the chat line as the game rendered it, already stripped of legacy {@code §} codes

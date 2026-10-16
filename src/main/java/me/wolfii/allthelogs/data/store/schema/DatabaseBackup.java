@@ -1,5 +1,6 @@
-package me.wolfii.allthelogs.data.store;
+package me.wolfii.allthelogs.data.store.schema;
 
+import me.wolfii.allthelogs.data.store.StoreCancellation;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
@@ -110,7 +111,7 @@ public final class DatabaseBackup {
             + STAMP.format(at) + EXTENSION);
     }
 
-    static List<Copy> list(Path database) throws IOException {
+    public static List<Copy> list(Path database) throws IOException {
         Path parent = database.getParent();
         if (parent == null || !Files.isDirectory(parent)) return List.of();
         Pattern pattern = pattern(database);

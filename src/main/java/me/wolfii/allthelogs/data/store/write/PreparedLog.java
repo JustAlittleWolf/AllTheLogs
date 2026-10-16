@@ -1,5 +1,6 @@
-package me.wolfii.allthelogs.data.store;
+package me.wolfii.allthelogs.data.store.write;
 
+import me.wolfii.allthelogs.data.store.SourceKind;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;

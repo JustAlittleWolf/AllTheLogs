@@ -5,7 +5,7 @@ import me.wolfii.allthelogs.client.timeline.TimelineScale;
 import me.wolfii.allthelogs.client.timeline.TimelineTicks;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
 import me.wolfii.allthelogs.client.ui.widget.HoverChip;
-import me.wolfii.allthelogs.data.MatchDay;
+import me.wolfii.allthelogs.data.query.MatchDay;
 import net.minecraft.client.gui.Font;
 import net.minecraft.network.chat.Component;
 

@@ -1,8 +1,8 @@
 package me.wolfii.allthelogs.data.importer.discover;
 
-import me.wolfii.allthelogs.data.ImportPhase;
-import me.wolfii.allthelogs.data.ImportProgress;
 import me.wolfii.allthelogs.data.LogSource;
+import me.wolfii.allthelogs.data.importer.ImportPhase;
+import me.wolfii.allthelogs.data.importer.ImportProgress;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;

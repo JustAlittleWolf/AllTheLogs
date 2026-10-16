@@ -1,5 +1,6 @@
-package me.wolfii.allthelogs.data;
+package me.wolfii.allthelogs.data.query;
 
+import me.wolfii.allthelogs.data.ChatQuery;
 import java.time.LocalDateTime;
 import java.util.List;
 

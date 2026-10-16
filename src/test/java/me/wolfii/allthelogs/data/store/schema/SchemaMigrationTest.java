@@ -1,9 +1,10 @@
-package me.wolfii.allthelogs.data.store;
+package me.wolfii.allthelogs.data.store.schema;
 
 import me.wolfii.allthelogs.data.LogDataException;
 import me.wolfii.allthelogs.data.LogStore;
 import me.wolfii.allthelogs.data.parse.MessageCharacters;
 import me.wolfii.allthelogs.data.parse.PackedFormatting;
+import me.wolfii.allthelogs.data.store.StoreConnections;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

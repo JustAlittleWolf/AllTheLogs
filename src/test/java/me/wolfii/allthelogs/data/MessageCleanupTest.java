@@ -5,6 +5,7 @@ import me.wolfii.allthelogs.data.parse.FormattingCodes;
 import me.wolfii.allthelogs.data.parse.IngestFilter;
 import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import me.wolfii.allthelogs.data.parse.TextRemoval;
+import me.wolfii.allthelogs.data.query.CleanupPreview;
 import me.wolfii.allthelogs.data.query.MessageCleanup;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;

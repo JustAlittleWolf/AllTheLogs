@@ -1,4 +1,4 @@
-package me.wolfii.allthelogs.data;
+package me.wolfii.allthelogs.data.importer;
 
 /**
  * Stages of one import run. File discovery and writing occupy the first share of the progress bar;

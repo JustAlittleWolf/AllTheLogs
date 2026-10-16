@@ -1,5 +1,6 @@
-package me.wolfii.allthelogs.data;
+package me.wolfii.allthelogs.data.importer;
 
+import me.wolfii.allthelogs.data.LogSource;
 import java.util.List;
 
 /**

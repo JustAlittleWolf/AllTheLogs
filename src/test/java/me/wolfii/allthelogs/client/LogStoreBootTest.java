@@ -160,7 +160,7 @@ class LogStoreWorkerLiveQueueTest {
 
         try (LogStoreWorker worker = new LogStoreWorker()) {
             worker.open(temp.resolve("logs.duckdb")).join();
-            var importFuture = worker.importDirectory(logs, me.wolfii.allthelogs.data.ImportOptions.currentLogsDirectory(),
+            var importFuture = worker.importDirectory(logs, me.wolfii.allthelogs.data.importer.ImportOptions.currentLogsDirectory(),
                 null);
             worker.importSessionMessage(Component.literal("while importing"), "Tester", "world/overworld");
             LocalDateTime queuedAt = LocalDateTime.now();
@@ -214,7 +214,7 @@ class LogStoreWorkerLiveQueueTest {
         try (LogStoreWorker worker = new LogStoreWorker()) {
             worker.open(temp.resolve("logs.duckdb")).join();
             worker.startSession("26.2", "Tester").join();
-            var importFuture = worker.importDirectory(logs, me.wolfii.allthelogs.data.ImportOptions.currentLogsDirectory(),
+            var importFuture = worker.importDirectory(logs, me.wolfii.allthelogs.data.importer.ImportOptions.currentLogsDirectory(),
                 null);
             worker.importSessionMessage(Component.literal("during background import"), "Tester", "world/overworld");
             LocalDateTime queuedAt = LocalDateTime.now();

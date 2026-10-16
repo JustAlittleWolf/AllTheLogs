@@ -2,8 +2,8 @@ package me.wolfii.allthelogs.data.importer;
 
 import me.wolfii.allthelogs.data.importer.discover.LogCandidate;
 import me.wolfii.allthelogs.data.parse.LogDates;
-import me.wolfii.allthelogs.data.store.PreparedLog;
 import me.wolfii.allthelogs.data.store.SourceKind;
+import me.wolfii.allthelogs.data.store.write.PreparedLog;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;

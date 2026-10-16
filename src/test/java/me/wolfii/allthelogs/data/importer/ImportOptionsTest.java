@@ -1,10 +1,9 @@
-package me.wolfii.allthelogs.data;
+package me.wolfii.allthelogs.data.importer;
 
 import org.junit.jupiter.api.Test;
 
 import java.time.DateTimeException;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
 
 import static org.junit.jupiter.api.Assertions.*;
 

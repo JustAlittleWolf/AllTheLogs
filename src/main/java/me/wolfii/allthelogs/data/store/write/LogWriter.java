@@ -1,6 +1,8 @@
-package me.wolfii.allthelogs.data.store;
+package me.wolfii.allthelogs.data.store.write;
 
-import me.wolfii.allthelogs.data.ImportOptions;
+import me.wolfii.allthelogs.data.importer.ImportOptions;
+import me.wolfii.allthelogs.data.session.SessionMarker;
+import me.wolfii.allthelogs.data.store.SourceKind;
 import org.duckdb.DuckDBAppender;
 import org.duckdb.DuckDBConnection;
 

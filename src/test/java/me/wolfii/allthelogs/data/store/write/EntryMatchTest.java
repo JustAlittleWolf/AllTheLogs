@@ -1,4 +1,4 @@
-package me.wolfii.allthelogs.data.store;
+package me.wolfii.allthelogs.data.store.write;
 
 import org.junit.jupiter.api.Test;
 

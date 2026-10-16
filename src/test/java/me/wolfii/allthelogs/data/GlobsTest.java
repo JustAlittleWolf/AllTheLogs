@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.data;
 
+import me.wolfii.allthelogs.data.importer.ImportOptions;
 import me.wolfii.allthelogs.data.importer.discover.Globs;
 import org.junit.jupiter.api.Test;
 

@@ -8,7 +8,7 @@ import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.LogSource;
 import me.wolfii.allthelogs.client.timeline.ScrubberGeometry;
 import me.wolfii.allthelogs.client.timeline.TimelineEdge;
-import me.wolfii.allthelogs.data.MatchDay;
+import me.wolfii.allthelogs.data.query.MatchDay;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;

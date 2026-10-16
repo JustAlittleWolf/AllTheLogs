@@ -9,7 +9,7 @@ import me.wolfii.allthelogs.client.timeline.TimelineEdge;
 import me.wolfii.allthelogs.client.ui.text.StoreSummary;
 import me.wolfii.allthelogs.client.ui.widget.timeline.MessageTimeline;
 import me.wolfii.allthelogs.data.ChatEntry;
-import me.wolfii.allthelogs.data.MatchSummary;
+import me.wolfii.allthelogs.data.query.MatchSummary;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 

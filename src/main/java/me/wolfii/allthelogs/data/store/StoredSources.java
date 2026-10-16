@@ -2,6 +2,8 @@ package me.wolfii.allthelogs.data.store;
 
 import me.wolfii.allthelogs.data.LogSource;
 
+import me.wolfii.allthelogs.data.session.SessionMarker;
+import me.wolfii.allthelogs.data.store.write.PreparedLog;
 import java.nio.file.Path;
 import java.sql.SQLException;
 

@@ -5,8 +5,8 @@ import me.wolfii.allthelogs.data.extract.LogTimeExtractor;
 import me.wolfii.allthelogs.data.extract.MinecraftUserExtractor;
 import me.wolfii.allthelogs.data.extract.MinecraftVersionExtractor;
 import me.wolfii.allthelogs.data.extract.ServerOrWorldExtractor;
-import me.wolfii.allthelogs.data.store.SessionMarker;
 
+import me.wolfii.allthelogs.data.session.SessionMarker;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.time.LocalDate;

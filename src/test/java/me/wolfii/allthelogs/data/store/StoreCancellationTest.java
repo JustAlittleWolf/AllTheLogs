@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.data.store;
 
+import me.wolfii.allthelogs.data.store.schema.DatabaseBackup;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

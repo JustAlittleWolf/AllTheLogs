@@ -7,8 +7,8 @@ import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.LogDataException;
 import me.wolfii.allthelogs.data.LogSource;
-import me.wolfii.allthelogs.data.MatchDay;
-import me.wolfii.allthelogs.data.MatchSummary;
+import me.wolfii.allthelogs.data.query.MatchDay;
+import me.wolfii.allthelogs.data.query.MatchSummary;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;

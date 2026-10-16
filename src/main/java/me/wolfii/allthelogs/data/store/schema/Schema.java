@@ -1,5 +1,6 @@
-package me.wolfii.allthelogs.data.store;
+package me.wolfii.allthelogs.data.store.schema;
 
+import me.wolfii.allthelogs.data.store.StoreCancellation;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;

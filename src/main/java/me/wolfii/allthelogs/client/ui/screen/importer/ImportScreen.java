@@ -15,7 +15,7 @@ import me.wolfii.allthelogs.client.files.ImportTimezones;
 import me.wolfii.allthelogs.client.files.NativeFilePicker;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
 import me.wolfii.allthelogs.client.ui.text.WrappedTooltip;
-import me.wolfii.allthelogs.data.ImportOptions;
+import me.wolfii.allthelogs.data.importer.ImportOptions;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;

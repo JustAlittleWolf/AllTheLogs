@@ -1,5 +1,9 @@
 package me.wolfii.allthelogs.data;
 
+import me.wolfii.allthelogs.data.importer.ImportOptions;
+import me.wolfii.allthelogs.data.importer.ImportPhase;
+import me.wolfii.allthelogs.data.importer.ImportProgress;
+import me.wolfii.allthelogs.data.importer.ImportResult;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

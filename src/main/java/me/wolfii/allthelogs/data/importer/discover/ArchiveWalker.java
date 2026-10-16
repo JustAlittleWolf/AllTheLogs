@@ -1,8 +1,8 @@
 package me.wolfii.allthelogs.data.importer.discover;
 
-import me.wolfii.allthelogs.data.ImportOptions;
-import me.wolfii.allthelogs.data.ImportResult;
 import me.wolfii.allthelogs.data.LogSource;
+import me.wolfii.allthelogs.data.importer.ImportOptions;
+import me.wolfii.allthelogs.data.importer.ImportResult;
 import me.wolfii.allthelogs.data.store.SourceKind;
 import org.apache.commons.compress.archivers.ArchiveEntry;
 import org.apache.commons.compress.archivers.ArchiveInputStream;

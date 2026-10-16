@@ -1,4 +1,4 @@
-package me.wolfii.allthelogs.data.store;
+package me.wolfii.allthelogs.data.session;
 
 import java.util.Locale;
 import java.util.Objects;

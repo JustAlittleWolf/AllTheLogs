@@ -1,8 +1,9 @@
-package me.wolfii.allthelogs.data.store;
+package me.wolfii.allthelogs.data.store.schema;
 
 import me.wolfii.allthelogs.data.parse.FormattingCodes;
 import me.wolfii.allthelogs.data.parse.MessageCharacters;
 import me.wolfii.allthelogs.data.parse.PackedFormatting;
+import me.wolfii.allthelogs.data.store.StoreCancellation;
 import org.duckdb.DuckDBAppender;
 import org.duckdb.DuckDBConnection;
 
@@ -192,7 +193,7 @@ public final class SchemaMigration {
         return true;
     }
 
-    static int readVersion(Statement statement) throws SQLException {
+    public static int readVersion(Statement statement) throws SQLException {
         if (!tableExists(statement, Schema.META_TABLE)) {
             return 0;
         }
