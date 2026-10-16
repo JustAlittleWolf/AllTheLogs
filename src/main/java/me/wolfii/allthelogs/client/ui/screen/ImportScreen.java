@@ -47,9 +47,10 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
     private boolean nestedArchives = true;
     private boolean skipAlreadyImported = true;
     private boolean updateMetadataOnly;
-    private boolean updateFormatting;
-    private boolean updateMinecraftUser;
-    private boolean updateMinecraftServer;
+    private boolean overwriteFormatting;
+    private boolean overwriteMinecraftUser;
+    private boolean overwriteMinecraftServer;
+    private boolean overwriteLive;
     private String pathMatcher = "";
     private ZoneId timezone = ZoneId.systemDefault();
     private boolean summerTime = ImportTimezones.observesDaylightSaving(timezone);
@@ -58,9 +59,10 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
     private CheckboxComponent nestedBox;
     private CheckboxComponent skipBox;
     private CheckboxComponent updateMetadataBox;
-    private CheckboxComponent updateFormattingBox;
-    private CheckboxComponent updateMinecraftUserBox;
-    private CheckboxComponent updateMinecraftServerBox;
+    private CheckboxComponent overwriteFormattingBox;
+    private CheckboxComponent overwriteMinecraftUserBox;
+    private CheckboxComponent overwriteMinecraftServerBox;
+    private CheckboxComponent overwriteLiveBox;
     private FlowLayout advancedOptions;
     private FlowLayout metadataFields;
     private CheckboxComponent summerTimeBox;
@@ -187,22 +189,48 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
         }
     }
 
+    /**
+     * Overwrite choices under "Update metadata". Missing values are always filled in, so these only decide
+     * which existing values may be replaced. "Also live messages" only shows while one of them is checked.
+     */
     private FlowLayout metadataFieldSelect() {
         FlowLayout fields = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
         fields.gap(4).padding(Insets.left(16));
         FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
         row.gap(12).verticalAlignment(VerticalAlignment.CENTER);
-        updateFormattingBox = optionCheckbox("allthelogs.import.update_metadata.formatting", updateFormatting,
-            value -> updateFormatting = value);
-        updateMinecraftUserBox = optionCheckbox("allthelogs.import.update_metadata.user", updateMinecraftUser,
-            value -> updateMinecraftUser = value);
-        updateMinecraftServerBox = optionCheckbox("allthelogs.import.update_metadata.server", updateMinecraftServer,
-            value -> updateMinecraftServer = value);
-        row.child(updateFormattingBox);
-        row.child(updateMinecraftUserBox);
-        row.child(updateMinecraftServerBox);
+        overwriteFormattingBox = optionCheckbox("allthelogs.import.overwrite.formatting", overwriteFormatting,
+            value -> {
+                overwriteFormatting = value;
+                syncOverwriteLive();
+            });
+        overwriteMinecraftUserBox = optionCheckbox("allthelogs.import.overwrite.user", overwriteMinecraftUser,
+            value -> {
+                overwriteMinecraftUser = value;
+                syncOverwriteLive();
+            });
+        overwriteMinecraftServerBox = optionCheckbox("allthelogs.import.overwrite.server", overwriteMinecraftServer,
+            value -> {
+                overwriteMinecraftServer = value;
+                syncOverwriteLive();
+            });
+        row.child(overwriteFormattingBox);
+        row.child(overwriteMinecraftUserBox);
+        row.child(overwriteMinecraftServerBox);
         fields.child(row);
+        overwriteLiveBox = optionCheckbox("allthelogs.import.overwrite.live", overwriteLive, value -> overwriteLive = value);
+        if (overwritesAny()) fields.child(overwriteLiveBox);
         return fields;
+    }
+
+    private boolean overwritesAny() {
+        return overwriteFormatting || overwriteMinecraftUser || overwriteMinecraftServer;
+    }
+
+    private void syncOverwriteLive() {
+        if (metadataFields == null || overwriteLiveBox == null) return;
+        boolean present = metadataFields.children().contains(overwriteLiveBox);
+        if (overwritesAny() && !present) metadataFields.child(overwriteLiveBox);
+        else if (!overwritesAny() && present) metadataFields.removeChild(overwriteLiveBox);
     }
 
     private CheckboxComponent optionCheckbox(String key, boolean checked, Consumer<Boolean> onChanged) {
@@ -270,16 +298,19 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
         nestedArchives = options.nestedArchives();
         skipAlreadyImported = options.skipAlreadyImported();
         updateMetadataOnly = options.updateMetadataOnly();
-        updateFormatting = options.updateFormatting();
-        updateMinecraftUser = options.updateMinecraftUser();
-        updateMinecraftServer = options.updateMinecraftServer();
+        overwriteFormatting = options.overwriteFormatting();
+        overwriteMinecraftUser = options.overwriteMinecraftUser();
+        overwriteMinecraftServer = options.overwriteMinecraftServer();
+        overwriteLive = options.overwriteLive();
         pathMatcher = options.pathMatcher() == null ? "" : options.pathMatcher();
         if (recursiveBox != null) recursiveBox.checked(recursive);
         if (nestedBox != null) nestedBox.checked(nestedArchives);
         if (skipBox != null) skipBox.checked(skipAlreadyImported);
-        if (updateFormattingBox != null) updateFormattingBox.checked(updateFormatting);
-        if (updateMinecraftUserBox != null) updateMinecraftUserBox.checked(updateMinecraftUser);
-        if (updateMinecraftServerBox != null) updateMinecraftServerBox.checked(updateMinecraftServer);
+        if (overwriteFormattingBox != null) overwriteFormattingBox.checked(overwriteFormatting);
+        if (overwriteMinecraftUserBox != null) overwriteMinecraftUserBox.checked(overwriteMinecraftUser);
+        if (overwriteMinecraftServerBox != null) overwriteMinecraftServerBox.checked(overwriteMinecraftServer);
+        if (overwriteLiveBox != null) overwriteLiveBox.checked(overwriteLive);
+        syncOverwriteLive();
         if (updateMetadataBox != null) updateMetadataBox.checked(updateMetadataOnly);
         setUpdateMetadataOnly(updateMetadataOnly);
         if (pathMatcherBox != null) pathMatcherBox.text(pathMatcher);
@@ -311,9 +342,10 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
             .withNestedArchives(nestedArchives)
             .withSkipAlreadyImported(skipAlreadyImported)
             .withUpdateMetadataOnly(updateMetadataOnly)
-            .withUpdateFormatting(updateFormatting)
-            .withUpdateMinecraftUser(updateMinecraftUser)
-            .withUpdateMinecraftServer(updateMinecraftServer)
+            .withOverwriteFormatting(overwriteFormatting)
+            .withOverwriteMinecraftUser(overwriteMinecraftUser)
+            .withOverwriteMinecraftServer(overwriteMinecraftServer)
+            .withOverwriteLive(overwriteLive && (overwriteFormatting || overwriteMinecraftUser || overwriteMinecraftServer))
             .withParallelism(parallelism)
             .withTimezone(ImportTimezones.forImport(zone, summerTime));
         if (!pathMatcher.isBlank()) {

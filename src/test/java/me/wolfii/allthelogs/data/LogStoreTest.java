@@ -100,9 +100,9 @@ class LogStoreTest {
             .withOptimize(false)
             .withSkipAlreadyImported(false)
             .withUpdateMetadataOnly(true)
-            .withUpdateFormatting(formatting)
-            .withUpdateMinecraftUser(user)
-            .withUpdateMinecraftServer(server);
+            .withOverwriteFormatting(formatting)
+            .withOverwriteMinecraftUser(user)
+            .withOverwriteMinecraftServer(server);
     }
 
     private Path logsDirectory() throws IOException {
@@ -2052,13 +2052,16 @@ class LogStoreTest {
             [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
             [10:00:10] [Render thread/INFO]: [CHAT] \u00a7ahello
             """);
-        store.importDirectory(tempDir, metadataOnly(true, false, false));
+        store.importDirectory(tempDir, metadataOnly(false, false, false));
         assertEquals(PackedFormatting.color(0xFF5555),
+            PackedFormatting.at(store.allEntries().getFirst().formatting(), 0));
+        store.importDirectory(tempDir, metadataOnly(true, false, false));
+        assertEquals(PackedFormatting.color(0x55FF55),
             PackedFormatting.at(store.allEntries().getFirst().formatting(), 0));
     }
 
     @Test
-    void metadataOnlyDoesNotWriteUnselectedFields() throws IOException {
+    void metadataOnlyFillsEveryMissingFieldAndOverwritesOnlyWhenChosen() throws IOException {
         Path logs = tempDir.resolve("logs");
         LogFixtures.writePlain(logs, "2026-08-26-1.log", """
             [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
@@ -2073,16 +2076,76 @@ class LogStoreTest {
             """);
 
         store.importDirectory(tempDir, metadataOnly(false, false, false));
-        ChatEntry unchanged = store.allEntries().getFirst();
-        assertNull(unchanged.formatting());
-        assertNull(unchanged.minecraftUser());
-        assertNull(unchanged.serverOrWorld());
+        ChatEntry filled = store.allEntries().getFirst();
+        assertNotNull(filled.formatting());
+        assertEquals("JustAlittleWolf", filled.minecraftUser());
+        assertEquals("unicacity.eu", filled.serverOrWorld());
 
-        store.importDirectory(tempDir, metadataOnly(false, true, false));
+        LogFixtures.writePlain(logs, "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:05] [Render thread/INFO]: Setting user: Someone
+            [10:00:06] [Render thread/INFO]: Connecting to gommehd.net, 25565
+            [10:00:10] [Render thread/INFO]: [CHAT] hello
+            """);
+        store.importDirectory(tempDir, metadataOnly(false, false, false));
+        ChatEntry kept = store.allEntries().getFirst();
+        assertEquals("JustAlittleWolf", kept.minecraftUser());
+        assertEquals("unicacity.eu", kept.serverOrWorld());
+        assertNotNull(kept.formatting());
+
+        store.importDirectory(tempDir, metadataOnly(true, true, false));
         ChatEntry userOnly = store.allEntries().getFirst();
-        assertNull(userOnly.formatting());
-        assertEquals("JustAlittleWolf", userOnly.minecraftUser());
-        assertNull(userOnly.serverOrWorld());
+        assertEquals("Someone", userOnly.minecraftUser());
+        assertEquals("unicacity.eu", userOnly.serverOrWorld());
+        assertNotNull(userOnly.formatting(), "a log line without formatting never clears it");
+    }
+
+    @Test
+    void liveMessagesAreFilledButOnlyOverwrittenWhenLiveIsChosen() throws IOException {
+        LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 10, 0);
+        store.startSession("26.2", startedAt);
+        assertTrue(store.importSessionMessage("hello", null, startedAt.plusSeconds(10), "Live", null));
+        Path logs = tempDir.resolve("logs");
+        LogFixtures.writePlain(logs, "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [10:00:05] [Render thread/INFO]: Setting user: FromLog
+            [10:00:06] [Render thread/INFO]: Connecting to unicacity.eu, 25565
+            [10:00:10] [Render thread/INFO]: [CHAT] hello
+            """);
+
+        store.importDirectory(tempDir, metadataOnly(false, true, true));
+        ChatEntry live = store.allEntries().getFirst();
+        assertEquals("Live", live.minecraftUser());
+        assertEquals("unicacity.eu", live.serverOrWorld());
+
+        store.importDirectory(tempDir, metadataOnly(false, true, true).withOverwriteLive(true));
+        assertEquals("FromLog", store.allEntries().getFirst().minecraftUser());
+    }
+
+    @Test
+    void aLiveSessionPastMidnightTakesThePlaceFromThePickedDayBefore() throws IOException {
+        LocalDateTime startedAt = LocalDateTime.of(2026, 9, 19, 23, 50);
+        store.startSession("26.2", startedAt, "Wolf");
+        assertTrue(store.importSessionMessage("before midnight", null, LocalDateTime.of(2026, 9, 19, 23, 59, 45),
+            "Wolf", null));
+        assertTrue(store.importSessionMessage("after midnight", null, LocalDateTime.of(2026, 9, 20, 0, 0, 5),
+            "Wolf", null));
+        Path logs = tempDir.resolve("logs");
+        LogFixtures.writePlain(logs, "2026-09-19-1.log", """
+            [23:50:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
+            [23:50:01] [Render thread/INFO]: Setting user: Wolf
+            [23:50:05] [Render thread/INFO]: Connecting to gommehd.net, 25565
+            [23:59:45] [Render thread/INFO]: [CHAT] before midnight
+            """);
+        LogFixtures.writePlain(logs, "2026-09-20-1.log", """
+            [00:00:05] [Render thread/INFO]: [CHAT] after midnight
+            [00:39:01] [Render thread/INFO]: Stopping!
+            """);
+
+        store.importDirectory(tempDir, metadataOnly(false, false, false));
+        for (ChatEntry entry : store.allEntries()) {
+            assertEquals("gommehd.net", entry.serverOrWorld(), entry.message());
+        }
     }
 
     @Test
