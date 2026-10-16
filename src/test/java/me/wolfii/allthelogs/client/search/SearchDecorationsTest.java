@@ -14,8 +14,8 @@ class SearchDecorationsTest {
         assertTrue(SearchDecorations.wraps(regex));
         assertEquals("/", SearchDecorations.prefix(regex));
         assertEquals("/i", SearchDecorations.suffix(regex));
-        assertEquals(Colors.REGEX_GROUP, SearchDecorations.decorationColor("/i", 0));
-        assertEquals(Colors.REGEX_ANCHOR, SearchDecorations.decorationColor("/i", 1));
+        assertEquals(Colors.REGEX_CHROME, SearchDecorations.decorationColor("/i", 0));
+        assertEquals(Colors.REGEX_CHROME_FLAG, SearchDecorations.decorationColor("/i", 1));
     }
 
     @Test
@@ -23,7 +23,7 @@ class SearchDecorationsTest {
         SearchFilter regex = SearchFilter.defaults().withRegex(true).withCaseSensitive(true).withText("Bar");
         assertEquals("/", SearchDecorations.prefix(regex));
         assertEquals("/", SearchDecorations.suffix(regex));
-        assertEquals(Colors.REGEX_GROUP, SearchDecorations.decorationColor("/", 0));
+        assertEquals(Colors.REGEX_CHROME, SearchDecorations.decorationColor("/", 0));
     }
 
     @Test

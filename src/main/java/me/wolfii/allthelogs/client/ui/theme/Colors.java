@@ -60,6 +60,16 @@ public final class Colors {
     public static final int REGEX_GROUP = 0xFFB8A9E0;
     public static final int REGEX_QUANTIFIER = 0xFFE0B070;
     public static final int REGEX_ANCHOR = 0xFFE08A8A;
+    /**
+     * The {@code /} drawn beside the query. The same hue as {@link #REGEX_GROUP}, darker so it is not
+     * read as part of the typed pattern.
+     */
+    public static final int REGEX_CHROME = multiply(REGEX_GROUP, brightnessMultiply(60));
+    /**
+     * The {@code i} flag drawn beside the query. The same hue as {@link #REGEX_ANCHOR}, darkened the
+     * same way as {@link #REGEX_CHROME}.
+     */
+    public static final int REGEX_CHROME_FLAG = multiply(REGEX_ANCHOR, brightnessMultiply(60));
 
     public static final int TRACK = 0xFF2B2B2B;
     public static final int TRACK_BORDER = 0xFF3A3A3A;

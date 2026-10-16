@@ -4,6 +4,7 @@
   "allthelogs.screen.import": "Import logs",
   "allthelogs.search.placeholder": "Search messages...",
   "allthelogs.filter": "Filter",
+  "allthelogs.filter.count": "Filter (%s)",
   "allthelogs.filter.regex": "Use Regex",
   "allthelogs.filter.case_sensitive": "Case sensitive",
   "allthelogs.filter.context": "Lines of context",

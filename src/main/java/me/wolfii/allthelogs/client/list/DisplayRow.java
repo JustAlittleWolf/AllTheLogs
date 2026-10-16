@@ -25,7 +25,9 @@ public record DisplayRow(
     String message,
     long[] visualFormatting,
     boolean expandUp,
-    boolean expandDown
+    boolean expandDown,
+    int probeAbove,
+    int probeBelow
 ) {
     public DisplayRow {
         Objects.requireNonNull(entry, "entry");
@@ -40,7 +42,7 @@ public record DisplayRow(
 
     private DisplayRow(ChatEntry entry, boolean match, List<HighlightSpan> highlights,
                        VisualMessage.Prepared prepared) {
-        this(entry, match, highlights, prepared.text(), prepared.formatting(), false, false);
+        this(entry, match, highlights, prepared.text(), prepared.formatting(), false, false, -1, -1);
     }
 
     /**
@@ -66,11 +68,24 @@ public record DisplayRow(
 
     /**
      * List-direction expand carets for this row's cluster edge. {@code expandUp} loads more toward the top
-     * of the list; {@code expandDown} toward the bottom.
+     * of the list; {@code expandDown} toward the bottom. A caret that turns off forgets the hidden line it
+     * pointed at. A caret that stays keeps that line.
      */
     public DisplayRow withExpand(boolean expandUp, boolean expandDown) {
-        if (this.expandUp == expandUp && this.expandDown == expandDown) return this;
-        return new DisplayRow(entry, match, highlights, message, visualFormatting, expandUp, expandDown);
+        return withExpand(expandUp, expandDown, expandUp ? probeAbove : -1, expandDown ? probeBelow : -1);
+    }
+
+    /**
+     * Same as {@link #withExpand(boolean, boolean)}, recording the hidden line each newly set caret faces.
+     * {@code probeAbove} and {@code probeBelow} are line indexes, or {@code -1} when that side is unknown.
+     */
+    public DisplayRow withExpand(boolean expandUp, boolean expandDown, int probeAbove, int probeBelow) {
+        if (this.expandUp == expandUp && this.expandDown == expandDown
+            && this.probeAbove == probeAbove && this.probeBelow == probeBelow) {
+            return this;
+        }
+        return new DisplayRow(entry, match, highlights, message, visualFormatting, expandUp, expandDown,
+            probeAbove, probeBelow);
     }
 
     public ChatLog chatLog() {

@@ -9,6 +9,8 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.TextColor;
 
 /**
  * Search box whose regex {@code /} and {@code /i} are drawn beside the text instead of stored in it.
@@ -17,6 +19,7 @@ import net.minecraft.client.input.MouseButtonEvent;
 public final class DecoratedSearchField extends TextBoxComponent {
     private String prefix = "";
     private String suffix = "";
+    private Component hint = Component.empty();
 
     public DecoratedSearchField() {
         super(Sizing.expand());
@@ -32,6 +35,16 @@ public final class DecoratedSearchField extends TextBoxComponent {
     }
 
     /**
+     * Screen x of the closing {@code /} or {@code /i}. It sits {@code gap} pixels after the visible query.
+     * Returns {@code -1} when the end of the query is scrolled out of the box, so the mark is not drawn
+     * in the middle of the pattern.
+     */
+    static int suffixX(int textX, int visibleWidth, int gap, int valueLength, int displayPos, int visibleChars) {
+        if (displayPos + Math.max(0, visibleChars) < valueLength) return -1;
+        return textX + Math.max(0, visibleWidth) + gap;
+    }
+
+    /**
      * Scrolls the stored query into the visible window after the box has a real width.
      */
     public void revealValue() {
@@ -42,6 +55,12 @@ public final class DecoratedSearchField extends TextBoxComponent {
         int cursor = Math.min(getCursorPosition(), value.length());
         setCursorPosition(0);
         setCursorPosition(cursor);
+    }
+
+    @Override
+    public void setHint(Component hint) {
+        this.hint = hint == null ? Component.empty() : hint;
+        super.setHint(this.hint);
     }
 
     public void setDecorations(String prefix, String suffix) {
@@ -101,16 +120,26 @@ public final class DecoratedSearchField extends TextBoxComponent {
     public void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         revealIfHidden();
         applyTextInset();
-        super.extractWidgetRenderState(graphics, mouseX, mouseY, delta);
+        boolean moveHint = hintFollowsSuffix();
+        if (moveHint) super.setHint(Component.empty());
+        try {
+            super.extractWidgetRenderState(graphics, mouseX, mouseY, delta);
+        } finally {
+            if (moveHint) super.setHint(hint);
+        }
         Font font = Minecraft.getInstance().font;
         if (font == null) return;
         int textY = textY();
         if (!prefix.isEmpty()) {
             drawDecoration(graphics, font, prefix, getX() + horizontalPadding(), textY);
         }
-        if (!suffix.isEmpty()) {
-            int x = getX() + getWidth() - horizontalPadding() - font.width(suffix);
-            drawDecoration(graphics, font, suffix, x, textY);
+        int suffixAt = suffixX(font);
+        if (suffixAt >= 0) {
+            drawDecoration(graphics, font, suffix, suffixAt, textY);
+        }
+        if (moveHint && suffixAt >= 0) {
+            int hintX = suffixAt + font.width(suffix) + SearchDecorations.GAP;
+            graphics.text(font, hint, hintX, textY, 0xFF000000 | TextColor.DARK_GRAY.getValue());
         }
     }
 
@@ -130,6 +159,24 @@ public final class DecoratedSearchField extends TextBoxComponent {
         if (leading == 0) return;
         EditBoxAccessor access = (EditBoxAccessor) box;
         access.allthelogs$setTextX(access.allthelogs$getTextX() + leading);
+    }
+
+    private boolean hintFollowsSuffix() {
+        return !suffix.isEmpty() && getValue().isEmpty() && !isFocused() && !hint.getString().isEmpty();
+    }
+
+    /**
+     * Closing mark, or {@code -1} when it should stay hidden. The editable text already starts after the
+     * opening slash, so this is that text's right edge plus the padding.
+     */
+    private int suffixX(Font font) {
+        if (suffix.isEmpty()) return -1;
+        EditBoxAccessor access = (EditBoxAccessor) (EditBox) this;
+        String value = getValue();
+        int displayPos = Math.min(Math.max(0, access.allthelogs$getDisplayPos()), value.length());
+        String visible = font.plainSubstrByWidth(value.substring(displayPos), getInnerWidth());
+        return suffixX(access.allthelogs$getTextX(), font.width(visible), SearchDecorations.GAP,
+            value.length(), displayPos, visible.length());
     }
 
     private int leadingInset() {

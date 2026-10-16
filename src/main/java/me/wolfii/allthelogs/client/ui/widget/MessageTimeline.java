@@ -183,6 +183,14 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     /**
+     * Whether the timeline thumb is held. The hamburger sits under the bottom of this track, so a drag
+     * onto that button must not be treated as a hover.
+     */
+    public boolean draggingScrollbar() {
+        return scrub.dragging();
+    }
+
+    /**
      * Drag generation that owns the preview query currently in flight. Pass it back to
      * {@link #scrubQueryFinished(int)} when that query's page is on screen.
      */
