@@ -130,7 +130,7 @@
   "allthelogs.playtime.server.unknown": "Unknown",
   "allthelogs.playtime.heat.all": "All",
   "allthelogs.playtime.heat.less": "Less",
-  "allthelogs.playtime.heat.detail": "Detail: %s",
+  "allthelogs.playtime.heat.detail": "Heatmap detail: %s",
   "allthelogs.playtime.heat.minutes": "%s min",
   "allthelogs.playtime.heat.hours": "%s h",
   "allthelogs.playtime.heat.more": "More",
