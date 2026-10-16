@@ -6,8 +6,9 @@ import java.util.function.IntFunction;
 
 /**
  * Hover card text shared by the playtime charts: the period, the total, the series under the pointer when
- * there is one, an empty line, and then every other series with playtime, largest first. Names are
- * left-aligned and values right-aligned.
+ * there is one, an empty line, and then every other series with playtime, largest first. When only one
+ * series has playtime, the card shows the period and that series alone. Names are left-aligned and values
+ * right-aligned.
  */
 public final class PlaytimeHover {
     public static final int HEADING = 0xFFA0A0A0;
@@ -34,6 +35,11 @@ public final class PlaytimeHover {
                                    double[] weights, IntFunction<String> valueText, String unknownServer, int focus) {
         List<Line> lines = new ArrayList<>();
         lines.add(Line.plain(heading, HEADING));
+        int only = onlySeries(weights, series.size());
+        if (only >= 0) {
+            lines.add(entry(series.get(only), valueText.apply(only), unknownServer, false));
+            return List.copyOf(lines);
+        }
         lines.add(new Line(totalLabel, total, TOTAL, false));
         boolean focused = focus >= 0 && focus < series.size() && focus < weights.length && weights[focus] > 0;
         if (focused) lines.add(entry(series.get(focus), valueText.apply(focus), unknownServer, true));
@@ -49,6 +55,19 @@ public final class PlaytimeHover {
         lines.add(Line.plain("", TOTAL));
         for (int index : order) lines.add(entry(series.get(index), valueText.apply(index), unknownServer, false));
         return List.copyOf(lines);
+    }
+
+    /**
+     * The one series with playtime, or -1 when none or several have some.
+     */
+    private static int onlySeries(double[] weights, int count) {
+        int found = -1;
+        for (int index = 0; index < count && index < weights.length; index++) {
+            if (weights[index] <= 0) continue;
+            if (found >= 0) return -1;
+            found = index;
+        }
+        return found;
     }
 
     private static Line entry(PlaytimeSeries series, String value, String unknownServer, boolean bold) {

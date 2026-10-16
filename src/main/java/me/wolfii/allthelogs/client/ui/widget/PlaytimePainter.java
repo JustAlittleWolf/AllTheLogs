@@ -141,7 +141,8 @@ final class PlaytimePainter {
 
     /**
      * Hover card kept inside the given bounds, below the pointer or above it when there is no room. Labels
-     * are left-aligned and values right-aligned in a second column.
+     * are left-aligned and values right-aligned in a second column. Lines without a value, like the period
+     * heading, only need to fit the card; they do not push the value column to the right.
      */
     static void hoverCard(OwoUIGraphics graphics, List<PlaytimeHover.Line> lines, int mouseX, int mouseY,
                           int x, int y, int width, int height) {
@@ -151,19 +152,26 @@ final class PlaytimePainter {
         Font font = font();
         int labelWidth = 0;
         int valueWidth = 0;
+        int plainWidth = 0;
         for (int index = 0; index < shown; index++) {
             PlaytimeHover.Line line = lines.get(index);
-            labelWidth = Math.max(labelWidth, font.width(text(line.label(), line.bold())));
-            valueWidth = Math.max(valueWidth, font.width(line.value()));
+            int width = font.width(text(line.label(), line.bold()));
+            if (line.value().isEmpty()) {
+                plainWidth = Math.max(plainWidth, width);
+            } else {
+                labelWidth = Math.max(labelWidth, width);
+                valueWidth = Math.max(valueWidth, font.width(line.value()));
+            }
         }
         String more = null;
         if (hidden > 0) {
             more = Component.translatable("allthelogs.playtime.hover.more", hidden).getString();
-            labelWidth = Math.max(labelWidth, font.width(more));
+            plainWidth = Math.max(plainWidth, font.width(more));
         }
         int rows = shown + (more == null ? 0 : 1);
         int pad = 4;
-        int contentWidth = labelWidth + (valueWidth > 0 ? VALUE_GAP + valueWidth : 0);
+        int columnsWidth = valueWidth > 0 ? labelWidth + VALUE_GAP + valueWidth : labelWidth;
+        int contentWidth = Math.max(plainWidth, columnsWidth);
         int boxWidth = Math.min(width - 4, contentWidth + pad * 2);
         int boxHeight = pad * 2 + rows * font.lineHeight;
         int boxX = Math.max(x + 2, Math.min(mouseX + 8, x + width - boxWidth - 2));

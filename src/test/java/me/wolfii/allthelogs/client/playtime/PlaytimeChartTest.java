@@ -302,12 +302,10 @@ class PlaytimeChartTest {
         assertEquals(3_600_000L, days.heatMillis(DayOfWeek.MONDAY.getValue() - 1, 0));
         assertEquals(2 * 3_600_000L, days.heatMillis(PlaytimeWeekday.ALL_DAYS, 0));
 
-        List<PlaytimeHover.Line> hover = days.dayHover(DayOfWeek.TUESDAY.getValue() - 1, "Total", "Unknown", -1);
-        assertEquals("Total", hover.get(1).label());
-        assertEquals("3h", hover.get(1).value());
-        assertEquals("", hover.get(2).label());
-        assertEquals("b", hover.get(3).label());
-        assertEquals("3h", hover.get(3).value());
+        List<PlaytimeHover.Line> single = days.dayHover(DayOfWeek.TUESDAY.getValue() - 1, "Total", "Unknown", -1);
+        assertEquals(2, single.size());
+        assertEquals("b", single.get(1).label());
+        assertEquals("3h", single.get(1).value());
     }
 
     @Test
