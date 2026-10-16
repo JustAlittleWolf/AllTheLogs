@@ -7,7 +7,6 @@ import io.wispforest.owo.ui.container.ScrollContainer;
 import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.ParentUIComponent;
-import io.wispforest.owo.ui.core.Positioning;
 import io.wispforest.owo.ui.core.Sizing;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
@@ -63,10 +62,8 @@ final class OptionMenu {
         ScrollContainer<FlowLayout> scroll = UIContainers.verticalScroll(Sizing.fixed(width), Sizing.fixed(maxHeight), items);
         scroll.scrollbar(OverflowScrollbar.vanillaFlat());
         scroll.surface(PanelSurfaces.menu());
-        int menuX = Math.min(anchor.x(), Math.max(0, screenWidth.getAsInt() - width - 4));
-        int menuY = anchor.y() + anchor.height();
-        if (menuY + maxHeight > screenHeight.getAsInt() - 4) menuY = Math.max(4, anchor.y() - maxHeight);
-        scroll.positioning(Positioning.absolute(menuX, menuY));
+        AnchoredPopup.place(scroll, anchor.x(), anchor.y(), anchor.height(), width, maxHeight,
+            screenWidth.getAsInt(), screenHeight.getAsInt());
         menu = scroll;
         overlays.child(scroll);
     }

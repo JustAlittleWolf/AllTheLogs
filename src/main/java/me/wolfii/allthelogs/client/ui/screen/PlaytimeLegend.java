@@ -7,6 +7,8 @@ import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Color;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.VerticalAlignment;
+import me.wolfii.allthelogs.client.playtime.PlaytimeChartModel;
+import me.wolfii.allthelogs.client.playtime.PlaytimeDuration;
 import me.wolfii.allthelogs.client.playtime.PlaytimeFilter;
 import me.wolfii.allthelogs.client.playtime.PlaytimeSeries;
 import net.minecraft.network.chat.Component;
@@ -20,18 +22,19 @@ final class PlaytimeLegend {
     private PlaytimeLegend() {
     }
 
-    static void fill(FlowLayout legend, List<PlaytimeSeries> series, List<Integer> indexes) {
+    static void fill(FlowLayout legend, List<PlaytimeSeries> series, List<PlaytimeChartModel.LegendEntry> entries) {
         legend.clearChildren();
         String unknown = Component.translatable("allthelogs.playtime.server.unknown").getString();
-        for (int index : indexes) {
-            if (index < 0 || index >= series.size()) continue;
-            PlaytimeSeries entry = series.get(index);
+        for (PlaytimeChartModel.LegendEntry item : entries) {
+            if (item.series() < 0 || item.series() >= series.size()) continue;
+            PlaytimeSeries entry = series.get(item.series());
             FlowLayout chip = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
             chip.gap(3).verticalAlignment(VerticalAlignment.CENTER);
             BoxComponent swatch = UIComponents.box(Sizing.fixed(10), Sizing.fixed(10));
             swatch.fill(true).color(Color.ofRgb(entry.color() & 0xFFFFFF));
             chip.child(swatch);
-            chip.child(UIComponents.label(Component.literal(entry.label(unknown))));
+            chip.child(UIComponents.label(Component.literal(
+                entry.label(unknown) + " (" + PlaytimeDuration.format(item.millis()) + ")")));
             legend.child(chip);
         }
     }

@@ -34,7 +34,7 @@ public final class PlaytimeWeekday {
         long totalMillis,
         PlaytimeBreakdown breakdown,
         List<PlaytimeSeries> series,
-        List<Integer> legend,
+        List<PlaytimeChartModel.LegendEntry> legend,
         List<Bar> bars,
         int mostDay,
         int leastDay,
@@ -103,19 +103,7 @@ public final class PlaytimeWeekday {
                 seriesTotals[seriesIndex] += grid[day][seriesIndex];
             }
         }
-        return new Result(total, group, List.copyOf(series), legend(seriesTotals), List.copyOf(bars), most, least, axisMax);
-    }
-
-    private static List<Integer> legend(long[] totals) {
-        List<Integer> order = new ArrayList<>();
-        for (int index = 0; index < totals.length; index++) order.add(index);
-        order.sort((left, right) -> {
-            int byTime = Long.compare(totals[right], totals[left]);
-            return byTime != 0 ? byTime : Integer.compare(left, right);
-        });
-        if (order.size() > PlaytimeChartModel.LEGEND_LIMIT) {
-            return List.copyOf(order.subList(0, PlaytimeChartModel.LEGEND_LIMIT));
-        }
-        return List.copyOf(order);
+        return new Result(total, group, List.copyOf(series), PlaytimeChartModel.legend(seriesTotals),
+            List.copyOf(bars), most, least, axisMax);
     }
 }

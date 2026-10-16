@@ -15,12 +15,9 @@ import io.wispforest.owo.ui.core.OwoUIAdapter;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.Surface;
 import io.wispforest.owo.ui.core.VerticalAlignment;
-import me.wolfii.allthelogs.client.AllTheLogsClient;
 import me.wolfii.allthelogs.client.config.BrowserSession;
 import me.wolfii.allthelogs.client.playtime.PlaytimeBreakdown;
 import me.wolfii.allthelogs.client.playtime.PlaytimeChartModel;
-import me.wolfii.allthelogs.client.playtime.PlaytimeDuration;
-import me.wolfii.allthelogs.client.playtime.PlaytimeFilter;
 import me.wolfii.allthelogs.client.playtime.PlaytimeGrain;
 import me.wolfii.allthelogs.client.playtime.PlaytimeMessageFilter;
 import me.wolfii.allthelogs.client.playtime.PlaytimeSeries;
@@ -103,7 +100,7 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         totalLabel = UIComponents.label(Component.translatable("allthelogs.playtime.loading"));
         totalLabel.horizontalSizing(Sizing.expand());
         header.child(totalLabel);
-        header.child(button("allthelogs.playtime.weekdays", pressed -> openWeekdays()));
+        header.child(PlaytimeScreenSupport.button("allthelogs.playtime.weekdays", pressed -> openWeekdays()));
         page.child(header);
 
         grainMenu = new OptionMenu(overlays, () -> this.width, () -> this.height);
@@ -114,11 +111,11 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
 
         FlowLayout controls = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
         controls.gap(4).verticalAlignment(VerticalAlignment.CENTER);
-        grainButton = button(grainLabel(), pressed -> openGrain());
-        breakdownButton = button(breakdownLabel(), pressed -> openBreakdown());
-        styleButton = button(styleLabel(), pressed -> openStyle());
-        versionButton = button(versionLabel(), pressed -> openVersions());
-        serverButton = button(serverLabel(), pressed -> openServers());
+        grainButton = PlaytimeScreenSupport.button(grainLabel(), pressed -> openGrain());
+        breakdownButton = PlaytimeScreenSupport.button(breakdownLabel(), pressed -> openBreakdown());
+        styleButton = PlaytimeScreenSupport.button(styleLabel(), pressed -> openStyle());
+        versionButton = PlaytimeScreenSupport.button(PlaytimeScreenSupport.versionLabel(), pressed -> openVersions());
+        serverButton = PlaytimeScreenSupport.button(PlaytimeScreenSupport.serverLabel(), pressed -> openServers());
         controls.child(grainButton);
         controls.child(breakdownButton);
         controls.child(styleButton);
@@ -175,23 +172,7 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
 
     private void load() {
         int request = ++loadToken;
-        var worker = AllTheLogsClient.worker();
-        if (worker == null || !worker.isOpen()) {
-            status(Component.translatable("allthelogs.playtime.unavailable"));
-            return;
-        }
-        if (!PlaytimeSession.loaded()) status(Component.translatable("allthelogs.playtime.loading"));
-        worker.playtime().whenComplete((spans, error) -> Minecraft.getInstance().execute(() -> {
-            if (request != loadToken || Minecraft.getInstance().gui.screen() != this) return;
-            if (error != null) {
-                AllTheLogsClient.LOGGER.warn("Could not read playtime", error);
-                status(Component.translatable("allthelogs.status.error"));
-                return;
-            }
-            PlaytimeSession.spans(spans);
-            status(null);
-            rebuild();
-        }));
+        PlaytimeScreenSupport.load(this, request, () -> loadToken, this::status, this::rebuild);
     }
 
     private void rebuild() {
@@ -205,23 +186,16 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
 
     private void status(@Nullable Component message) {
         statusMessage = message;
-        if (totalLabel == null) return;
-        if (message != null) {
-            totalLabel.text(message);
-            if (chartWidget != null) chartWidget.placeholder(message);
-            return;
-        }
-        long total = chart == null ? 0 : chart.totalMillis();
-        totalLabel.text(Component.translatable("allthelogs.playtime.total", PlaytimeDuration.format(total)));
-        if (chartWidget != null) chartWidget.placeholder(Component.translatable("allthelogs.playtime.empty"));
+        PlaytimeScreenSupport.showTotal(totalLabel, chartWidget == null ? null : chartWidget::placeholder,
+            message, chart == null ? 0 : chart.totalMillis());
     }
 
     private void syncButtons() {
         if (grainButton != null) grainButton.setMessage(grainLabel());
         if (breakdownButton != null) breakdownButton.setMessage(breakdownLabel());
         if (styleButton != null) styleButton.setMessage(styleLabel());
-        if (versionButton != null) versionButton.setMessage(versionLabel());
-        if (serverButton != null) serverButton.setMessage(serverLabel());
+        if (versionButton != null) versionButton.setMessage(PlaytimeScreenSupport.versionLabel());
+        if (serverButton != null) serverButton.setMessage(PlaytimeScreenSupport.serverLabel());
     }
 
     private void zoom(double fraction, double steps) {
@@ -289,35 +263,11 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
     }
 
     private void openVersions() {
-        boolean open = versionMenu.isOpen();
-        closeMenus();
-        if (open) return;
-        List<String> values = PlaytimeChartModel.versionsIn(PlaytimeSession.spans());
-        versionMenu.show(versionButton, values, PlaytimeSession.filter().versions(), PlaytimeLegend::named,
-            (value, selected) -> {
-                PlaytimeSession.filter(PlaytimeSession.filter().toggleVersion(value, selected, values));
-                rebuild();
-            }, () -> {
-                PlaytimeSession.filter(PlaytimeSession.filter().withVersions(null));
-                versionMenu.close();
-                rebuild();
-            });
+        PlaytimeScreenSupport.openVersions(versionMenu, versionButton, this::closeMenus, this::rebuild);
     }
 
     private void openServers() {
-        boolean open = serverMenu.isOpen();
-        closeMenus();
-        if (open) return;
-        List<String> values = PlaytimeChartModel.serversIn(PlaytimeSession.spans());
-        serverMenu.show(serverButton, values, PlaytimeSession.filter().servers(), PlaytimeLegend::named,
-            (value, selected) -> {
-                PlaytimeSession.filter(PlaytimeSession.filter().toggleServer(value, selected, values));
-                rebuild();
-            }, () -> {
-                PlaytimeSession.filter(PlaytimeSession.filter().withServers(null));
-                serverMenu.close();
-                rebuild();
-            });
+        PlaytimeScreenSupport.openServers(serverMenu, serverButton, this::closeMenus, this::rebuild);
     }
 
     private void openContextMenu(PlaytimeChartModel.Hit hit, double screenX, double screenY) {
@@ -417,23 +367,4 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         return Component.translatable("allthelogs.playtime.style", Component.translatable(key));
     }
 
-    private Component versionLabel() {
-        return PlaytimeLegend.selection("allthelogs.playtime.versions", PlaytimeSession.filter().versions(),
-            PlaytimeChartModel.versionsIn(PlaytimeSession.spans()));
-    }
-
-    private Component serverLabel() {
-        return PlaytimeLegend.selection("allthelogs.playtime.servers", PlaytimeSession.filter().servers(),
-            PlaytimeChartModel.serversIn(PlaytimeSession.spans()));
-    }
-
-    private static ButtonComponent button(String key, Consumer<ButtonComponent> onPress) {
-        return button(Component.translatable(key), onPress);
-    }
-
-    private static ButtonComponent button(Component label, Consumer<ButtonComponent> onPress) {
-        ButtonComponent button = UIComponents.button(label, onPress::accept);
-        button.horizontalSizing(Sizing.content());
-        return button;
-    }
 }

@@ -48,6 +48,12 @@ public final class PlaytimeChartModel {
     public record Hit(int column, int series) {
     }
 
+    /**
+     * One legend chip: the series index and that series' playtime under the current filters.
+     */
+    public record LegendEntry(int series, long millis) {
+    }
+
     public record Plot(int x, int y, int width, int height) {
     }
 
@@ -61,7 +67,7 @@ public final class PlaytimeChartModel {
         PlaytimeStyle style,
         PlaytimeBreakdown breakdown,
         List<PlaytimeSeries> series,
-        List<Integer> legend,
+        List<LegendEntry> legend,
         List<Column> columns,
         double axisMax
     ) {
@@ -333,15 +339,20 @@ public final class PlaytimeChartModel {
         return series;
     }
 
-    private static List<Integer> legend(long[] totals) {
+    static List<LegendEntry> legend(long[] totals) {
         List<Integer> order = new ArrayList<>();
         for (int index = 0; index < totals.length; index++) order.add(index);
         order.sort((left, right) -> {
             int byTime = Long.compare(totals[right], totals[left]);
             return byTime != 0 ? byTime : Integer.compare(left, right);
         });
-        if (order.size() > LEGEND_LIMIT) return List.copyOf(order.subList(0, LEGEND_LIMIT));
-        return List.copyOf(order);
+        int limit = Math.min(order.size(), LEGEND_LIMIT);
+        List<LegendEntry> ranked = new ArrayList<>(limit);
+        for (int index = 0; index < limit; index++) {
+            int series = order.get(index);
+            ranked.add(new LegendEntry(series, totals[series]));
+        }
+        return List.copyOf(ranked);
     }
 
     private static String percent(long part, long total) {

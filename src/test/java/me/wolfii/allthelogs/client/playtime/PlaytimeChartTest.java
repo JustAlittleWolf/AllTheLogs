@@ -64,7 +64,8 @@ class PlaytimeChartTest {
         PlaytimeChartModel.Result legend = PlaytimeChartModel.build(many, PlaytimeFilter.all(),
             PlaytimeBreakdown.VERSION, PlaytimeStyle.BARS, PlaytimeGrain.DAYS, null);
         assertEquals(10, legend.legend().size());
-        assertEquals("1.10", legend.series().get(legend.legend().getFirst()).version());
+        assertEquals("1.10", legend.series().get(legend.legend().getFirst().series()).version());
+        assertEquals(11 * 60_000L, legend.legend().getFirst().millis());
     }
 
     @Test

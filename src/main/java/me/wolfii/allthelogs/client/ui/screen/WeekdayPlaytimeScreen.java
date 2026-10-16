@@ -14,9 +14,7 @@ import io.wispforest.owo.ui.core.OwoUIAdapter;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.Surface;
 import io.wispforest.owo.ui.core.VerticalAlignment;
-import me.wolfii.allthelogs.client.AllTheLogsClient;
 import me.wolfii.allthelogs.client.playtime.PlaytimeBreakdown;
-import me.wolfii.allthelogs.client.playtime.PlaytimeChartModel;
 import me.wolfii.allthelogs.client.playtime.PlaytimeDuration;
 import me.wolfii.allthelogs.client.playtime.PlaytimeSession;
 import me.wolfii.allthelogs.client.playtime.PlaytimeWeekday;
@@ -32,7 +30,6 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
-import java.util.function.Consumer;
 
 /**
  * Monday-to-Sunday playtime. Opened from the timeline screen, not the hamburger menu.
@@ -93,7 +90,7 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
         totalLabel = UIComponents.label(Component.translatable("allthelogs.playtime.loading"));
         totalLabel.horizontalSizing(Sizing.expand());
         header.child(totalLabel);
-        header.child(button("allthelogs.playtime.timeline", pressed -> onClose()));
+        header.child(PlaytimeScreenSupport.button("allthelogs.playtime.timeline", pressed -> onClose()));
         page.child(header);
 
         FlowLayout extremes = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
@@ -110,9 +107,9 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
 
         FlowLayout controls = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
         controls.gap(4).verticalAlignment(VerticalAlignment.CENTER);
-        groupButton = button(groupLabel(), pressed -> openGroup());
-        versionButton = button(versionLabel(), pressed -> openVersions());
-        serverButton = button(serverLabel(), pressed -> openServers());
+        groupButton = PlaytimeScreenSupport.button(groupLabel(), pressed -> openGroup());
+        versionButton = PlaytimeScreenSupport.button(PlaytimeScreenSupport.versionLabel(), pressed -> openVersions());
+        serverButton = PlaytimeScreenSupport.button(PlaytimeScreenSupport.serverLabel(), pressed -> openServers());
         controls.child(groupButton);
         controls.child(versionButton);
         controls.child(serverButton);
@@ -158,23 +155,7 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
 
     private void load() {
         int request = ++loadToken;
-        var worker = AllTheLogsClient.worker();
-        if (worker == null || !worker.isOpen()) {
-            status(Component.translatable("allthelogs.playtime.unavailable"));
-            return;
-        }
-        if (!PlaytimeSession.loaded()) status(Component.translatable("allthelogs.playtime.loading"));
-        worker.playtime().whenComplete((spans, error) -> Minecraft.getInstance().execute(() -> {
-            if (request != loadToken || Minecraft.getInstance().gui.screen() != this) return;
-            if (error != null) {
-                AllTheLogsClient.LOGGER.warn("Could not read playtime", error);
-                status(Component.translatable("allthelogs.status.error"));
-                return;
-            }
-            PlaytimeSession.spans(spans);
-            status(null);
-            rebuild();
-        }));
+        PlaytimeScreenSupport.load(this, request, () -> loadToken, this::status, this::rebuild);
     }
 
     private void rebuild() {
@@ -203,21 +184,14 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
 
     private void status(@Nullable Component message) {
         statusMessage = message;
-        if (totalLabel == null) return;
-        if (message != null) {
-            totalLabel.text(message);
-            if (chartWidget != null) chartWidget.placeholder(message);
-            return;
-        }
-        long total = chart == null ? 0 : chart.totalMillis();
-        totalLabel.text(Component.translatable("allthelogs.playtime.total", PlaytimeDuration.format(total)));
-        if (chartWidget != null) chartWidget.placeholder(Component.translatable("allthelogs.playtime.empty"));
+        PlaytimeScreenSupport.showTotal(totalLabel, chartWidget == null ? null : chartWidget::placeholder,
+            message, chart == null ? 0 : chart.totalMillis());
     }
 
     private void syncButtons() {
         if (groupButton != null) groupButton.setMessage(groupLabel());
-        if (versionButton != null) versionButton.setMessage(versionLabel());
-        if (serverButton != null) serverButton.setMessage(serverLabel());
+        if (versionButton != null) versionButton.setMessage(PlaytimeScreenSupport.versionLabel());
+        if (serverButton != null) serverButton.setMessage(PlaytimeScreenSupport.serverLabel());
     }
 
     private void openGroup() {
@@ -235,35 +209,11 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
     }
 
     private void openVersions() {
-        boolean open = versionMenu.isOpen();
-        closeMenus();
-        if (open) return;
-        List<String> values = PlaytimeChartModel.versionsIn(PlaytimeSession.spans());
-        versionMenu.show(versionButton, values, PlaytimeSession.filter().versions(), PlaytimeLegend::named,
-            (value, selected) -> {
-                PlaytimeSession.filter(PlaytimeSession.filter().toggleVersion(value, selected, values));
-                rebuild();
-            }, () -> {
-                PlaytimeSession.filter(PlaytimeSession.filter().withVersions(null));
-                versionMenu.close();
-                rebuild();
-            });
+        PlaytimeScreenSupport.openVersions(versionMenu, versionButton, this::closeMenus, this::rebuild);
     }
 
     private void openServers() {
-        boolean open = serverMenu.isOpen();
-        closeMenus();
-        if (open) return;
-        List<String> values = PlaytimeChartModel.serversIn(PlaytimeSession.spans());
-        serverMenu.show(serverButton, values, PlaytimeSession.filter().servers(), PlaytimeLegend::named,
-            (value, selected) -> {
-                PlaytimeSession.filter(PlaytimeSession.filter().toggleServer(value, selected, values));
-                rebuild();
-            }, () -> {
-                PlaytimeSession.filter(PlaytimeSession.filter().withServers(null));
-                serverMenu.close();
-                rebuild();
-            });
+        PlaytimeScreenSupport.openServers(serverMenu, serverButton, this::closeMenus, this::rebuild);
     }
 
     private boolean menusOpen() {
@@ -287,23 +237,4 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
         return Component.translatable("allthelogs.playtime.weekday.group", Component.translatable(key));
     }
 
-    private Component versionLabel() {
-        return PlaytimeLegend.selection("allthelogs.playtime.versions", PlaytimeSession.filter().versions(),
-            PlaytimeChartModel.versionsIn(PlaytimeSession.spans()));
-    }
-
-    private Component serverLabel() {
-        return PlaytimeLegend.selection("allthelogs.playtime.servers", PlaytimeSession.filter().servers(),
-            PlaytimeChartModel.serversIn(PlaytimeSession.spans()));
-    }
-
-    private static ButtonComponent button(String key, Consumer<ButtonComponent> onPress) {
-        return button(Component.translatable(key), onPress);
-    }
-
-    private static ButtonComponent button(Component label, Consumer<ButtonComponent> onPress) {
-        ButtonComponent button = UIComponents.button(label, onPress::accept);
-        button.horizontalSizing(Sizing.content());
-        return button;
-    }
 }
