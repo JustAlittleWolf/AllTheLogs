@@ -288,8 +288,8 @@ final class BrowserToolsMenu {
         FlowLayout menu = panel(width);
         exportButton = action(Component.translatable("allthelogs.menu.export"), this::ensureScope);
         menu.child(exportButton);
-        menu.child(action(Component.translatable("allthelogs.menu.cleanup"), openCleanup));
         menu.child(action(Component.translatable("allthelogs.menu.scripts"), openScripts));
+        menu.child(action(Component.translatable("allthelogs.menu.cleanup"), openCleanup));
         menu.child(action(Component.translatable("allthelogs.menu.optimize"), optimize));
         databaseRow = infoRow(Component.translatable("allthelogs.meta.marker"));
         databaseRow.tooltip(databaseTooltip);
