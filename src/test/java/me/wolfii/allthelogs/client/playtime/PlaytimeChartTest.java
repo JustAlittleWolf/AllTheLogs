@@ -31,6 +31,9 @@ class PlaytimeChartTest {
         assertEquals("1m 30s", PlaytimeDuration.format(90_000));
         assertEquals("1h 1m", PlaytimeDuration.format(3_660_000));
         assertEquals("1d 1h", PlaytimeDuration.format(90_000_000));
+        assertEquals("4d 23h 59m", PlaytimeDuration.summary(5 * 86_400_000L - 60_000));
+        assertEquals("5d", PlaytimeDuration.summary(5 * 86_400_000L + 3_600_000));
+        assertEquals("200d", PlaytimeDuration.summary(199 * 86_400_000L + 13 * 3_600_000L));
     }
 
     @Test

@@ -71,18 +71,16 @@ final class PlaytimeScreenSupport {
     }
 
     /**
-     * The chart beside a column with the total, the scrolling legend under it, the filter controls, and the
-     * done button at the bottom. Only the legend scrolls.
+     * The chart beside a column with the total, the scrolling legend under it, and the filter controls at the
+     * bottom. Only the legend scrolls.
      */
-    static FlowLayout body(UIComponent chart, TotalRow total, PlaytimeLegendWidget legend, List<UIComponent> filters,
-                           ButtonComponent done) {
+    static FlowLayout body(UIComponent chart, TotalRow total, PlaytimeLegendWidget legend, List<UIComponent> filters) {
         ScrollContainer<PlaytimeLegendWidget> legendScroll = OverflowScrollbar.vertical(Sizing.fill(), Sizing.expand(), legend);
         FlowLayout side = UIContainers.verticalFlow(Sizing.fixed(SIDE_WIDTH), Sizing.fill());
         side.gap(2);
         side.child(total.row);
         side.child(legendScroll);
         filters.forEach(side::child);
-        side.child(done.horizontalSizing(Sizing.fill()));
 
         FlowLayout body = UIContainers.horizontalFlow(Sizing.fill(), Sizing.expand());
         body.gap(4);
@@ -140,7 +138,7 @@ final class PlaytimeScreenSupport {
      */
     static void showTotal(@Nullable TotalRow total, @Nullable Consumer<Component> placeholder,
                           @Nullable Component message, long totalMillis) {
-        if (total != null) total.show(message != null ? null : PlaytimeDuration.format(totalMillis));
+        if (total != null) total.show(message != null ? null : PlaytimeDuration.summary(totalMillis));
         if (placeholder != null) placeholder.accept(message != null ? message : Component.translatable("allthelogs.playtime.empty"));
     }
 

@@ -12,7 +12,6 @@ import me.wolfii.allthelogs.client.search.DateParser;
 import me.wolfii.allthelogs.client.ui.popup.ChecklistMenu;
 import me.wolfii.allthelogs.client.ui.popup.OptionMenu;
 import me.wolfii.allthelogs.client.ui.widget.DateField;
-import me.wolfii.allthelogs.client.ui.widget.DoneButton;
 import me.wolfii.allthelogs.client.ui.widget.playtime.PlaytimeLegendWidget;
 import me.wolfii.allthelogs.client.ui.widget.playtime.SeriesHighlight;
 import me.wolfii.allthelogs.client.ui.widget.playtime.WeekdayChartWidget;
@@ -99,7 +98,7 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
             dateField("allthelogs.filter.until", DateParser.formatUntil(PlaytimeSession.weekdayUntil()),
                 DateParser::parseUntil, PlaytimeSession::weekdayUntil),
             versionButton,
-            serverButton), DoneButton.of(this)));
+            serverButton)));
         root.child(page);
         rebuild();
     }

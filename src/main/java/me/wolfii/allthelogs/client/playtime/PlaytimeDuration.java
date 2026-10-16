@@ -1,12 +1,20 @@
 package me.wolfii.allthelogs.client.playtime;
 
 /**
- * Compact durations for the playtime total, axis, and hover card.
+ * Compact durations for the playtime total, legend, axis, and hover card.
  */
 public final class PlaytimeDuration {
+    /** From this many days on, {@link #summary} leaves out the hours and minutes. */
+    static final int SUMMARY_DAYS_ONLY_FROM = 5;
+    private static final long DAY_MILLIS = 86_400_000L;
+
     private PlaytimeDuration() {
     }
 
+    /**
+     * Full duration in days, hours, and minutes, or seconds below a minute. Used where one value is looked at
+     * closely, such as the hover card.
+     */
     public static String format(long millis) {
         if (millis <= 0) return "0s";
         long seconds = millis / 1000;
@@ -21,6 +29,16 @@ public final class PlaytimeDuration {
         if (days == 0 && hours == 0 && (minutes == 0 || secs > 0)) append(text, secs, "s");
         if (text.isEmpty()) append(text, 0, "s");
         return text.toString();
+    }
+
+    /**
+     * Duration for overviews such as the total and the legend: {@link #format} below
+     * {@link #SUMMARY_DAYS_ONLY_FROM} days, and from there only the days, rounded, since the hours no longer
+     * matter.
+     */
+    public static String summary(long millis) {
+        if (millis < SUMMARY_DAYS_ONLY_FROM * DAY_MILLIS) return format(millis);
+        return Math.round((double) millis / DAY_MILLIS) + "d";
     }
 
     /**

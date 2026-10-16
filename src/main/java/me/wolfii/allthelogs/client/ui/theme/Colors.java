@@ -45,6 +45,8 @@ public final class Colors {
     public static final int SELECTION = 0x663A6EA5;
     public static final int STATUS_CHIP = 0xE0181818;
     public static final int HOVER_CHIP = 0xFb1C1C1C;
+    /** Playtime chart hover card, slightly see-through so the bars under it stay visible. */
+    public static final int CHART_HOVER_CHIP = 0xEB1C1C1C;
     /**
      * Rule drawn between sessions and where context runs out.
      */

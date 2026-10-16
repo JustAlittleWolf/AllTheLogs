@@ -86,7 +86,7 @@ public final class PlaytimeLegendWidget extends BaseUIComponent implements AutoC
                 boolean rowHovered = pointerInside && mouseY >= rowY && mouseY < rowY + ROW;
                 if (rowHovered) hovered = entry.series();
                 if (entry.series() == active) graphics.fill(x, rowY, right, rowY + ROW, HIGHLIGHT_ROW);
-                String duration = PlaytimeDuration.format(entry.millis());
+                String duration = PlaytimeDuration.summary(entry.millis());
                 int durationWidth = font.width(duration);
                 int nameX = x + SWATCH + 4;
                 String fullName = item.label(unknown);
