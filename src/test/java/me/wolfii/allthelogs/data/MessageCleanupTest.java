@@ -20,7 +20,6 @@ import java.util.regex.Pattern;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -51,15 +50,20 @@ class MessageCleanupTest {
     @Test
     void previewCountsMatchesAndShowsOldestNewestAndSample() throws IOException {
         importedStore(LogStore.openInMemory());
-        CleanupPreview preview = store.previewCleanup(ChatQuery.all().withSubstring("spam"), 5);
-        assertEquals(2, preview.matches());
-        assertEquals("spam [x3]", preview.first().message());
-        assertEquals("spam [x12]", preview.last().message());
-        assertEquals(2, preview.sample().size());
+        CleanupPreview preview = store.previewCleanup(ChatQuery.all(), 2, 5);
+        assertEquals(5, preview.matches());
+        assertEquals(List.of("keep me", "spam [x3]"), preview.oldest().stream().map(ChatEntry::message).toList());
+        assertEquals(List.of("[x2]", "hello"), preview.newest().stream().map(ChatEntry::message).toList());
+        assertEquals(List.of("spam [x12]"), preview.sample().stream().map(ChatEntry::message).toList());
 
-        CleanupPreview none = store.previewCleanup(ChatQuery.all().withSubstring("absent"), 5);
+        CleanupPreview few = store.previewCleanup(ChatQuery.all().withSubstring("spam"), 3, 5);
+        assertEquals(List.of("spam [x3]", "spam [x12]"), few.oldest().stream().map(ChatEntry::message).toList());
+        assertTrue(few.newest().isEmpty());
+        assertTrue(few.sample().isEmpty());
+
+        CleanupPreview none = store.previewCleanup(ChatQuery.all().withSubstring("absent"), 3, 5);
         assertEquals(0, none.matches());
-        assertNull(none.first());
+        assertTrue(none.oldest().isEmpty());
     }
 
     @Test

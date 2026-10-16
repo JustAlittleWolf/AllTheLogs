@@ -29,13 +29,13 @@ import java.util.function.IntSupplier;
 
 /**
  * Menu on the messages toolbar. Hovering or clicking the hamburger opens Playtime, Import, and Advanced
- * above it, top to bottom, with a database info row under those actions. The row is plain text, not a
- * button, and hovering it shows the database summary.
- * A click keeps the menu open. Advanced opens Export, Clean up, and Scripts to the side; Export opens the
- * export scope beside that, and the chosen scope opens the file format. A row whose side menu is open stays
- * highlighted.
+ * above it, top to bottom. A click keeps the menu open. Advanced opens Export, DB Cleanup, Scripts, and
+ * Optimize database to the side, with a database info row under them. The row is plain text, not a button,
+ * and hovering it shows the database summary. Export opens the export scope beside that, and the chosen
+ * scope opens the file format. A row whose side menu is open stays highlighted.
  * <p>
- * Side menus grow upward from their row, so a menu at the bottom of the screen stays on it. Every menu stays
+ * Advanced grows upward from its row, so it stays on screen at the bottom. The export menus are centered on
+ * the row they open from, moved only as far as the screen edge needs. Every menu stays
  * open for {@link #CLOSE_DELAY_MS} after the pointer leaves it, so it can be reached again, unless the
  * pointer moves onto another row of the menu it came from. Dragging the timeline scrollbar does not count
  * as a hover, including the moment that drag is released on the button.
@@ -59,6 +59,7 @@ final class BrowserToolsMenu {
     private final Runnable openImport;
     private final Runnable openPlaytime;
     private final Runnable openCleanup;
+    private final Runnable optimize;
     private final BiConsumer<Scope, MessageExport.Format> export;
 
     private ButtonComponent anchor;
@@ -87,7 +88,7 @@ final class BrowserToolsMenu {
     BrowserToolsMenu(StackLayout overlays, IntSupplier screenWidth, IntSupplier screenHeight,
                      BooleanSupplier hasSelection, BooleanSupplier suppressed, Runnable onOpened,
                      Runnable openScripts, Runnable openImport, Runnable openPlaytime, Runnable openCleanup,
-                     BiConsumer<Scope, MessageExport.Format> export) {
+                     Runnable optimize, BiConsumer<Scope, MessageExport.Format> export) {
         this.overlays = overlays;
         this.screenWidth = screenWidth;
         this.screenHeight = screenHeight;
@@ -98,6 +99,7 @@ final class BrowserToolsMenu {
         this.openImport = openImport;
         this.openPlaytime = openPlaytime;
         this.openCleanup = openCleanup;
+        this.optimize = optimize;
         this.export = export;
     }
 
@@ -146,7 +148,6 @@ final class BrowserToolsMenu {
         closeAdvanced();
         remove(actions);
         actions = null;
-        databaseRow = null;
         advancedButton = null;
         placedActionsX = Integer.MIN_VALUE;
         placedActionsY = Integer.MIN_VALUE;
@@ -266,16 +267,12 @@ final class BrowserToolsMenu {
             placeActions();
             return;
         }
-        int width = labelWidth("allthelogs.menu.playtime", "allthelogs.menu.import", "allthelogs.menu.advanced",
-            "allthelogs.meta.marker");
+        int width = labelWidth("allthelogs.menu.playtime", "allthelogs.menu.import", "allthelogs.menu.advanced");
         FlowLayout menu = panel(width);
         menu.child(action(Component.translatable("allthelogs.menu.playtime"), openPlaytime));
         menu.child(action(Component.translatable("allthelogs.menu.import"), openImport));
         advancedButton = action(Component.translatable("allthelogs.menu.advanced"), this::ensureAdvanced);
         menu.child(advancedButton);
-        databaseRow = infoRow(Component.translatable("allthelogs.meta.marker"));
-        databaseRow.tooltip(databaseTooltip);
-        menu.child(databaseRow);
         actions = menu;
         overlays.child(menu);
         placeActions();
@@ -286,12 +283,17 @@ final class BrowserToolsMenu {
             place(advancedMenu, advancedButton);
             return;
         }
-        int width = labelWidth("allthelogs.menu.export", "allthelogs.menu.cleanup", "allthelogs.menu.scripts");
+        int width = labelWidth("allthelogs.menu.export", "allthelogs.menu.cleanup", "allthelogs.menu.scripts",
+            "allthelogs.menu.optimize", "allthelogs.meta.marker");
         FlowLayout menu = panel(width);
         exportButton = action(Component.translatable("allthelogs.menu.export"), this::ensureScope);
         menu.child(exportButton);
         menu.child(action(Component.translatable("allthelogs.menu.cleanup"), openCleanup));
         menu.child(action(Component.translatable("allthelogs.menu.scripts"), openScripts));
+        menu.child(action(Component.translatable("allthelogs.menu.optimize"), optimize));
+        databaseRow = infoRow(Component.translatable("allthelogs.meta.marker"));
+        databaseRow.tooltip(databaseTooltip);
+        menu.child(databaseRow);
         advancedMenu = menu;
         overlays.child(menu);
         place(advancedMenu, advancedButton);
@@ -301,7 +303,7 @@ final class BrowserToolsMenu {
     private void ensureScope() {
         boolean includeSelection = hasSelection.getAsBoolean();
         if (scopeMenu != null && scopeIncludesSelection == includeSelection) {
-            place(scopeMenu, exportButton);
+            placeCentered(scopeMenu, exportButton);
             return;
         }
         closeScope();
@@ -321,13 +323,13 @@ final class BrowserToolsMenu {
         menu.child(queryButton);
         scopeMenu = menu;
         overlays.child(menu);
-        place(scopeMenu, exportButton);
+        placeCentered(scopeMenu, exportButton);
         markOpen(exportButton, true);
     }
 
     private void ensureFormat(Scope scope) {
         if (formatMenu != null && formatScope == scope) {
-            place(formatMenu, scopeButton(formatScope));
+            placeCentered(formatMenu, scopeButton(formatScope));
             markSelectedScope();
             return;
         }
@@ -340,7 +342,7 @@ final class BrowserToolsMenu {
         menu.child(action(Component.translatable("allthelogs.export.csv"), () -> export.accept(scope, MessageExport.Format.CSV)));
         formatMenu = menu;
         overlays.child(menu);
-        place(formatMenu, scopeButton(formatScope));
+        placeCentered(formatMenu, scopeButton(formatScope));
         markSelectedScope();
     }
 
@@ -349,6 +351,7 @@ final class BrowserToolsMenu {
         remove(advancedMenu);
         advancedMenu = null;
         exportButton = null;
+        databaseRow = null;
         advancedCloseAt = Long.MAX_VALUE;
         markOpen(advancedButton, false);
     }
@@ -408,8 +411,16 @@ final class BrowserToolsMenu {
     }
 
     private void place(FlowLayout menu, UIComponent row) {
+        place(menu, row, false);
+    }
+
+    private void placeCentered(FlowLayout menu, UIComponent row) {
+        place(menu, row, true);
+    }
+
+    private void place(FlowLayout menu, UIComponent row, boolean centered) {
         if (menu == null || row == null) return;
-        int[] at = beside(menu, row);
+        int[] at = beside(menu, row, centered);
         if (at == null) return;
         Positioning current = menu.positioning().get();
         if (current.type == Positioning.Type.ABSOLUTE && current.x == at[0] && current.y == at[1]) return;
@@ -417,7 +428,7 @@ final class BrowserToolsMenu {
     }
 
     /**
-     * Tooltip for the database info row at the bottom of the menu. Safe to call before the menu is open.
+     * Tooltip for the database info row at the bottom of Advanced. Safe to call before the menu is open.
      */
     void setDatabaseInfo(List<Component> lines) {
         databaseTooltip = lines == null || lines.isEmpty()
@@ -429,13 +440,15 @@ final class BrowserToolsMenu {
     /**
      * Prefers the left side of {@code row} so a menu on the right edge stays on screen.
      */
-    private int[] beside(FlowLayout menu, UIComponent row) {
+    private int[] beside(FlowLayout menu, UIComponent row, boolean centered) {
         if (menu.width() <= 0 || menu.height() <= 0) return null;
         int left = row.x() - menu.width() - GAP;
         int right = row.x() + row.width() + GAP;
         int x = left >= 4 ? left : right;
         if (x + menu.width() > screenWidth.getAsInt() - 4) x = Math.max(4, left);
-        int y = submenuTop(row.y() + row.height(), menu.padding().get().bottom(), menu.height(), screenHeight.getAsInt());
+        int y = centered
+            ? centeredTop(row.y() + row.height() / 2, menu.height(), screenHeight.getAsInt())
+            : submenuTop(row.y() + row.height(), menu.padding().get().bottom(), menu.height(), screenHeight.getAsInt());
         return new int[]{x, y};
     }
 
@@ -450,6 +463,16 @@ final class BrowserToolsMenu {
         int limit = screenHeight - 4;
         if (y + menuHeight > limit) y = Math.max(4, limit - menuHeight);
         return y;
+    }
+
+    /**
+     * Top of a side menu centered on the row it opened from, at {@code rowCenter}, kept on screen.
+     */
+    static int centeredTop(int rowCenter, int menuHeight, int screenHeight) {
+        int y = rowCenter - menuHeight / 2;
+        int limit = screenHeight - 4;
+        if (y + menuHeight > limit) y = limit - menuHeight;
+        return Math.max(4, y);
     }
 
     private ButtonComponent scopeButton(Scope scope) {

@@ -151,9 +151,10 @@ public final class LogStoreWorker implements AutoCloseable {
         return submit(() -> requireStore().countMatches(copy));
     }
 
-    public CompletableFuture<CleanupPreview> previewCleanup(me.wolfii.allthelogs.api.ChatQuery query, int sampleSize) {
+    public CompletableFuture<CleanupPreview> previewCleanup(me.wolfii.allthelogs.api.ChatQuery query, int edgeSize,
+                                                            int sampleSize) {
         var copy = Objects.requireNonNull(query, "query");
-        return submit(() -> requireStore().previewCleanup(copy, sampleSize));
+        return submit(() -> requireStore().previewCleanup(copy, edgeSize, sampleSize));
     }
 
     /**
