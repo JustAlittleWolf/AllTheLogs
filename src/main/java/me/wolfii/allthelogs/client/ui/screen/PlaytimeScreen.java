@@ -3,20 +3,11 @@ package me.wolfii.allthelogs.client.ui.screen;
 import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.DropdownComponent;
-import io.wispforest.owo.ui.component.LabelComponent;
-import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
-import io.wispforest.owo.ui.container.ScrollContainer;
 import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
-import io.wispforest.owo.ui.core.HorizontalAlignment;
-import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
-import io.wispforest.owo.ui.core.Sizing;
-import io.wispforest.owo.ui.core.Surface;
-import io.wispforest.owo.ui.core.VerticalAlignment;
 import me.wolfii.allthelogs.client.config.BrowserSession;
-import me.wolfii.allthelogs.client.playtime.PlaytimeBreakdown;
 import me.wolfii.allthelogs.client.playtime.PlaytimeChartModel;
 import me.wolfii.allthelogs.client.playtime.PlaytimeGrain;
 import me.wolfii.allthelogs.client.playtime.PlaytimeMessageFilter;
@@ -25,9 +16,9 @@ import me.wolfii.allthelogs.client.playtime.PlaytimeSession;
 import me.wolfii.allthelogs.client.playtime.PlaytimeStyle;
 import me.wolfii.allthelogs.client.playtime.PlaytimeWindow;
 import me.wolfii.allthelogs.client.search.SearchFilter;
-import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
-import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
 import me.wolfii.allthelogs.client.ui.widget.PlaytimeChartWidget;
+import me.wolfii.allthelogs.client.ui.widget.PlaytimeLegendWidget;
+import me.wolfii.allthelogs.client.ui.widget.SeriesHighlight;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
@@ -36,6 +27,8 @@ import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -43,12 +36,6 @@ import java.util.function.Consumer;
  * Full playtime history. The hamburger menu opens this screen. Weekdays are a separate view reached from here.
  */
 public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
-    private static final PlaytimeGrain[] GRAINS = {
-        PlaytimeGrain.AUTO, PlaytimeGrain.DAYS, PlaytimeGrain.WEEKS, PlaytimeGrain.MONTHS
-    };
-    private static final PlaytimeBreakdown[] GROUPS = {
-        PlaytimeBreakdown.VERSION, PlaytimeBreakdown.SERVER, PlaytimeBreakdown.COMBINED
-    };
     private static final PlaytimeStyle[] STYLES = {
         PlaytimeStyle.BARS, PlaytimeStyle.CUMULATIVE, PlaytimeStyle.PERCENT
     };
@@ -56,9 +43,9 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
     private final Screen parent;
     private final Consumer<SearchFilter> onFilterMessages;
     private StackLayout overlays;
+    private final SeriesHighlight highlight = new SeriesHighlight();
     private PlaytimeChartWidget chartWidget;
-    private LabelComponent totalLabel;
-    private FlowLayout legend;
+    private PlaytimeLegendWidget legend;
     private ButtonComponent grainButton;
     private ButtonComponent breakdownButton;
     private ButtonComponent styleButton;
@@ -89,19 +76,7 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
     protected void build(StackLayout root) {
         this.overlays = root;
         root.allowOverflow(true);
-        FlowLayout page = UIContainers.verticalFlow(Sizing.fill(), Sizing.fill());
-        page.gap(6).padding(Insets.of(8));
-        page.surface(Surface.blur(5, 10).and(PanelSurfaces.overlay()));
-        page.horizontalAlignment(HorizontalAlignment.LEFT);
-        page.verticalAlignment(VerticalAlignment.TOP);
-
-        FlowLayout header = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
-        header.gap(8).verticalAlignment(VerticalAlignment.CENTER);
-        totalLabel = UIComponents.label(Component.translatable("allthelogs.playtime.loading"));
-        totalLabel.horizontalSizing(Sizing.expand());
-        header.child(totalLabel);
-        header.child(PlaytimeScreenSupport.button("allthelogs.playtime.weekdays", pressed -> openWeekdays()));
-        page.child(header);
+        FlowLayout page = PlaytimeScreenSupport.page();
 
         grainMenu = new OptionMenu(overlays, () -> this.width, () -> this.height);
         breakdownMenu = new OptionMenu(overlays, () -> this.width, () -> this.height);
@@ -109,21 +84,16 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         versionMenu = new ChecklistMenu(overlays, () -> this.width, () -> this.height);
         serverMenu = new ChecklistMenu(overlays, () -> this.width, () -> this.height);
 
-        FlowLayout controls = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
-        controls.gap(4).verticalAlignment(VerticalAlignment.CENTER);
-        grainButton = PlaytimeScreenSupport.button(grainLabel(), pressed -> openGrain());
-        breakdownButton = PlaytimeScreenSupport.button(breakdownLabel(), pressed -> openBreakdown());
-        styleButton = PlaytimeScreenSupport.button(styleLabel(), pressed -> openStyle());
-        versionButton = PlaytimeScreenSupport.button(PlaytimeScreenSupport.versionLabel(), pressed -> openVersions());
-        serverButton = PlaytimeScreenSupport.button(PlaytimeScreenSupport.serverLabel(), pressed -> openServers());
-        controls.child(grainButton);
-        controls.child(breakdownButton);
-        controls.child(styleButton);
-        controls.child(versionButton);
-        controls.child(serverButton);
-        page.child(controls);
+        grainButton = PlaytimeScreenSupport.optionButton(grainLabel(PlaytimeSession.grain()),
+            grains().stream().map(PlaytimeScreen::grainLabel).toList(), pressed -> openGrain());
+        styleButton = PlaytimeScreenSupport.optionButton(styleLabel(PlaytimeSession.style()),
+            Arrays.stream(STYLES).map(PlaytimeScreen::styleLabel).toList(), pressed -> openStyle());
+        breakdownButton = PlaytimeScreenSupport.optionButton(PlaytimeScreenSupport.groupLabel(PlaytimeSession.breakdown()),
+            PlaytimeScreenSupport.groupLabels(), pressed -> openBreakdown());
+        page.child(PlaytimeScreenSupport.optionsRow(List.of(grainButton, styleButton, breakdownButton),
+            PlaytimeScreenSupport.button("allthelogs.playtime.weekdays", pressed -> openWeekdays())));
 
-        chartWidget = new PlaytimeChartWidget();
+        chartWidget = new PlaytimeChartWidget(highlight);
         chartWidget.onZoom(this::zoom);
         chartWidget.onPan(this::pan);
         chartWidget.onReset(() -> {
@@ -132,13 +102,10 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         });
         chartWidget.onDismiss(this::closeContextMenu);
         chartWidget.onContext(this::openContextMenu);
-        page.child(chartWidget.verticalSizing(Sizing.expand()));
-
-        legend = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
-        legend.gap(10).verticalAlignment(VerticalAlignment.CENTER);
-        ScrollContainer<FlowLayout> legendScroll = UIContainers.horizontalScroll(Sizing.fill(), Sizing.fixed(18), legend);
-        legendScroll.scrollbar(OverflowScrollbar.vanillaFlat());
-        page.child(legendScroll);
+        legend = new PlaytimeLegendWidget(highlight);
+        versionButton = PlaytimeScreenSupport.filterButton(PlaytimeScreenSupport.versionLabel(), pressed -> openVersions());
+        serverButton = PlaytimeScreenSupport.filterButton(PlaytimeScreenSupport.serverLabel(), pressed -> openServers());
+        page.child(PlaytimeScreenSupport.body(chartWidget, legend, List.of(versionButton, serverButton)));
         root.child(page);
         rebuild();
     }
@@ -179,21 +146,21 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         chart = PlaytimeChartModel.build(PlaytimeSession.spans(), PlaytimeSession.filter(), PlaytimeSession.breakdown(),
             PlaytimeSession.style(), PlaytimeSession.grain(), PlaytimeSession.window());
         if (chartWidget != null) chartWidget.chart(chart);
-        if (legend != null) PlaytimeLegend.fill(legend, chart.series(), chart.legend());
+        if (legend != null) legend.entries(chart.series(), chart.legend());
         syncButtons();
         if (statusMessage == null) status(null);
     }
 
     private void status(@Nullable Component message) {
         statusMessage = message;
-        PlaytimeScreenSupport.showTotal(totalLabel, chartWidget == null ? null : chartWidget::placeholder,
+        PlaytimeScreenSupport.showTotal(legend, chartWidget == null ? null : chartWidget::placeholder,
             message, chart == null ? 0 : chart.totalMillis());
     }
 
     private void syncButtons() {
-        if (grainButton != null) grainButton.setMessage(grainLabel());
-        if (breakdownButton != null) breakdownButton.setMessage(breakdownLabel());
-        if (styleButton != null) styleButton.setMessage(styleLabel());
+        if (grainButton != null) grainButton.setMessage(grainLabel(PlaytimeSession.grain()));
+        if (breakdownButton != null) breakdownButton.setMessage(PlaytimeScreenSupport.groupLabel(PlaytimeSession.breakdown()));
+        if (styleButton != null) styleButton.setMessage(styleLabel(PlaytimeSession.style()));
         if (versionButton != null) versionButton.setMessage(PlaytimeScreenSupport.versionLabel());
         if (serverButton != null) serverButton.setMessage(PlaytimeScreenSupport.serverLabel());
     }
@@ -223,13 +190,9 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         boolean open = grainMenu.isOpen();
         closeMenus();
         if (open) return;
-        grainMenu.show(grainButton, List.of(
-            Component.translatable("allthelogs.playtime.grain.auto"),
-            Component.translatable("allthelogs.playtime.grain.days"),
-            Component.translatable("allthelogs.playtime.grain.weeks"),
-            Component.translatable("allthelogs.playtime.grain.months")
-        ), index -> {
-            PlaytimeSession.grain(GRAINS[index]);
+        List<PlaytimeGrain> grains = grains();
+        grainMenu.show(grainButton, grains.stream().map(PlaytimeScreen::grainName).toList(), index -> {
+            PlaytimeSession.grain(grains.get(index));
             rebuild();
         });
     }
@@ -238,12 +201,8 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         boolean open = breakdownMenu.isOpen();
         closeMenus();
         if (open) return;
-        breakdownMenu.show(breakdownButton, List.of(
-            Component.translatable("allthelogs.playtime.breakdown.version"),
-            Component.translatable("allthelogs.playtime.breakdown.server"),
-            Component.translatable("allthelogs.playtime.breakdown.combined")
-        ), index -> {
-            PlaytimeSession.breakdown(GROUPS[index]);
+        breakdownMenu.show(breakdownButton, PlaytimeScreenSupport.groupChoices(), index -> {
+            PlaytimeSession.breakdown(PlaytimeScreenSupport.GROUPS[index]);
             rebuild();
         });
     }
@@ -252,11 +211,7 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         boolean open = styleMenu.isOpen();
         closeMenus();
         if (open) return;
-        styleMenu.show(styleButton, List.of(
-            Component.translatable("allthelogs.playtime.style.bars"),
-            Component.translatable("allthelogs.playtime.style.cumulative"),
-            Component.translatable("allthelogs.playtime.style.percent")
-        ), index -> {
+        styleMenu.show(styleButton, Arrays.stream(STYLES).map(PlaytimeScreen::styleName).toList(), index -> {
             PlaytimeSession.style(STYLES[index]);
             rebuild();
         });
@@ -339,32 +294,41 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         if (serverMenu != null) serverMenu.close();
     }
 
-    private Component grainLabel() {
-        String key = switch (PlaytimeSession.grain()) {
+    /**
+     * Bar widths on offer. Years only appear when the history covers more than one calendar year.
+     */
+    private static List<PlaytimeGrain> grains() {
+        List<PlaytimeGrain> grains = new ArrayList<>(List.of(
+            PlaytimeGrain.AUTO, PlaytimeGrain.DAYS, PlaytimeGrain.WEEKS, PlaytimeGrain.MONTHS));
+        if (PlaytimeChartModel.spansSeveralYears(PlaytimeSession.spans()) || PlaytimeSession.grain() == PlaytimeGrain.YEARS) {
+            grains.add(PlaytimeGrain.YEARS);
+        }
+        return grains;
+    }
+
+    private static Component grainName(PlaytimeGrain grain) {
+        return Component.translatable(switch (grain) {
             case AUTO -> "allthelogs.playtime.grain.auto";
             case DAYS -> "allthelogs.playtime.grain.days";
             case WEEKS -> "allthelogs.playtime.grain.weeks";
             case MONTHS -> "allthelogs.playtime.grain.months";
-        };
-        return Component.translatable("allthelogs.playtime.grain", Component.translatable(key));
+            case YEARS -> "allthelogs.playtime.grain.years";
+        });
     }
 
-    private Component breakdownLabel() {
-        String key = switch (PlaytimeSession.breakdown()) {
-            case VERSION -> "allthelogs.playtime.breakdown.version";
-            case SERVER -> "allthelogs.playtime.breakdown.server";
-            case COMBINED -> "allthelogs.playtime.breakdown.combined";
-        };
-        return Component.translatable("allthelogs.playtime.breakdown", Component.translatable(key));
+    private static Component grainLabel(PlaytimeGrain grain) {
+        return Component.translatable("allthelogs.playtime.grain", grainName(grain));
     }
 
-    private Component styleLabel() {
-        String key = switch (PlaytimeSession.style()) {
+    private static Component styleName(PlaytimeStyle style) {
+        return Component.translatable(switch (style) {
             case BARS -> "allthelogs.playtime.style.bars";
             case CUMULATIVE -> "allthelogs.playtime.style.cumulative";
             case PERCENT -> "allthelogs.playtime.style.percent";
-        };
-        return Component.translatable("allthelogs.playtime.style", Component.translatable(key));
+        });
     }
 
+    private static Component styleLabel(PlaytimeStyle style) {
+        return Component.translatable("allthelogs.playtime.style", styleName(style));
+    }
 }

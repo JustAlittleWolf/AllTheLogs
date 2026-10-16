@@ -17,7 +17,7 @@ import java.util.function.IntConsumer;
 import java.util.function.IntSupplier;
 
 /**
- * Small choice list anchored under a button. Choosing an entry closes the list.
+ * Small choice list anchored under a button and exactly as wide. Choosing an entry closes the list.
  */
 final class OptionMenu {
     private final StackLayout overlays;
@@ -57,7 +57,7 @@ final class OptionMenu {
             button.horizontalSizing(Sizing.fill());
             items.child(button);
         }
-        int width = Math.max(120, anchor.width());
+        int width = anchor.width();
         int maxHeight = Math.max(48, Math.min(180, screenHeight.getAsInt() - anchor.y() - anchor.height() - 12));
         ScrollContainer<FlowLayout> scroll = UIContainers.verticalScroll(Sizing.fixed(width), Sizing.fixed(maxHeight), items);
         scroll.scrollbar(OverflowScrollbar.vanillaFlat());

@@ -11,25 +11,19 @@ import java.time.ZoneOffset;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Buckets filtered playtime into stacked columns. Stacking is oldest version first, then server name.
- * The legend keeps the ten series with the most playtime under the current filters.
+ * The legend lists every series, most playtime first.
  */
 public final class PlaytimeChartModel {
-    public static final int LEGEND_LIMIT = 10;
     public static final int PLOT_LEFT = 52;
     public static final int PLOT_TOP = 6;
     public static final int PLOT_RIGHT = 8;
     public static final int PLOT_BOTTOM = 18;
 
     private PlaytimeChartModel() {
-    }
-
-    public record HoverLine(String text, int color) {
     }
 
     public record Column(LocalDateTime start, LocalDateTime end, long[] millis, double[] display) {
@@ -49,7 +43,7 @@ public final class PlaytimeChartModel {
     }
 
     /**
-     * One legend chip: the series index and that series' playtime under the current filters.
+     * One legend row: the series index and that series' playtime under the current filters.
      */
     public record LegendEntry(int series, long millis) {
     }
@@ -75,55 +69,46 @@ public final class PlaytimeChartModel {
             return columns.isEmpty();
         }
 
-        public List<HoverLine> hover(int column, String unknownServer, String totalLabel) {
+        public List<PlaytimeHover.Line> hover(int column, String unknownServer, String totalLabel) {
             if (column < 0 || column >= columns.size()) return List.of();
             Column current = columns.get(column);
-            List<HoverLine> lines = new ArrayList<>();
-            lines.add(new HoverLine(spanLabel(current.start(), current.end(), grain), 0xFFA0A0A0));
-            for (int index = 0; index < series.size(); index++) {
-                long bucket = current.millis()[index];
-                double drawn = current.display()[index];
-                if (bucket <= 0 && drawn <= 0) continue;
-                PlaytimeSeries entry = series.get(index);
-                String text = switch (style) {
-                    case PERCENT -> entry.label(unknownServer) + "  " + percent(bucket, current.totalMillis())
-                        + "  " + PlaytimeDuration.format(bucket);
-                    case CUMULATIVE -> entry.label(unknownServer) + "  " + PlaytimeDuration.format(Math.round(drawn));
-                    case BARS -> entry.label(unknownServer) + "  " + PlaytimeDuration.format(bucket);
-                };
-                lines.add(new HoverLine(text, entry.color()));
-            }
-            long total = style == PlaytimeStyle.CUMULATIVE ? Math.round(sum(current.display())) : current.totalMillis();
-            if (lines.size() > 2) {
-                lines.add(new HoverLine(totalLabel + "  " + PlaytimeDuration.format(total), 0xFFE8E8E8));
-            } else if (lines.size() == 1) {
-                lines.add(new HoverLine(PlaytimeDuration.format(0), 0xFFE8E8E8));
-            }
-            return List.copyOf(lines);
+            boolean cumulative = style == PlaytimeStyle.CUMULATIVE;
+            long total = cumulative ? Math.round(sum(current.display())) : current.totalMillis();
+            double[] weights = cumulative ? current.display() : PlaytimeHover.weights(current.millis());
+            return PlaytimeHover.lines(spanLabel(current.start(), current.end(), grain),
+                totalLabel + "  " + PlaytimeDuration.format(total), series, weights, index -> switch (style) {
+                    case PERCENT -> percent(current.millis()[index], current.totalMillis())
+                        + "  " + PlaytimeDuration.format(current.millis()[index]);
+                    case CUMULATIVE -> PlaytimeDuration.format(Math.round(current.display()[index]));
+                    case BARS -> PlaytimeDuration.format(current.millis()[index]);
+                }, unknownServer);
         }
 
-        public Hit hit(double localX, double localY, Plot plot) {
-            if (isEmpty() || plot.width() <= 0 || plot.height() <= 0) return null;
-            if (localX < plot.x() || localX >= plot.x() + plot.width()) return null;
+        /**
+         * Section of {@code column} at {@code localY}, or null outside the plot height.
+         */
+        public Hit hit(int column, double localY, Plot plot) {
+            if (column < 0 || column >= columns.size() || plot.height() <= 0) return null;
             if (localY < plot.y() || localY >= plot.y() + plot.height()) return null;
-            int column = columnAt((localX - plot.x()) / plot.width());
-            if (column < 0) return null;
             return new Hit(column, seriesAt(columns.get(column).display(), axisMax, localY, plot.y(), plot.height()));
         }
 
-        private int columnAt(double fraction) {
+        /**
+         * Position of the screen pixel {@code pixelX} inside the view, from 0 at {@link #viewStart} to 1 at
+         * {@link #viewEnd}. Zooming keeps the time under the pointer fixed with it.
+         */
+        public double fractionAt(BarLayout layout, double pixelX) {
             long start = epoch(viewStart);
             long end = epoch(viewEnd);
-            if (end <= start) return columns.isEmpty() ? -1 : 0;
-            long at = start + Math.round(Math.clamp(fraction, 0d, 1d) * (end - start));
-            if (at >= end) at = end - 1;
-            for (int index = 0; index < columns.size(); index++) {
-                Column column = columns.get(index);
-                long bucketStart = epoch(column.start());
-                long bucketEnd = epoch(column.end());
-                if (at >= bucketStart && at < bucketEnd) return index;
-            }
-            return -1;
+            if (end <= start || layout.count() == 0) return 0.5;
+            double clampedX = Math.clamp(pixelX, layout.left(), layout.right() - 0.001);
+            int column = layout.columnAt(clampedX);
+            if (column < 0 || column >= columns.size()) return 0.5;
+            Column bucket = columns.get(column);
+            double within = (clampedX - layout.barLeft(column)) / layout.barWidth();
+            long bucketStart = epoch(bucket.start());
+            double at = bucketStart + within * (epoch(bucket.end()) - bucketStart);
+            return Math.clamp((at - start) / (end - start), 0d, 1d);
         }
     }
 
@@ -158,14 +143,14 @@ public final class PlaytimeChartModel {
         PlaytimeWindow domain = new PlaytimeWindow(domainStart, domainEnd);
         PlaytimeWindow visible = PlaytimeWindow.clamp(domain, view);
         PlaytimeGrain resolved = PlaytimeGrain.resolve(grain, visible.start(), visible.end());
-        List<PlaytimeSeries> series = series(kept, group);
-        Map<PlaytimeSeries, Integer> index = new LinkedHashMap<>();
-        for (int i = 0; i < series.size(); i++) index.put(series.get(i), i);
+        if (resolved == PlaytimeGrain.YEARS && !severalYears(domainStart, domainEnd)) resolved = PlaytimeGrain.MONTHS;
+        PlaytimeSeries.Index index = PlaytimeSeries.collect(kept, spans, group);
+        List<PlaytimeSeries> series = index.series();
         List<LocalDateTime> buckets = buckets(domainStart, visible.end(), resolved);
         long[][] grid = new long[buckets.size()][series.size()];
         long[] seriesTotals = new long[series.size()];
         for (PlaytimeSpan span : kept) {
-            int seriesIndex = index.get(PlaytimeSeries.of(group, span.version(), span.server()));
+            int seriesIndex = index.of(span);
             seriesTotals[seriesIndex] += span.millis();
             addSpan(grid, buckets, resolved, span, seriesIndex);
         }
@@ -205,17 +190,36 @@ public final class PlaytimeChartModel {
         }
         if (axisMax <= 0) axisMax = 1;
         return new Result(total, domainStart, domainEnd, visible.start(), visible.end(), resolved, drawn, group,
-            List.copyOf(series), legend(seriesTotals), List.copyOf(columns), axisMax);
+            series, legend(seriesTotals), List.copyOf(columns), axisMax);
     }
 
     public static String spanLabel(LocalDateTime start, LocalDateTime end, PlaytimeGrain grain) {
         LocalDate first = start.toLocalDate();
         LocalDate last = end.minusNanos(1).toLocalDate();
+        if (grain == PlaytimeGrain.YEARS && first.getYear() == last.getYear()) return Integer.toString(first.getYear());
         if (grain == PlaytimeGrain.MONTHS && first.getYear() == last.getYear() && first.getMonth() == last.getMonth()) {
             return String.format("%d-%02d", first.getYear(), first.getMonthValue());
         }
         if (first.equals(last)) return first.toString();
         return first + " - " + last;
+    }
+
+    /**
+     * Whether {@code spans} cover more than one calendar year, so a yearly timeline has more than one bar.
+     */
+    public static boolean spansSeveralYears(List<PlaytimeSpan> spans) {
+        if (spans == null || spans.isEmpty()) return false;
+        LocalDateTime first = spans.getFirst().start();
+        LocalDateTime last = spans.getFirst().end();
+        for (PlaytimeSpan span : spans) {
+            if (span.start().isBefore(first)) first = span.start();
+            if (span.end().isAfter(last)) last = span.end();
+        }
+        return severalYears(first, last);
+    }
+
+    private static boolean severalYears(LocalDateTime start, LocalDateTime end) {
+        return start.getYear() != end.minusNanos(1).getYear();
     }
 
     public static List<String> versionsIn(List<PlaytimeSpan> spans) {
@@ -235,11 +239,14 @@ public final class PlaytimeChartModel {
             if (!servers.contains(key)) servers.add(key);
         }
         servers.sort(Comparator.comparing((String server) -> server.equals(PlaytimeFilter.UNKNOWN_SERVER))
-            .thenComparing(String::compareToIgnoreCase));
+            .thenComparing(PlaytimeSeries::displayName, String.CASE_INSENSITIVE_ORDER));
         return List.copyOf(servers);
     }
 
-    private static int seriesAt(double[] display, double axisMax, double localY, int plotY, int plotHeight) {
+    /**
+     * Series whose stacked section is at {@code localY}, or -1 above the stack.
+     */
+    public static int seriesAt(double[] display, double axisMax, double localY, int plotY, int plotHeight) {
         if (axisMax <= 0 || plotHeight <= 0) return -1;
         double stack = 0;
         for (double value : display) stack += Math.max(0, value);
@@ -305,6 +312,7 @@ public final class PlaytimeChartModel {
         return switch (grain) {
             case WEEKS -> date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).atStartOfDay();
             case MONTHS -> date.withDayOfMonth(1).atStartOfDay();
+            case YEARS -> date.withDayOfYear(1).atStartOfDay();
             case DAYS, AUTO -> date.atStartOfDay();
         };
     }
@@ -313,6 +321,7 @@ public final class PlaytimeChartModel {
         return switch (grain) {
             case WEEKS -> bucketStart.plusWeeks(1);
             case MONTHS -> bucketStart.plusMonths(1);
+            case YEARS -> bucketStart.plusYears(1);
             case DAYS, AUTO -> bucketStart.plusDays(1);
         };
     }
@@ -329,16 +338,6 @@ public final class PlaytimeChartModel {
         return Duration.between(from, to).toMillis();
     }
 
-    private static List<PlaytimeSeries> series(List<PlaytimeSpan> spans, PlaytimeBreakdown breakdown) {
-        Map<PlaytimeSeries, Boolean> found = new LinkedHashMap<>();
-        for (PlaytimeSpan span : spans) {
-            found.put(PlaytimeSeries.of(breakdown, span.version(), span.server()), Boolean.TRUE);
-        }
-        List<PlaytimeSeries> series = new ArrayList<>(found.keySet());
-        series.sort(PlaytimeSeries.STACK_ORDER);
-        return series;
-    }
-
     static List<LegendEntry> legend(long[] totals) {
         List<Integer> order = new ArrayList<>();
         for (int index = 0; index < totals.length; index++) order.add(index);
@@ -346,12 +345,8 @@ public final class PlaytimeChartModel {
             int byTime = Long.compare(totals[right], totals[left]);
             return byTime != 0 ? byTime : Integer.compare(left, right);
         });
-        int limit = Math.min(order.size(), LEGEND_LIMIT);
-        List<LegendEntry> ranked = new ArrayList<>(limit);
-        for (int index = 0; index < limit; index++) {
-            int series = order.get(index);
-            ranked.add(new LegendEntry(series, totals[series]));
-        }
+        List<LegendEntry> ranked = new ArrayList<>(order.size());
+        for (int series : order) ranked.add(new LegendEntry(series, totals[series]));
         return List.copyOf(ranked);
     }
 

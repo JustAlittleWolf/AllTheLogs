@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -33,14 +34,15 @@ class PlaytimeChartTest {
 
     @Test
     void autoGrainFollowsTheVisibleSpan() {
-        assertEquals(PlaytimeGrain.DAYS, PlaytimeGrain.resolve(PlaytimeGrain.AUTO, at(1, 0), at(1, 0).plusDays(62)));
-        assertEquals(PlaytimeGrain.WEEKS, PlaytimeGrain.resolve(PlaytimeGrain.AUTO, at(1, 0), at(1, 0).plusDays(63)));
-        assertEquals(PlaytimeGrain.MONTHS, PlaytimeGrain.resolve(PlaytimeGrain.AUTO, at(1, 0), at(1, 0).plusDays(731)));
+        assertEquals(PlaytimeGrain.DAYS, PlaytimeGrain.resolve(PlaytimeGrain.AUTO, at(1, 0), at(1, 0).plusDays(45)));
+        assertEquals(PlaytimeGrain.WEEKS, PlaytimeGrain.resolve(PlaytimeGrain.AUTO, at(1, 0), at(1, 0).plusDays(46)));
+        assertEquals(PlaytimeGrain.MONTHS, PlaytimeGrain.resolve(PlaytimeGrain.AUTO, at(1, 0), at(1, 0).plusDays(367)));
+        assertEquals(PlaytimeGrain.YEARS, PlaytimeGrain.resolve(PlaytimeGrain.AUTO, at(1, 0), at(1, 0).plusDays(3_661)));
         assertEquals(PlaytimeGrain.DAYS, PlaytimeGrain.resolve(PlaytimeGrain.DAYS, at(1, 0), at(1, 0).plusDays(800)));
     }
 
     @Test
-    void barsStackOldestVersionThenServerAndLegendKeepsTheTenLongest() {
+    void barsStackOldestVersionThenServerAndLegendListsEverySeriesLongestFirst() {
         List<PlaytimeSpan> spans = List.of(
             span(1, 1, "1.21", "b"),
             span(1, 3, "1.20.4", "a"),
@@ -64,7 +66,7 @@ class PlaytimeChartTest {
         }
         PlaytimeChartModel.Result legend = PlaytimeChartModel.build(many, PlaytimeFilter.all(),
             PlaytimeBreakdown.VERSION, PlaytimeStyle.BARS, PlaytimeGrain.DAYS, null);
-        assertEquals(10, legend.legend().size());
+        assertEquals(11, legend.legend().size());
         assertEquals("1.10", legend.series().get(legend.legend().getFirst().series()).version());
         assertEquals(11 * 60_000L, legend.legend().getFirst().millis());
     }
@@ -102,15 +104,75 @@ class PlaytimeChartTest {
     }
 
     @Test
-    void hoverListsTheBucketAndEveryCategoryInIt() {
+    void hoverPutsTheTotalFirstAndSortsCategoriesByPlaytime() {
         PlaytimeChartModel.Result chart = PlaytimeChartModel.build(
             List.of(span(1, 1, "1.20.4", "a"), span(1, 3, "1.21", "b")),
             PlaytimeFilter.all(), PlaytimeBreakdown.VERSION, PlaytimeStyle.BARS, PlaytimeGrain.DAYS, null);
-        List<String> lines = chart.hover(0, "Unknown", "Total").stream().map(PlaytimeChartModel.HoverLine::text).toList();
-        assertEquals("2024-01-01", lines.getFirst());
-        assertTrue(lines.contains("1.20.4  1h"));
-        assertTrue(lines.contains("1.21  3h"));
-        assertEquals("Total  4h", lines.getLast());
+        List<String> lines = chart.hover(0, "Unknown", "Total").stream().map(PlaytimeHover.Line::text).toList();
+        assertEquals(List.of("2024-01-01", "Total  4h", "", "1.21  3h", "1.20.4  1h"), lines);
+    }
+
+    @Test
+    void serverNamesLoseFormattingAndLongNamesAreCut() {
+        PlaytimeSeries series = PlaytimeSeries.of(PlaytimeBreakdown.SERVER, "1.21", "\u00a76Gold \u00a7lWorld");
+        assertEquals("Gold World", series.label("Unknown"));
+        String cut = PlaytimeSeries.of(PlaytimeBreakdown.SERVER, "1.21", "x".repeat(40)).shortLabel("Unknown");
+        assertEquals(PlaytimeSeries.MAX_LABEL_LENGTH, cut.length());
+        assertTrue(cut.endsWith("\u2026"));
+    }
+
+    @Test
+    void colorsFollowFirstAppearanceAndStayWhenFiltered() {
+        List<PlaytimeSpan> spans = List.of(span(1, 1, "1.20.4", "a"), span(2, 1, "1.21", "b"), span(3, 1, "1.21.1", null));
+        PlaytimeChartModel.Result all = PlaytimeChartModel.build(spans, PlaytimeFilter.all(),
+            PlaytimeBreakdown.VERSION, PlaytimeStyle.BARS, PlaytimeGrain.DAYS, null);
+        assertEquals(PlaytimeColors.ofRank(0), all.series().get(0).color());
+        assertEquals(PlaytimeColors.ofRank(1), all.series().get(1).color());
+        PlaytimeChartModel.Result only = PlaytimeChartModel.build(spans,
+            PlaytimeFilter.all().withVersions(Set.of("1.21")),
+            PlaytimeBreakdown.VERSION, PlaytimeStyle.BARS, PlaytimeGrain.DAYS, null);
+        assertEquals(PlaytimeColors.ofRank(1), only.series().getFirst().color());
+        for (int rank = 0; rank < 8; rank++) {
+            double gap = Math.abs(hue(PlaytimeColors.ofRank(rank)) - hue(PlaytimeColors.ofRank(rank + 1)));
+            assertTrue(Math.min(gap, 1 - gap) > 0.2, "neighboring ranks need distinct hues");
+        }
+
+        PlaytimeChartModel.Result servers = PlaytimeChartModel.build(spans, PlaytimeFilter.all(),
+            PlaytimeBreakdown.SERVER, PlaytimeStyle.BARS, PlaytimeGrain.DAYS, null);
+        assertEquals(PlaytimeColors.UNKNOWN, servers.series().getLast().color());
+    }
+
+    private static double hue(int argb) {
+        return java.awt.Color.RGBtoHSB((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF, null)[0];
+    }
+
+    @Test
+    void barLayoutGivesEveryBarTheSameWidthAndCentersTheRest() {
+        BarLayout layout = BarLayout.of(3, 10, 100);
+        assertEquals(33, layout.barWidth());
+        assertEquals(10, layout.left());
+        assertEquals(0, layout.columnAt(10));
+        assertEquals(2, layout.columnAt(10 + 98));
+        assertEquals(-1, layout.columnAt(10 + 99));
+        BarLayout crowded = BarLayout.of(500, 0, 100);
+        assertEquals(100, crowded.count());
+        assertEquals(1, crowded.barWidth());
+        assertEquals(200, crowded.first());
+    }
+
+    @Test
+    void yearsBucketByCalendarYear() {
+        List<PlaytimeSpan> spans = List.of(span(1, 1, "1.21", null),
+            new PlaytimeSpan(LocalDateTime.of(2025, 6, 1, 0, 0), LocalDateTime.of(2025, 6, 1, 2, 0), "1.21", null));
+        assertTrue(PlaytimeChartModel.spansSeveralYears(spans));
+        PlaytimeChartModel.Result years = PlaytimeChartModel.build(spans, PlaytimeFilter.all(),
+            PlaytimeBreakdown.VERSION, PlaytimeStyle.BARS, PlaytimeGrain.YEARS, null);
+        assertEquals(2, years.columns().size());
+        assertEquals("2024", PlaytimeChartModel.spanLabel(years.columns().getFirst().start(),
+            years.columns().getFirst().end(), PlaytimeGrain.YEARS));
+        PlaytimeChartModel.Result single = PlaytimeChartModel.build(List.of(span(1, 1, "1.21", null)),
+            PlaytimeFilter.all(), PlaytimeBreakdown.VERSION, PlaytimeStyle.BARS, PlaytimeGrain.YEARS, null);
+        assertEquals(PlaytimeGrain.MONTHS, single.grain());
     }
 
     @Test
@@ -119,11 +181,12 @@ class PlaytimeChartTest {
             List.of(span(1, 3, "1.20.4", null), span(1, 1, "1.21", null)),
             PlaytimeFilter.all(), PlaytimeBreakdown.VERSION, PlaytimeStyle.BARS, PlaytimeGrain.DAYS, null);
         PlaytimeChartModel.Plot plot = new PlaytimeChartModel.Plot(0, 0, 100, 100);
-        PlaytimeChartModel.Hit top = chart.hit(50, 1, plot);
-        PlaytimeChartModel.Hit bottom = chart.hit(50, 90, plot);
+        PlaytimeChartModel.Hit top = chart.hit(0, 1, plot);
+        PlaytimeChartModel.Hit bottom = chart.hit(0, 90, plot);
         assertEquals(1, top.series());
         assertEquals(0, bottom.series());
-        assertNull(chart.hit(50, -1, plot));
+        assertNull(chart.hit(0, -1, plot));
+        assertNull(chart.hit(1, 50, plot));
     }
 
     @Test
@@ -143,21 +206,35 @@ class PlaytimeChartTest {
     }
 
     @Test
-    void weekdaySplitsMidnightAndReportsMostAndLeast() {
+    void weekdaySplitsMidnightAndFillsTheHourHeatMap() {
         PlaytimeSpan overnight = new PlaytimeSpan(
             LocalDateTime.of(2024, 1, 7, 23, 0),
             LocalDateTime.of(2024, 1, 8, 1, 0),
             "1.20.4", "a");
         assertEquals(DayOfWeek.SUNDAY, overnight.start().getDayOfWeek());
         PlaytimeWeekday.Result days = PlaytimeWeekday.build(List.of(overnight, span(2, 3, "1.21", "b")),
-            PlaytimeFilter.all(), PlaytimeBreakdown.SERVER);
+            PlaytimeFilter.all(), PlaytimeBreakdown.SERVER, null, null);
         assertEquals(5 * 3_600_000L, days.totalMillis());
         assertEquals(3_600_000L, days.bars().get(DayOfWeek.SUNDAY.getValue() - 1).totalMillis());
         assertEquals(3_600_000L, days.bars().get(DayOfWeek.MONDAY.getValue() - 1).totalMillis());
         assertEquals(3 * 3_600_000L, days.bars().get(DayOfWeek.TUESDAY.getValue() - 1).totalMillis());
-        assertEquals(DayOfWeek.TUESDAY, days.bars().get(days.mostDay()).day());
-        assertEquals(DayOfWeek.WEDNESDAY, days.bars().get(days.leastDay()).day());
         assertEquals(List.of("a", "b"), days.series().stream().map(PlaytimeSeries::serverKey).toList());
+        assertEquals(3_600_000L, days.heatMillis(DayOfWeek.SUNDAY.getValue() - 1, 23));
+        assertEquals(3_600_000L, days.heatMillis(DayOfWeek.MONDAY.getValue() - 1, 0));
+        assertEquals(2 * 3_600_000L, days.heatMillis(PlaytimeWeekday.ALL_DAYS, 0));
+
+        List<String> hover = days.dayHover(DayOfWeek.TUESDAY.getValue() - 1, "Total", "Unknown").stream()
+            .map(PlaytimeHover.Line::text).toList();
+        assertEquals("Total  3h", hover.get(1));
+        assertEquals("", hover.get(2));
+        assertEquals("b  3h", hover.get(3));
+    }
+
+    @Test
+    void weekdayPeriodClipsSpans() {
+        PlaytimeWeekday.Result clipped = PlaytimeWeekday.build(List.of(span(1, 4, "1.21", null), span(3, 2, "1.21", null)),
+            PlaytimeFilter.all(), PlaytimeBreakdown.VERSION, at(1, 3), at(2, 0));
+        assertEquals(3_600_000L, clipped.totalMillis());
     }
 
     @Test

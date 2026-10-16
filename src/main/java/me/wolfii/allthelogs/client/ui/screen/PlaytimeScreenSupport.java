@@ -1,27 +1,90 @@
 package me.wolfii.allthelogs.client.ui.screen;
 
 import io.wispforest.owo.ui.component.ButtonComponent;
-import io.wispforest.owo.ui.component.LabelComponent;
 import io.wispforest.owo.ui.component.UIComponents;
+import io.wispforest.owo.ui.container.FlowLayout;
+import io.wispforest.owo.ui.container.ScrollContainer;
+import io.wispforest.owo.ui.container.UIContainers;
+import io.wispforest.owo.ui.core.HorizontalAlignment;
+import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.Sizing;
+import io.wispforest.owo.ui.core.Surface;
+import io.wispforest.owo.ui.core.UIComponent;
+import io.wispforest.owo.ui.core.VerticalAlignment;
 import me.wolfii.allthelogs.client.AllTheLogsClient;
+import me.wolfii.allthelogs.client.playtime.PlaytimeBreakdown;
 import me.wolfii.allthelogs.client.playtime.PlaytimeChartModel;
 import me.wolfii.allthelogs.client.playtime.PlaytimeDuration;
+import me.wolfii.allthelogs.client.playtime.PlaytimeFilter;
+import me.wolfii.allthelogs.client.playtime.PlaytimeSeries;
 import me.wolfii.allthelogs.client.playtime.PlaytimeSession;
+import me.wolfii.allthelogs.client.ui.text.TextFit;
+import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
+import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
+import me.wolfii.allthelogs.client.ui.widget.PlaytimeLegendWidget;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.IntSupplier;
 
 /**
- * Loading, filter menus, and button labels shared by the timeline and weekday playtime screens.
+ * Layout, loading, filter menus, and button labels shared by the timeline and weekday playtime screens.
+ * Display options sit in a row above the chart. The legend and the filters share a column on the right.
  */
 final class PlaytimeScreenSupport {
+    static final int SIDE_WIDTH = 150;
+    static final PlaytimeBreakdown[] GROUPS = {
+        PlaytimeBreakdown.VERSION, PlaytimeBreakdown.SERVER, PlaytimeBreakdown.COMBINED
+    };
+    /** Space a vanilla button keeps around its label. */
+    private static final int BUTTON_PADDING = 12;
+
     private PlaytimeScreenSupport() {
+    }
+
+    static FlowLayout page() {
+        FlowLayout page = UIContainers.verticalFlow(Sizing.fill(), Sizing.fill());
+        page.gap(6).padding(Insets.of(8));
+        page.surface(Surface.blur(5, 10).and(PanelSurfaces.overlay()));
+        page.horizontalAlignment(HorizontalAlignment.LEFT);
+        page.verticalAlignment(VerticalAlignment.TOP);
+        return page;
+    }
+
+    /**
+     * Row of display options with {@code end} pushed to the right edge.
+     */
+    static FlowLayout optionsRow(List<UIComponent> options, UIComponent end) {
+        FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
+        row.gap(4).verticalAlignment(VerticalAlignment.CENTER);
+        options.forEach(row::child);
+        row.child(UIContainers.horizontalFlow(Sizing.expand(), Sizing.fixed(0)));
+        row.child(end);
+        return row;
+    }
+
+    /**
+     * The chart beside a column with the scrolling legend on top and the filter controls at the bottom.
+     */
+    static FlowLayout body(UIComponent chart, PlaytimeLegendWidget legend, List<UIComponent> filters) {
+        ScrollContainer<PlaytimeLegendWidget> legendScroll = UIContainers.verticalScroll(Sizing.fill(), Sizing.expand(), legend);
+        legendScroll.scrollbar(OverflowScrollbar.vanillaFlat());
+        legendScroll.padding(Insets.right(legendScroll.scrollbarThiccness() + 1));
+        FlowLayout side = UIContainers.verticalFlow(Sizing.fixed(SIDE_WIDTH), Sizing.fill());
+        side.gap(3);
+        side.child(legendScroll);
+        filters.forEach(side::child);
+
+        FlowLayout body = UIContainers.horizontalFlow(Sizing.fill(), Sizing.expand());
+        body.gap(6);
+        body.child(chart.horizontalSizing(Sizing.expand()).verticalSizing(Sizing.fill()));
+        body.child(side);
+        return body;
     }
 
     static void load(Screen screen, int request, IntSupplier token, Consumer<Component> status, Runnable ready) {
@@ -44,30 +107,25 @@ final class PlaytimeScreenSupport {
         }));
     }
 
-    static void showTotal(@Nullable LabelComponent total, @Nullable Consumer<Component> placeholder,
-                           @Nullable Component message, long totalMillis) {
-        if (total == null) return;
-        if (message != null) {
-            total.text(message);
-            if (placeholder != null) placeholder.accept(message);
-            return;
+    /**
+     * Puts the total at the top of the legend, or a loading or error message in the chart.
+     */
+    static void showTotal(@Nullable PlaytimeLegendWidget legend, @Nullable Consumer<Component> placeholder,
+                          @Nullable Component message, long totalMillis) {
+        if (legend != null) {
+            legend.total(message != null ? Component.empty()
+                : Component.translatable("allthelogs.playtime.total", PlaytimeDuration.format(totalMillis)));
         }
-        total.text(Component.translatable("allthelogs.playtime.total", PlaytimeDuration.format(totalMillis)));
-        if (placeholder != null) placeholder.accept(Component.translatable("allthelogs.playtime.empty"));
+        if (placeholder != null) placeholder.accept(message != null ? message : Component.translatable("allthelogs.playtime.empty"));
     }
 
     static void openVersions(ChecklistMenu menu, ButtonComponent button, Runnable closeMenus, Runnable rebuild) {
         boolean open = menu.isOpen();
         closeMenus.run();
         if (open) return;
-        List<String> values = PlaytimeChartModel.versionsIn(PlaytimeSession.spans());
-        menu.show(button, values, PlaytimeSession.filter().versions(), PlaytimeLegend::named,
-            (value, selected) -> {
-                PlaytimeSession.filter(PlaytimeSession.filter().toggleVersion(value, selected, values));
-                rebuild.run();
-            }, () -> {
-                PlaytimeSession.filter(PlaytimeSession.filter().withVersions(null));
-                menu.close();
+        menu.show(button, PlaytimeChartModel.versionsIn(PlaytimeSession.spans()), () -> PlaytimeSession.filter().versions(),
+            PlaytimeScreenSupport::name, selected -> {
+                PlaytimeSession.filter(PlaytimeSession.filter().withVersions(selected));
                 rebuild.run();
             });
     }
@@ -76,35 +134,86 @@ final class PlaytimeScreenSupport {
         boolean open = menu.isOpen();
         closeMenus.run();
         if (open) return;
-        List<String> values = PlaytimeChartModel.serversIn(PlaytimeSession.spans());
-        menu.show(button, values, PlaytimeSession.filter().servers(), PlaytimeLegend::named,
-            (value, selected) -> {
-                PlaytimeSession.filter(PlaytimeSession.filter().toggleServer(value, selected, values));
-                rebuild.run();
-            }, () -> {
-                PlaytimeSession.filter(PlaytimeSession.filter().withServers(null));
-                menu.close();
+        menu.show(button, PlaytimeChartModel.serversIn(PlaytimeSession.spans()), () -> PlaytimeSession.filter().servers(),
+            PlaytimeScreenSupport::name, selected -> {
+                PlaytimeSession.filter(PlaytimeSession.filter().withServers(selected));
                 rebuild.run();
             });
     }
 
     static Component versionLabel() {
-        return PlaytimeLegend.selection("allthelogs.playtime.versions", PlaytimeSession.filter().versions(),
-            PlaytimeChartModel.versionsIn(PlaytimeSession.spans()));
+        return selection("allthelogs.playtime.versions", PlaytimeSession.filter().versions());
     }
 
     static Component serverLabel() {
-        return PlaytimeLegend.selection("allthelogs.playtime.servers", PlaytimeSession.filter().servers(),
-            PlaytimeChartModel.serversIn(PlaytimeSession.spans()));
+        return selection("allthelogs.playtime.servers", PlaytimeSession.filter().servers());
+    }
+
+    /**
+     * Full-width filter button for the side column.
+     */
+    static ButtonComponent filterButton(Component label, Consumer<ButtonComponent> onPress) {
+        ButtonComponent button = UIComponents.button(label, onPress::accept);
+        button.horizontalSizing(Sizing.fill());
+        return button;
+    }
+
+    /**
+     * Button as wide as the longest of {@code labels}, so it keeps its size whichever option is chosen.
+     */
+    static ButtonComponent optionButton(Component label, List<Component> labels, Consumer<ButtonComponent> onPress) {
+        int width = 0;
+        for (Component option : labels) width = Math.max(width, Minecraft.getInstance().font.width(option));
+        ButtonComponent button = UIComponents.button(label, onPress::accept);
+        button.horizontalSizing(Sizing.fixed(width + BUTTON_PADDING));
+        return button;
     }
 
     static ButtonComponent button(String key, Consumer<ButtonComponent> onPress) {
-        return button(Component.translatable(key), onPress);
-    }
-
-    static ButtonComponent button(Component label, Consumer<ButtonComponent> onPress) {
-        ButtonComponent button = UIComponents.button(label, onPress::accept);
+        ButtonComponent button = UIComponents.button(Component.translatable(key), onPress::accept);
         button.horizontalSizing(Sizing.content());
         return button;
+    }
+
+    static Component groupLabel(PlaytimeBreakdown breakdown) {
+        return Component.translatable("allthelogs.playtime.breakdown", Component.translatable(groupKey(breakdown)));
+    }
+
+    static List<Component> groupLabels() {
+        return List.of(groupLabel(PlaytimeBreakdown.VERSION), groupLabel(PlaytimeBreakdown.SERVER),
+            groupLabel(PlaytimeBreakdown.COMBINED));
+    }
+
+    static List<Component> groupChoices() {
+        return List.of(Component.translatable(groupKey(PlaytimeBreakdown.VERSION)),
+            Component.translatable(groupKey(PlaytimeBreakdown.SERVER)),
+            Component.translatable(groupKey(PlaytimeBreakdown.COMBINED)));
+    }
+
+    private static String groupKey(PlaytimeBreakdown breakdown) {
+        return switch (breakdown) {
+            case VERSION -> "allthelogs.playtime.breakdown.version";
+            case SERVER -> "allthelogs.playtime.breakdown.server";
+            case COMBINED -> "allthelogs.playtime.breakdown.combined";
+        };
+    }
+
+    private static String name(String value) {
+        if (PlaytimeFilter.UNKNOWN_SERVER.equals(value)) {
+            return Component.translatable("allthelogs.playtime.server.unknown").getString();
+        }
+        return PlaytimeSeries.displayName(value);
+    }
+
+    /**
+     * "Versions: All", "Versions: None", the single chosen name, or the count, cut to the side column.
+     */
+    private static Component selection(String key, Set<String> selected) {
+        Component value;
+        if (selected == null) value = Component.translatable("allthelogs.playtime.filter.all");
+        else if (selected.isEmpty()) value = Component.translatable("allthelogs.playtime.filter.none");
+        else if (selected.size() == 1) value = Component.literal(name(selected.iterator().next()));
+        else value = Component.literal(Integer.toString(selected.size()));
+        return Component.literal(TextFit.fit(Component.translatable(key, value).getString(), SIDE_WIDTH - BUTTON_PADDING));
     }
 }

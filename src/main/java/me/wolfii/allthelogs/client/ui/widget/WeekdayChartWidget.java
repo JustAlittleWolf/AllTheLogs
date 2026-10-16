@@ -5,25 +5,27 @@ import io.wispforest.owo.ui.core.OwoUIGraphics;
 import io.wispforest.owo.ui.core.Sizing;
 import me.wolfii.allthelogs.client.playtime.PlaytimeChartModel;
 import me.wolfii.allthelogs.client.playtime.PlaytimeDuration;
+import me.wolfii.allthelogs.client.playtime.PlaytimeHover;
 import me.wolfii.allthelogs.client.playtime.PlaytimeWeekday;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.Font;
 import net.minecraft.network.chat.Component;
 
+import java.util.List;
+
 /**
- * Seven stacked bars, Monday on the left through Sunday on the right. The most and least played days
- * are outlined.
+ * Weekday bars on the left and the hour-of-day heat map on the right. The bars run Monday to Sunday and
+ * are all the same width in screen pixels. Hovering a bar or a heat map cell shows its playtime. Both
+ * halves live in one component so the hover card can reach across them.
  */
 public final class WeekdayChartWidget extends BaseUIComponent {
-    private static final float AXIS_SCALE = 0.75f;
-    private static final int MOST = 0xFFFFFFFF;
-    private static final int LEAST = 0xFF8E8E8E;
+    private static final int SPLIT_GAP = 10;
 
+    private final SeriesHighlight highlight;
     private PlaytimeWeekday.Result chart;
     private Component placeholder = Component.empty();
 
-    public WeekdayChartWidget() {
+    public WeekdayChartWidget(SeriesHighlight highlight) {
+        this.highlight = highlight;
         this.sizing(Sizing.fill(), Sizing.fill());
     }
 
@@ -39,52 +41,61 @@ public final class WeekdayChartWidget extends BaseUIComponent {
     public void draw(OwoUIGraphics graphics, int mouseX, int mouseY, float partialTicks, float delta) {
         graphics.fill(x, y, x + width, y + height, Colors.LIST_BACKGROUND);
         if (chart == null || chart.isEmpty()) {
-            Font font = Minecraft.getInstance().font;
-            int textWidth = font.width(placeholder);
-            graphics.drawText(placeholder, x + Math.max(0, (width - textWidth) / 2),
-                y + Math.max(0, (height - font.lineHeight) / 2), 1f, Colors.MUTED);
+            highlight.chart(-1);
+            PlaytimePainter.centered(graphics, placeholder, x, y, width, height);
             return;
         }
-        PlaytimeChartModel.Plot plot = PlaytimeChartModel.plot(width, height);
+        boolean inside = isInBoundingBox(mouseX, mouseY);
+        int barsWidth = Math.max(140, width * 2 / 5);
+        List<PlaytimeHover.Line> card = drawBars(graphics, barsWidth, mouseX, mouseY, inside);
+        int heatX = x + barsWidth + SPLIT_GAP;
+        List<PlaytimeHover.Line> heatCard = HeatmapPainter.draw(graphics, chart, highlight.active(), heatX, y,
+            x + width - heatX, height, mouseX, mouseY, inside);
+        if (card == null) card = heatCard;
+        if (card != null) PlaytimePainter.hoverCard(graphics, card, mouseX, mouseY, x, y, width, height);
+    }
+
+    private List<PlaytimeHover.Line> drawBars(OwoUIGraphics graphics, int areaWidth, int mouseX, int mouseY,
+                                              boolean inside) {
+        PlaytimeChartModel.Plot plot = PlaytimeChartModel.plot(areaWidth, height);
         int plotX = x + plot.x();
         int plotY = y + plot.y();
         int plotBottom = plotY + plot.height();
-        graphics.fill(plotX, plotBottom, plotX + plot.width(), plotBottom + 1, Colors.TRACK_BORDER);
-        drawYAxis(graphics, plotX, plotY, plot.height());
-        int[] colors = new int[chart.series().size()];
-        for (int index = 0; index < colors.length; index++) colors[index] = chart.series().get(index).color();
-        double slot = plot.width() / 7.0;
-        Font font = Minecraft.getInstance().font;
-        for (int day = 0; day < 7; day++) {
-            int left = plotX + (int) Math.round(day * slot) + 3;
-            int right = plotX + (int) Math.round((day + 1) * slot) - 3;
-            if (right <= left) right = left + 1;
-            PlaytimeWeekday.Bar bar = chart.bars().get(day);
-            PlaytimeBars.stacked(graphics, left, right, plotBottom, plot.height(), chart.axisMax(), bar.display(), colors);
-            int stackTop = plotBottom - (int) Math.round(bar.totalMillis() / chart.axisMax() * plot.height());
-            if (day == chart.mostDay() && bar.totalMillis() > 0) {
-                PlaytimeBars.outline(graphics, left, stackTop, right, plotBottom, MOST);
-            } else if (day == chart.leastDay() && chart.mostDay() != chart.leastDay()) {
-                PlaytimeBars.outline(graphics, left, Math.min(stackTop, plotBottom - 1), right, plotBottom, LEAST);
-            }
-            String label = PlaytimeWeekday.shortDayName(day);
-            int textWidth = Math.round(font.width(label) * AXIS_SCALE);
-            int center = (left + right) / 2;
-            graphics.drawText(Component.literal(label), center - textWidth / 2, plotBottom + 3, AXIS_SCALE, Colors.TICK_LABEL);
-        }
-    }
+        int scale = PlaytimePainter.scale();
+        int slot = plot.width() * scale / 7;
+        int gap = Math.max(scale, slot / 5);
+        int bar = Math.max(1, slot - gap);
+        int left = plotX * scale + (plot.width() * scale - slot * 7 + gap) / 2;
 
-    private void drawYAxis(OwoUIGraphics graphics, int plotX, int plotY, int plotHeight) {
-        Font font = Minecraft.getInstance().font;
-        for (int step = 0; step <= 3; step++) {
-            double fraction = step / 3.0;
-            int lineY = plotY + plotHeight - (int) Math.round(fraction * plotHeight);
-            graphics.fill(plotX, lineY, plotX + PlaytimeChartModel.plot(width, height).width(), lineY + 1,
-                step == 0 ? Colors.TRACK_BORDER : Colors.SEPARATOR);
-            String label = PlaytimeDuration.format(Math.round(chart.axisMax() * fraction));
-            int textWidth = Math.round(font.width(label) * AXIS_SCALE);
-            graphics.drawText(Component.literal(label), plotX - 4 - textWidth, Math.max(y, lineY - font.lineHeight),
-                AXIS_SCALE, Colors.TICK_LABEL);
+        int hoveredDay = -1;
+        int hoveredSeries = -1;
+        if (inside && mouseY >= plotY && mouseY < plotBottom && slot > 0) {
+            int day = Math.floorDiv(mouseX * scale - left, slot);
+            if (day >= 0 && day < 7 && mouseX * scale - left - day * slot < bar) {
+                hoveredDay = day;
+                hoveredSeries = PlaytimeChartModel.seriesAt(chart.bars().get(day).display(), chart.axisMax(),
+                    mouseY - y, plot.y(), plot.height());
+            }
         }
+        highlight.chart(hoveredSeries);
+
+        PlaytimePainter.yAxis(graphics, y, plotX, plotY, plot.width(), plot.height(), chart.axisMax(),
+            value -> PlaytimeDuration.format(Math.round(value)));
+        int active = highlight.active();
+        PlaytimePainter.inPixels(graphics, scale, () -> {
+            for (int day = 0; day < 7; day++) {
+                int barLeft = left + day * slot;
+                PlaytimePainter.stacked(graphics, barLeft, barLeft + bar, plotBottom * scale, plot.height() * scale,
+                    chart.axisMax(), chart.bars().get(day).display(), chart.series(), active);
+            }
+        });
+        for (int day = 0; day < 7; day++) {
+            String label = PlaytimeWeekday.shortDayName(day);
+            int center = (left + day * slot + bar / 2) / scale;
+            PlaytimePainter.axisLabel(graphics, label, center - PlaytimePainter.axisWidth(label) / 2, plotBottom + 3);
+        }
+        if (hoveredDay < 0) return null;
+        return chart.dayHover(hoveredDay, Component.translatable("allthelogs.playtime.hover.total").getString(),
+            Component.translatable("allthelogs.playtime.server.unknown").getString());
     }
 }

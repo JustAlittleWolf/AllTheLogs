@@ -2,6 +2,7 @@ package me.wolfii.allthelogs.client.playtime;
 
 import me.wolfii.allthelogs.data.playtime.PlaytimeSpan;
 
+import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -50,22 +51,27 @@ public record PlaytimeFilter(Set<String> versions, Set<String> servers) {
      * Checks or unchecks one value. Selecting every known value returns to "all" (a null set).
      */
     public PlaytimeFilter toggleVersion(String version, boolean selected, List<String> all) {
-        return new PlaytimeFilter(toggle(versions, version, selected, all), servers);
+        return new PlaytimeFilter(select(versions, List.of(version), selected, all), servers);
     }
 
     public PlaytimeFilter toggleServer(String server, boolean selected, List<String> all) {
-        return new PlaytimeFilter(versions, toggle(servers, server, selected, all));
+        return new PlaytimeFilter(versions, select(servers, List.of(server), selected, all));
+    }
+
+    /**
+     * {@code current} with {@code values} checked or unchecked. Every value of {@code all} checked is
+     * "all" (null); none checked is an empty set.
+     */
+    public static Set<String> select(Set<String> current, Collection<String> values, boolean selected,
+                                     List<String> all) {
+        Set<String> next = current == null ? new LinkedHashSet<>(all) : new LinkedHashSet<>(current);
+        if (selected) next.addAll(values);
+        else next.removeAll(values);
+        if (all != null && next.containsAll(all)) return null;
+        return Set.copyOf(next);
     }
 
     private static Set<String> copy(Set<String> values) {
         return values == null ? null : Set.copyOf(values);
-    }
-
-    private static Set<String> toggle(Set<String> current, String value, boolean selected, List<String> all) {
-        Set<String> next = current == null ? new LinkedHashSet<>(all) : new LinkedHashSet<>(current);
-        if (selected) next.add(value);
-        else next.remove(value);
-        if (all != null && next.size() == all.size()) return null;
-        return Set.copyOf(next);
     }
 }
