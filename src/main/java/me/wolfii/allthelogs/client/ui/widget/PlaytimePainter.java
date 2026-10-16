@@ -140,11 +140,20 @@ final class PlaytimePainter {
 
     /**
      * Hover card kept inside the given bounds, below the pointer or above it when there is no room. Labels
-     * are left-aligned and values right-aligned in a second column. Lines without a value, like the period
+     * are left-aligned and values right-aligned in a second column; the first line, the period, is centered. Lines without a value, like the period
      * heading, only need to fit the card; they do not push the value column to the right.
      */
     static void hoverCard(OwoUIGraphics graphics, List<PlaytimeHover.Line> lines, int mouseX, int mouseY,
                           int x, int y, int width, int height) {
+        hoverCard(graphics, lines, mouseX, mouseY, x, y, width, height, false);
+    }
+
+    /**
+     * @param leftOfPointer open the card to the left of the pointer when there is room, so it covers what
+     *                      lies to the left instead of the right
+     */
+    static void hoverCard(OwoUIGraphics graphics, List<PlaytimeHover.Line> lines, int mouseX, int mouseY,
+                          int x, int y, int width, int height, boolean leftOfPointer) {
         if (lines.isEmpty()) return;
         int shown = lines.size();
         Font font = font();
@@ -167,7 +176,9 @@ final class PlaytimePainter {
         int contentWidth = Math.max(plainWidth, columnsWidth);
         int boxWidth = Math.min(width - 4, contentWidth + pad * 2);
         int boxHeight = pad * 2 + rows * font.lineHeight;
-        int boxX = Math.max(x + 2, Math.min(mouseX + 8, x + width - boxWidth - 2));
+        int boxX = leftOfPointer && mouseX - 8 - boxWidth >= x + 2
+            ? mouseX - 8 - boxWidth
+            : Math.max(x + 2, Math.min(mouseX + 8, x + width - boxWidth - 2));
         int boxY = mouseY + 12;
         if (boxY + boxHeight > y + height) boxY = Math.max(y + 2, mouseY - boxHeight - 4);
         HoverChip.fill(graphics, boxX, boxY, boxWidth, boxHeight, Colors.HOVER_CHIP);
@@ -175,7 +186,8 @@ final class PlaytimePainter {
         int valueRight = boxX + boxWidth - pad;
         for (int index = 0; index < shown; index++) {
             PlaytimeHover.Line line = lines.get(index);
-            graphics.drawText(text(line), boxX + pad, textY, 1f, line.color());
+            int textX = index == 0 ? boxX + (boxWidth - font.width(text(line))) / 2 : boxX + pad;
+            graphics.drawText(text(line), textX, textY, 1f, line.color());
             if (!line.value().isEmpty()) {
                 graphics.drawText(Component.literal(line.value()), valueRight - font.width(line.value()), textY, 1f,
                     Colors.MUTED);

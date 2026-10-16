@@ -110,14 +110,14 @@ class PlaytimeChartTest {
             List.of(span(1, 1, "1.20.4", "a"), span(1, 3, "1.21", "b")),
             PlaytimeFilter.all(), PlaytimeBreakdown.VERSION, PlaytimeStyle.BARS, PlaytimeGrain.DAYS, null);
         List<PlaytimeHover.Line> lines = chart.hover(0, "Unknown", "Total", -1);
-        assertEquals(List.of("2024-01-01", "Total", "", "1.21", "1.20.4"),
-            lines.stream().map(PlaytimeHover.Line::label).toList());
+        assertEquals(List.of("Total", "", "1.21", "1.20.4"),
+            lines.stream().skip(1).map(PlaytimeHover.Line::label).toList());
         assertEquals(List.of("", "4h", "", "3h", "1h"), lines.stream().map(PlaytimeHover.Line::value).toList());
         assertFalse(lines.get(1).bold());
 
         List<PlaytimeHover.Line> focused = chart.hover(0, "Unknown", "Total", 0);
-        assertEquals(List.of("2024-01-01", "Total", "1.20.4", "", "1.21"),
-            focused.stream().map(PlaytimeHover.Line::label).toList());
+        assertEquals(List.of("Total", "1.20.4", "", "1.21"),
+            focused.stream().skip(1).map(PlaytimeHover.Line::label).toList());
         assertTrue(focused.get(2).bold());
     }
 
@@ -250,8 +250,21 @@ class PlaytimeChartTest {
     @Test
     void weekLabelsShowOnlyTheFirstDay() {
         LocalDateTime monday = LocalDateTime.of(2024, 1, 1, 0, 0);
-        assertEquals("2024-01-01", PlaytimeChartModel.axisLabel(monday, monday.plusWeeks(1), PlaytimeGrain.WEEKS));
-        assertEquals("2024-01-01 - 2024-01-07", PlaytimeChartModel.spanLabel(monday, monday.plusWeeks(1), PlaytimeGrain.WEEKS));
+        Locale previous = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.UK);
+            assertEquals("1 Jan", PlaytimeChartModel.axisLabel(monday, PlaytimeGrain.WEEKS, false));
+            assertEquals("1 Jan 2024", PlaytimeChartModel.axisLabel(monday, PlaytimeGrain.WEEKS, true));
+            assertEquals("1 – 7 Jan 2024", PlaytimeChartModel.spanLabel(monday, monday.plusWeeks(1), PlaytimeGrain.WEEKS));
+            LocalDateTime late = LocalDateTime.of(2024, 1, 29, 0, 0);
+            assertEquals("29 Jan – 4 Feb 2024", PlaytimeChartModel.spanLabel(late, late.plusWeeks(1), PlaytimeGrain.WEEKS));
+            LocalDateTime turn = LocalDateTime.of(2024, 12, 30, 0, 0);
+            assertEquals("30 Dec 2024 – 5 Jan 2025", PlaytimeChartModel.spanLabel(turn, turn.plusWeeks(1), PlaytimeGrain.WEEKS));
+            assertEquals("Mon 1 Jan 2024", PlaytimeChartModel.spanLabel(monday, monday.plusDays(1), PlaytimeGrain.DAYS));
+            assertEquals("Jan 2024", PlaytimeChartModel.spanLabel(monday, monday.plusMonths(1), PlaytimeGrain.MONTHS));
+        } finally {
+            Locale.setDefault(previous);
+        }
     }
 
     @Test

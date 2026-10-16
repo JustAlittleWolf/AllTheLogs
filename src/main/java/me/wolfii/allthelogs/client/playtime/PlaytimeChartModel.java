@@ -8,10 +8,12 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Buckets filtered playtime into stacked columns. Stacking is oldest version first, then server name.
@@ -213,15 +215,22 @@ public final class PlaytimeChartModel {
             series, legend(seriesTotals), List.copyOf(columns), axisMax);
     }
 
+    /**
+     * Readable period in the system locale with short month names: {@code Mon 1 Jan 2024} for a day,
+     * {@code 1 – 7 Jan 2024} or {@code 29 Jan – 4 Feb 2024} for a week, {@code Jan 2024} for a month, and
+     * {@code 2024} for a year. A month or year shared by both ends of a range is written once.
+     */
     public static String spanLabel(LocalDateTime start, LocalDateTime end, PlaytimeGrain grain) {
         LocalDate first = start.toLocalDate();
         LocalDate last = end.minusNanos(1).toLocalDate();
         if (grain == PlaytimeGrain.YEARS && first.getYear() == last.getYear()) return Integer.toString(first.getYear());
         if (grain == PlaytimeGrain.MONTHS && first.getYear() == last.getYear() && first.getMonth() == last.getMonth()) {
-            return String.format("%d-%02d", first.getYear(), first.getMonthValue());
+            return date(first, "LLL yyyy");
         }
-        if (first.equals(last)) return first.toString();
-        return first + " - " + last;
+        if (first.equals(last)) return date(first, "EEE d MMM yyyy");
+        if (first.getYear() != last.getYear()) return date(first, "d MMM yyyy") + " – " + date(last, "d MMM yyyy");
+        if (first.getMonth() != last.getMonth()) return date(first, "d MMM") + " – " + date(last, "d MMM yyyy");
+        return first.getDayOfMonth() + " – " + date(last, "d MMM yyyy");
     }
 
     /**
@@ -243,11 +252,21 @@ public final class PlaytimeChartModel {
     }
 
     /**
-     * Short label under a bar: the first day of a week, otherwise the same as {@link #spanLabel}.
+     * Label under a bar, by its first day: {@code 3 Jan} for days and weeks, {@code Jan} for months, and
+     * {@code 2024} for years. {@code withYear} adds the year to days, weeks, and months, for the first label
+     * and where the year changes.
      */
-    public static String axisLabel(LocalDateTime start, LocalDateTime end, PlaytimeGrain grain) {
-        if (grain == PlaytimeGrain.WEEKS) return start.toLocalDate().toString();
-        return spanLabel(start, end, grain);
+    public static String axisLabel(LocalDateTime start, PlaytimeGrain grain, boolean withYear) {
+        LocalDate day = start.toLocalDate();
+        return switch (grain) {
+            case YEARS -> Integer.toString(day.getYear());
+            case MONTHS -> date(day, withYear ? "LLL yyyy" : "LLL");
+            case DAYS, WEEKS, AUTO -> date(day, withYear ? "d MMM yyyy" : "d MMM");
+        };
+    }
+
+    private static String date(LocalDate date, String pattern) {
+        return DateTimeFormatter.ofPattern(pattern, Locale.getDefault(Locale.Category.FORMAT)).format(date);
     }
 
     public static List<String> versionsIn(List<PlaytimeSpan> spans) {

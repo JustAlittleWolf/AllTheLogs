@@ -37,6 +37,7 @@ public final class WeekdayChartWidget extends BaseUIComponent implements AutoClo
     /** Dividers between the bar chart and the heat map, and before "All". Brighter and wider than grid lines. */
     private static final int DIVIDER = 0xFF6A6A6A;
     private static final int DIVIDER_WIDTH = 2;
+    private static final int DASH = 3;
 
     private final SeriesHighlight highlight;
     private final PixelCanvas bars = new PixelCanvas();
@@ -173,23 +174,26 @@ public final class WeekdayChartWidget extends BaseUIComponent implements AutoClo
         bars.draw(graphics, scale, barsLeft, plotTop);
         heat.draw(graphics, scale, heatLeft, plotTop);
         drawHourAxis(graphics, heatX + heatAxis, y + barPlot.y(), heatGuiWidth, barPlot.height());
-        drawKey(graphics, scale, (heatLeft + heatDays.barLeft(0)
-            + heatDays.barLeft(PlaytimeWeekday.ALL_DAYS) + heatDays.bar()) / 2 / scale, y + 3);
+        int heatStart = heatLeft + heatDays.barLeft(0);
+        int heatEnd = heatLeft + heatDays.barLeft(PlaytimeWeekday.ALL_DAYS) + heatDays.bar();
+        drawKey(graphics, scale, (heatStart + heatEnd) / 2 / scale, y + 3);
 
         int labelY = y + barPlot.y() + barPlot.height() + 3;
         int separatorBottom = labelY + 7;
         int split = x + barsWidth + SPLIT_GAP / 2;
-        graphics.fill(split, y + 2, split + DIVIDER_WIDTH, separatorBottom, DIVIDER);
+        for (int dash = y + 2; dash < separatorBottom; dash += DASH * 2) {
+            graphics.fill(split, dash, split + DIVIDER_WIDTH, Math.min(dash + DASH, separatorBottom), DIVIDER);
+        }
         int allLeft = heatLeft + heatDays.barLeft(PlaytimeWeekday.ALL_DAYS);
         int sundayEnd = heatLeft + heatDays.barLeft(6) + heatDays.bar();
         int allLine = (sundayEnd + allLeft) / 2 / scale - DIVIDER_WIDTH / 2;
-        graphics.fill(allLine, y + barPlot.y(), allLine + DIVIDER_WIDTH, separatorBottom, DIVIDER);
+        graphics.fill(allLine, y + barPlot.y(), allLine + DIVIDER_WIDTH, y + barPlot.y() + barPlot.height(), DIVIDER);
 
         for (int day = 0; day < 7; day++) {
-            dayLabel(graphics, day, barsLeft + days.barLeft(day), days.slot(), scale, labelY);
-            dayLabel(graphics, day, heatLeft + heatDays.barLeft(day), heatDays.slot(), scale, labelY);
+            dayLabel(graphics, day, barsLeft + days.barLeft(day), days.bar(), days.slot(), scale, labelY);
+            dayLabel(graphics, day, heatLeft + heatDays.barLeft(day), heatDays.bar(), heatDays.slot(), scale, labelY);
         }
-        dayLabel(graphics, PlaytimeWeekday.ALL_DAYS, allLeft, heatDays.slot(), scale, labelY);
+        dayLabel(graphics, PlaytimeWeekday.ALL_DAYS, allLeft, heatDays.bar(), heatDays.slot(), scale, labelY);
 
         List<PlaytimeHover.Line> lines = null;
         if (hoveredDay >= 0) {
@@ -211,7 +215,7 @@ public final class WeekdayChartWidget extends BaseUIComponent implements AutoClo
                 dayName(column) + "  " + String.format("%02d:00 - %02d:00", hour, hour + 1),
                 totalLabel(), unknown(), -1));
         }
-        if (lines != null) PlaytimePainter.hoverCard(graphics, lines, mouseX, mouseY, x, y, width, height);
+        if (lines != null) PlaytimePainter.hoverCard(graphics, lines, mouseX, mouseY, x, y, width, height, true);
     }
 
     private List<PlaytimeHover.Line> card(String key, Supplier<List<PlaytimeHover.Line>> build) {
@@ -316,9 +320,10 @@ public final class WeekdayChartWidget extends BaseUIComponent implements AutoClo
     }
 
     /**
-     * Day name centered under a column, cut to two letters or one when the column is too narrow.
+     * Day name centered under a column, cut to two letters or one when the column's slot is too narrow.
      */
-    private static void dayLabel(OwoUIGraphics graphics, int day, int pixelLeft, int pixelSlot, int scale, int y) {
+    private static void dayLabel(OwoUIGraphics graphics, int day, int pixelLeft, int pixelBar, int pixelSlot,
+                                 int scale, int y) {
         String label = day == PlaytimeWeekday.ALL_DAYS
             ? Component.translatable("allthelogs.playtime.heat.all").getString()
             : PlaytimeWeekday.shortDayName(day);
@@ -326,8 +331,8 @@ public final class WeekdayChartWidget extends BaseUIComponent implements AutoClo
         while (label.length() > 1 && PlaytimePainter.axisWidth(label) > room) {
             label = label.substring(0, label.length() - 1);
         }
-        int center = (pixelLeft + pixelSlot / 2) / scale;
-        PlaytimePainter.axisLabel(graphics, label, center - PlaytimePainter.axisWidth(label) / 2, y);
+        float center = (pixelLeft + pixelBar / 2f) / scale;
+        PlaytimePainter.axisLabel(graphics, label, Math.round(center - PlaytimePainter.axisWidth(label) / 2f), y);
     }
 
     private static String dayName(int column) {
