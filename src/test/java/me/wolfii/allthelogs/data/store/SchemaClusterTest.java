@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class SchemaClusterTest {
     private static void insertFile(Statement statement, long id, String time) throws SQLException {
         statement.execute("""
-            INSERT INTO log_file VALUES (
+            INSERT INTO log_file (id, file_name, source_kind, source_path, entry_path, log_date, minecraft_version, start_time, end_time, entry_count, minecraft_user) VALUES (
                 %d, 'chat.log', 'FILE', '/tmp/%d.log', '/tmp/%d.log',
                 DATE '2026-01-01', '26.2',
                 TIMESTAMP '%s', TIMESTAMP '%s', 1, NULL)""".formatted(id, id, id, time, time));

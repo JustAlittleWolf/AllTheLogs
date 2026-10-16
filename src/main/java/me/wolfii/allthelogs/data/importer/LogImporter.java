@@ -227,6 +227,7 @@ public final class LogImporter {
             } else {
                 writer.applyMetadataPatches(options);
             }
+            writer.linkContinuations();
 
             List<ImportResult.Failure> failures = new ArrayList<>(discovery.failures());
             failures.addAll(parseFailures);

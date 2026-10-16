@@ -369,7 +369,7 @@ class SchemaMigrationTest {
 
     private static void insertLogFile(Statement statement, long id) throws SQLException {
         statement.execute("""
-            INSERT INTO log_file VALUES (
+            INSERT INTO log_file (id, file_name, source_kind, source_path, entry_path, log_date, minecraft_version, start_time, end_time, entry_count, minecraft_user) VALUES (
                 %d, 'chat.log', 'FILE', '/tmp/%d.log', '/tmp/%d.log',
                 DATE '2026-01-01', '26.2',
                 TIMESTAMP '2026-01-01 00:00:00', TIMESTAMP '2026-01-01 00:00:01', 1, NULL)"""

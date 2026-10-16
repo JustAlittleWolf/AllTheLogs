@@ -32,7 +32,9 @@ import java.util.Objects;
  *                                       in different zones stay comparable. Passing the default timezone leaves the
  *                                       values unchanged
  * @param updateMetadataOnly             whether parsed logs are used only to fill metadata on messages already stored,
- *                                       never to insert new chat lines or log files
+ *                                       never to insert new chat lines or log files,
+ *                                       and to record what joins a log to the previous day's when its session
+ *                                       crossed midnight
  * @param updateFormatting               when {@code updateMetadataOnly}, write formatting onto stored messages that
  *                                       have none, if the log line has formatting
  * @param updateMinecraftUser            when {@code updateMetadataOnly}, write the Minecraft player when the log has

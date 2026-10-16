@@ -35,7 +35,8 @@ public final class SchemaMigration {
         2, NO_OP,
         3, SchemaMigration::migrate3To4SeedClusterMarker,
         4, SchemaMigration::migrate4To5PerEntryMetadata,
-        5, SchemaMigration::migrate5To6StripPlaceholderCharacters
+        5, SchemaMigration::migrate5To6StripPlaceholderCharacters,
+        6, SchemaMigration::migrate6To7ContinuationColumns
     );
 
     @FunctionalInterface
@@ -190,6 +191,17 @@ public final class SchemaMigration {
             statement.execute("DROP TABLE IF EXISTS chat_entry_rewrite");
         }
         return true;
+    }
+
+    /**
+     * Adds what {@link ContinuationLinker} needs to join a log to the previous day's. Existing rows stay
+     * {@code NULL} and are only linked after a metadata update import has read their files again.
+     */
+    private static boolean migrate6To7ContinuationColumns(Statement statement) throws SQLException {
+        statement.execute("ALTER TABLE log_file ADD COLUMN IF NOT EXISTS has_startup BOOLEAN");
+        statement.execute("ALTER TABLE log_file ADD COLUMN IF NOT EXISTS end_place VARCHAR");
+        statement.execute("ALTER TABLE log_file ADD COLUMN IF NOT EXISTS first_place_time TIMESTAMP");
+        return false;
     }
 
     static int readVersion(Statement statement) throws SQLException {

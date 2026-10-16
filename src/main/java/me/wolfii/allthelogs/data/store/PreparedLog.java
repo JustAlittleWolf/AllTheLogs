@@ -19,6 +19,11 @@ import java.util.List;
  * @param entryUsers               player in effect for each chat line, parallel to {@link #messages()}
  * @param entryServerOrWorlds      server or world in effect for each chat line, parallel to {@link #messages()}
  * @param contentHash              SHA-256 of the discovered raw bytes, or {@code null}
+ * @param startup                  whether the file has a game start line; without one it may continue the previous
+ *                                 day's log, see {@link ContinuationLinker}
+ * @param endPlace                 place in effect at the end of the file, {@code ""} after a disconnect, or
+ *                                 {@code null} when the file has no join or leave line
+ * @param firstPlaceTime           timestamp of the first join or leave line, or {@code null} when there is none
  */
 public record PreparedLog(
     String fileName,
@@ -37,6 +42,21 @@ public record PreparedLog(
     String minecraftUser,
     List<String> entryUsers,
     List<String> entryServerOrWorlds,
-    String contentHash
+    String contentHash,
+    boolean startup,
+    String endPlace,
+    LocalDateTime firstPlaceTime
 ) {
+    /**
+     * A log with a game start line and no place information, for callers that do not track either.
+     */
+    public PreparedLog(String fileName, SourceKind sourceKind, String sourcePath, String entryPath, LocalDate date,
+                       String minecraftVersion, List<LocalDateTime> entryTimes, List<String> messages,
+                       List<long[]> formattings, boolean resourceManagerReloaded, LocalDateTime firstLineTime,
+                       LocalDateTime lastLineTime, String sessionId, String minecraftUser, List<String> entryUsers,
+                       List<String> entryServerOrWorlds, String contentHash) {
+        this(fileName, sourceKind, sourcePath, entryPath, date, minecraftVersion, entryTimes, messages, formattings,
+            resourceManagerReloaded, firstLineTime, lastLineTime, sessionId, minecraftUser, entryUsers,
+            entryServerOrWorlds, contentHash, true, null, null);
+    }
 }
