@@ -1,6 +1,6 @@
 package me.wolfii.allthelogs.client.timeline;
 
-import me.wolfii.allthelogs.data.MatchDay;
+import me.wolfii.allthelogs.data.query.MatchDay;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;

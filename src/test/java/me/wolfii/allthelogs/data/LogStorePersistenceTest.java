@@ -1,6 +1,8 @@
 package me.wolfii.allthelogs.data;
 
-import me.wolfii.allthelogs.data.store.SessionMarker;
+import me.wolfii.allthelogs.data.importer.ImportOptions;
+import me.wolfii.allthelogs.data.importer.ImportResult;
+import me.wolfii.allthelogs.data.session.SessionMarker;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

@@ -1,5 +1,9 @@
 package me.wolfii.allthelogs.data.store;
 
+import me.wolfii.allthelogs.data.store.schema.DatabaseBackup;
+import me.wolfii.allthelogs.data.store.schema.Schema;
+import me.wolfii.allthelogs.data.store.schema.SchemaMigration;
+import me.wolfii.allthelogs.data.store.schema.StoreOptimizer;
 import org.duckdb.DuckDBConnection;
 import org.duckdb.DuckDBDriver;
 

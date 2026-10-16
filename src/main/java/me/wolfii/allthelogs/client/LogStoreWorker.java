@@ -2,8 +2,13 @@ package me.wolfii.allthelogs.client;
 
 import me.wolfii.allthelogs.api.PendingImportMessage;
 import me.wolfii.allthelogs.data.*;
+import me.wolfii.allthelogs.data.importer.ImportOptions;
+import me.wolfii.allthelogs.data.importer.ImportProgress;
+import me.wolfii.allthelogs.data.importer.ImportResult;
 import me.wolfii.allthelogs.data.playtime.PlaytimeSpan;
 import me.wolfii.allthelogs.data.parse.FormattingCodes;
+import me.wolfii.allthelogs.data.query.CleanupPreview;
+import me.wolfii.allthelogs.data.query.MatchSummary;
 import me.wolfii.allthelogs.data.query.MessageCleanup;
 import me.wolfii.allthelogs.data.store.StoreCancellation;
 import net.minecraft.network.chat.Component;

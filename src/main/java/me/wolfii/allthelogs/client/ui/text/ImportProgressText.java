@@ -1,9 +1,9 @@
 package me.wolfii.allthelogs.client.ui.text;
 
-import me.wolfii.allthelogs.data.ImportProgress;
 import me.wolfii.allthelogs.data.LogDataException;
 import me.wolfii.allthelogs.data.LogSource;
 
+import me.wolfii.allthelogs.data.importer.ImportProgress;
 import java.nio.file.Path;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;

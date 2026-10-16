@@ -4,10 +4,12 @@ import me.wolfii.allthelogs.client.config.AllTheLogsConfig;
 import me.wolfii.allthelogs.client.script.GraalJs;
 import me.wolfii.allthelogs.client.script.ScriptFiles;
 import me.wolfii.allthelogs.client.script.ScriptRuntime;
-import me.wolfii.allthelogs.client.ui.screen.ImportScreen;
 import me.wolfii.allthelogs.client.ui.screen.LibraryDownloadScreen;
-import me.wolfii.allthelogs.client.ui.screen.LogBrowserScreen;
 import me.wolfii.allthelogs.client.ui.screen.ScriptsScreen;
+import me.wolfii.allthelogs.client.ui.screen.browser.CleanupScreen;
+import me.wolfii.allthelogs.client.ui.screen.browser.LogBrowserScreen;
+import me.wolfii.allthelogs.client.ui.screen.importer.ImportScreen;
+import me.wolfii.allthelogs.client.ui.screen.playtime.PlaytimeScreen;
 import me.wolfii.allthelogs.client.ui.widget.IconButtonWidget;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Tooltip;
@@ -47,6 +49,21 @@ public final class AllTheLogsScreens {
             return;
         }
         Minecraft.getInstance().gui.setScreen(LibraryDownloadScreen.scripts(parent));
+    }
+
+    /**
+     * Playtime opened without the messages screen. Picking messages from the chart opens a new one.
+     */
+    public static void openPlaytime(@Nullable Screen parent) {
+        Minecraft.getInstance().gui.setScreen(new PlaytimeScreen(parent, filter -> {
+            LogBrowserScreen messages = new LogBrowserScreen(parent);
+            messages.showFiltered(filter);
+            Minecraft.getInstance().gui.setScreen(messages);
+        }));
+    }
+
+    public static void openCleanup(@Nullable Screen parent) {
+        Minecraft.getInstance().gui.setScreen(new CleanupScreen(parent));
     }
 
     public static void openSettings(@Nullable Screen parent) {

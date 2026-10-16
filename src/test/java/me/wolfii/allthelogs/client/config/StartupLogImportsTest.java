@@ -1,6 +1,6 @@
 package me.wolfii.allthelogs.client.config;
 
-import me.wolfii.allthelogs.data.ImportOptions;
+import me.wolfii.allthelogs.data.importer.ImportOptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

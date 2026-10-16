@@ -6,11 +6,11 @@ import me.wolfii.allthelogs.data.importer.discover.FileCountEstimator;
 import me.wolfii.allthelogs.data.importer.discover.ImportObserver;
 import me.wolfii.allthelogs.data.importer.discover.LogCandidate;
 import me.wolfii.allthelogs.data.importer.discover.LogDiscovery;
-import me.wolfii.allthelogs.data.store.ContinuationLinker;
-import me.wolfii.allthelogs.data.store.LogWriter;
-import me.wolfii.allthelogs.data.store.PreparedLog;
 import me.wolfii.allthelogs.data.store.SourceKind;
 import me.wolfii.allthelogs.data.store.StoredSources;
+import me.wolfii.allthelogs.data.store.write.ContinuationLinker;
+import me.wolfii.allthelogs.data.store.write.LogWriter;
+import me.wolfii.allthelogs.data.store.write.PreparedLog;
 import org.duckdb.DuckDBConnection;
 
 import java.nio.file.Path;

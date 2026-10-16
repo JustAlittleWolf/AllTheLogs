@@ -5,8 +5,8 @@ import me.wolfii.allthelogs.data.LogDataException;
 import me.wolfii.allthelogs.data.parse.FormattingCodes;
 import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import me.wolfii.allthelogs.data.parse.TextRemoval;
-import me.wolfii.allthelogs.data.store.FileAggregates;
 import me.wolfii.allthelogs.data.store.StoreCancellation;
+import me.wolfii.allthelogs.data.store.write.FileAggregates;
 import org.duckdb.DuckDBAppender;
 import org.duckdb.DuckDBConnection;
 

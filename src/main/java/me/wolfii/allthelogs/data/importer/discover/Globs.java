@@ -3,7 +3,7 @@ package me.wolfii.allthelogs.data.importer.discover;
 import java.util.regex.Pattern;
 
 /**
- * Translates the glob syntax used by {@link me.wolfii.allthelogs.data.ImportOptions#pathMatcher()} into a regex.
+ * Translates the glob syntax used by {@link me.wolfii.allthelogs.data.importer.ImportOptions#pathMatcher()} into a regex.
  * Paths inside archives are virtual and always use {@code /}, so the default file system's path matcher is not used.
  */
 public final class Globs {

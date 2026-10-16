@@ -1,7 +1,7 @@
 package me.wolfii.allthelogs.data.importer.discover;
 
-import me.wolfii.allthelogs.data.ImportOptions;
 
+import me.wolfii.allthelogs.data.importer.ImportOptions;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

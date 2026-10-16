@@ -3,8 +3,8 @@ package me.wolfii.allthelogs.client.list;
 import me.wolfii.allthelogs.api.ChatQuery;
 import me.wolfii.allthelogs.api.MatchDay;
 import me.wolfii.allthelogs.data.ChatEntry;
-import me.wolfii.allthelogs.data.MatchSummary;
 
+import me.wolfii.allthelogs.data.query.MatchSummary;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;

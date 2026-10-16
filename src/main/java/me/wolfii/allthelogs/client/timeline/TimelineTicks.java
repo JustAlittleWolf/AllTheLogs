@@ -1,7 +1,7 @@
 package me.wolfii.allthelogs.client.timeline;
 
-import me.wolfii.allthelogs.data.MatchDay;
 
+import me.wolfii.allthelogs.data.query.MatchDay;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
