@@ -182,6 +182,14 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     public void tick() {
         super.tick();
         drainExportProgress();
+        queries.pollLatest(!exportBusy && messageMenu == null && (tools == null || !tools.isOpen())
+            && (filters == null || !filters.listOpen()));
+    }
+
+    @Override
+    public void removed() {
+        queries.pauseLatest();
+        super.removed();
     }
 
     @Override

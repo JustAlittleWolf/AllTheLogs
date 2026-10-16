@@ -1,9 +1,12 @@
 package me.wolfii.allthelogs.client.ui.screen.browser;
 
 import me.wolfii.allthelogs.api.ChatQuery;
+import me.wolfii.allthelogs.client.list.ContextPeeks;
 import me.wolfii.allthelogs.client.config.BrowserSession;
 import me.wolfii.allthelogs.client.list.DisplayRow;
 import me.wolfii.allthelogs.client.list.PageBounds;
+import me.wolfii.allthelogs.client.search.SearchFilter;
+import me.wolfii.allthelogs.data.LogStore;
 import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.LogDataException;
@@ -11,15 +14,58 @@ import me.wolfii.allthelogs.data.LogSource;
 import me.wolfii.allthelogs.data.query.MatchDay;
 import me.wolfii.allthelogs.data.query.MatchSummary;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletionException;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class LogBrowserQueriesTest {
+    @Test
+    void latestPagePreservesFiltersAndFindsNewLiveMatchesAtTheSameTimestamp(@TempDir Path directory) {
+        LocalDateTime time = LocalDateTime.of(2026, 10, 16, 12, 0);
+        SearchFilter filter = SearchFilter.defaults().withText("hit").withContextLines(0)
+            .withVersions(Set.of("26.2")).withServersOrWorlds(Set.of("a.net"))
+            .withDay(time.toLocalDate()).withLimit(2).withOffset(time.minusDays(1));
+        SearchFilter latest = LogBrowserQueries.newestPage(filter);
+        assertEquals(filter.withoutOffset().withSort(ChatQuery.Sort.DESCENDING), latest);
+        try (LogStore store = LogStore.open(directory.resolve("latest.duckdb"))) {
+            store.startSession("26.2", "Player");
+            assertTrue(store.findEntries(latest.toQuery()).isEmpty());
+            store.importSessionMessage("hit one", null, time, "Player", "a.net");
+            List<DisplayRow> first = ContextPeeks.forSearchPage(
+                DisplayRow.from(store.findEntries(latest.toQuery()), latest), true, 0, List.of());
+            assertEquals(List.of("hit one"), first.stream().map(DisplayRow::message).toList());
+            assertTrue(LogBrowserQueries.hasNewLatestRow(List.of(), first, ChatQuery.Sort.DESCENDING));
+            store.importSessionMessage("hit two", null, time, "Player", "a.net");
+            store.importSessionMessage("not a match", null, time.plusSeconds(1), "Player", "a.net");
+            store.importSessionMessage("hit elsewhere", null, time.plusSeconds(2), "Player", "b.net");
+            List<DisplayRow> next = ContextPeeks.forSearchPage(
+                DisplayRow.from(store.findEntries(latest.toQuery()), latest), true, 0, List.of());
+            assertEquals(List.of("hit two", "hit one"), next.stream().map(DisplayRow::message).toList());
+            assertTrue(LogBrowserQueries.hasNewLatestRow(first, next, ChatQuery.Sort.DESCENDING));
+            assertTrue(LogBrowserQueries.hasNewLatestRow(first.reversed(), next.reversed(), ChatQuery.Sort.ASCENDING));
+            assertFalse(LogBrowserQueries.hasNewLatestRow(next, next, ChatQuery.Sort.DESCENDING));
+            assertFalse(LogBrowserQueries.hasNewLatestRow(next, List.of(), ChatQuery.Sort.DESCENDING));
+            ChatQuery probeQuery = LogBrowserQueries.newestProbe(filter.withContextLines(3));
+            assertEquals(1, probeQuery.limit());
+            assertEquals(0, probeQuery.contextLines());
+            List<ChatEntry> probe = store.findEntries(probeQuery);
+            assertEquals(List.of("hit two"), probe.stream().map(ChatEntry::message).toList());
+            List<DisplayRow> probeRows = DisplayRow.from(probe, filter);
+            DisplayRow context = new DisplayRow(new ChatEntry(next.getFirst().chatLog(),
+                time.plusSeconds(1), 99, "context"), false, List.of());
+            List<DisplayRow> withContext = List.of(context, next.getFirst(), next.getLast());
+            assertFalse(LogBrowserQueries.hasNewLatestRow(withContext, probeRows, ChatQuery.Sort.DESCENDING));
+            assertFalse(LogBrowserQueries.hasNewLatestRow(withContext.reversed(), probeRows, ChatQuery.Sort.ASCENDING));
+            assertTrue(LogBrowserQueries.hasNewLatestRow(first, probeRows, ChatQuery.Sort.ASCENDING));
+        }
+    }
+
     private static DisplayRow row(LocalDateTime time, int line) {
         ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), time.toLocalDate(), "26.2", time, time);
         return new DisplayRow(new ChatEntry(log, time, line, "msg"), true, List.of());

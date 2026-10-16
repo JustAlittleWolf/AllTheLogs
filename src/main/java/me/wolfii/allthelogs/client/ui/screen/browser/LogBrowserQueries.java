@@ -39,6 +39,7 @@ import java.util.function.Consumer;
  */
 final class LogBrowserQueries {
     private final AtomicInteger generation = new AtomicInteger();
+    private final LatestMessagesPoll latestPoll = new LatestMessagesPoll();
     private SearchFilter filter;
     private MessageTimeline list;
     private Consumer<List<Component>> databaseInfo;
@@ -144,6 +145,7 @@ final class LogBrowserQueries {
     }
 
     void updateFilter(SearchFilter next) {
+        latestPoll.pause();
         filter = next.withoutOffset();
         if (list != null) list.setContextLines(filter.contextLines());
     }
@@ -204,9 +206,7 @@ final class LogBrowserQueries {
         int gen = generation.incrementAndGet();
         list.setLoading(true);
         boolean chronological = filter.sort() == ChatQuery.Sort.ASCENDING;
-        SearchFilter query = chronological
-            ? filter.withoutOffset().withSort(ChatQuery.Sort.DESCENDING)
-            : filter.withoutOffset();
+        SearchFilter query = newestPage(filter);
         long startedAt = System.nanoTime();
         onClient(AllTheLogsClient.worker().findEntries(query.toQuery()), (entries, error) -> {
             if (gen != generation.get()) return;
@@ -227,6 +227,72 @@ final class LogBrowserQueries {
             takeSnapshot();
             loadMatchSummary(gen, query, startedAt);
         });
+    }
+
+    static SearchFilter newestPage(SearchFilter filter) {
+        return filter.withoutOffset().withSort(ChatQuery.Sort.DESCENDING);
+    }
+
+    static ChatQuery newestProbe(SearchFilter filter) {
+        return newestPage(filter).toQuery().withContextLines(0).withLimit(1);
+    }
+
+    /** Called only while the browser is visible. Background refreshes never show a loading overlay. */
+    void pollLatest(boolean unobstructed) {
+        boolean following = unobstructed && canFollowLatest();
+        if (!latestPoll.begin(System.nanoTime(), following)) return;
+        int gen = generation.get();
+        MessageTimeline target = list;
+        SearchFilter query = newestPage(filter);
+        long startedAt = System.nanoTime();
+        onClient(AllTheLogsClient.worker().findEntries(newestProbe(filter)), (probe, probeError) -> {
+            boolean followingNow = gen == generation.get() && target == list && canFollowLatest();
+            if (!latestPoll.canApply(followingNow) || probeError != null) {
+                latestPoll.finish(false);
+                if (probeError != null) logQueryFailure("AllTheLogs latest message probe failed", probeError);
+                return;
+            }
+            if (!hasNewLatestRow(list.window().rows(), displayRows(probe), filter.sort())) {
+                latestPoll.finish(true);
+                return;
+            }
+            onClient(AllTheLogsClient.worker().findEntries(query.toQuery()), (entries, error) -> {
+                if (!latestPoll.finish(gen == generation.get() && target == list && canFollowLatest())) return;
+                if (error != null) {
+                    logQueryFailure("AllTheLogs latest messages query failed", error);
+                    return;
+                }
+                List<DisplayRow> rows = displaySearchRows(entries);
+                boolean chronological = filter.sort() == ChatQuery.Sort.ASCENDING;
+                if (chronological) rows = DisplayRows.reversed(rows);
+                if (!hasNewLatestRow(list.window().rows(), rows, filter.sort())) return;
+                boolean full = PageBounds.isFull(rows, query.limit());
+                list.restore(rows, chronological && full, !chronological && full, 0);
+                if (chronological) list.scrollToEnd();
+                takeSnapshot();
+                refreshStats();
+                loadMatchSummary(gen, query, startedAt);
+            });
+        });
+    }
+
+    private boolean canFollowLatest() {
+        return list != null && !reloadPending && filter.canQuery() && !list.loading()
+            && list.canFollowLatest(filter.sort())
+            && AllTheLogsClient.worker() != null && AllTheLogsClient.worker().isOpen();
+    }
+
+    static boolean hasNewLatestRow(List<DisplayRow> current, List<DisplayRow> incoming, ChatQuery.Sort sort) {
+        if (incoming.isEmpty()) return false;
+        DisplayRow newest = sort == ChatQuery.Sort.ASCENDING
+            ? DisplayRows.lastMatch(incoming) : DisplayRows.firstMatch(incoming);
+        DisplayRow previous = sort == ChatQuery.Sort.ASCENDING
+            ? DisplayRows.lastMatch(current) : DisplayRows.firstMatch(current);
+        return newest != null && (previous == null || !newest.key().equals(previous.key()));
+    }
+
+    void pauseLatest() {
+        latestPoll.pause();
     }
 
     void refreshStats() {
