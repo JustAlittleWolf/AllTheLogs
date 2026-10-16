@@ -8,7 +8,6 @@ public enum PlaytimePattern {
     SOLID,
     DIAGONAL,
     HORIZONTAL,
-    VERTICAL,
     CHECKER,
     DOTS;
 
@@ -23,7 +22,6 @@ public enum PlaytimePattern {
             case SOLID -> false;
             case DIAGONAL -> Math.floorMod(px + py, 7) < 3;
             case HORIZONTAL -> Math.floorMod(py, 5) < 2;
-            case VERTICAL -> Math.floorMod(px, 5) < 2;
             case CHECKER -> Math.floorMod(Math.floorDiv(px, 5) + Math.floorDiv(py, 5), 2) == 0;
             case DOTS -> Math.floorMod(px, 5) < 2 && Math.floorMod(py, 5) < 2;
         };
