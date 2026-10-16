@@ -38,7 +38,7 @@ import java.util.function.IntSupplier;
  * Display options sit in a row above the chart. The legend and the filters share a column on the right.
  */
 final class PlaytimeScreenSupport {
-    static final int SIDE_WIDTH = 150;
+    static final int SIDE_WIDTH = 140;
     static final PlaytimeBreakdown[] GROUPS = {
         PlaytimeBreakdown.VERSION, PlaytimeBreakdown.SERVER, PlaytimeBreakdown.COMBINED
     };
@@ -50,7 +50,7 @@ final class PlaytimeScreenSupport {
 
     static FlowLayout page() {
         FlowLayout page = UIContainers.verticalFlow(Sizing.fill(), Sizing.fill());
-        page.gap(6).padding(Insets.of(8));
+        page.gap(4).padding(Insets.of(5));
         page.surface(Surface.blur(5, 10).and(PanelSurfaces.overlay()));
         page.horizontalAlignment(HorizontalAlignment.LEFT);
         page.verticalAlignment(VerticalAlignment.TOP);
@@ -77,14 +77,14 @@ final class PlaytimeScreenSupport {
         ScrollContainer<PlaytimeLegendWidget> legendScroll = UIContainers.verticalScroll(Sizing.fill(), Sizing.expand(), legend);
         legendScroll.scrollbar(OverflowScrollbar.vanillaFlat());
         FlowLayout side = UIContainers.verticalFlow(Sizing.fixed(SIDE_WIDTH), Sizing.fill());
-        side.gap(3);
+        side.gap(2);
         total.horizontalSizing(Sizing.fill());
         side.child(total);
         side.child(legendScroll);
         filters.forEach(side::child);
 
         FlowLayout body = UIContainers.horizontalFlow(Sizing.fill(), Sizing.expand());
-        body.gap(6);
+        body.gap(4);
         body.child(chart.horizontalSizing(Sizing.expand()).verticalSizing(Sizing.fill()));
         body.child(side);
         return body;

@@ -40,7 +40,7 @@ final class PlaytimePainter {
      * Pattern cell size in screen pixels, so patterns look the same at every GUI scale.
      */
     static int patternUnit(int scale) {
-        return Math.max(1, (scale + 1) / 2);
+        return Math.max(1, scale);
     }
 
     /**
@@ -83,25 +83,36 @@ final class PlaytimePainter {
      */
     static int yAxisWidth(double axisMax, DoubleFunction<String> label) {
         int widest = 0;
-        for (int step = 0; step <= AXIS_STEPS; step++) {
-            widest = Math.max(widest, axisWidth(label.apply(axisMax * step / AXIS_STEPS)));
+        for (int step = 1; step <= AXIS_STEPS; step++) {
+            for (String line : label.apply(axisMax * step / AXIS_STEPS).split("\n")) {
+                widest = Math.max(widest, axisWidth(line));
+            }
         }
         return widest + AXIS_GAP + 2;
     }
 
     /**
-     * Grid lines and value labels for four steps from zero to {@code axisMax}.
+     * The baseline and three grid lines up to {@code axisMax}, each with its value centered on the line.
+     * A label may have several lines separated by {@code \n}; they are centered on each other.
      */
     static void yAxis(OwoUIGraphics graphics, int widgetY, int plotX, int plotY, int plotWidth, int plotHeight,
                       double axisMax, DoubleFunction<String> label) {
-        Font font = font();
+        int lineHeight = Math.round(font().lineHeight * AXIS_SCALE);
         for (int step = 0; step <= AXIS_STEPS; step++) {
             double fraction = step / (double) AXIS_STEPS;
             int lineY = plotY + plotHeight - (int) Math.round(fraction * plotHeight);
             graphics.fill(plotX, lineY, plotX + plotWidth, lineY + 1, step == 0 ? Colors.TRACK_BORDER : Colors.SEPARATOR);
-            String text = label.apply(axisMax * fraction);
-            graphics.drawText(Component.literal(text), plotX - AXIS_GAP - axisWidth(text),
-                Math.max(widgetY, lineY - font.lineHeight), AXIS_SCALE, Colors.TICK_LABEL);
+            if (step == 0) continue;
+            String[] lines = label.apply(axisMax * fraction).split("\n");
+            int blockWidth = 0;
+            for (String line : lines) blockWidth = Math.max(blockWidth, axisWidth(line));
+            int blockRight = plotX - AXIS_GAP;
+            int textY = Math.max(widgetY, lineY - lines.length * lineHeight / 2);
+            for (String line : lines) {
+                int lineX = blockRight - blockWidth + (blockWidth - axisWidth(line)) / 2;
+                graphics.drawText(Component.literal(line), lineX, textY, AXIS_SCALE, Colors.TICK_LABEL);
+                textY += lineHeight;
+            }
         }
     }
 

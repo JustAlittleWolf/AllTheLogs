@@ -42,7 +42,13 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         PlaytimeStyle.BARS, PlaytimeStyle.CUMULATIVE, PlaytimeStyle.PERCENT
     };
 
+    /** Time constant of the zoom animation: about 95% of the way after three of these. */
+    private static final double ZOOM_EASE_SECONDS = 0.05;
+
     private final Screen parent;
+    private boolean refreshOnShow = true;
+    private PlaytimeWindow zoomTarget;
+    private long lastZoomFrame;
     private final Consumer<SearchFilter> onFilterMessages;
     private StackLayout overlays;
     private final SeriesHighlight highlight = new SeriesHighlight();
@@ -93,6 +99,9 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
             Arrays.stream(STYLES).map(PlaytimeScreen::styleLabel).toList(), pressed -> openStyle());
         breakdownButton = PlaytimeScreenSupport.optionButton(PlaytimeScreenSupport.groupLabel(PlaytimeSession.breakdown()),
             PlaytimeScreenSupport.groupLabels(), pressed -> openBreakdown());
+        grainMenu.opensOnHover(grainButton, this::openGrain);
+        styleMenu.opensOnHover(styleButton, this::openStyle);
+        breakdownMenu.opensOnHover(breakdownButton, this::openBreakdown);
         page.child(PlaytimeScreenSupport.optionsRow(List.of(grainButton, styleButton, breakdownButton),
             PlaytimeScreenSupport.button("allthelogs.playtime.weekdays", pressed -> openWeekdays())));
 
@@ -100,6 +109,7 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         chartWidget.onZoom(this::zoom);
         chartWidget.onPan(this::pan);
         chartWidget.onReset(() -> {
+            zoomTarget = null;
             PlaytimeSession.window(null);
             rebuild();
         });
@@ -119,7 +129,17 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
     @Override
     protected void init() {
         super.init();
-        load();
+        if (refreshOnShow || !PlaytimeSession.loaded()) load();
+        refreshOnShow = false;
+    }
+
+    @Override
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+        animateZoom();
+        if (grainMenu != null) grainMenu.sync(mouseX, mouseY);
+        if (styleMenu != null) styleMenu.sync(mouseX, mouseY);
+        if (breakdownMenu != null) breakdownMenu.sync(mouseX, mouseY);
+        super.extractRenderState(graphics, mouseX, mouseY, delta);
     }
 
     @Override
@@ -157,7 +177,8 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
 
     private void rebuild() {
         chart = PlaytimeChartModel.build(PlaytimeSession.spans(), PlaytimeSession.filter(), PlaytimeSession.breakdown(),
-            PlaytimeSession.style(), PlaytimeSession.grain(), PlaytimeSession.window());
+            PlaytimeSession.style(), PlaytimeSession.grain(), PlaytimeSession.window(),
+            chartWidget == null ? 0 : chartWidget.plotWidth());
         if (chartWidget != null) chartWidget.chart(chart);
         if (legend != null) legend.entries(chart.series(), chart.legend());
         syncButtons();
@@ -178,15 +199,41 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         if (serverButton != null) serverButton.setMessage(PlaytimeScreenSupport.serverLabel());
     }
 
+    /**
+     * Sets where the view is heading. {@link #animateZoom()} moves the view there over the next frames, and
+     * further scrolling continues from that target, so fast scrolling adds up instead of stepping.
+     */
     private void zoom(double fraction, double steps) {
         if (chart == null || chart.isEmpty()) return;
         PlaytimeWindow domain = new PlaytimeWindow(chart.domainStart(), chart.domainEnd());
         PlaytimeWindow view = new PlaytimeWindow(chart.viewStart(), chart.viewEnd());
-        PlaytimeSession.window(PlaytimeWindow.zoom(domain, view, fraction, steps));
+        PlaytimeWindow base = zoomTarget == null ? view : zoomTarget;
+        double anchor = PlaytimeWindow.fractionOf(base, PlaytimeWindow.at(view, fraction));
+        zoomTarget = PlaytimeWindow.zoom(domain, base, anchor, steps);
+        lastZoomFrame = System.nanoTime();
+    }
+
+    private void animateZoom() {
+        if (zoomTarget == null) return;
+        if (chart == null || chart.isEmpty()) {
+            zoomTarget = null;
+            return;
+        }
+        long now = System.nanoTime();
+        double seconds = Math.min(0.1, (now - lastZoomFrame) / 1e9);
+        lastZoomFrame = now;
+        PlaytimeWindow view = new PlaytimeWindow(chart.viewStart(), chart.viewEnd());
+        PlaytimeWindow next = PlaytimeWindow.toward(view, zoomTarget, 1 - Math.exp(-seconds / ZOOM_EASE_SECONDS));
+        if (PlaytimeWindow.close(next, zoomTarget)) {
+            next = zoomTarget;
+            zoomTarget = null;
+        }
+        PlaytimeSession.window(next);
         rebuild();
     }
 
     private void pan(double fractionDelta) {
+        zoomTarget = null;
         if (chart == null || chart.isEmpty()) return;
         PlaytimeWindow domain = new PlaytimeWindow(chart.domainStart(), chart.domainEnd());
         PlaytimeWindow view = new PlaytimeWindow(chart.viewStart(), chart.viewEnd());
@@ -200,9 +247,8 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
     }
 
     private void openGrain() {
-        boolean open = grainMenu.isOpen();
+        if (grainMenu.isOpen()) return;
         closeMenus();
-        if (open) return;
         List<PlaytimeGrain> grains = grains();
         grainMenu.show(grainButton, grains.stream().map(PlaytimeScreen::grainName).toList(), index -> {
             PlaytimeSession.grain(grains.get(index));
@@ -211,9 +257,8 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
     }
 
     private void openBreakdown() {
-        boolean open = breakdownMenu.isOpen();
+        if (breakdownMenu.isOpen()) return;
         closeMenus();
-        if (open) return;
         breakdownMenu.show(breakdownButton, PlaytimeScreenSupport.groupChoices(), index -> {
             PlaytimeSession.breakdown(PlaytimeScreenSupport.GROUPS[index]);
             rebuild();
@@ -221,9 +266,8 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
     }
 
     private void openStyle() {
-        boolean open = styleMenu.isOpen();
+        if (styleMenu.isOpen()) return;
         closeMenus();
-        if (open) return;
         styleMenu.show(styleButton, Arrays.stream(STYLES).map(PlaytimeScreen::styleName).toList(), index -> {
             PlaytimeSession.style(STYLES[index]);
             rebuild();

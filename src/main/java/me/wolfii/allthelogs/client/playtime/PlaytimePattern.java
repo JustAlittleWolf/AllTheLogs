@@ -10,7 +10,6 @@ public enum PlaytimePattern {
     HORIZONTAL,
     VERTICAL,
     CHECKER,
-    DIAMOND,
     DOTS;
 
     /**
@@ -22,11 +21,10 @@ public enum PlaytimePattern {
         int py = Math.floorDiv(y, u);
         return switch (this) {
             case SOLID -> false;
-            case DIAGONAL -> Math.floorMod(px + py, 6) < 2;
+            case DIAGONAL -> Math.floorMod(px + py, 7) < 3;
             case HORIZONTAL -> Math.floorMod(py, 5) < 2;
             case VERTICAL -> Math.floorMod(px, 5) < 2;
-            case CHECKER -> (Math.floorDiv(px, 3) + Math.floorDiv(py, 3)) % 2 == 0;
-            case DIAMOND -> (Math.floorDiv(px + py, 4) + Math.floorDiv(px - py, 4)) % 2 == 0;
+            case CHECKER -> Math.floorMod(Math.floorDiv(px, 5) + Math.floorDiv(py, 5), 2) == 0;
             case DOTS -> Math.floorMod(px, 5) < 2 && Math.floorMod(py, 5) < 2;
         };
     }

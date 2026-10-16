@@ -8,6 +8,7 @@ import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.ParentUIComponent;
 import io.wispforest.owo.ui.core.Sizing;
+import io.wispforest.owo.ui.core.UIComponent;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
 import net.minecraft.network.chat.Component;
@@ -17,15 +18,21 @@ import java.util.function.IntConsumer;
 import java.util.function.IntSupplier;
 
 /**
- * Small choice list anchored under a button and exactly as wide. Choosing an entry closes the list.
+ * Small choice list anchored under a button and exactly as wide. Choosing an entry closes the list. With
+ * {@link #opensOnHover} it behaves like the messages menu: hovering the button opens it, and it closes
+ * {@link #CLOSE_DELAY_MS} after the pointer leaves both the button and the list, like the messages menu.
  */
 final class OptionMenu {
     private final StackLayout overlays;
     private final IntSupplier screenWidth;
     private final IntSupplier screenHeight;
     private static final int ROW_HEIGHT = 20;
+    static final long CLOSE_DELAY_MS = 1000;
 
     private ParentUIComponent menu;
+    private ButtonComponent hoverAnchor;
+    private Runnable hoverOpen;
+    private long closeAt = Long.MAX_VALUE;
 
     OptionMenu(StackLayout overlays, IntSupplier screenWidth, IntSupplier screenHeight) {
         this.overlays = overlays;
@@ -40,6 +47,35 @@ final class OptionMenu {
     void close() {
         if (isOpen()) overlays.removeChild(menu);
         menu = null;
+        closeAt = Long.MAX_VALUE;
+    }
+
+    /**
+     * Opens through {@code open} whenever the pointer is on {@code anchor}. Call {@link #sync} every frame.
+     */
+    void opensOnHover(ButtonComponent anchor, Runnable open) {
+        this.hoverAnchor = anchor;
+        this.hoverOpen = open;
+    }
+
+    void sync(int mouseX, int mouseY) {
+        if (hoverAnchor == null) return;
+        boolean over = hit(hoverAnchor, mouseX, mouseY) || (isOpen() && hit(menu, mouseX, mouseY));
+        long now = System.currentTimeMillis();
+        if (over) {
+            closeAt = Long.MAX_VALUE;
+            if (!isOpen()) hoverOpen.run();
+            return;
+        }
+        if (!isOpen()) return;
+        if (closeAt == Long.MAX_VALUE) closeAt = now + CLOSE_DELAY_MS;
+        if (now >= closeAt) close();
+    }
+
+    private static boolean hit(UIComponent component, int mouseX, int mouseY) {
+        if (component == null || component.width() <= 0 || component.height() <= 0) return false;
+        return mouseX >= component.x() && mouseX < component.x() + component.width()
+            && mouseY >= component.y() && mouseY < component.y() + component.height();
     }
 
     void show(ButtonComponent anchor, List<Component> labels, IntConsumer pick) {

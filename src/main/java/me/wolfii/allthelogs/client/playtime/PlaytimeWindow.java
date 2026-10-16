@@ -9,7 +9,8 @@ import java.util.Objects;
  * pointer fixed and never leaves the domain of the filtered playtime.
  */
 public record PlaytimeWindow(LocalDateTime start, LocalDateTime end) {
-    private static final long MIN_SECONDS = 86_400L;
+    /** Narrowest view: about twenty days, or the whole history when it is shorter. */
+    static final long MIN_SECONDS = 20 * 86_400L;
     private static final double ZOOM = 1.25;
 
     public PlaytimeWindow {
@@ -73,6 +74,43 @@ public record PlaytimeWindow(LocalDateTime start, LocalDateTime end) {
             if (newStart < domainStart) newStart = domainStart;
         }
         return new PlaytimeWindow(fromSeconds(newStart), fromSeconds(newEnd));
+    }
+
+    /**
+     * Moves {@code current} a fraction {@code amount} of the way toward {@code target}, edge by edge. Used to
+     * animate zooming.
+     */
+    public static PlaytimeWindow toward(PlaytimeWindow current, PlaytimeWindow target, double amount) {
+        double t = Math.clamp(amount, 0d, 1d);
+        long start = seconds(current.start()) + Math.round((seconds(target.start()) - seconds(current.start())) * t);
+        long end = seconds(current.end()) + Math.round((seconds(target.end()) - seconds(current.end())) * t);
+        if (end <= start) return target;
+        return new PlaytimeWindow(fromSeconds(start), fromSeconds(end));
+    }
+
+    /**
+     * Whether both edges of {@code a} and {@code b} are within a thousandth of {@code b}'s length, or a minute.
+     */
+    public static boolean close(PlaytimeWindow a, PlaytimeWindow b) {
+        long tolerance = Math.max(60, (seconds(b.end()) - seconds(b.start())) / 1000);
+        return Math.abs(seconds(a.start()) - seconds(b.start())) <= tolerance
+            && Math.abs(seconds(a.end()) - seconds(b.end())) <= tolerance;
+    }
+
+    /**
+     * Position of {@code time} inside {@code window}, from 0 at its start to 1 at its end.
+     */
+    public static double fractionOf(PlaytimeWindow window, LocalDateTime time) {
+        double span = Math.max(1, seconds(window.end()) - seconds(window.start()));
+        return Math.clamp((seconds(time) - seconds(window.start())) / span, 0d, 1d);
+    }
+
+    /**
+     * The instant at {@code fraction} of {@code window}.
+     */
+    public static LocalDateTime at(PlaytimeWindow window, double fraction) {
+        long span = seconds(window.end()) - seconds(window.start());
+        return fromSeconds(seconds(window.start()) + Math.round(Math.clamp(fraction, 0d, 1d) * span));
     }
 
     private static PlaytimeWindow place(long domainStart, long domainEnd, long anchor, double fraction, long span) {

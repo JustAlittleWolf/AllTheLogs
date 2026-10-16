@@ -24,13 +24,16 @@ public final class PlaytimeDuration {
     }
 
     /**
-     * Shorter form for axis labels: {@code 2d 06:36} once days are reached, otherwise {@link #format}.
+     * Axis label: {@link #format} below a day. From a day on, the days on the first line and the hours and
+     * minutes on a second line, separated by {@code \n}.
      */
     public static String axis(long millis) {
         long minutes = Math.max(0, millis) / 60_000;
         long days = minutes / 1_440;
         if (days == 0) return format(millis);
-        return String.format("%dd %02d:%02d", days, (minutes % 1_440) / 60, minutes % 60);
+        long rest = minutes % 1_440;
+        if (rest == 0) return days + "d";
+        return days + "d\n" + format(rest * 60_000);
     }
 
     private static void append(StringBuilder text, long value, String unit) {

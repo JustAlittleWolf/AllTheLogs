@@ -16,7 +16,7 @@ import java.util.function.BooleanSupplier;
 
 /**
  * Vertical legend: every series with its playtime, most first, and the same pattern as in the charts.
- * Hovering a row highlights that series in the charts. Meant to sit in a vertical scroll container; the
+ * Hovering a row highlights that series in the charts, and shows the full name when it is cut short. Meant to sit in a vertical scroll container; the
  * rightmost pixels stay free for its scrollbar.
  */
 public final class PlaytimeLegendWidget extends BaseUIComponent implements AutoCloseable {
@@ -50,9 +50,13 @@ public final class PlaytimeLegendWidget extends BaseUIComponent implements AutoC
         this.hoverBlocked = hoverBlocked;
     }
 
+    /**
+     * Releases the swatch texture. Drawing again repaints it.
+     */
     @Override
     public void close() {
         swatches.close();
+        swatchesPainted = false;
     }
 
     @Override
@@ -70,17 +74,21 @@ public final class PlaytimeLegendWidget extends BaseUIComponent implements AutoC
             && (parent() == null || parent().isInBoundingBox(mouseX, mouseY));
         int right = x + width - SCROLLBAR_ROOM;
         int hovered = -1;
+        String cutName = null;
         int active = highlight.active();
         int rowY = y;
         for (PlaytimeChartModel.LegendEntry entry : entries) {
             if (entry.series() >= 0 && entry.series() < series.size()) {
                 PlaytimeSeries item = series.get(entry.series());
-                if (pointerInside && mouseY >= rowY && mouseY < rowY + ROW) hovered = entry.series();
+                boolean rowHovered = pointerInside && mouseY >= rowY && mouseY < rowY + ROW;
+                if (rowHovered) hovered = entry.series();
                 if (entry.series() == active) graphics.fill(x, rowY, right, rowY + ROW, HIGHLIGHT_ROW);
                 String duration = PlaytimeDuration.format(entry.millis());
                 int durationWidth = font.width(duration);
                 int nameX = x + SWATCH + 4;
-                String name = TextFit.fit(item.label(unknown), right - durationWidth - 4 - nameX);
+                String fullName = item.label(unknown);
+                String name = TextFit.fit(fullName, right - durationWidth - 4 - nameX);
+                if (rowHovered && !name.equals(fullName)) cutName = fullName;
                 graphics.drawText(Component.literal(name), nameX, rowY + 2, 1f, Colors.TEXT);
                 graphics.drawText(Component.literal(duration), right - durationWidth - 1, rowY + 2, 1f, Colors.MUTED);
             }
@@ -88,6 +96,7 @@ public final class PlaytimeLegendWidget extends BaseUIComponent implements AutoC
         }
         swatches.draw(graphics, scale, (x + 1) * scale, y * scale);
         highlight.legend(hovered);
+        if (cutName != null) graphics.setTooltipForNextFrame(font, Component.literal(cutName), mouseX, mouseY);
     }
 
     /**

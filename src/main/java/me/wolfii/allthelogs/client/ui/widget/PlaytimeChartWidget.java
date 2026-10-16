@@ -61,6 +61,7 @@ public final class PlaytimeChartWidget extends BaseUIComponent implements AutoCl
     private boolean painted;
     private int paintedHighlight;
     private int hoverColumn = -1;
+    private int hoverFocus = -1;
     private List<PlaytimeHover.Line> hoverLines = List.of();
 
     public PlaytimeChartWidget(SeriesHighlight highlight) {
@@ -137,7 +138,7 @@ public final class PlaytimeChartWidget extends BaseUIComponent implements AutoCl
         drawXAxis(graphics, plotX, scale, plotBottom + 3);
         drawViewIndicator(graphics, plotX, plot.width());
         if (column >= 0) {
-            PlaytimePainter.hoverCard(graphics, hoverLines(column), mouseX, mouseY, x, y, width, height);
+            PlaytimePainter.hoverCard(graphics, hoverLines(column, hit.series()), mouseX, mouseY, x, y, width, height);
         }
     }
 
@@ -193,9 +194,20 @@ public final class PlaytimeChartWidget extends BaseUIComponent implements AutoCl
         return super.onMouseUp(click);
     }
 
+    /**
+     * Releases the bar texture. Drawing again repaints it, so a screen that is shown again keeps working.
+     */
     @Override
     public void close() {
         canvas.close();
+        painted = false;
+    }
+
+    /**
+     * Width of the plot in GUI pixels, or 0 before the first layout.
+     */
+    public int plotWidth() {
+        return width <= 0 ? 0 : plot().width();
     }
 
     private Plot plot() {
@@ -252,10 +264,12 @@ public final class PlaytimeChartWidget extends BaseUIComponent implements AutoCl
         return drawnAt[relative];
     }
 
-    private List<PlaytimeHover.Line> hoverLines(int column) {
-        if (column != hoverColumn) {
+    private List<PlaytimeHover.Line> hoverLines(int column, int focus) {
+        if (column != hoverColumn || focus != hoverFocus) {
             hoverColumn = column;
-            hoverLines = chart.hover(column, Component.translatable("allthelogs.playtime.server.unknown").getString());
+            hoverFocus = focus;
+            hoverLines = chart.hover(column, Component.translatable("allthelogs.playtime.server.unknown").getString(),
+                Component.translatable("allthelogs.playtime.hover.total").getString(), focus);
         }
         return hoverLines;
     }
@@ -272,7 +286,7 @@ public final class PlaytimeChartWidget extends BaseUIComponent implements AutoCl
         int step = Math.max(1, (int) Math.ceil((widest + LABEL_GAP) * scale / Math.max(averageBar, 0.001)));
         for (int column = 0; column < count; column += step) {
             PlaytimeChartModel.Column bucket = columns.get(column);
-            String label = PlaytimeChartModel.spanLabel(bucket.start(), bucket.end(), chart.grain());
+            String label = PlaytimeChartModel.axisLabel(bucket.start(), bucket.end(), chart.grain());
             int textWidth = PlaytimePainter.axisWidth(label);
             int center = plotX + (layout.barLeft(column) + layout.barRight(column)) / 2 / scale;
             int textX = Math.max(x, Math.min(center - textWidth / 2, x + width - textWidth));
@@ -281,7 +295,7 @@ public final class PlaytimeChartWidget extends BaseUIComponent implements AutoCl
     }
 
     private int labelWidth(PlaytimeChartModel.Column bucket) {
-        return PlaytimePainter.axisWidth(PlaytimeChartModel.spanLabel(bucket.start(), bucket.end(), chart.grain()));
+        return PlaytimePainter.axisWidth(PlaytimeChartModel.axisLabel(bucket.start(), bucket.end(), chart.grain()));
     }
 
     private void drawViewIndicator(OwoUIGraphics graphics, int left, int span) {

@@ -11,6 +11,7 @@ import java.util.Locale;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -108,11 +109,16 @@ class PlaytimeChartTest {
         PlaytimeChartModel.Result chart = PlaytimeChartModel.build(
             List.of(span(1, 1, "1.20.4", "a"), span(1, 3, "1.21", "b")),
             PlaytimeFilter.all(), PlaytimeBreakdown.VERSION, PlaytimeStyle.BARS, PlaytimeGrain.DAYS, null);
-        List<PlaytimeHover.Line> lines = chart.hover(0, "Unknown");
-        assertEquals(List.of("2024-01-01", "4h", "", "1.21", "1.20.4"),
+        List<PlaytimeHover.Line> lines = chart.hover(0, "Unknown", "Total", -1);
+        assertEquals(List.of("2024-01-01", "Total", "", "1.21", "1.20.4"),
             lines.stream().map(PlaytimeHover.Line::label).toList());
-        assertEquals(List.of("", "", "", "3h", "1h"), lines.stream().map(PlaytimeHover.Line::value).toList());
-        assertTrue(lines.get(1).bold());
+        assertEquals(List.of("", "4h", "", "3h", "1h"), lines.stream().map(PlaytimeHover.Line::value).toList());
+        assertFalse(lines.get(1).bold());
+
+        List<PlaytimeHover.Line> focused = chart.hover(0, "Unknown", "Total", 0);
+        assertEquals(List.of("2024-01-01", "Total", "1.20.4", "", "1.21"),
+            focused.stream().map(PlaytimeHover.Line::label).toList());
+        assertTrue(focused.get(2).bold());
     }
 
     @Test
@@ -174,9 +180,46 @@ class PlaytimeChartTest {
     }
 
     @Test
-    void axisLabelsUseClockTimeOnceDaysAreReached() {
+    void axisLabelsPutDaysOnTheirOwnLine() {
         assertEquals("6h 36m", PlaytimeDuration.axis(6 * 3_600_000L + 36 * 60_000L));
-        assertEquals("2d 06:05", PlaytimeDuration.axis(2 * 86_400_000L + 6 * 3_600_000L + 5 * 60_000L));
+        assertEquals("2d\n6h 5m", PlaytimeDuration.axis(2 * 86_400_000L + 6 * 3_600_000L + 5 * 60_000L));
+        assertEquals("3d", PlaytimeDuration.axis(3 * 86_400_000L));
+    }
+
+    @Test
+    void autoKeepsBarsNarrowForTheChartWidth() {
+        LocalDateTime start = at(1, 0);
+        assertEquals(PlaytimeGrain.MONTHS, PlaytimeGrain.resolve(PlaytimeGrain.AUTO, start, start.plusDays(5 * 365), 1000));
+        assertEquals(PlaytimeGrain.WEEKS, PlaytimeGrain.resolve(PlaytimeGrain.AUTO, start, start.plusDays(365), 1000));
+        assertEquals(PlaytimeGrain.DAYS, PlaytimeGrain.resolve(PlaytimeGrain.AUTO, start, start.plusDays(90), 1000));
+        assertEquals(PlaytimeGrain.DAYS, PlaytimeGrain.resolve(PlaytimeGrain.AUTO, start, start.plusDays(20), 1000));
+    }
+
+    @Test
+    void zoomStopsAtTwentyDaysAndAnimatesTowardTheTarget() {
+        PlaytimeWindow domain = new PlaytimeWindow(at(1, 0), at(1, 0).plusDays(100));
+        PlaytimeWindow deep = PlaytimeWindow.zoom(domain, domain, 0.5, 40);
+        assertEquals(20, java.time.Duration.between(deep.start(), deep.end()).toDays());
+
+        PlaytimeWindow halfway = PlaytimeWindow.toward(domain, deep, 0.5);
+        assertTrue(halfway.start().isAfter(domain.start()) && halfway.start().isBefore(deep.start()));
+        assertTrue(PlaytimeWindow.close(PlaytimeWindow.toward(domain, deep, 1), deep));
+    }
+
+    @Test
+    void weekLabelsShowOnlyTheFirstDay() {
+        LocalDateTime monday = LocalDateTime.of(2024, 1, 1, 0, 0);
+        assertEquals("2024-01-01", PlaytimeChartModel.axisLabel(monday, monday.plusWeeks(1), PlaytimeGrain.WEEKS));
+        assertEquals("2024-01-01 - 2024-01-07", PlaytimeChartModel.spanLabel(monday, monday.plusWeeks(1), PlaytimeGrain.WEEKS));
+    }
+
+    @Test
+    void emptyDaysAndWeeksStillGetABar() {
+        List<PlaytimeSpan> spans = List.of(span(1, 1, "1.21", null), span(29, 1, "1.21", null));
+        assertEquals(29, PlaytimeChartModel.build(spans, PlaytimeFilter.all(), PlaytimeBreakdown.VERSION,
+            PlaytimeStyle.BARS, PlaytimeGrain.DAYS, null).columns().size());
+        assertEquals(5, PlaytimeChartModel.build(spans, PlaytimeFilter.all(), PlaytimeBreakdown.VERSION,
+            PlaytimeStyle.BARS, PlaytimeGrain.WEEKS, null).columns().size());
     }
 
     @Test
@@ -250,8 +293,9 @@ class PlaytimeChartTest {
         assertEquals(3_600_000L, days.heatMillis(DayOfWeek.MONDAY.getValue() - 1, 0));
         assertEquals(2 * 3_600_000L, days.heatMillis(PlaytimeWeekday.ALL_DAYS, 0));
 
-        List<PlaytimeHover.Line> hover = days.dayHover(DayOfWeek.TUESDAY.getValue() - 1, "Unknown");
-        assertEquals("3h", hover.get(1).label());
+        List<PlaytimeHover.Line> hover = days.dayHover(DayOfWeek.TUESDAY.getValue() - 1, "Total", "Unknown", -1);
+        assertEquals("Total", hover.get(1).label());
+        assertEquals("3h", hover.get(1).value());
         assertEquals("", hover.get(2).label());
         assertEquals("b", hover.get(3).label());
         assertEquals("3h", hover.get(3).value());
