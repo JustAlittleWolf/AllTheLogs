@@ -50,7 +50,7 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
     private final SeriesHighlight highlight = new SeriesHighlight();
     private PlaytimeChartWidget chartWidget;
     private PlaytimeLegendWidget legend;
-    private PlaytimeScreenSupport.TotalRow totalLabel;
+    private PlaytimeScreenSupport.TotalRow totalRow;
     private ButtonComponent grainButton;
     private ButtonComponent breakdownButton;
     private ButtonComponent styleButton;
@@ -111,12 +111,12 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         chartWidget.onDismiss(this::closeContextMenu);
         chartWidget.onContext(this::openContextMenu);
         legend = new PlaytimeLegendWidget(highlight);
-        totalLabel = new PlaytimeScreenSupport.TotalRow();
+        totalRow = new PlaytimeScreenSupport.TotalRow();
         chartWidget.hoverBlocked(this::menusOpen);
         legend.hoverBlocked(this::menusOpen);
         versionButton = PlaytimeScreenSupport.filterButton(PlaytimeScreenSupport.versionLabel(), pressed -> openVersions());
         serverButton = PlaytimeScreenSupport.filterButton(PlaytimeScreenSupport.serverLabel(), pressed -> openServers());
-        page.child(PlaytimeScreenSupport.body(chartWidget, totalLabel, legend, List.of(versionButton, serverButton)));
+        page.child(PlaytimeScreenSupport.body(chartWidget, totalRow, legend, List.of(versionButton, serverButton)));
         root.child(page);
         rebuild();
     }
@@ -188,7 +188,7 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
 
     private void status(@Nullable Component message) {
         statusMessage = message;
-        PlaytimeScreenSupport.showTotal(totalLabel, chartWidget == null ? null : chartWidget::placeholder,
+        PlaytimeScreenSupport.showTotal(totalRow, chartWidget == null ? null : chartWidget::placeholder,
             message, chart == null ? 0 : chart.totalMillis());
     }
 

@@ -41,7 +41,7 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
     private StackLayout overlays;
     private WeekdayChartWidget chartWidget;
     private PlaytimeLegendWidget legend;
-    private PlaytimeScreenSupport.TotalRow totalLabel;
+    private PlaytimeScreenSupport.TotalRow totalRow;
     private ButtonComponent groupButton;
     private ButtonComponent versionButton;
     private ButtonComponent serverButton;
@@ -80,12 +80,12 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
 
         chartWidget = new WeekdayChartWidget(highlight);
         legend = new PlaytimeLegendWidget(highlight);
-        totalLabel = new PlaytimeScreenSupport.TotalRow();
+        totalRow = new PlaytimeScreenSupport.TotalRow();
         chartWidget.hoverBlocked(this::menusOpen);
         legend.hoverBlocked(this::menusOpen);
         versionButton = PlaytimeScreenSupport.filterButton(PlaytimeScreenSupport.versionLabel(), pressed -> openVersions());
         serverButton = PlaytimeScreenSupport.filterButton(PlaytimeScreenSupport.serverLabel(), pressed -> openServers());
-        page.child(PlaytimeScreenSupport.body(chartWidget, totalLabel, legend, List.of(
+        page.child(PlaytimeScreenSupport.body(chartWidget, totalRow, legend, List.of(
             dateField("allthelogs.filter.from", DateParser.format(PlaytimeSession.weekdayFrom()), DateParser::parse,
                 PlaytimeSession::weekdayFrom),
             dateField("allthelogs.filter.until", DateParser.formatUntil(PlaytimeSession.weekdayUntil()),
@@ -183,7 +183,7 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
 
     private void status(@Nullable Component message) {
         statusMessage = message;
-        PlaytimeScreenSupport.showTotal(totalLabel, chartWidget == null ? null : chartWidget::placeholder,
+        PlaytimeScreenSupport.showTotal(totalRow, chartWidget == null ? null : chartWidget::placeholder,
             message, chart == null ? 0 : chart.totalMillis());
     }
 
