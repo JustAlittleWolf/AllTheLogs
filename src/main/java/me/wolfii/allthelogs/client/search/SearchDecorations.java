@@ -10,7 +10,7 @@ import net.minecraft.util.FormattedCharSequence;
  */
 public final class SearchDecorations {
     /** Space between a decoration and the editable pattern, in pixels. */
-    public static final int GAP = 1;
+    public static final int GAP = 3;
 
     private SearchDecorations() {
     }
@@ -29,13 +29,13 @@ public final class SearchDecorations {
     }
 
     /**
-     * Colour of one decoration character. The slashes use the group colour; the {@code i} flag uses the
-     * anchor colour, matching the old in-text wrapping.
+     * Colour of one decoration character. The slashes and the {@code i} flag use the pattern hues,
+     * darkened so the chrome stays distinct from the typed query.
      */
     public static int decorationColor(String decoration, int index) {
-        if (decoration == null || index < 0 || index >= decoration.length()) return Colors.REGEX_GROUP;
-        if (index == 0) return Colors.REGEX_GROUP;
-        return Colors.REGEX_ANCHOR;
+        if (decoration == null || index < 0 || index >= decoration.length()) return Colors.REGEX_CHROME;
+        if (index == 0) return Colors.REGEX_CHROME;
+        return Colors.REGEX_CHROME_FLAG;
     }
 
     /**

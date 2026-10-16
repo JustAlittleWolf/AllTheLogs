@@ -288,9 +288,9 @@ final class LogBrowserQueries {
             boolean more = added > 0 && PageBounds.isFull(incoming, pageLimit);
 
             List<DisplayRow> current = list.window().rows();
-            List<DisplayRow> merged = towardStart
+            List<DisplayRow> merged = ContextPeeks.clearCaretsFacingLoadedLines(towardStart
                 ? DisplayRows.mergeUnique(incoming, current)
-                : DisplayRows.mergeUnique(current, incoming);
+                : DisplayRows.mergeUnique(current, incoming));
             int shift = towardStart ? added : 0;
             int keep = (int) Math.max(1, Math.min(pageLimit, Integer.MAX_VALUE));
             List<DisplayRow> trimmed = DisplayRows.trimToMatchLimit(
@@ -538,7 +538,8 @@ final class LogBrowserQueries {
             List<DisplayRow> incoming = DisplayRows.reversed(displaySearchRows(entries, rows));
             boolean more = PageBounds.isFull(incoming, extra.limit())
                 && DisplayRows.countNewKeys(incoming, alreadyLoaded) > 0;
-            List<DisplayRow> merged = DisplayRows.mergeUnique(incoming, rows);
+            List<DisplayRow> merged = ContextPeeks.clearCaretsFacingLoadedLines(
+                DisplayRows.mergeUnique(incoming, rows));
             applyJump(target, preview, merged,
                 more || PageBounds.hasBefore(filter.sort(), merged, matchSummary),
                 hasAfter || PageBounds.hasAfter(filter.sort(), false, merged, matchSummary),
