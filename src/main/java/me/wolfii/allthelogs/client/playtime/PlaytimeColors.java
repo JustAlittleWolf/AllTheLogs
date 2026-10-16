@@ -1,19 +1,64 @@
 package me.wolfii.allthelogs.client.playtime;
 
 /**
- * Stable color for a version, server, or version-and-server pair. The same key keeps its color when the
- * filter or the zoom changes.
+ * Series colors. Each series gets a rank from when it first appears in the whole history, and the rank picks
+ * a color. Neighboring ranks are far apart in hue and alternate in brightness, so series that were played
+ * around the same time stay easy to tell apart. New history is appended later in time, so existing series
+ * keep their color when the filter, the zoom, or the import changes.
  */
 public final class PlaytimeColors {
+    /** Series with neither a known version nor a known server. */
+    public static final int UNKNOWN = 0xFF8A8A8A;
+    private static final double GOLDEN = 0.6180339887498949;
+    private static final float[][] TIERS = {
+        {0.62f, 0.95f},
+        {0.78f, 0.76f},
+        {0.38f, 0.86f},
+    };
+
     private PlaytimeColors() {
     }
 
-    public static int of(String version, String serverKey) {
-        int hash = 17;
-        hash = hash * 31 + (version == null ? 0 : version.hashCode());
-        hash = hash * 31 + (serverKey == null ? 0 : serverKey.hashCode());
-        float hue = (hash & 0xFFFF) / 65535f;
-        return hsb(hue, 0.55f, 0.92f);
+    public static int ofRank(int rank) {
+        double hue = (0.08 + rank * GOLDEN) % 1.0;
+        float[] tier = TIERS[Math.floorMod(rank, TIERS.length)];
+        return hsb((float) hue, tier[0], tier[1]);
+    }
+
+    /**
+     * {@link #ofRank} with little saturation, for series that are only partly known.
+     */
+    public static int ofRankMuted(int rank) {
+        double hue = (0.08 + rank * GOLDEN) % 1.0;
+        return hsb((float) hue, 0.22f, 0.72f);
+    }
+
+    /**
+     * Every other group of three ranks is hatched. Ranks three apart are the closest in hue within a group of
+     * neighbors, so this puts them in different patterns.
+     */
+    public static boolean hatched(int rank) {
+        return Math.floorDiv(rank, 3) % 2 == 1;
+    }
+
+    /**
+     * {@code ARGB} with each channel scaled toward black, used to dim the series that are not highlighted.
+     */
+    public static int dim(int color) {
+        int red = ((color >> 16) & 0xFF) * 3 / 10;
+        int green = ((color >> 8) & 0xFF) * 3 / 10;
+        int blue = (color & 0xFF) * 3 / 10;
+        return (color & 0xFF000000) | (red << 16) | (green << 8) | blue;
+    }
+
+    /**
+     * Stripe color for a hatched section: the fill color at about 60% brightness.
+     */
+    public static int stripe(int color) {
+        int red = ((color >> 16) & 0xFF) * 6 / 10;
+        int green = ((color >> 8) & 0xFF) * 6 / 10;
+        int blue = (color & 0xFF) * 6 / 10;
+        return (color & 0xFF000000) | (red << 16) | (green << 8) | blue;
     }
 
     static int hsb(float hue, float saturation, float brightness) {

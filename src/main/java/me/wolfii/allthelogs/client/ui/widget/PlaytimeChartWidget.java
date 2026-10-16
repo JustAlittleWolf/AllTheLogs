@@ -4,6 +4,7 @@ import io.wispforest.owo.ui.base.BaseUIComponent;
 import io.wispforest.owo.ui.core.OwoUIGraphics;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.UIComponent;
+import me.wolfii.allthelogs.client.playtime.BarLayout;
 import me.wolfii.allthelogs.client.playtime.PlaytimeChartModel;
 import me.wolfii.allthelogs.client.playtime.PlaytimeChartModel.Hit;
 import me.wolfii.allthelogs.client.playtime.PlaytimeChartModel.Plot;
@@ -11,8 +12,6 @@ import me.wolfii.allthelogs.client.playtime.PlaytimeChartModel.Result;
 import me.wolfii.allthelogs.client.playtime.PlaytimeDuration;
 import me.wolfii.allthelogs.client.playtime.PlaytimeStyle;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.Font;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
@@ -24,13 +23,15 @@ import java.util.function.BiConsumer;
 import java.util.function.DoubleConsumer;
 
 /**
- * Timeline of estimated playtime. The scroll wheel zooms around the pointer and dragging pans.
- * Right-click reports the bucket, and the colored section when the pointer is on one.
+ * Timeline of estimated playtime. Every bucket is a bar of the same width in screen pixels, with no gap
+ * between bars. The scroll wheel zooms around the pointer and dragging pans. While zoomed in, a thin
+ * indicator under the axis shows where the view sits in the whole history. Right-click reports the
+ * bucket, and the colored section when the pointer is on one.
  */
 public final class PlaytimeChartWidget extends BaseUIComponent {
-    private static final int MAX_HOVER_LINES = 14;
-    private static final float AXIS_SCALE = 0.75f;
+    private static final int LABEL_GAP = 8;
 
+    private final SeriesHighlight highlight;
     private Result chart;
     private Component placeholder = Component.empty();
     private BiConsumer<Double, Double> onZoom = (fraction, steps) -> {
@@ -45,7 +46,8 @@ public final class PlaytimeChartWidget extends BaseUIComponent {
     };
     private boolean panning;
 
-    public PlaytimeChartWidget() {
+    public PlaytimeChartWidget(SeriesHighlight highlight) {
+        this.highlight = highlight;
         this.sizing(Sizing.fill(), Sizing.fill());
     }
 
@@ -81,45 +83,42 @@ public final class PlaytimeChartWidget extends BaseUIComponent {
     public void draw(OwoUIGraphics graphics, int mouseX, int mouseY, float partialTicks, float delta) {
         graphics.fill(x, y, x + width, y + height, Colors.LIST_BACKGROUND);
         if (chart == null || chart.isEmpty()) {
-            drawCentered(graphics, placeholder);
+            highlight.chart(-1);
+            PlaytimePainter.centered(graphics, placeholder, x, y, width, height);
             return;
         }
         Plot plot = PlaytimeChartModel.plot(width, height);
         int plotX = x + plot.x();
         int plotY = y + plot.y();
         int plotBottom = plotY + plot.height();
-        int plotRight = plotX + plot.width();
-        graphics.fill(plotX, plotBottom, plotRight, plotBottom + 1, Colors.TRACK_BORDER);
-        drawYAxis(graphics, plotX, plotY, plot.height());
-        int[] colors = colors();
-        for (PlaytimeChartModel.Column column : chart.columns()) {
-            int left = xAt(plot, column.start());
-            int right = xAt(plot, column.end());
-            if (right - left > 3) {
-                left++;
-                right--;
+        int scale = PlaytimePainter.scale();
+        BarLayout layout = layout(plot, scale);
+        Hit hit = isInBoundingBox(mouseX, mouseY) ? hitAt(layout, scale, mouseX - x, mouseY - y) : null;
+        highlight.chart(hit == null ? -1 : hit.series());
+        PlaytimePainter.yAxis(graphics, y, plotX, plotY, plot.width(), plot.height(), chart.axisMax(), this::yLabel);
+        int active = highlight.active();
+        PlaytimePainter.inPixels(graphics, scale, () -> {
+            for (int column = layout.first(); column < layout.first() + layout.count(); column++) {
+                int left = layout.barLeft(column);
+                PlaytimePainter.stacked(graphics, left, left + layout.barWidth(), plotBottom * scale,
+                    plot.height() * scale, chart.axisMax(), chart.columns().get(column).display(), chart.series(), active);
             }
-            if (right <= left) right = left + 1;
-            left = Math.max(plotX, left);
-            right = Math.min(plotRight, right);
-            PlaytimeBars.stacked(graphics, left, right, plotBottom, plot.height(), chart.axisMax(),
-                column.display(), colors);
-        }
-        drawXAxis(graphics, plotY + plot.height() + 3);
-        int localX = mouseX - x;
-        int localY = mouseY - y;
-        if (localX >= 0 && localX < width && localY >= 0 && localY < height) {
-            Hit hit = chart.hit(localX, localY, plot);
-            if (hit != null) drawHover(graphics, mouseX, mouseY, hit.column());
+        });
+        drawXAxis(graphics, layout, scale, plotBottom + 3);
+        drawViewIndicator(graphics, plotX, plot.width());
+        if (hit != null) {
+            String unknown = Component.translatable("allthelogs.playtime.server.unknown").getString();
+            String total = Component.translatable("allthelogs.playtime.hover.total").getString();
+            PlaytimePainter.hoverCard(graphics, chart.hover(hit.column(), unknown, total), mouseX, mouseY, x, y, width, height);
         }
     }
 
     @Override
     public boolean onMouseScroll(double mouseX, double mouseY, double amount) {
         if (chart == null || chart.isEmpty()) return false;
-        Plot plot = PlaytimeChartModel.plot(width, height);
-        double fraction = plot.width() <= 0 ? 0.5 : (mouseX - plot.x()) / plot.width();
-        onZoom.accept(fraction, Math.clamp(amount, -5d, 5d));
+        int scale = PlaytimePainter.scale();
+        BarLayout layout = layout(PlaytimeChartModel.plot(width, height), scale);
+        onZoom.accept(chart.fractionAt(layout, (x + mouseX) * scale), Math.clamp(amount, -5d, 5d));
         return true;
     }
 
@@ -129,8 +128,11 @@ public final class PlaytimeChartWidget extends BaseUIComponent {
             focusHandler().focus(this, UIComponent.FocusSource.MOUSE_CLICK);
         }
         if (click.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
-            Hit hit = hitAt(click.x(), click.y());
-            if (hit != null) onContext.open(hit, x + click.x(), y + click.y());
+            if (chart != null && !chart.isEmpty()) {
+                int scale = PlaytimePainter.scale();
+                Hit hit = hitAt(layout(PlaytimeChartModel.plot(width, height), scale), scale, click.x(), click.y());
+                if (hit != null) onContext.open(hit, x + click.x(), y + click.y());
+            }
             return true;
         }
         onDismiss.run();
@@ -162,40 +164,51 @@ public final class PlaytimeChartWidget extends BaseUIComponent {
         return super.onMouseUp(click);
     }
 
-    private Hit hitAt(double localX, double localY) {
-        if (chart == null || chart.isEmpty()) return null;
-        return chart.hit(localX, localY, PlaytimeChartModel.plot(width, height));
+    private BarLayout layout(Plot plot, int scale) {
+        return BarLayout.of(chart.columns().size(), (x + plot.x()) * scale, plot.width() * scale);
     }
 
-    private void drawYAxis(OwoUIGraphics graphics, int plotX, int plotY, int plotHeight) {
-        Font font = font();
-        for (int step = 0; step <= 3; step++) {
-            double fraction = step / 3.0;
-            int lineY = plotY + plotHeight - (int) Math.round(fraction * plotHeight);
-            graphics.fill(plotX, lineY, plotX + PlaytimeChartModel.plot(width, height).width(), lineY + 1,
-                step == 0 ? Colors.TRACK_BORDER : Colors.SEPARATOR);
-            String label = yLabel(chart.axisMax() * fraction);
-            int textWidth = Math.round(font.width(label) * AXIS_SCALE);
-            int textY = Math.max(y, lineY - font.lineHeight);
-            graphics.drawText(Component.literal(label), plotX - 4 - textWidth, textY, AXIS_SCALE, Colors.TICK_LABEL);
-        }
+    private Hit hitAt(BarLayout layout, int scale, double localX, double localY) {
+        int column = layout.columnAt((x + localX) * scale);
+        return chart.hit(column, localY, PlaytimeChartModel.plot(width, height));
     }
 
-    private void drawXAxis(OwoUIGraphics graphics, int labelY) {
+    /**
+     * Labels under the bars. Labelled columns are a fixed multiple apart, so labels stay put while panning.
+     */
+    private void drawXAxis(OwoUIGraphics graphics, BarLayout layout, int scale, int labelY) {
         List<PlaytimeChartModel.Column> columns = chart.columns();
-        if (columns.isEmpty()) return;
-        int labels = Math.min(6, columns.size());
-        int step = Math.max(1, (int) Math.ceil(columns.size() / (double) labels));
-        Plot plot = PlaytimeChartModel.plot(width, height);
-        Font font = font();
-        for (int index = 0; index < columns.size(); index += step) {
-            PlaytimeChartModel.Column column = columns.get(index);
-            String label = PlaytimeChartModel.spanLabel(column.start(), column.end(), chart.grain());
-            int textWidth = Math.round(font.width(label) * AXIS_SCALE);
-            int center = (xAt(plot, column.start()) + xAt(plot, column.end())) / 2;
+        if (layout.count() == 0) return;
+        int widest = Math.max(labelWidth(columns.get(layout.first())),
+            labelWidth(columns.get(layout.first() + layout.count() - 1)));
+        int step = Math.max(1, (int) Math.ceil((widest + LABEL_GAP) * scale / (double) layout.barWidth()));
+        int first = Math.ceilDiv(layout.first(), step) * step;
+        for (int column = first; column < layout.first() + layout.count(); column += step) {
+            PlaytimeChartModel.Column bucket = columns.get(column);
+            String label = PlaytimeChartModel.spanLabel(bucket.start(), bucket.end(), chart.grain());
+            int textWidth = PlaytimePainter.axisWidth(label);
+            int center = (layout.barLeft(column) + layout.barWidth() / 2) / scale;
             int textX = Math.max(x, Math.min(center - textWidth / 2, x + width - textWidth));
-            graphics.drawText(Component.literal(label), textX, y + labelY, AXIS_SCALE, Colors.TICK_LABEL);
+            PlaytimePainter.axisLabel(graphics, label, textX, labelY);
         }
+    }
+
+    private int labelWidth(PlaytimeChartModel.Column bucket) {
+        return PlaytimePainter.axisWidth(PlaytimeChartModel.spanLabel(bucket.start(), bucket.end(), chart.grain()));
+    }
+
+    private void drawViewIndicator(OwoUIGraphics graphics, int left, int span) {
+        long domainStart = epoch(chart.domainStart());
+        long domainEnd = epoch(chart.domainEnd());
+        long viewStart = epoch(chart.viewStart());
+        long viewEnd = epoch(chart.viewEnd());
+        if (domainEnd <= domainStart || (viewStart <= domainStart && viewEnd >= domainEnd)) return;
+        double length = domainEnd - domainStart;
+        int thumbLeft = left + (int) Math.round((viewStart - domainStart) / length * span);
+        int thumbRight = Math.max(thumbLeft + 2, left + (int) Math.round((viewEnd - domainStart) / length * span));
+        int bottom = y + height;
+        graphics.fill(left, bottom - 2, left + span, bottom, Colors.TRACK);
+        graphics.fill(thumbLeft, bottom - 2, thumbRight, bottom, Colors.MUTED);
     }
 
     private String yLabel(double value) {
@@ -203,67 +216,8 @@ public final class PlaytimeChartWidget extends BaseUIComponent {
         return PlaytimeDuration.format(Math.round(value));
     }
 
-    private void drawHover(OwoUIGraphics graphics, int mouseX, int mouseY, int column) {
-        String unknown = Component.translatable("allthelogs.playtime.server.unknown").getString();
-        String total = Component.translatable("allthelogs.playtime.hover.total").getString();
-        List<PlaytimeChartModel.HoverLine> lines = chart.hover(column, unknown, total);
-        if (lines.isEmpty()) return;
-        int hidden = Math.max(0, lines.size() - MAX_HOVER_LINES);
-        int shown = lines.size() - hidden;
-        Font font = font();
-        int lineHeight = font.lineHeight;
-        int textWidth = 0;
-        for (int index = 0; index < shown; index++) {
-            textWidth = Math.max(textWidth, font.width(lines.get(index).text()));
-        }
-        String more = null;
-        if (hidden > 0) {
-            more = Component.translatable("allthelogs.playtime.hover.more", hidden).getString();
-            textWidth = Math.max(textWidth, font.width(more));
-            shown++;
-        }
-        int pad = 4;
-        int boxWidth = Math.min(width - 8, textWidth + pad * 2);
-        int boxHeight = pad * 2 + shown * lineHeight;
-        int boxX = Math.min(mouseX + 8, x + width - boxWidth - 2);
-        boxX = Math.max(x + 2, boxX);
-        int boxY = mouseY + 12;
-        if (boxY + boxHeight > y + height) boxY = Math.max(y + 2, mouseY - boxHeight - 4);
-        HoverChip.fill(graphics, boxX, boxY, boxWidth, boxHeight, Colors.HOVER_CHIP);
-        int textY = boxY + pad;
-        for (int index = 0; index < lines.size() - hidden; index++) {
-            PlaytimeChartModel.HoverLine line = lines.get(index);
-            graphics.drawText(Component.literal(line.text()), boxX + pad, textY, 1f, line.color());
-            textY += lineHeight;
-        }
-        if (more != null) {
-            graphics.drawText(Component.literal(more), boxX + pad, textY, 1f, Colors.MUTED);
-        }
-    }
-
-    private void drawCentered(OwoUIGraphics graphics, Component text) {
-        Font font = font();
-        int textWidth = font.width(text);
-        graphics.drawText(text, x + Math.max(0, (width - textWidth) / 2), y + Math.max(0, (height - font.lineHeight) / 2),
-            1f, Colors.MUTED);
-    }
-
-    private int xAt(Plot plot, LocalDateTime time) {
-        long start = chart.viewStart().toEpochSecond(ZoneOffset.UTC);
-        long end = chart.viewEnd().toEpochSecond(ZoneOffset.UTC);
-        double fraction = end <= start ? 0 : (time.toEpochSecond(ZoneOffset.UTC) - start) / (double) (end - start);
-        fraction = Math.clamp(fraction, 0d, 1d);
-        return x + plot.x() + (int) Math.round(fraction * plot.width());
-    }
-
-    private int[] colors() {
-        int[] colors = new int[chart.series().size()];
-        for (int index = 0; index < colors.length; index++) colors[index] = chart.series().get(index).color();
-        return colors;
-    }
-
-    private static Font font() {
-        return Minecraft.getInstance().font;
+    private static long epoch(LocalDateTime time) {
+        return time.toEpochSecond(ZoneOffset.UTC);
     }
 
     @FunctionalInterface

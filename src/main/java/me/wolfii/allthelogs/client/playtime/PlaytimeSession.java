@@ -2,6 +2,7 @@ package me.wolfii.allthelogs.client.playtime;
 
 import me.wolfii.allthelogs.data.playtime.PlaytimeSpan;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -14,6 +15,8 @@ public final class PlaytimeSession {
     private static PlaytimeStyle style = PlaytimeStyle.BARS;
     private static PlaytimeGrain grain = PlaytimeGrain.AUTO;
     private static PlaytimeWindow window;
+    private static LocalDateTime weekdayFrom;
+    private static LocalDateTime weekdayUntil;
     private static List<PlaytimeSpan> spans = List.of();
     private static boolean loaded;
 
@@ -60,6 +63,28 @@ public final class PlaytimeSession {
         window = next;
     }
 
+    /**
+     * Inclusive start of the period the weekday screen covers, or null for the start of history.
+     */
+    public static LocalDateTime weekdayFrom() {
+        return weekdayFrom;
+    }
+
+    public static void weekdayFrom(LocalDateTime next) {
+        weekdayFrom = next;
+    }
+
+    /**
+     * Exclusive end of the period the weekday screen covers, or null for no end.
+     */
+    public static LocalDateTime weekdayUntil() {
+        return weekdayUntil;
+    }
+
+    public static void weekdayUntil(LocalDateTime next) {
+        weekdayUntil = next;
+    }
+
     public static List<PlaytimeSpan> spans() {
         return spans;
     }
@@ -79,6 +104,8 @@ public final class PlaytimeSession {
         style = PlaytimeStyle.BARS;
         grain = PlaytimeGrain.AUTO;
         window = null;
+        weekdayFrom = null;
+        weekdayUntil = null;
         spans = List.of();
         loaded = false;
     }

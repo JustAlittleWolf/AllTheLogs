@@ -2,24 +2,18 @@ package me.wolfii.allthelogs.client.ui.screen;
 
 import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.ButtonComponent;
-import io.wispforest.owo.ui.component.LabelComponent;
+import io.wispforest.owo.ui.component.TextBoxComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
-import io.wispforest.owo.ui.container.ScrollContainer;
 import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
-import io.wispforest.owo.ui.core.HorizontalAlignment;
-import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
 import io.wispforest.owo.ui.core.Sizing;
-import io.wispforest.owo.ui.core.Surface;
-import io.wispforest.owo.ui.core.VerticalAlignment;
-import me.wolfii.allthelogs.client.playtime.PlaytimeBreakdown;
-import me.wolfii.allthelogs.client.playtime.PlaytimeDuration;
 import me.wolfii.allthelogs.client.playtime.PlaytimeSession;
 import me.wolfii.allthelogs.client.playtime.PlaytimeWeekday;
-import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
-import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
+import me.wolfii.allthelogs.client.search.DateParser;
+import me.wolfii.allthelogs.client.ui.widget.PlaytimeLegendWidget;
+import me.wolfii.allthelogs.client.ui.widget.SeriesHighlight;
 import me.wolfii.allthelogs.client.ui.widget.WeekdayChartWidget;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -29,23 +23,22 @@ import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
- * Monday-to-Sunday playtime. Opened from the timeline screen, not the hamburger menu.
+ * Playtime by weekday beside a heat map of the hours of the day. Opened from the timeline screen, not the
+ * hamburger menu. The period, version, and server filters apply to both charts.
  */
 public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
-    private static final PlaytimeBreakdown[] GROUPS = {
-        PlaytimeBreakdown.VERSION, PlaytimeBreakdown.SERVER, PlaytimeBreakdown.COMBINED
-    };
-
     private final Screen parent;
+    private final SeriesHighlight highlight = new SeriesHighlight();
     private StackLayout overlays;
     private WeekdayChartWidget chartWidget;
-    private LabelComponent totalLabel;
-    private LabelComponent mostLabel;
-    private LabelComponent leastLabel;
-    private FlowLayout legend;
+    private PlaytimeLegendWidget legend;
     private ButtonComponent groupButton;
     private ButtonComponent versionButton;
     private ButtonComponent serverButton;
@@ -70,50 +63,28 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
     protected void build(StackLayout root) {
         this.overlays = root;
         root.allowOverflow(true);
-        FlowLayout page = UIContainers.verticalFlow(Sizing.fill(), Sizing.fill());
-        page.gap(6).padding(Insets.of(8));
-        page.surface(Surface.blur(5, 10).and(PanelSurfaces.overlay()));
-        page.horizontalAlignment(HorizontalAlignment.LEFT);
-        page.verticalAlignment(VerticalAlignment.TOP);
-
-        FlowLayout header = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
-        header.gap(8).verticalAlignment(VerticalAlignment.CENTER);
-        totalLabel = UIComponents.label(Component.translatable("allthelogs.playtime.loading"));
-        totalLabel.horizontalSizing(Sizing.expand());
-        header.child(totalLabel);
-        header.child(PlaytimeScreenSupport.button("allthelogs.playtime.timeline", pressed -> onClose()));
-        page.child(header);
-
-        FlowLayout extremes = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
-        extremes.gap(12).verticalAlignment(VerticalAlignment.CENTER);
-        mostLabel = UIComponents.label(Component.empty());
-        leastLabel = UIComponents.label(Component.empty());
-        extremes.child(mostLabel);
-        extremes.child(leastLabel);
-        page.child(extremes);
+        FlowLayout page = PlaytimeScreenSupport.page();
 
         groupMenu = new OptionMenu(overlays, () -> this.width, () -> this.height);
         versionMenu = new ChecklistMenu(overlays, () -> this.width, () -> this.height);
         serverMenu = new ChecklistMenu(overlays, () -> this.width, () -> this.height);
 
-        FlowLayout controls = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
-        controls.gap(4).verticalAlignment(VerticalAlignment.CENTER);
-        groupButton = PlaytimeScreenSupport.button(groupLabel(), pressed -> openGroup());
-        versionButton = PlaytimeScreenSupport.button(PlaytimeScreenSupport.versionLabel(), pressed -> openVersions());
-        serverButton = PlaytimeScreenSupport.button(PlaytimeScreenSupport.serverLabel(), pressed -> openServers());
-        controls.child(groupButton);
-        controls.child(versionButton);
-        controls.child(serverButton);
-        page.child(controls);
+        groupButton = PlaytimeScreenSupport.optionButton(PlaytimeScreenSupport.groupLabel(PlaytimeSession.breakdown()),
+            PlaytimeScreenSupport.groupLabels(), pressed -> openGroup());
+        page.child(PlaytimeScreenSupport.optionsRow(List.of(groupButton),
+            PlaytimeScreenSupport.button("allthelogs.playtime.timeline", pressed -> onClose())));
 
-        chartWidget = new WeekdayChartWidget();
-        page.child(chartWidget.verticalSizing(Sizing.expand()));
-
-        legend = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
-        legend.gap(10).verticalAlignment(VerticalAlignment.CENTER);
-        ScrollContainer<FlowLayout> legendScroll = UIContainers.horizontalScroll(Sizing.fill(), Sizing.fixed(18), legend);
-        legendScroll.scrollbar(OverflowScrollbar.vanillaFlat());
-        page.child(legendScroll);
+        chartWidget = new WeekdayChartWidget(highlight);
+        legend = new PlaytimeLegendWidget(highlight);
+        versionButton = PlaytimeScreenSupport.filterButton(PlaytimeScreenSupport.versionLabel(), pressed -> openVersions());
+        serverButton = PlaytimeScreenSupport.filterButton(PlaytimeScreenSupport.serverLabel(), pressed -> openServers());
+        page.child(PlaytimeScreenSupport.body(chartWidget, legend, List.of(
+            dateField("allthelogs.filter.from", DateParser.format(PlaytimeSession.weekdayFrom()), DateParser::parse,
+                PlaytimeSession::weekdayFrom),
+            dateField("allthelogs.filter.until", DateParser.formatUntil(PlaytimeSession.weekdayUntil()),
+                DateParser::parseUntil, PlaytimeSession::weekdayUntil),
+            versionButton,
+            serverButton)));
         root.child(page);
         rebuild();
     }
@@ -144,43 +115,49 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
         Minecraft.getInstance().gui.setScreen(parent);
     }
 
+    /**
+     * Label and text box for one end of the period. Text that is not a date yet is ignored; empty text
+     * removes that bound.
+     */
+    private FlowLayout dateField(String key, String value, Function<String, Optional<LocalDateTime>> parse,
+                                 Consumer<LocalDateTime> apply) {
+        FlowLayout row = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
+        row.gap(2);
+        row.child(UIComponents.label(Component.translatable(key)));
+        TextBoxComponent box = UIComponents.textBox(Sizing.fill(), value);
+        box.setMaxLength(32);
+        box.setHint(Component.translatable("allthelogs.filter.date_hint"));
+        box.onChanged().subscribe(text -> {
+            if (!DateParser.isBlankOrValid(text)) return;
+            apply.accept(parse.apply(text).orElse(null));
+            rebuild();
+        });
+        row.child(box);
+        return row;
+    }
+
     private void load() {
         int request = ++loadToken;
         PlaytimeScreenSupport.load(this, request, () -> loadToken, this::status, this::rebuild);
     }
 
     private void rebuild() {
-        chart = PlaytimeWeekday.build(PlaytimeSession.spans(), PlaytimeSession.filter(), PlaytimeSession.breakdown());
+        chart = PlaytimeWeekday.build(PlaytimeSession.spans(), PlaytimeSession.filter(), PlaytimeSession.breakdown(),
+            PlaytimeSession.weekdayFrom(), PlaytimeSession.weekdayUntil());
         if (chartWidget != null) chartWidget.chart(chart);
-        if (legend != null) PlaytimeLegend.fill(legend, chart.series(), chart.legend());
-        if (mostLabel != null && leastLabel != null) {
-            if (chart.isEmpty()) {
-                mostLabel.text(Component.empty());
-                leastLabel.text(Component.empty());
-            } else {
-                mostLabel.text(extreme("allthelogs.playtime.most", chart.mostDay()));
-                leastLabel.text(chart.mostDay() == chart.leastDay()
-                    ? Component.empty()
-                    : extreme("allthelogs.playtime.least", chart.leastDay()));
-            }
-        }
+        if (legend != null) legend.entries(chart.series(), chart.legend());
         syncButtons();
         if (statusMessage == null) status(null);
     }
 
-    private Component extreme(String key, int day) {
-        String name = PlaytimeWeekday.dayName(day);
-        return Component.translatable(key, name, PlaytimeDuration.format(chart.bars().get(day).totalMillis()));
-    }
-
     private void status(@Nullable Component message) {
         statusMessage = message;
-        PlaytimeScreenSupport.showTotal(totalLabel, chartWidget == null ? null : chartWidget::placeholder,
+        PlaytimeScreenSupport.showTotal(legend, chartWidget == null ? null : chartWidget::placeholder,
             message, chart == null ? 0 : chart.totalMillis());
     }
 
     private void syncButtons() {
-        if (groupButton != null) groupButton.setMessage(groupLabel());
+        if (groupButton != null) groupButton.setMessage(PlaytimeScreenSupport.groupLabel(PlaytimeSession.breakdown()));
         if (versionButton != null) versionButton.setMessage(PlaytimeScreenSupport.versionLabel());
         if (serverButton != null) serverButton.setMessage(PlaytimeScreenSupport.serverLabel());
     }
@@ -189,12 +166,8 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
         boolean open = groupMenu.isOpen();
         closeMenus();
         if (open) return;
-        groupMenu.show(groupButton, List.of(
-            Component.translatable("allthelogs.playtime.breakdown.version"),
-            Component.translatable("allthelogs.playtime.breakdown.server"),
-            Component.translatable("allthelogs.playtime.breakdown.combined")
-        ), index -> {
-            PlaytimeSession.breakdown(GROUPS[index]);
+        groupMenu.show(groupButton, PlaytimeScreenSupport.groupChoices(), index -> {
+            PlaytimeSession.breakdown(PlaytimeScreenSupport.GROUPS[index]);
             rebuild();
         });
     }
@@ -218,14 +191,4 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
         if (versionMenu != null) versionMenu.close();
         if (serverMenu != null) serverMenu.close();
     }
-
-    private Component groupLabel() {
-        String key = switch (PlaytimeSession.breakdown()) {
-            case VERSION -> "allthelogs.playtime.breakdown.version";
-            case SERVER -> "allthelogs.playtime.breakdown.server";
-            case COMBINED -> "allthelogs.playtime.breakdown.combined";
-        };
-        return Component.translatable("allthelogs.playtime.weekday.group", Component.translatable(key));
-    }
-
 }
