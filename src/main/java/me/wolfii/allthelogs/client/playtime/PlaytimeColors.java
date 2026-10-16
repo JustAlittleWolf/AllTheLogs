@@ -53,12 +53,12 @@ public final class PlaytimeColors {
     }
 
     /**
-     * Pattern color for a section: the fill color at about 60% brightness.
+     * Pattern color for a section: the fill color at about 78% brightness, close enough to stay calm.
      */
     public static int stripe(int color) {
-        int red = ((color >> 16) & 0xFF) * 6 / 10;
-        int green = ((color >> 8) & 0xFF) * 6 / 10;
-        int blue = (color & 0xFF) * 6 / 10;
+        int red = ((color >> 16) & 0xFF) * 78 / 100;
+        int green = ((color >> 8) & 0xFF) * 78 / 100;
+        int blue = (color & 0xFF) * 78 / 100;
         return (color & 0xFF000000) | (red << 16) | (green << 8) | blue;
     }
 

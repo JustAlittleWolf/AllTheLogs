@@ -73,6 +73,7 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
 
         groupButton = PlaytimeScreenSupport.optionButton(PlaytimeScreenSupport.groupLabel(PlaytimeSession.breakdown()),
             PlaytimeScreenSupport.groupLabels(), pressed -> openGroup());
+        groupMenu.opensOnHover(groupButton, this::openGroup);
         page.child(PlaytimeScreenSupport.optionsRow(List.of(groupButton),
             PlaytimeScreenSupport.button("allthelogs.playtime.timeline", pressed -> onClose())));
 
@@ -94,10 +95,20 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
         rebuild();
     }
 
+    /**
+     * Uses the playtime the timeline already loaded, so switching between the two screens does not query the
+     * store again.
+     */
     @Override
     protected void init() {
         super.init();
-        load();
+        if (!PlaytimeSession.loaded()) load();
+    }
+
+    @Override
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+        if (groupMenu != null) groupMenu.sync(mouseX, mouseY);
+        super.extractRenderState(graphics, mouseX, mouseY, delta);
     }
 
     @Override
@@ -175,9 +186,8 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
     }
 
     private void openGroup() {
-        boolean open = groupMenu.isOpen();
+        if (groupMenu.isOpen()) return;
         closeMenus();
-        if (open) return;
         groupMenu.show(groupButton, PlaytimeScreenSupport.groupChoices(), index -> {
             PlaytimeSession.breakdown(PlaytimeScreenSupport.GROUPS[index]);
             rebuild();

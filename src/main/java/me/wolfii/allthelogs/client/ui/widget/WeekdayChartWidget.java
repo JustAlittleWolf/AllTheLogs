@@ -12,17 +12,22 @@ import net.minecraft.network.chat.Component;
 
 import java.util.List;
 import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 
 /**
- * Weekday bars on the left and an hour-of-day heat map on the right. Both put the days along the bottom:
- * the bars run Monday to Sunday, and the heat map adds a summed "All" column with the hours running down
- * each column as one continuous strip. Weekday columns share one color scale and the "All" column has its
- * own. While a series is highlighted, the heat map counts only that series. Both halves are painted into
- * textures only when the chart, the size, or the highlight changes, and they live in one component so the
- * hover card can reach across them.
+ * Weekday bars on the left and an hour-of-day heat map on the right, split by a thin line. Both put the
+ * days along the bottom: the bars run Monday to Sunday, and the heat map adds a summed "All" column, set
+ * apart by its own line, with the hours running down each column as one continuous strip. A small key above
+ * the heat map shows which end of the color scale means more playtime. Weekday columns share one color
+ * scale and the "All" column has its own. While a series is highlighted, the heat map counts only that
+ * series. Both halves are painted into textures only when the chart, the size, or the highlight changes,
+ * and they live in one component so the hover card can reach across them.
  */
 public final class WeekdayChartWidget extends BaseUIComponent implements AutoCloseable {
-    private static final int SPLIT_GAP = 10;
+    private static final int TOP = 16;
+    private static final int SPLIT_GAP = 9;
+    private static final int KEY_WIDTH = 40;
+    private static final int KEY_HEIGHT = 4;
     private static final int HEAT_EMPTY = 0xFF1A1A1A;
     private static final int[] HEAT_STOPS = {0xFF2D1150, 0xFFB5367A, 0xFFFCA050};
     private static final int[] HOUR_STEPS = {1, 2, 3, 4, 6, 12};
@@ -31,6 +36,7 @@ public final class WeekdayChartWidget extends BaseUIComponent implements AutoClo
     private final SeriesHighlight highlight;
     private final PixelCanvas bars = new PixelCanvas();
     private final PixelCanvas heat = new PixelCanvas();
+    private final PixelCanvas key = new PixelCanvas();
     private PlaytimeWeekday.Result chart;
     private Component placeholder = Component.empty();
     private BooleanSupplier hoverBlocked = () -> false;
@@ -39,6 +45,8 @@ public final class WeekdayChartWidget extends BaseUIComponent implements AutoClo
     private int paintedHeight;
     private int paintedScale;
     private int paintedHighlight;
+    private String cardKey;
+    private List<PlaytimeHover.Line> card = List.of();
 
     public WeekdayChartWidget(SeriesHighlight highlight) {
         this.highlight = highlight;
@@ -60,10 +68,15 @@ public final class WeekdayChartWidget extends BaseUIComponent implements AutoClo
         this.hoverBlocked = hoverBlocked;
     }
 
+    /**
+     * Releases the textures. Drawing again repaints them, so a screen that is shown again keeps working.
+     */
     @Override
     public void close() {
         bars.close();
         heat.close();
+        key.close();
+        painted = null;
     }
 
     /**
@@ -72,9 +85,9 @@ public final class WeekdayChartWidget extends BaseUIComponent implements AutoClo
      */
     private record Columns(int left, int slot, int bar, int gapBefore, int extra) {
         static Columns of(int pixelWidth, int count, int gapBefore, int scale) {
-            int extra = gapBefore >= 0 ? 3 * scale : 0;
+            int extra = gapBefore >= 0 ? 5 * scale : 0;
             int slot = Math.max(1, (pixelWidth - extra) / count);
-            int gap = Math.max(scale, slot / 5);
+            int gap = Math.max(scale, slot / 6);
             int bar = Math.max(1, slot - gap);
             int used = slot * count - gap + extra;
             return new Columns(Math.max(0, (pixelWidth - used) / 2), slot, bar, gapBefore, extra);
@@ -106,17 +119,17 @@ public final class WeekdayChartWidget extends BaseUIComponent implements AutoClo
         int pixelX = mouseX * scale + scale / 2;
         int pixelY = mouseY * scale + scale / 2;
 
-        int barsWidth = Math.max(140, width * 2 / 5);
-        int barsAxis = Math.max(20, PlaytimePainter.yAxisWidth(chart.axisMax(), this::durationLabel));
-        PlaytimeChartModel.Plot barPlot = PlaytimeChartModel.plot(barsWidth, height, barsAxis);
+        int barsWidth = Math.max(110, width * 2 / 5);
+        int barsAxis = Math.max(16, PlaytimePainter.yAxisWidth(chart.axisMax(), this::durationLabel));
+        PlaytimeChartModel.Plot barPlot = PlaytimeChartModel.plot(barsWidth, height, barsAxis, TOP);
         Columns days = Columns.of(barPlot.width() * scale, 7, -1, scale);
         int barsLeft = (x + barPlot.x()) * scale;
         int plotTop = (y + barPlot.y()) * scale;
         int plotHeight = barPlot.height() * scale;
 
         int heatX = x + barsWidth + SPLIT_GAP;
-        int heatAxis = PlaytimePainter.axisWidth("00:00") + 6;
-        int heatGuiWidth = Math.max(1, x + width - PlaytimeChartModel.PLOT_RIGHT - heatX - heatAxis);
+        int heatAxis = PlaytimePainter.axisWidth("00:00") + 4;
+        int heatGuiWidth = Math.max(1, x + width - 2 - heatX - heatAxis);
         Columns heatDays = Columns.of(heatGuiWidth * scale, PlaytimeWeekday.ALL_DAYS + 1, PlaytimeWeekday.ALL_DAYS, scale);
         int heatLeft = (heatX + heatAxis) * scale;
 
@@ -141,11 +154,13 @@ public final class WeekdayChartWidget extends BaseUIComponent implements AutoClo
             || paintedHighlight != active) {
             paintBars(days, barPlot.width() * scale, plotHeight, active, scale);
             paintHeat(heatDays, heatGuiWidth * scale, plotHeight, active);
+            paintKey(scale);
             painted = chart;
             paintedWidth = width;
             paintedHeight = height;
             paintedScale = scale;
             paintedHighlight = active;
+            cardKey = null;
         }
 
         PlaytimePainter.yAxis(graphics, y, x + barPlot.x(), y + barPlot.y(), barPlot.width(), barPlot.height(),
@@ -153,31 +168,50 @@ public final class WeekdayChartWidget extends BaseUIComponent implements AutoClo
         bars.draw(graphics, scale, barsLeft, plotTop);
         heat.draw(graphics, scale, heatLeft, plotTop);
         drawHourAxis(graphics, heatX + heatAxis, y + barPlot.y(), heatGuiWidth, barPlot.height());
-        int labelY = y + barPlot.y() + barPlot.height() + 3;
-        for (int day = 0; day < 7; day++) {
-            String name = PlaytimeWeekday.shortDayName(day);
-            dayLabel(graphics, name, barsLeft + days.barLeft(day), days.bar(), scale, labelY);
-            dayLabel(graphics, name, heatLeft + heatDays.barLeft(day), heatDays.bar(), scale, labelY);
-        }
-        String all = Component.translatable("allthelogs.playtime.heat.all").getString();
-        dayLabel(graphics, all, heatLeft + heatDays.barLeft(PlaytimeWeekday.ALL_DAYS), heatDays.bar(), scale, labelY);
+        drawKey(graphics, scale, x + width - 2, y + 3);
 
-        List<PlaytimeHover.Line> card = null;
-        String unknown = Component.translatable("allthelogs.playtime.server.unknown").getString();
+        int labelY = y + barPlot.y() + barPlot.height() + 3;
+        int separatorBottom = labelY + 7;
+        int split = x + barsWidth + SPLIT_GAP / 2;
+        graphics.fill(split, y + 2, split + 1, separatorBottom, Colors.SEPARATOR);
+        int allLeft = heatLeft + heatDays.barLeft(PlaytimeWeekday.ALL_DAYS);
+        int sundayEnd = heatLeft + heatDays.barLeft(6) + heatDays.bar();
+        int allLine = (sundayEnd + allLeft) / 2 / scale;
+        graphics.fill(allLine, y + barPlot.y(), allLine + 1, separatorBottom, Colors.SEPARATOR);
+
+        for (int day = 0; day < 7; day++) {
+            dayLabel(graphics, day, barsLeft + days.barLeft(day), days.slot(), scale, labelY);
+            dayLabel(graphics, day, heatLeft + heatDays.barLeft(day), heatDays.slot(), scale, labelY);
+        }
+        dayLabel(graphics, PlaytimeWeekday.ALL_DAYS, allLeft, heatDays.slot(), scale, labelY);
+
+        List<PlaytimeHover.Line> lines = null;
         if (hoveredDay >= 0) {
             int left = barsLeft + days.barLeft(hoveredDay);
             PlaytimePainter.inPixels(graphics, scale, () ->
                 graphics.fill(left, plotTop, left + days.bar(), plotTop + plotHeight, PlaytimePainter.HOVER_BAND));
-            card = chart.dayHover(hoveredDay, unknown);
+            int day = hoveredDay;
+            int focus = hoveredSeries;
+            lines = card("day:" + day + ":" + focus, () -> chart.dayHover(day, totalLabel(), unknown(), focus));
         } else if (heatHour >= 0) {
             outlineCell(graphics, scale, heatLeft + heatDays.barLeft(heatColumn), heatDays.bar(),
                 plotTop + heatHour * plotHeight / PlaytimeWeekday.HOURS,
                 plotTop + (heatHour + 1) * plotHeight / PlaytimeWeekday.HOURS);
-            String day = heatColumn == PlaytimeWeekday.ALL_DAYS ? all : PlaytimeWeekday.dayName(heatColumn);
-            card = chart.heatHover(heatColumn, heatHour,
-                day + "  " + String.format("%02d:00 - %02d:00", heatHour, heatHour + 1), unknown);
+            int column = heatColumn;
+            int hour = heatHour;
+            lines = card("heat:" + column + ":" + hour, () -> chart.heatHover(column, hour,
+                dayName(column) + "  " + String.format("%02d:00 - %02d:00", hour, hour + 1),
+                totalLabel(), unknown(), -1));
         }
-        if (card != null) PlaytimePainter.hoverCard(graphics, card, mouseX, mouseY, x, y, width, height);
+        if (lines != null) PlaytimePainter.hoverCard(graphics, lines, mouseX, mouseY, x, y, width, height);
+    }
+
+    private List<PlaytimeHover.Line> card(String key, Supplier<List<PlaytimeHover.Line>> build) {
+        if (!key.equals(cardKey)) {
+            cardKey = key;
+            card = build.get();
+        }
+        return card;
     }
 
     private void paintBars(Columns days, int width, int height, int active, int scale) {
@@ -218,6 +252,33 @@ public final class WeekdayChartWidget extends BaseUIComponent implements AutoClo
         heat.upload();
     }
 
+    /**
+     * The color scale from no playtime to the most, drawn as a small strip above the heat map.
+     */
+    private void paintKey(int scale) {
+        int width = KEY_WIDTH * scale;
+        key.reset(width, KEY_HEIGHT * scale);
+        for (int pixel = 0; pixel < width; pixel++) {
+            long value = pixel == 0 ? 0 : pixel;
+            key.fill(pixel, 0, pixel + 1, KEY_HEIGHT * scale, shade(value, width - 1));
+        }
+        key.upload();
+    }
+
+    /**
+     * "Less", the color strip, and "More", right-aligned at {@code right}.
+     */
+    private void drawKey(OwoUIGraphics graphics, int scale, int right, int top) {
+        String less = Component.translatable("allthelogs.playtime.heat.less").getString();
+        String more = Component.translatable("allthelogs.playtime.heat.more").getString();
+        int moreX = right - PlaytimePainter.axisWidth(more);
+        int keyX = moreX - 3 - KEY_WIDTH;
+        int lessX = keyX - 3 - PlaytimePainter.axisWidth(less);
+        PlaytimePainter.axisLabel(graphics, less, lessX, top);
+        key.draw(graphics, scale, keyX * scale, (top + 1) * scale);
+        PlaytimePainter.axisLabel(graphics, more, moreX, top);
+    }
+
     private static void outlineCell(OwoUIGraphics graphics, int scale, int left, int width, int top, int bottom) {
         int right = left + width;
         int line = Math.max(1, scale / 2);
@@ -244,13 +305,37 @@ public final class WeekdayChartWidget extends BaseUIComponent implements AutoClo
             int lineY = top + hour * height / PlaytimeWeekday.HOURS;
             if (hour > 0 && hour < PlaytimeWeekday.HOURS) graphics.fill(left, lineY, left + width, lineY + 1, 0x40000000);
             String label = String.format("%02d:00", hour);
-            PlaytimePainter.axisLabel(graphics, label, left - 4 - PlaytimePainter.axisWidth(label), lineY - 3);
+            PlaytimePainter.axisLabel(graphics, label, left - 3 - PlaytimePainter.axisWidth(label), lineY - 3);
         }
     }
 
-    private static void dayLabel(OwoUIGraphics graphics, String label, int pixelLeft, int pixelWidth, int scale, int y) {
-        int center = (pixelLeft + pixelWidth / 2) / scale;
+    /**
+     * Day name centered under a column, cut to two letters or one when the column is too narrow.
+     */
+    private static void dayLabel(OwoUIGraphics graphics, int day, int pixelLeft, int pixelSlot, int scale, int y) {
+        String label = day == PlaytimeWeekday.ALL_DAYS
+            ? Component.translatable("allthelogs.playtime.heat.all").getString()
+            : PlaytimeWeekday.shortDayName(day);
+        int room = pixelSlot / scale - 1;
+        while (label.length() > 1 && PlaytimePainter.axisWidth(label) > room) {
+            label = label.substring(0, label.length() - 1);
+        }
+        int center = (pixelLeft + pixelSlot / 2) / scale;
         PlaytimePainter.axisLabel(graphics, label, center - PlaytimePainter.axisWidth(label) / 2, y);
+    }
+
+    private static String dayName(int column) {
+        return column == PlaytimeWeekday.ALL_DAYS
+            ? Component.translatable("allthelogs.playtime.heat.all").getString()
+            : PlaytimeWeekday.dayName(column);
+    }
+
+    private static String totalLabel() {
+        return Component.translatable("allthelogs.playtime.hover.total").getString();
+    }
+
+    private static String unknown() {
+        return Component.translatable("allthelogs.playtime.server.unknown").getString();
     }
 
     private String durationLabel(double value) {

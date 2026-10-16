@@ -19,7 +19,7 @@ import java.util.List;
  */
 public final class PlaytimeChartModel {
     public static final int PLOT_LEFT = 52;
-    public static final int PLOT_TOP = 6;
+    public static final int PLOT_TOP = 8;
     public static final int PLOT_RIGHT = 8;
     public static final int PLOT_BOTTOM = 18;
 
@@ -69,19 +69,19 @@ public final class PlaytimeChartModel {
             return columns.isEmpty();
         }
 
-        public List<PlaytimeHover.Line> hover(int column, String unknownServer) {
+        public List<PlaytimeHover.Line> hover(int column, String unknownServer, String totalLabel, int focus) {
             if (column < 0 || column >= columns.size()) return List.of();
             Column current = columns.get(column);
             boolean cumulative = style == PlaytimeStyle.CUMULATIVE;
             long total = cumulative ? Math.round(sum(current.display())) : current.totalMillis();
             double[] weights = cumulative ? current.display() : PlaytimeHover.weights(current.millis());
-            return PlaytimeHover.lines(spanLabel(current.start(), current.end(), grain),
+            return PlaytimeHover.lines(spanLabel(current.start(), current.end(), grain), totalLabel,
                 PlaytimeDuration.format(total), series, weights, index -> switch (style) {
                     case PERCENT -> percent(current.millis()[index], current.totalMillis())
                         + "  " + PlaytimeDuration.format(current.millis()[index]);
                     case CUMULATIVE -> PlaytimeDuration.format(Math.round(current.display()[index]));
                     case BARS -> PlaytimeDuration.format(current.millis()[index]);
-                }, unknownServer);
+                }, unknownServer, focus);
         }
 
         /**
@@ -121,13 +121,25 @@ public final class PlaytimeChartModel {
      * @param left room for the value labels left of the plot
      */
     public static Plot plot(int width, int height, int left) {
-        return new Plot(left, PLOT_TOP,
+        return plot(width, height, left, PLOT_TOP);
+    }
+
+    public static Plot plot(int width, int height, int left, int top) {
+        return new Plot(left, top,
             Math.max(1, width - left - PLOT_RIGHT),
-            Math.max(1, height - PLOT_TOP - PLOT_BOTTOM));
+            Math.max(1, height - top - PLOT_BOTTOM));
     }
 
     public static Result build(List<PlaytimeSpan> spans, PlaytimeFilter filter, PlaytimeBreakdown breakdown,
                                PlaytimeStyle style, PlaytimeGrain grain, PlaytimeWindow view) {
+        return build(spans, filter, breakdown, style, grain, view, 0);
+    }
+
+    /**
+     * @param chartWidth plot width in GUI pixels, used by {@link PlaytimeGrain#AUTO}, or 0 when unknown
+     */
+    public static Result build(List<PlaytimeSpan> spans, PlaytimeFilter filter, PlaytimeBreakdown breakdown,
+                               PlaytimeStyle style, PlaytimeGrain grain, PlaytimeWindow view, int chartWidth) {
         PlaytimeFilter active = filter == null ? PlaytimeFilter.all() : filter;
         PlaytimeBreakdown group = breakdown == null ? PlaytimeBreakdown.VERSION : breakdown;
         PlaytimeStyle drawn = style == null ? PlaytimeStyle.BARS : style;
@@ -150,7 +162,7 @@ public final class PlaytimeChartModel {
         }
         PlaytimeWindow domain = new PlaytimeWindow(domainStart, domainEnd);
         PlaytimeWindow visible = PlaytimeWindow.clamp(domain, view);
-        PlaytimeGrain resolved = PlaytimeGrain.resolve(grain, visible.start(), visible.end());
+        PlaytimeGrain resolved = PlaytimeGrain.resolve(grain, visible.start(), visible.end(), chartWidth);
         if (resolved == PlaytimeGrain.YEARS && !severalYears(domainStart, domainEnd)) resolved = PlaytimeGrain.MONTHS;
         PlaytimeSeries.Index index = PlaytimeSeries.collect(kept, spans, group);
         List<PlaytimeSeries> series = index.series();
@@ -228,6 +240,14 @@ public final class PlaytimeChartModel {
 
     private static boolean severalYears(LocalDateTime start, LocalDateTime end) {
         return start.getYear() != end.minusNanos(1).getYear();
+    }
+
+    /**
+     * Short label under a bar: the first day of a week, otherwise the same as {@link #spanLabel}.
+     */
+    public static String axisLabel(LocalDateTime start, LocalDateTime end, PlaytimeGrain grain) {
+        if (grain == PlaytimeGrain.WEEKS) return start.toLocalDate().toString();
+        return spanLabel(start, end, grain);
     }
 
     public static List<String> versionsIn(List<PlaytimeSpan> spans) {

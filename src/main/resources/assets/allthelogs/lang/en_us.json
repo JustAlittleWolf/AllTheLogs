@@ -106,6 +106,8 @@
   "allthelogs.playtime.filter.search": "Search...",
   "allthelogs.playtime.server.unknown": "Unknown",
   "allthelogs.playtime.heat.all": "All",
+  "allthelogs.playtime.heat.less": "Less",
+  "allthelogs.playtime.heat.more": "More",
   "allthelogs.playtime.menu.range": "Filter messages in this period",
   "allthelogs.playtime.menu.version": "Filter this version in this period",
   "allthelogs.playtime.menu.server": "Filter this server in this period",

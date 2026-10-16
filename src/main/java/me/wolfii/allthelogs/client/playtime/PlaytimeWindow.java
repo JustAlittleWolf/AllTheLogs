@@ -9,7 +9,8 @@ import java.util.Objects;
  * pointer fixed and never leaves the domain of the filtered playtime.
  */
 public record PlaytimeWindow(LocalDateTime start, LocalDateTime end) {
-    private static final long MIN_SECONDS = 86_400L;
+    /** Narrowest view: about twenty days, or the whole history when it is shorter. */
+    static final long MIN_SECONDS = 20 * 86_400L;
     private static final double ZOOM = 1.25;
 
     public PlaytimeWindow {

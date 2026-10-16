@@ -43,6 +43,7 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
     };
 
     private final Screen parent;
+    private boolean refreshOnShow = true;
     private final Consumer<SearchFilter> onFilterMessages;
     private StackLayout overlays;
     private final SeriesHighlight highlight = new SeriesHighlight();
@@ -93,6 +94,9 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
             Arrays.stream(STYLES).map(PlaytimeScreen::styleLabel).toList(), pressed -> openStyle());
         breakdownButton = PlaytimeScreenSupport.optionButton(PlaytimeScreenSupport.groupLabel(PlaytimeSession.breakdown()),
             PlaytimeScreenSupport.groupLabels(), pressed -> openBreakdown());
+        grainMenu.opensOnHover(grainButton, this::openGrain);
+        styleMenu.opensOnHover(styleButton, this::openStyle);
+        breakdownMenu.opensOnHover(breakdownButton, this::openBreakdown);
         page.child(PlaytimeScreenSupport.optionsRow(List.of(grainButton, styleButton, breakdownButton),
             PlaytimeScreenSupport.button("allthelogs.playtime.weekdays", pressed -> openWeekdays())));
 
@@ -119,7 +123,16 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
     @Override
     protected void init() {
         super.init();
-        load();
+        if (refreshOnShow || !PlaytimeSession.loaded()) load();
+        refreshOnShow = false;
+    }
+
+    @Override
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+        if (grainMenu != null) grainMenu.sync(mouseX, mouseY);
+        if (styleMenu != null) styleMenu.sync(mouseX, mouseY);
+        if (breakdownMenu != null) breakdownMenu.sync(mouseX, mouseY);
+        super.extractRenderState(graphics, mouseX, mouseY, delta);
     }
 
     @Override
@@ -157,7 +170,8 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
 
     private void rebuild() {
         chart = PlaytimeChartModel.build(PlaytimeSession.spans(), PlaytimeSession.filter(), PlaytimeSession.breakdown(),
-            PlaytimeSession.style(), PlaytimeSession.grain(), PlaytimeSession.window());
+            PlaytimeSession.style(), PlaytimeSession.grain(), PlaytimeSession.window(),
+            chartWidget == null ? 0 : chartWidget.plotWidth());
         if (chartWidget != null) chartWidget.chart(chart);
         if (legend != null) legend.entries(chart.series(), chart.legend());
         syncButtons();
@@ -200,9 +214,8 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
     }
 
     private void openGrain() {
-        boolean open = grainMenu.isOpen();
+        if (grainMenu.isOpen()) return;
         closeMenus();
-        if (open) return;
         List<PlaytimeGrain> grains = grains();
         grainMenu.show(grainButton, grains.stream().map(PlaytimeScreen::grainName).toList(), index -> {
             PlaytimeSession.grain(grains.get(index));
@@ -211,9 +224,8 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
     }
 
     private void openBreakdown() {
-        boolean open = breakdownMenu.isOpen();
+        if (breakdownMenu.isOpen()) return;
         closeMenus();
-        if (open) return;
         breakdownMenu.show(breakdownButton, PlaytimeScreenSupport.groupChoices(), index -> {
             PlaytimeSession.breakdown(PlaytimeScreenSupport.GROUPS[index]);
             rebuild();
@@ -221,9 +233,8 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
     }
 
     private void openStyle() {
-        boolean open = styleMenu.isOpen();
+        if (styleMenu.isOpen()) return;
         closeMenus();
-        if (open) return;
         styleMenu.show(styleButton, Arrays.stream(STYLES).map(PlaytimeScreen::styleName).toList(), index -> {
             PlaytimeSession.style(STYLES[index]);
             rebuild();
