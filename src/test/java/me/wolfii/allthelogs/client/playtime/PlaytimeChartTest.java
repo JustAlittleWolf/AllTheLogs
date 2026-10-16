@@ -196,6 +196,24 @@ class PlaytimeChartTest {
     }
 
     @Test
+    void longHoverCardsSumTheSeriesThatDoNotFit() {
+        List<PlaytimeSpan> spans = new ArrayList<>();
+        for (int index = 0; index < 20; index++) {
+            spans.add(new PlaytimeSpan(at(1, 0), at(1, 0).plusMinutes(index + 1), "1." + index, null));
+        }
+        PlaytimeChartModel.Result chart = PlaytimeChartModel.build(spans, PlaytimeFilter.all(),
+            PlaytimeBreakdown.VERSION, PlaytimeStyle.BARS, PlaytimeGrain.DAYS, null);
+        List<PlaytimeHover.Line> lines = chart.hover(0, "Unknown", "Total", -1);
+        assertEquals(PlaytimeHover.MAX_LINES, lines.size());
+        PlaytimeHover.Line more = lines.getLast();
+        int shown = PlaytimeHover.MAX_LINES - 4;
+        assertEquals(20 - shown, more.hidden());
+        int hiddenMinutes = 0;
+        for (int minutes = 1; minutes <= 20 - shown; minutes++) hiddenMinutes += minutes;
+        assertEquals(PlaytimeDuration.format(hiddenMinutes * 60_000L), more.value());
+    }
+
+    @Test
     void changingTheFilterZoomsAllTheWayOut() {
         PlaytimeSession.clear();
         try {

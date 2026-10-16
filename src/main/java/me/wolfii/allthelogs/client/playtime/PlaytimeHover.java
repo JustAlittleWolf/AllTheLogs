@@ -8,19 +8,28 @@ import java.util.function.IntFunction;
  * Hover card text shared by the playtime charts: the period, the total, the series under the pointer when
  * there is one, an empty line, and then every other series with playtime, largest first. When only one
  * series has playtime, the card shows the period and that series alone. Names are left-aligned and values
- * right-aligned.
+ * right-aligned. A card longer than {@link #MAX_LINES} ends with one line for the remaining series and
+ * their combined playtime.
  */
 public final class PlaytimeHover {
     public static final int HEADING = 0xFFA0A0A0;
     public static final int TOTAL = 0xFFE8E8E8;
+    public static final int MORE = 0xFFA0A0A0;
+    public static final int MAX_LINES = 16;
 
     private PlaytimeHover() {
     }
 
     /**
-     * @param value right-aligned text, or empty for a line that is only a label
+     * @param value  right-aligned text, or empty for a line that is only a label
+     * @param hidden for the closing "more" line, how many series it stands for; the chart shows its own
+     *               translated text instead of {@code label}. Zero on every other line.
      */
-    public record Line(String label, String value, int color, boolean bold) {
+    public record Line(String label, String value, int color, boolean bold, int hidden) {
+        public Line(String label, String value, int color, boolean bold) {
+            this(label, value, color, bold, 0);
+        }
+
         public static Line plain(String label, int color) {
             return new Line(label, "", color, false);
         }
@@ -53,7 +62,18 @@ public final class PlaytimeHover {
             return byWeight != 0 ? byWeight : Integer.compare(left, right);
         });
         lines.add(Line.plain("", TOTAL));
-        for (int index : order) lines.add(entry(series.get(index), valueText.apply(index), unknownServer, false));
+        int room = MAX_LINES - lines.size();
+        int listed = order.size() <= room ? order.size() : Math.max(0, room - 1);
+        for (int position = 0; position < listed; position++) {
+            int index = order.get(position);
+            lines.add(entry(series.get(index), valueText.apply(index), unknownServer, false));
+        }
+        if (listed < order.size()) {
+            double rest = 0;
+            for (int position = listed; position < order.size(); position++) rest += weights[order.get(position)];
+            int hidden = order.size() - listed;
+            lines.add(new Line("+ " + hidden, PlaytimeDuration.format(Math.round(rest)), MORE, false, hidden));
+        }
         return List.copyOf(lines);
     }
 

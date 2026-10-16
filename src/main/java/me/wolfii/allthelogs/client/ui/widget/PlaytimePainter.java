@@ -24,7 +24,6 @@ final class PlaytimePainter {
     private static final int AXIS_STEPS = 3;
     private static final int AXIS_GAP = 4;
     private static final int VALUE_GAP = 12;
-    private static final int MAX_HOVER_LINES = 16;
 
     private PlaytimePainter() {
     }
@@ -147,15 +146,14 @@ final class PlaytimePainter {
     static void hoverCard(OwoUIGraphics graphics, List<PlaytimeHover.Line> lines, int mouseX, int mouseY,
                           int x, int y, int width, int height) {
         if (lines.isEmpty()) return;
-        int hidden = Math.max(0, lines.size() - MAX_HOVER_LINES);
-        int shown = lines.size() - hidden;
+        int shown = lines.size();
         Font font = font();
         int labelWidth = 0;
         int valueWidth = 0;
         int plainWidth = 0;
         for (int index = 0; index < shown; index++) {
             PlaytimeHover.Line line = lines.get(index);
-            int lineWidth = font.width(text(line.label(), line.bold()));
+            int lineWidth = font.width(text(line));
             if (line.value().isEmpty()) {
                 plainWidth = Math.max(plainWidth, lineWidth);
             } else {
@@ -163,12 +161,7 @@ final class PlaytimePainter {
                 valueWidth = Math.max(valueWidth, font.width(line.value()));
             }
         }
-        String more = null;
-        if (hidden > 0) {
-            more = Component.translatable("allthelogs.playtime.hover.more", hidden).getString();
-            plainWidth = Math.max(plainWidth, font.width(more));
-        }
-        int rows = shown + (more == null ? 0 : 1);
+        int rows = shown;
         int pad = 4;
         int columnsWidth = valueWidth > 0 ? labelWidth + VALUE_GAP + valueWidth : labelWidth;
         int contentWidth = Math.max(plainWidth, columnsWidth);
@@ -182,18 +175,19 @@ final class PlaytimePainter {
         int valueRight = boxX + boxWidth - pad;
         for (int index = 0; index < shown; index++) {
             PlaytimeHover.Line line = lines.get(index);
-            graphics.drawText(text(line.label(), line.bold()), boxX + pad, textY, 1f, line.color());
+            graphics.drawText(text(line), boxX + pad, textY, 1f, line.color());
             if (!line.value().isEmpty()) {
                 graphics.drawText(Component.literal(line.value()), valueRight - font.width(line.value()), textY, 1f,
                     Colors.MUTED);
             }
             textY += font.lineHeight;
         }
-        if (more != null) graphics.drawText(Component.literal(more), boxX + pad, textY, 1f, Colors.MUTED);
     }
 
-    private static Component text(String text, boolean bold) {
-        return bold ? Component.literal(text).withStyle(ChatFormatting.BOLD) : Component.literal(text);
+    private static Component text(PlaytimeHover.Line line) {
+        if (line.hidden() > 0) return Component.translatable("allthelogs.playtime.hover.more", line.hidden());
+        Component text = Component.literal(line.label());
+        return line.bold() ? text.copy().withStyle(ChatFormatting.BOLD) : text;
     }
 
     static Font font() {
