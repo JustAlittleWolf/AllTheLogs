@@ -65,6 +65,15 @@ final class PixelCanvas implements AutoCloseable {
      * Fills the rectangle with {@code argb}, and its {@code pattern} pixels with a darker shade of it.
      */
     void fill(int left, int top, int right, int bottom, int argb, PlaytimePattern pattern, int unit) {
+        fill(left, top, right, bottom, argb, pattern, unit, 0);
+    }
+
+    /**
+     * @param patternShift added to x before the pattern is looked up, so the pattern can move with content
+     *                     that is scrolled sideways
+     */
+    void fill(int left, int top, int right, int bottom, int argb, PlaytimePattern pattern, int unit,
+              int patternShift) {
         if (pattern == PlaytimePattern.SOLID) {
             fill(left, top, right, bottom, argb);
             return;
@@ -76,7 +85,7 @@ final class PixelCanvas implements AutoCloseable {
         int y1 = Math.min(height, bottom);
         for (int y = y0; y < y1; y++) {
             int row = y * width;
-            for (int x = x0; x < x1; x++) pixels[row + x] = pattern.on(x, y, unit) ? shade : argb;
+            for (int x = x0; x < x1; x++) pixels[row + x] = pattern.on(x + patternShift, y, unit) ? shade : argb;
         }
     }
 

@@ -62,6 +62,14 @@ final class PlaytimePainter {
      */
     static void stack(PixelCanvas canvas, int left, int right, int bottom, int height, double axisMax,
                       double[] display, List<PlaytimeSeries> series, int highlight, int unit) {
+        stack(canvas, left, right, bottom, height, axisMax, display, series, highlight, unit, 0);
+    }
+
+    /**
+     * @param patternShift horizontal scroll in screen pixels, so patterns move with the bars when panning
+     */
+    static void stack(PixelCanvas canvas, int left, int right, int bottom, int height, double axisMax,
+                      double[] display, List<PlaytimeSeries> series, int highlight, int unit, int patternShift) {
         if (right <= left || height <= 0 || axisMax <= 0) return;
         double cursor = 0;
         int baseline = bottom;
@@ -72,7 +80,7 @@ final class PlaytimePainter {
             if (top < baseline) {
                 PlaytimeSeries entry = series.get(index);
                 int color = highlight >= 0 && highlight != index ? PlaytimeColors.dim(entry.color()) : entry.color();
-                canvas.fill(left, top, right, baseline, color, entry.pattern(), unit);
+                canvas.fill(left, top, right, baseline, color, entry.pattern(), unit, patternShift);
             }
             baseline = top;
         }

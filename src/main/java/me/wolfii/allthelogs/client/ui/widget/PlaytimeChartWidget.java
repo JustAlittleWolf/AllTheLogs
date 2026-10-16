@@ -237,6 +237,16 @@ public final class PlaytimeChartWidget extends BaseUIComponent implements AutoCl
         hoverColumn = -1;
     }
 
+    /**
+     * Screen pixels between the start of the history and the left edge of the view, so patterns scroll with
+     * the bars instead of staying put on screen.
+     */
+    private int patternShift(int pixelWidth) {
+        if (!zoomedIn()) return 0;
+        double span = Math.max(1, epoch(chart.viewEnd()) - epoch(chart.viewStart()));
+        return (int) Math.round((epoch(chart.viewStart()) - epoch(chart.domainStart())) / span * pixelWidth);
+    }
+
     private boolean zoomedIn() {
         return epoch(chart.viewStart()) > epoch(chart.domainStart()) || epoch(chart.viewEnd()) < epoch(chart.domainEnd());
     }
@@ -253,13 +263,14 @@ public final class PlaytimeChartWidget extends BaseUIComponent implements AutoCl
         int unit = PlaytimePainter.patternUnit(scale);
         int bottom = plot.height() * scale;
         int offset = layout.left();
+        int shift = patternShift(plot.width() * scale);
         int start = 0;
         for (int pixel = 1; pixel <= drawnAt.length; pixel++) {
             if (pixel < drawnAt.length && drawnAt[pixel] == drawnAt[start]) continue;
             int column = drawnAt[start];
             if (column >= 0) {
                 PlaytimePainter.stack(canvas, offset + start, offset + pixel, bottom, bottom, chart.axisMax(),
-                    chart.columns().get(column).display(), chart.series(), active, unit);
+                    chart.columns().get(column).display(), chart.series(), active, unit, shift);
             }
             start = pixel;
         }
