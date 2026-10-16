@@ -79,24 +79,17 @@ class ContinuationTest {
     }
 
     @Test
-    void logsStoredEarlierAreFilledInByTheNextImport() throws IOException, SQLException {
+    void anImportLeavesLogsItDidNotTouchAlone() throws IOException, SQLException {
         writeLogs();
         Path database = tempDir.resolve("store.duckdb");
         try (LogStore store = LogStore.open(database)) {
             store.importDirectory(tempDir.resolve("instance"), ImportOptions.defaults().withOptimize(false));
         }
-        try (Connection connection = DriverManager.getConnection("jdbc:duckdb:" + database);
-             Statement statement = connection.createStatement()) {
-            statement.execute("UPDATE log_file SET minecraft_version = 'unknown', minecraft_user = NULL "
-                + "WHERE file_name = '2024-05-02-1.log'");
-            statement.execute("UPDATE chat_entry SET minecraft_user = NULL, server_or_world = NULL "
-                + "WHERE file_id = (SELECT id FROM log_file WHERE file_name = '2024-05-02-1.log') AND line_index = 0");
-        }
+        forgetContinuation(database);
         try (LogStore store = LogStore.open(database)) {
-            assertEquals("unknown", log(store, "2024-05-02-1.log").minecraftVersion());
             store.importDirectory(tempDir.resolve("instance"),
                 ImportOptions.defaults().withOptimize(false).withSkipAlreadyImported(true));
-            assertContinued(store);
+            assertEquals("unknown", log(store, "2024-05-02-1.log").minecraftVersion());
         }
     }
 
@@ -107,13 +100,7 @@ class ContinuationTest {
         try (LogStore store = LogStore.open(database)) {
             store.importDirectory(tempDir.resolve("instance"), ImportOptions.defaults().withOptimize(false));
         }
-        try (Connection connection = DriverManager.getConnection("jdbc:duckdb:" + database);
-             Statement statement = connection.createStatement()) {
-            statement.execute("UPDATE log_file SET minecraft_version = 'unknown', minecraft_user = NULL "
-                + "WHERE file_name = '2024-05-02-1.log'");
-            statement.execute("UPDATE chat_entry SET minecraft_user = NULL, server_or_world = NULL "
-                + "WHERE file_id = (SELECT id FROM log_file WHERE file_name = '2024-05-02-1.log') AND line_index = 0");
-        }
+        forgetContinuation(database);
         Path picked = tempDir.resolve("picked/logs");
         LogFixtures.writePlain(picked, "2024-05-02-1.log", AFTER_MIDNIGHT);
         try (LogStore store = LogStore.open(database)) {
@@ -124,6 +111,19 @@ class ContinuationTest {
                 .withUpdateMinecraftUser(true)
                 .withUpdateMinecraftServer(true));
             assertContinued(store);
+        }
+    }
+
+    /**
+     * Makes the stored after-midnight log look like it was imported before continuations were linked.
+     */
+    private static void forgetContinuation(Path database) throws SQLException {
+        try (Connection connection = DriverManager.getConnection("jdbc:duckdb:" + database);
+             Statement statement = connection.createStatement()) {
+            statement.execute("UPDATE log_file SET minecraft_version = 'unknown', minecraft_user = NULL "
+                + "WHERE file_name = '2024-05-02-1.log'");
+            statement.execute("UPDATE chat_entry SET minecraft_user = NULL, server_or_world = NULL "
+                + "WHERE file_id = (SELECT id FROM log_file WHERE file_name = '2024-05-02-1.log') AND line_index = 0");
         }
     }
 

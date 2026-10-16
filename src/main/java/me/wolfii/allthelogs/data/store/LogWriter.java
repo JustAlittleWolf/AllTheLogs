@@ -10,6 +10,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -40,6 +41,7 @@ public final class LogWriter implements AutoCloseable {
     private final Set<Long> keepEvenIfEmpty = ConcurrentHashMap.newKeySet();
     /** First file id handed out by this writer; counters and dedup bookkeeping are scoped to this import. */
     private final long sessionStartId;
+    private final Set<Long> touchedFiles = new HashSet<>();
     private long nextFileId;
     private long bufferedEntries;
     private long writtenEntries;
@@ -197,6 +199,7 @@ public final class LogWriter implements AutoCloseable {
             entryAppender.endRow();
         }
 
+        touchedFiles.add(fileId);
         if (times.isEmpty() && log.resourceManagerReloaded()) keepEvenIfEmpty.add(fileId);
         existingLocations.put(locationKey(log.sourcePath(), log.entryPath()), fileId);
         markConsidered(log.sourcePath(), log.entryPath(), log.contentHash());
@@ -343,6 +346,7 @@ public final class LogWriter implements AutoCloseable {
             if (updated > 0 && options.updateMinecraftUser()) {
                 updateLogFileUsers();
             }
+            collectPatchedFiles(update);
             update.execute("DROP TABLE IF EXISTS metadata_patch_seconds");
             update.execute("DROP TABLE IF EXISTS metadata_patch_norm");
             update.execute("DROP TABLE IF EXISTS metadata_patch");
@@ -353,6 +357,35 @@ public final class LogWriter implements AutoCloseable {
         }
         metadataPatchReady = false;
         metadataPatchFiles = 0;
+    }
+
+    /**
+     * Remembers the stored logs the picked files matched, by path or by the same text close in time, so
+     * {@link ContinuationLinker} looks at them after the update.
+     */
+    private void collectPatchedFiles(Statement statement) throws SQLException {
+        try (ResultSet result = statement.executeQuery("""
+            SELECT f.id
+            FROM metadata_patch_norm p
+            JOIN log_file f ON f.source_path = p.source_path AND f.entry_path = p.entry_path
+            UNION
+            SELECT e.file_id
+            FROM metadata_patch_seconds p
+            JOIN chat_entry e
+              ON date_trunc('second', e.entry_time) = p.join_second
+             AND %s
+            WHERE %s
+            """.formatted(EntryMatch.sameAsNormalized("e.message", "p.text"),
+                EntryMatch.withinWindow("e.entry_time", "p.entry_time")))) {
+            while (result.next()) touchedFiles.add(result.getLong(1));
+        }
+    }
+
+    /**
+     * Logs this import wrote, or for a metadata update the stored logs its files matched.
+     */
+    public Set<Long> touchedFiles() {
+        return Set.copyOf(touchedFiles);
     }
 
     private void ensureMetadataPatchTable() throws SQLException {

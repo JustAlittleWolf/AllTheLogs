@@ -14,14 +14,16 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Fills in stored logs that continue a session across midnight, by the rule in {@link LogContinuation}.
  * A continuation takes its predecessor's version and player, and its chat before its first message with a
  * place takes the place of the predecessor's last message. Chat only happens inside a world or on a
  * server, so that last place is where the player still was at midnight. Logs are handled in time order, so
- * a session over several midnights passes its metadata on day by day. Only empty values are filled, so
- * running this after every import changes nothing once a log is filled in.
+ * a session over several midnights passes its metadata on day by day. Only logs the current import wrote,
+ * or that a metadata update import matched, are filled in; their predecessor may have been stored earlier.
+ * Only empty values are filled.
  */
 public final class ContinuationLinker {
     private ContinuationLinker() {
@@ -35,9 +37,11 @@ public final class ContinuationLinker {
     }
 
     /**
+     * @param touched ids of the logs to fill in
      * @return how many logs took metadata from their predecessor
      */
-    public static int link(DuckDBConnection connection) throws SQLException {
+    public static int link(DuckDBConnection connection, Set<Long> touched) throws SQLException {
+        if (touched.isEmpty()) return 0;
         Map<String, List<Log>> byFolder = new HashMap<>();
         for (Log log : load(connection)) byFolder.computeIfAbsent(log.folder(), key -> new ArrayList<>()).add(log);
         int linked = 0;
@@ -46,7 +50,7 @@ public final class ContinuationLinker {
                 folder.sort(Comparator.comparing(Log::start).thenComparingLong(Log::id));
                 for (int index = 0; index < folder.size(); index++) {
                     Log log = folder.get(index);
-                    if (!LogContinuation.lacksStart(log.version(), log.user())) continue;
+                    if (!touched.contains(log.id()) || !LogContinuation.lacksStart(log.version(), log.user())) continue;
                     Log previous = predecessor(folder, log);
                     if (previous == null) continue;
                     Log joined = inherit(log, previous, updates);

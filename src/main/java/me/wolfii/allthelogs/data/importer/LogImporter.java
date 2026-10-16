@@ -228,7 +228,7 @@ public final class LogImporter {
             } else {
                 writer.applyMetadataPatches(options);
             }
-            ContinuationLinker.link(connection);
+            ContinuationLinker.link(connection, writer.touchedFiles());
 
             List<ImportResult.Failure> failures = new ArrayList<>(discovery.failures());
             failures.addAll(parseFailures);
