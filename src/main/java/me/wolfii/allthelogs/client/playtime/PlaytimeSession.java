@@ -17,6 +17,7 @@ public final class PlaytimeSession {
     private static PlaytimeWindow window;
     private static LocalDateTime weekdayFrom;
     private static LocalDateTime weekdayUntil;
+    private static int heatSlotMinutes = PlaytimeWeekday.SLOT_MINUTES[0];
     private static List<PlaytimeSpan> spans = List.of();
     private static boolean loaded;
 
@@ -90,6 +91,17 @@ public final class PlaytimeSession {
         weekdayUntil = next;
     }
 
+    /**
+     * Slot length of the weekday heat map in minutes, one of {@link PlaytimeWeekday#SLOT_MINUTES}.
+     */
+    public static int heatSlotMinutes() {
+        return heatSlotMinutes;
+    }
+
+    public static void heatSlotMinutes(int minutes) {
+        heatSlotMinutes = minutes;
+    }
+
     public static List<PlaytimeSpan> spans() {
         return spans;
     }
@@ -111,6 +123,7 @@ public final class PlaytimeSession {
         window = null;
         weekdayFrom = null;
         weekdayUntil = null;
+        heatSlotMinutes = PlaytimeWeekday.SLOT_MINUTES[0];
         spans = List.of();
         loaded = false;
     }

@@ -343,12 +343,17 @@ class PlaytimeChartTest {
         assertEquals(3_600_000L, days.bars().get(DayOfWeek.MONDAY.getValue() - 1).totalMillis());
         assertEquals(3 * 3_600_000L, days.bars().get(DayOfWeek.TUESDAY.getValue() - 1).totalMillis());
         assertEquals(List.of("a", "b"), days.series().stream().map(PlaytimeSeries::serverKey).toList());
-        assertEquals(3_600_000L, days.heatMillis(DayOfWeek.SUNDAY.getValue() - 1, 23));
-        assertEquals(3_600_000L, days.heatMillis(DayOfWeek.MONDAY.getValue() - 1, 0));
-        assertEquals(2 * 3_600_000L, days.heatMillis(PlaytimeWeekday.ALL_DAYS, 0));
-        assertEquals(5 * 60_000L, days.fineMillis(DayOfWeek.SUNDAY.getValue() - 1,
-            23 * PlaytimeWeekday.SLOTS_PER_HOUR + 11, -1));
-        assertEquals(0L, days.fineMillis(DayOfWeek.SUNDAY.getValue() - 1, 22 * PlaytimeWeekday.SLOTS_PER_HOUR, -1));
+        assertEquals(3_600_000L, days.heatMillis(DayOfWeek.SUNDAY.getValue() - 1, 23, -1));
+        assertEquals(3_600_000L, days.heatMillis(DayOfWeek.MONDAY.getValue() - 1, 0, -1));
+        assertEquals(2 * 3_600_000L, days.heatMillis(PlaytimeWeekday.ALL_DAYS, 0, -1));
+
+        PlaytimeWeekday.Result fine = PlaytimeWeekday.build(List.of(overnight), PlaytimeFilter.all(),
+            PlaytimeBreakdown.SERVER, null, null, 15);
+        assertEquals(96, fine.slots());
+        assertEquals(15 * 60_000L, fine.heatMillis(DayOfWeek.SUNDAY.getValue() - 1, 95, -1));
+        assertEquals(0L, fine.heatMillis(DayOfWeek.SUNDAY.getValue() - 1, 91, -1));
+        assertEquals("23:45 - 24:00", fine.slotLabel(95));
+        assertEquals(2 * 3_600_000L, fine.totalMillis());
 
         List<PlaytimeHover.Line> single = days.dayHover(DayOfWeek.TUESDAY.getValue() - 1, "Total", "Unknown", -1);
         assertEquals(2, single.size());

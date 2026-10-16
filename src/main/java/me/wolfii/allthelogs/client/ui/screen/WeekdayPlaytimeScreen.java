@@ -26,6 +26,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -43,9 +44,11 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
     private PlaytimeLegendWidget legend;
     private PlaytimeScreenSupport.TotalRow totalRow;
     private ButtonComponent groupButton;
+    private ButtonComponent detailButton;
     private ButtonComponent versionButton;
     private ButtonComponent serverButton;
     private OptionMenu groupMenu;
+    private OptionMenu detailMenu;
     private ChecklistMenu versionMenu;
     private ChecklistMenu serverMenu;
     private PlaytimeWeekday.Result chart;
@@ -69,13 +72,18 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
         FlowLayout page = PlaytimeScreenSupport.page();
 
         groupMenu = new OptionMenu(overlays, () -> this.width, () -> this.height);
+        detailMenu = new OptionMenu(overlays, () -> this.width, () -> this.height);
         versionMenu = new ChecklistMenu(overlays, () -> this.width, () -> this.height);
         serverMenu = new ChecklistMenu(overlays, () -> this.width, () -> this.height);
 
         groupButton = PlaytimeScreenSupport.optionButton(PlaytimeScreenSupport.groupLabel(PlaytimeSession.breakdown()),
             PlaytimeScreenSupport.groupLabels(), pressed -> openGroup());
         groupMenu.opensOnHover(groupButton, this::openGroup);
-        page.child(PlaytimeScreenSupport.optionsRow(List.of(groupButton),
+        detailButton = PlaytimeScreenSupport.optionButton(detailLabel(PlaytimeSession.heatSlotMinutes()),
+            Arrays.stream(PlaytimeWeekday.SLOT_MINUTES).mapToObj(WeekdayPlaytimeScreen::detailLabel).toList(),
+            pressed -> openDetail());
+        detailMenu.opensOnHover(detailButton, this::openDetail);
+        page.child(PlaytimeScreenSupport.optionsRow(List.of(groupButton, detailButton),
             PlaytimeScreenSupport.button("allthelogs.playtime.timeline", pressed -> onClose())));
 
         chartWidget = new WeekdayChartWidget(highlight);
@@ -109,6 +117,7 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         if (groupMenu != null) groupMenu.sync(mouseX, mouseY);
+        if (detailMenu != null) detailMenu.sync(mouseX, mouseY);
         super.extractRenderState(graphics, mouseX, mouseY, delta);
     }
 
@@ -175,7 +184,7 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
 
     private void rebuild() {
         chart = PlaytimeWeekday.build(PlaytimeSession.spans(), PlaytimeSession.filter(), PlaytimeSession.breakdown(),
-            PlaytimeSession.weekdayFrom(), PlaytimeSession.weekdayUntil());
+            PlaytimeSession.weekdayFrom(), PlaytimeSession.weekdayUntil(), PlaytimeSession.heatSlotMinutes());
         if (chartWidget != null) chartWidget.chart(chart);
         if (legend != null) legend.entries(chart.series(), chart.legend());
         syncButtons();
@@ -190,6 +199,7 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
 
     private void syncButtons() {
         if (groupButton != null) groupButton.setMessage(PlaytimeScreenSupport.groupLabel(PlaytimeSession.breakdown()));
+        if (detailButton != null) detailButton.setMessage(detailLabel(PlaytimeSession.heatSlotMinutes()));
         if (versionButton != null) versionButton.setMessage(PlaytimeScreenSupport.versionLabel());
         if (serverButton != null) serverButton.setMessage(PlaytimeScreenSupport.serverLabel());
     }
@@ -203,6 +213,26 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
         });
     }
 
+    private void openDetail() {
+        if (detailMenu.isOpen()) return;
+        closeMenus();
+        detailMenu.show(detailButton, Arrays.stream(PlaytimeWeekday.SLOT_MINUTES)
+            .mapToObj(WeekdayPlaytimeScreen::slotName).toList(), index -> {
+            PlaytimeSession.heatSlotMinutes(PlaytimeWeekday.SLOT_MINUTES[index]);
+            rebuild();
+        });
+    }
+
+    private static Component slotName(int minutes) {
+        return minutes % 60 == 0
+            ? Component.translatable("allthelogs.playtime.heat.hours", minutes / 60)
+            : Component.translatable("allthelogs.playtime.heat.minutes", minutes);
+    }
+
+    private static Component detailLabel(int minutes) {
+        return Component.translatable("allthelogs.playtime.heat.detail", slotName(minutes));
+    }
+
     private void openVersions() {
         PlaytimeScreenSupport.openVersions(versionMenu, versionButton, this::closeMenus, this::rebuild);
     }
@@ -213,12 +243,14 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
 
     private boolean menusOpen() {
         return (groupMenu != null && groupMenu.isOpen())
+            || (detailMenu != null && detailMenu.isOpen())
             || (versionMenu != null && versionMenu.isOpen())
             || (serverMenu != null && serverMenu.isOpen());
     }
 
     private void closeMenus() {
         if (groupMenu != null) groupMenu.close();
+        if (detailMenu != null) detailMenu.close();
         if (versionMenu != null) versionMenu.close();
         if (serverMenu != null) serverMenu.close();
     }

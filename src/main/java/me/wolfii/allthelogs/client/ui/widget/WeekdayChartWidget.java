@@ -17,8 +17,8 @@ import java.util.function.Supplier;
 /**
  * Weekday bars on the left and an hour-of-day heat map on the right, split by a divider. Both put the
  * days along the bottom: the bars run Monday to Sunday, and the heat map adds a summed "All" column, set
- * apart by its own divider, with the time of day running down each column as one continuous strip drawn in
- * five-minute steps. Hovering picks whole hours. A small key centered above the heat map shows which end of
+ * apart by its own divider, with the time of day running down each column as one continuous strip in the
+ * chart's slot length. Hovering picks one slot. A small key centered above the heat map shows which end of
  * the color scale means more playtime. Weekday columns share one color
  * scale and the "All" column has its own. While a series is highlighted, the heat map counts only that
  * series. Both halves are painted into textures only when the chart, the size, or the highlight changes,
@@ -142,7 +142,8 @@ public final class WeekdayChartWidget extends BaseUIComponent implements AutoClo
         int hoveredDay = -1;
         int hoveredSeries = -1;
         int heatColumn = -1;
-        int heatHour = -1;
+        int heatSlot = -1;
+        int slots = chart.slots();
         if (pointer && pixelY >= plotTop && pixelY < plotTop + plotHeight) {
             hoveredDay = days.at(pixelX - barsLeft, 7);
             if (hoveredDay >= 0) {
@@ -150,9 +151,7 @@ public final class WeekdayChartWidget extends BaseUIComponent implements AutoClo
                     mouseY - y, barPlot.y(), barPlot.height());
             }
             heatColumn = heatDays.at(pixelX - heatLeft, PlaytimeWeekday.ALL_DAYS + 1);
-            if (heatColumn >= 0) {
-                heatHour = Math.min(PlaytimeWeekday.HOURS - 1, (pixelY - plotTop) * PlaytimeWeekday.HOURS / plotHeight);
-            }
+            if (heatColumn >= 0) heatSlot = Math.min(slots - 1, (pixelY - plotTop) * slots / plotHeight);
         }
         highlight.chart(hoveredSeries);
         int active = highlight.active();
@@ -203,17 +202,16 @@ public final class WeekdayChartWidget extends BaseUIComponent implements AutoClo
             int day = hoveredDay;
             int focus = hoveredSeries;
             lines = card("day:" + day + ":" + focus, () -> chart.dayHover(day, totalLabel(), unknown(), focus));
-        } else if (heatHour >= 0) {
+        } else if (heatSlot >= 0) {
             int cellLeft = heatLeft + heatDays.barLeft(heatColumn);
-            int cellTop = plotTop + heatHour * plotHeight / PlaytimeWeekday.HOURS;
-            int cellBottom = plotTop + (heatHour + 1) * plotHeight / PlaytimeWeekday.HOURS;
+            int cellTop = plotTop + heatSlot * plotHeight / slots;
+            int cellBottom = Math.max(cellTop + 1, plotTop + (heatSlot + 1) * plotHeight / slots);
             PlaytimePainter.inPixels(graphics, scale, () ->
                 graphics.fill(cellLeft, cellTop, cellLeft + heatDays.bar(), cellBottom, HOVER_CELL));
             int column = heatColumn;
-            int hour = heatHour;
-            lines = card("heat:" + column + ":" + hour, () -> chart.heatHover(column, hour,
-                dayName(column) + "  " + String.format("%02d:00 - %02d:00", hour, hour + 1),
-                totalLabel(), unknown(), -1));
+            int slot = heatSlot;
+            lines = card("heat:" + column + ":" + slot, () -> chart.heatHover(column, slot,
+                dayName(column) + "  " + chart.slotLabel(slot), totalLabel(), unknown(), -1));
         }
         if (lines != null) PlaytimePainter.hoverCard(graphics, lines, mouseX, mouseY, x, y, width, height, true);
     }
@@ -238,23 +236,22 @@ public final class WeekdayChartWidget extends BaseUIComponent implements AutoClo
     }
 
     /**
-     * Paints each pixel row with the average playtime of the five-minute slots it covers. Weekday columns
-     * share one color scale and "All" has its own.
+     * Paints each pixel row with the slot it shows, or the average of the slots it covers when slots are
+     * shorter than a pixel. Weekday columns share one color scale and "All" has its own.
      */
     private void paintHeat(Columns columns, int width, int height, int active) {
         heat.reset(width, height);
         int series = active >= 0 && active < chart.series().size() ? active : -1;
+        int slots = chart.slots();
         double[][] values = new double[PlaytimeWeekday.ALL_DAYS + 1][height];
         double dayMax = 0;
         double allMax = 0;
         for (int column = 0; column <= PlaytimeWeekday.ALL_DAYS; column++) {
             for (int row = 0; row < height; row++) {
-                int from = row * PlaytimeWeekday.SLOTS / height;
-                int to = Math.max(from + 1, (row + 1) * PlaytimeWeekday.SLOTS / height);
+                int from = row * slots / height;
+                int to = Math.max(from + 1, (row + 1) * slots / height);
                 long sum = 0;
-                for (int slot = from; slot < to && slot < PlaytimeWeekday.SLOTS; slot++) {
-                    sum += chart.fineMillis(column, slot, series);
-                }
+                for (int slot = from; slot < to && slot < slots; slot++) sum += chart.heatMillis(column, slot, series);
                 double value = sum / (double) (to - from);
                 values[column][row] = value;
                 if (column < PlaytimeWeekday.ALL_DAYS) dayMax = Math.max(dayMax, value);
