@@ -114,8 +114,8 @@ class ContinuationTest {
                 .withOptimize(false)
                 .withSkipAlreadyImported(false)
                 .withUpdateMetadataOnly(true)
-                .withUpdateMinecraftUser(true)
-                .withUpdateMinecraftServer(true));
+                .withOverwriteMinecraftUser(true)
+                .withOverwriteMinecraftServer(true));
             assertContinued(store);
         }
     }

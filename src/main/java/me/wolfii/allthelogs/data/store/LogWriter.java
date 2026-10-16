@@ -42,6 +42,7 @@ public final class LogWriter implements AutoCloseable {
     /** First file id handed out by this writer; counters and dedup bookkeeping are scoped to this import. */
     private final long sessionStartId;
     private final Set<Long> touchedFiles = new HashSet<>();
+    private final PickedContinuations pickedContinuations = new PickedContinuations();
     private long nextFileId;
     private long bufferedEntries;
     private long writtenEntries;
@@ -215,13 +216,15 @@ public final class LogWriter implements AutoCloseable {
      * every file in the import has been queued so the store is not rewritten per file.
      * <p>
      * Matching prefers the same source path and line index, and otherwise the same message text within
-     * {@link EntryMatch#WINDOW_SECONDS}. Formatting is written only when the stored line has none
-     * and the log line has some. Username and server/world are written only when the log value is
-     * non-null. Live session fields that already have a value are left unchanged.
+     * {@link EntryMatch#WINDOW_SECONDS}. Formatting, player, and server or world are filled in where the
+     * stored line has none, live lines included. The chosen overwrites replace existing values of lines
+     * imported from files, and of live lines too when {@link ImportOptions#overwriteLive()} is set. A value
+     * is only ever replaced by another value, never cleared.
      */
     public void updateMetadata(PreparedLog log, ImportOptions options) throws SQLException {
         markConsidered(log.sourcePath(), log.entryPath(), log.contentHash());
-        if (!options.updatesAnyMetadata() || log.messages().isEmpty()) {
+        pickedContinuations.add(log);
+        if (log.messages().isEmpty()) {
             return;
         }
         flushAppenders();
@@ -269,29 +272,28 @@ public final class LogWriter implements AutoCloseable {
      * what made metadata-only imports sit on "Optimizing database..." until they timed out.
      */
     public void applyMetadataPatches(ImportOptions options) throws SQLException {
-        if (!metadataPatchReady || metadataPatchFiles == 0 || !options.updatesAnyMetadata()) {
+        if (!metadataPatchReady || metadataPatchFiles == 0) {
             return;
         }
         flushMetadataAppender();
-        String formattingFlag = options.updateFormatting() ? "true" : "false";
-        String userFlag = options.updateMinecraftUser() ? "true" : "false";
-        String serverFlag = options.updateMinecraftServer() ? "true" : "false";
+        pickedContinuations.apply(connection);
         String session = SourceKind.SESSION.name();
+        String formattingFlag = overwrite(options.overwriteFormatting(), options.overwriteLive(), session);
+        String userFlag = overwrite(options.overwriteMinecraftUser(), options.overwriteLive(), session);
+        String serverFlag = overwrite(options.overwriteMinecraftServer(), options.overwriteLive(), session);
         try (Statement update = connection.createStatement()) {
             prepareNormalizedPatches(update);
             int updated = update.executeUpdate("""
                 UPDATE chat_entry
                 SET
                     formatting = CASE
-                        WHEN %s AND chat_entry.formatting IS NULL AND m.new_formatting IS NOT NULL
+                        WHEN m.new_formatting IS NOT NULL AND (chat_entry.formatting IS NULL OR %s)
                         THEN m.new_formatting ELSE chat_entry.formatting END,
                     minecraft_user = CASE
-                        WHEN %s AND m.new_user IS NOT NULL
-                             AND (m.kind <> '%s' OR chat_entry.minecraft_user IS NULL)
+                        WHEN m.new_user IS NOT NULL AND (chat_entry.minecraft_user IS NULL OR %s)
                         THEN m.new_user ELSE chat_entry.minecraft_user END,
                     server_or_world = CASE
-                        WHEN %s AND m.new_place IS NOT NULL
-                             AND (m.kind <> '%s' OR chat_entry.server_or_world IS NULL)
+                        WHEN m.new_place IS NOT NULL AND (chat_entry.server_or_world IS NULL OR %s)
                         THEN m.new_place ELSE chat_entry.server_or_world END
                 FROM (
                     SELECT rid, kind, new_formatting, new_user, new_place FROM (
@@ -340,11 +342,11 @@ public final class LogWriter implements AutoCloseable {
                     WHERE rn = 1
                 ) m
                 WHERE chat_entry.rowid = m.rid
-                """.formatted(formattingFlag, userFlag, session, serverFlag, session,
+                """.formatted(formattingFlag, userFlag, serverFlag,
                     EntryMatch.sameAsNormalized("e.message", "p.text"),
                     EntryMatch.withinWindow("e.entry_time", "p.entry_time")));
-            if (updated > 0 && options.updateMinecraftUser()) {
-                updateLogFileUsers();
+            if (updated > 0) {
+                updateLogFileUsers(options);
             }
             collectPatchedFiles(update);
             update.execute("DROP TABLE IF EXISTS metadata_patch_seconds");
@@ -425,12 +427,23 @@ public final class LogWriter implements AutoCloseable {
             "metadata_patch_norm", "metadata_patch_seconds");
     }
 
-    private void updateLogFileUsers() throws SQLException {
+    /**
+     * SQL condition, on the matched line's {@code m.kind}, for replacing a value that is already there.
+     */
+    private static String overwrite(boolean field, boolean live, String session) {
+        if (!field) return "false";
+        return live ? "true" : "m.kind <> '" + session + "'";
+    }
+
+    private void updateLogFileUsers(ImportOptions options) throws SQLException {
         String session = SourceKind.SESSION.name();
+        boolean overwriteFiles = options.overwriteMinecraftUser();
+        boolean overwriteLive = overwriteFiles && options.overwriteLive();
         try (Statement statement = connection.createStatement()) {
             statement.execute("""
                 UPDATE log_file SET minecraft_user = CASE
-                    WHEN log_file.source_kind = '%s' THEN coalesce(log_file.minecraft_user, p.minecraft_user)
+                    WHEN log_file.source_kind = '%s' AND NOT %s THEN coalesce(log_file.minecraft_user, p.minecraft_user)
+                    WHEN log_file.source_kind <> '%s' AND NOT %s THEN coalesce(log_file.minecraft_user, p.minecraft_user)
                     ELSE p.minecraft_user
                 END
                 FROM (
@@ -440,7 +453,7 @@ public final class LogWriter implements AutoCloseable {
                     QUALIFY row_number() OVER (PARTITION BY source_path, entry_path ORDER BY seq) = 1
                 ) p
                 WHERE log_file.source_path = p.source_path AND log_file.entry_path = p.entry_path
-                """.formatted(session));
+                """.formatted(session, overwriteLive, session, overwriteFiles));
             statement.execute("""
                 UPDATE log_file SET minecraft_user = coalesce(log_file.minecraft_user, p.minecraft_user)
                 FROM (
