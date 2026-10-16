@@ -68,7 +68,7 @@ final class VersionMenu {
     private Component label() {
         SearchFilter current = filter.get();
         if (!current.hasVersion()) {
-            return Component.translatable("gui.all");
+            return Component.translatable("allthelogs.filter.version.all");
         }
         return Component.literal(current.version());
     }
@@ -90,7 +90,7 @@ final class VersionMenu {
         close();
         FlowLayout items = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
         items.gap(1);
-        items.child(choice(Component.translatable("gui.all"), null));
+        items.child(choice(Component.translatable("allthelogs.filter.version.all"), null));
         for (String version : MinecraftVersions.newestFirst(versions.get())) {
             items.child(choice(Component.literal(version), version));
         }

@@ -251,7 +251,7 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
         }
         rule();
         FlowLayout actions = actions();
-        actions.child(button("mco.brokenworld.download", this::beginDownload));
+        actions.child(button("allthelogs.download.start", this::beginDownload));
         actions.child(declineButton());
         card.child(actions);
     }
@@ -271,7 +271,7 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
     }
 
     private void showFailed(Snapshot snapshot) {
-        title(Component.translatable("mco.download.failed"));
+        title(Component.translatable("allthelogs.download.failed"));
         body(Component.translatable("allthelogs.download.failed.hint"), Colors.SEARCH_TEXT);
         String error = snapshot.error();
         detail = body(Component.translatable("allthelogs.download.failed.detail", error == null ? "" : error),

@@ -55,7 +55,7 @@ class MessageTextTest {
         DisplayRow row = new DisplayRow(new ChatEntry(log, time, 0, "hi", null, "Steve", "unicacity.eu"), true, List.of());
         List<Component> info = MessageText.messageInfo(row, Integer.MAX_VALUE, String::length);
         assertEquals("2026-08-27 19:22:14", info.get(0).getString());
-        assertEquals("mco.version", key(info.get(1)));
+        assertEquals("allthelogs.info.version", key(info.get(1)));
         assertEquals("allthelogs.info.playing", key(info.get(2)));
         assertEquals("allthelogs.info.playing_on", key(info.get(3)));
         assertEquals("allthelogs.info.path", key(info.get(4)));
