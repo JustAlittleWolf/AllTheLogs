@@ -135,8 +135,7 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
         actions.gap(8).verticalAlignment(VerticalAlignment.CENTER);
         actions.child(paddedButton(Component.translatable("allthelogs.import.start"), button -> startImport()));
         actions.child(status.horizontalSizing(Sizing.expand()));
-        actions.child(paddedButton(Component.translatable("gui.done"),
-            button -> Minecraft.getInstance().gui.setScreen(parent)));
+        actions.child(paddedButton(Component.translatable("gui.done"), button -> onClose()));
         content.child(actions);
         root.child(content);
     }

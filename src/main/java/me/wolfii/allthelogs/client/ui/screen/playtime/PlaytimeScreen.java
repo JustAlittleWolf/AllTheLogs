@@ -18,6 +18,7 @@ import me.wolfii.allthelogs.client.playtime.PlaytimeWindow;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.ui.popup.ChecklistMenu;
 import me.wolfii.allthelogs.client.ui.popup.OptionMenu;
+import me.wolfii.allthelogs.client.ui.widget.DoneButton;
 import me.wolfii.allthelogs.client.ui.widget.playtime.PlaytimeChartWidget;
 import me.wolfii.allthelogs.client.ui.widget.playtime.PlaytimeLegendWidget;
 import me.wolfii.allthelogs.client.ui.widget.playtime.SeriesHighlight;
@@ -120,7 +121,8 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         legend.hoverBlocked(this::menusOpen);
         versionButton = PlaytimeScreenSupport.filterButton(PlaytimeScreenSupport.versionLabel(), pressed -> openVersions());
         serverButton = PlaytimeScreenSupport.filterButton(PlaytimeScreenSupport.serverLabel(), pressed -> openServers());
-        page.child(PlaytimeScreenSupport.body(chartWidget, totalRow, legend, List.of(versionButton, serverButton)));
+        page.child(PlaytimeScreenSupport.body(chartWidget, totalRow, legend, List.of(versionButton, serverButton),
+            DoneButton.of(this)));
         root.child(page);
         rebuild();
     }

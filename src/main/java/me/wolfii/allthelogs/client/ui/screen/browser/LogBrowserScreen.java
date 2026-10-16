@@ -27,6 +27,7 @@ import me.wolfii.allthelogs.client.ui.screen.playtime.PlaytimeScreen;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
 import me.wolfii.allthelogs.client.ui.widget.DecoratedSearchField;
+import me.wolfii.allthelogs.client.ui.widget.DoneButton;
 import me.wolfii.allthelogs.client.ui.widget.timeline.MessageTimeline;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -232,6 +233,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         refreshFilterButton();
 
         bar.child(tools.button());
+        bar.child(DoneButton.of(this));
         return bar;
     }
 

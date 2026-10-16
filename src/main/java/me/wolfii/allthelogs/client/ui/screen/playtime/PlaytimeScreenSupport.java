@@ -71,10 +71,11 @@ final class PlaytimeScreenSupport {
     }
 
     /**
-     * The chart beside a column with the total, the scrolling legend under it, and the filter controls at the
-     * bottom. Only the legend scrolls.
+     * The chart beside a column with the total, the scrolling legend under it, the filter controls, and the
+     * done button at the bottom. Only the legend scrolls.
      */
-    static FlowLayout body(UIComponent chart, TotalRow total, PlaytimeLegendWidget legend, List<UIComponent> filters) {
+    static FlowLayout body(UIComponent chart, TotalRow total, PlaytimeLegendWidget legend, List<UIComponent> filters,
+                           ButtonComponent done) {
         ScrollContainer<PlaytimeLegendWidget> legendScroll = UIContainers.verticalScroll(Sizing.fill(), Sizing.expand(), legend);
         legendScroll.scrollbar(OverflowScrollbar.vanillaFlat());
         FlowLayout side = UIContainers.verticalFlow(Sizing.fixed(SIDE_WIDTH), Sizing.fill());
@@ -82,6 +83,7 @@ final class PlaytimeScreenSupport {
         side.child(total.row);
         side.child(legendScroll);
         filters.forEach(side::child);
+        side.child(done.horizontalSizing(Sizing.fill()));
 
         FlowLayout body = UIContainers.horizontalFlow(Sizing.fill(), Sizing.expand());
         body.gap(4);

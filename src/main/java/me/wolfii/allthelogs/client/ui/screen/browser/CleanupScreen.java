@@ -21,6 +21,7 @@ import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
+import me.wolfii.allthelogs.client.ui.widget.DoneButton;
 import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.CleanupPreview;
 import me.wolfii.allthelogs.data.parse.TextRemoval;
@@ -138,12 +139,9 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
         status = UIComponents.label(Component.empty());
         status.horizontalSizing(Sizing.expand());
         bottom.child(status);
-        ButtonComponent back = UIComponents.button(Component.translatable("gui.back"), pressed -> onClose());
-        back.horizontalSizing(Sizing.content());
-        bottom.child(back);
         applyButton = UIComponents.button(Component.empty(), pressed -> apply());
-        applyButton.horizontalSizing(Sizing.content());
         bottom.child(applyButton);
+        bottom.child(DoneButton.of(this));
         page.child(bottom);
 
         root.child(page);
