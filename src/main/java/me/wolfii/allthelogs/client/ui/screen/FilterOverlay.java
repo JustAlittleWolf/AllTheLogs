@@ -45,8 +45,7 @@ final class FilterOverlay {
     private final FlowLayout host;
     private final Supplier<SearchFilter> filter;
     private final Consumer<SearchFilter> onChange;
-    private final Supplier<List<String>> versions;
-    private final Consumer<Consumer<List<String>>> serversOrWorlds;
+    private final StoreCatalog catalog;
     private final ChecklistMenu versionMenu;
     private final ChecklistMenu serverMenu;
     private ButtonComponent versionButton;
@@ -61,13 +60,11 @@ final class FilterOverlay {
     private boolean detached;
 
     FilterOverlay(FlowLayout host, StackLayout overlays, IntSupplier screenWidth, IntSupplier screenHeight,
-                  Supplier<SearchFilter> filter, Supplier<List<String>> versions,
-                  Consumer<Consumer<List<String>>> serversOrWorlds, Consumer<SearchFilter> onChange) {
+                  Supplier<SearchFilter> filter, StoreCatalog catalog, Consumer<SearchFilter> onChange) {
         this.host = host;
         this.filter = filter;
         this.onChange = onChange;
-        this.versions = versions;
-        this.serversOrWorlds = serversOrWorlds;
+        this.catalog = catalog;
         this.versionMenu = new ChecklistMenu(overlays, screenWidth, screenHeight);
         this.serverMenu = new ChecklistMenu(overlays, screenWidth, screenHeight);
     }
@@ -223,7 +220,7 @@ final class FilterOverlay {
         boolean open = versionMenu.isOpen();
         closeLists();
         if (open) return;
-        List<String> values = MinecraftVersions.newestFirst(versions.get());
+        List<String> values = MinecraftVersions.newestFirst(catalog.versions());
         versionMenu.show(button, values, () -> filter.get().versions(), Function.identity(),
             selected -> emit(filter.get().withVersions(selected)));
     }
@@ -232,7 +229,7 @@ final class FilterOverlay {
         boolean open = serverMenu.isOpen();
         closeLists();
         if (open) return;
-        serversOrWorlds.accept(stored -> {
+        catalog.serversOrWorlds(stored -> {
             if (!open() || serverMenu.isOpen()) return;
             List<String> values = new ArrayList<>(stored);
             values.sort(Comparator.comparing(FilterOverlay::placeName, String.CASE_INSENSITIVE_ORDER));

@@ -38,7 +38,6 @@ import org.jetbrains.annotations.Nullable;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
-import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 /**
@@ -57,7 +56,7 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
     }
 
     private final Screen parent;
-    private final Supplier<List<String>> versions;
+    private final StoreCatalog catalog;
     private final Runnable onChanged;
     private SearchFilter filter;
     private Mode mode = Mode.DELETE;
@@ -77,12 +76,11 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
     /**
      * @param onChanged runs after stored messages changed, so the messages screen reloads
      */
-    public CleanupScreen(@Nullable Screen parent, SearchFilter filter, Supplier<List<String>> versions,
-                         Runnable onChanged) {
+    public CleanupScreen(@Nullable Screen parent, SearchFilter filter, StoreCatalog catalog, Runnable onChanged) {
         super(Component.translatable("allthelogs.screen.cleanup"));
         this.parent = parent;
         this.filter = filter == null ? SearchFilter.defaults() : filter;
-        this.versions = versions;
+        this.catalog = catalog;
         this.onChanged = onChanged;
     }
 
@@ -125,7 +123,7 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
         body.child(previewScroll);
         page.child(body);
         filters = new FilterOverlay(body, overlays, () -> this.width, () -> this.height,
-            () -> filter, versions, this::update);
+            () -> filter, catalog, this::update);
 
         FlowLayout bottom = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
         bottom.gap(4).verticalAlignment(VerticalAlignment.CENTER);

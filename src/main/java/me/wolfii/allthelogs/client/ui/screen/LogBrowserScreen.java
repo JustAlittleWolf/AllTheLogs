@@ -124,7 +124,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         chrome.child(content);
 
         filters = new FilterOverlay(chrome, overlays, () -> this.width, () -> this.height,
-            queries::filter, queries::versions, queries::serversOrWorlds, this::applyFilter);
+            queries::filter, queries.catalog(), this::applyFilter);
         root.child(chrome);
         filters.restore();
         syncSearchBox();
@@ -404,7 +404,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
 
     private void showCleanup() {
         if (tools != null) tools.close();
-        Minecraft.getInstance().gui.setScreen(new CleanupScreen(this, queries.filter(), queries::versions,
+        Minecraft.getInstance().gui.setScreen(new CleanupScreen(this, queries.filter(), queries.catalog(),
             queries::markReload));
     }
 

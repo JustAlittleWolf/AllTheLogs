@@ -41,8 +41,7 @@ final class LogBrowserQueries {
     private SearchFilter filter;
     private MessageTimeline list;
     private Consumer<List<Component>> databaseInfo;
-    private List<String> versions = List.of();
-    private List<String> serversOrWorlds;
+    private final StoreCatalog catalog = new StoreCatalog();
     private MatchSummary matchSummary = MatchSummary.empty();
     private boolean reloadPending = true;
     private boolean replaceOnJumpFailure;
@@ -104,24 +103,8 @@ final class LogBrowserQueries {
         return filter;
     }
 
-    /**
-     * Hands {@code ready} every stored server or world. Read from the store the first time and kept until
-     * the next reload, because it scans every message.
-     */
-    void serversOrWorlds(Consumer<List<String>> ready) {
-        if (serversOrWorlds != null) {
-            ready.accept(serversOrWorlds);
-            return;
-        }
-        onClient(AllTheLogsClient.worker().serversOrWorlds(), (servers, error) -> {
-            if (error != null || servers == null) return;
-            serversOrWorlds = servers;
-            ready.accept(servers);
-        });
-    }
-
-    List<String> versions() {
-        return versions;
+    StoreCatalog catalog() {
+        return catalog;
     }
 
     boolean consumeReload() {
@@ -240,8 +223,7 @@ final class LogBrowserQueries {
                 return;
             }
             publishDatabaseInfo(StoreSummary.tooltip(metadata));
-            versions = metadata.minecraftVersions();
-            serversOrWorlds = null;
+            catalog.versions(metadata.minecraftVersions());
             if (list != null && !filter.isNarrowed()) {
                 list.setTotalMatchCount(metadata.chatEntryCount());
                 takeSnapshot();
