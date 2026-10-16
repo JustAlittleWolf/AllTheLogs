@@ -167,6 +167,13 @@ public final class LogStoreWorker implements AutoCloseable {
             : requireStore().removeMatchedText(copy, part));
     }
 
+    /**
+     * Rewrites and compacts the whole store, see {@link LogStore#optimize()}.
+     */
+    public CompletableFuture<Void> optimize() {
+        return submit(() -> requireStore().optimize());
+    }
+
     public CompletableFuture<List<ChatEntry>> entriesAround(ChatLog log, int lineIndex, int before, int after) {
         ChatLog copy = Objects.requireNonNull(log, "log");
         int beforeLines = Math.max(0, before);

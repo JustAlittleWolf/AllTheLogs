@@ -52,7 +52,8 @@ import java.util.function.Function;
  * Transparent log browser: search bar, side filter panel, virtualised history, and a timeline of every hit.
  */
 public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
-    private static final int SEARCH_DEBOUNCE_MS = 250;
+    /** How long typing must pause before the search runs, here and on the cleanup screen. */
+    static final int SEARCH_DEBOUNCE_MS = 250;
     /** Above this many messages, the export shade warns that the write may take a while. */
     private static final int LARGE_EXPORT = 10_000;
 

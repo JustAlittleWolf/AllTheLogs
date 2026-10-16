@@ -40,6 +40,8 @@ import org.jetbrains.annotations.Nullable;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 /**
@@ -69,9 +71,12 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
     private FlowLayout preview;
     private LabelComponent status;
     private ButtonComponent applyButton;
+    private ButtonComponent optimizeButton;
     private CleanupPreview current;
     private @Nullable Component notice;
     private boolean armed;
+    private boolean optimizeArmed;
+    private boolean syncingText;
     private boolean busy;
     private int requestToken;
 
@@ -109,7 +114,7 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
         textBox = UIComponents.textBox(Sizing.expand(), filter.text());
         textBox.setMaxLength(1024);
         textBox.setHint(Component.translatable("allthelogs.cleanup.text_hint"));
-        textBox.onChanged().subscribe(text -> update(filter.withText(text)));
+        textBox.onChanged().subscribe(this::onTextChanged);
         top.child(textBox);
         modeButton = UIComponents.button(modeLabel(), pressed -> toggleMode());
         int modeWidth = Math.max(Minecraft.getInstance().font.width(modeLabel(Mode.DELETE)),
@@ -132,8 +137,12 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
 
         FlowLayout bottom = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
         bottom.gap(4).verticalAlignment(VerticalAlignment.CENTER);
+        optimizeButton = UIComponents.button(Component.translatable("allthelogs.cleanup.optimize"),
+            pressed -> optimize());
+        bottom.child(optimizeButton);
         status = UIComponents.label(Component.empty());
         status.horizontalSizing(Sizing.expand());
+        status.maxWidth(Math.max(120, this.width / 2));
         bottom.child(status);
         applyButton = UIComponents.button(Component.empty(), pressed -> apply());
         bottom.child(applyButton);
@@ -166,8 +175,34 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
     private void update(SearchFilter next) {
         filter = next;
         notice = null;
-        if (textBox != null && !textBox.getValue().equals(next.text())) textBox.setValue(next.text());
+        if (textBox != null && !textBox.getValue().equals(next.text())) {
+            syncingText = true;
+            try {
+                textBox.setValue(next.text());
+            } finally {
+                syncingText = false;
+            }
+        }
         refresh();
+    }
+
+    /**
+     * Counts again once typing pauses, like the messages screen's search, instead of on every key.
+     */
+    private void onTextChanged(String text) {
+        if (syncingText) return;
+        filter = filter.withText(text);
+        notice = null;
+        armed = false;
+        optimizeArmed = false;
+        current = null;
+        int request = ++requestToken;
+        status.text(Component.translatable("allthelogs.cleanup.counting"));
+        syncButtons();
+        CompletableFuture.delayedExecutor(LogBrowserScreen.SEARCH_DEBOUNCE_MS, TimeUnit.MILLISECONDS).execute(() ->
+            Minecraft.getInstance().execute(() -> {
+                if (request == requestToken && Minecraft.getInstance().gui.screen() == this) refresh();
+            }));
     }
 
     private void toggleMode() {
@@ -182,17 +217,18 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
      */
     private void refresh() {
         armed = false;
+        optimizeArmed = false;
         current = null;
         int request = ++requestToken;
         Component blocked = blockedReason();
         if (blocked != null) {
             showPreview(null);
             status.text(blocked);
-            syncApply();
+            syncButtons();
             return;
         }
         status.text(Component.translatable("allthelogs.cleanup.counting"));
-        syncApply();
+        syncButtons();
         AllTheLogsClient.worker().previewCleanup(filter.toSummaryQuery(), SAMPLE_SIZE).whenComplete(
             (result, error) -> Minecraft.getInstance().execute(() -> {
                 if (request != requestToken || Minecraft.getInstance().gui.screen() != this) return;
@@ -206,7 +242,7 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
                 showPreview(result);
                 status.text(notice == null ? summary(result)
                     : Component.empty().append(notice).append("  ").append(summary(result)));
-                syncApply();
+                syncButtons();
             }));
     }
 
@@ -268,7 +304,13 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
         return line;
     }
 
-    private void syncApply() {
+    private void syncButtons() {
+        if (optimizeButton != null) {
+            optimizeButton.setMessage(optimizeArmed
+                ? Component.translatable("allthelogs.cleanup.confirm").withStyle(ChatFormatting.RED)
+                : Component.translatable("allthelogs.cleanup.optimize"));
+            optimizeButton.active = !busy;
+        }
         if (applyButton == null) return;
         long matches = current == null ? 0 : current.matches();
         String count = String.format("%,d", matches);
@@ -285,17 +327,54 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
         if (busy || current == null || current.matches() == 0) return;
         if (!armed) {
             armed = true;
-            syncApply();
+            optimizeArmed = false;
+            syncButtons();
             return;
         }
         Optional<Pattern> part = mode == Mode.REMOVE_TEXT ? filter.removalPattern() : Optional.empty();
         if (mode == Mode.REMOVE_TEXT && part.isEmpty()) return;
         busy = true;
         armed = false;
-        syncApply();
+        syncButtons();
         status.text(Component.translatable("allthelogs.cleanup.working"));
         AllTheLogsClient.worker().cleanUp(filter.toSummaryQuery(), part.orElse(null)).whenComplete(
             (outcome, error) -> Minecraft.getInstance().execute(() -> finished(outcome, error)));
+    }
+
+    /**
+     * Optimizes the whole store after a second click. The first click explains what it does and how long it
+     * may take.
+     */
+    private void optimize() {
+        if (busy) return;
+        var worker = AllTheLogsClient.worker();
+        if (worker == null || !worker.isOpen()) {
+            status.text(Component.translatable("allthelogs.meta.unavailable"));
+            return;
+        }
+        if (!optimizeArmed) {
+            optimizeArmed = true;
+            armed = false;
+            status.text(Component.translatable("allthelogs.cleanup.optimize.warning").withStyle(ChatFormatting.YELLOW));
+            syncButtons();
+            return;
+        }
+        busy = true;
+        optimizeArmed = false;
+        syncButtons();
+        status.text(Component.translatable("allthelogs.status.optimizing"));
+        worker.optimize().whenComplete((ignored, error) -> Minecraft.getInstance().execute(() -> {
+            busy = false;
+            if (Minecraft.getInstance().gui.screen() != this) return;
+            if (error != null) {
+                AllTheLogsClient.LOGGER.warn("Could not optimize the store", error);
+                status.text(Component.translatable("allthelogs.status.error"));
+                syncButtons();
+                return;
+            }
+            notice = Component.translatable("allthelogs.cleanup.optimized").withStyle(ChatFormatting.GREEN);
+            refresh();
+        }));
     }
 
     private void finished(MessageCleanup.Outcome outcome, Throwable error) {
@@ -307,7 +386,7 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
         if (error != null) {
             AllTheLogsClient.LOGGER.warn("Could not clean up messages", error);
             status.text(Component.translatable("allthelogs.status.error"));
-            syncApply();
+            syncButtons();
             return;
         }
         BrowserSession.reset();
