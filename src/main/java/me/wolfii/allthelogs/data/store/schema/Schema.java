@@ -4,6 +4,7 @@ import me.wolfii.allthelogs.data.store.StoreCancellation;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Timestamp;
 import java.util.function.DoubleConsumer;
 
 /**
@@ -70,6 +71,59 @@ public final class Schema {
     public static void clusterEntries(Statement statement) throws SQLException {
         clusterEntries(statement, ignored -> {
         });
+    }
+
+    /**
+     * After a file import, cluster only the newly appended {@code file_id}s when they sit entirely
+     * after already-clustered rows. A full {@link #clusterEntries} rewrite runs when there is no
+     * clustered prefix yet, or when the new files interleave older timestamps.
+     * <p>
+     * On-disk compact is only worth it after dropping a previous clustered copy. A first cluster of
+     * an unsorted import already builds a packed table, so the catalog copy can be skipped.
+     *
+     * @return {@code true} when a previous clustered table was rewritten and compact should run
+     */
+    public static boolean clusterAfterImport(Statement statement, DoubleConsumer progress) throws SQLException {
+        DoubleConsumer report = progress == null ? ignored -> {
+        } : progress;
+        long marker = readClusterMarker(statement);
+        long pending;
+        try (ResultSet result = statement.executeQuery(
+            "SELECT count(*) FROM chat_entry WHERE file_id >= " + marker)) {
+            result.next();
+            pending = result.getLong(1);
+        }
+        if (pending == 0) {
+            report.accept(1d);
+            advanceClusterMarker(statement);
+            return false;
+        }
+        if (marker > 0 && !newEntriesInterleave(statement, marker)) {
+            report.accept(0.1);
+            clusterTail(statement);
+            report.accept(1d);
+            return false;
+        }
+        boolean compactAfter = marker > 0;
+        clusterEntries(statement, report);
+        return compactAfter;
+    }
+
+    private static boolean newEntriesInterleave(Statement statement, long marker) throws SQLException {
+        Timestamp maxOld;
+        try (ResultSet result = statement.executeQuery(
+            "SELECT max(entry_time) FROM chat_entry WHERE file_id < " + marker)) {
+            result.next();
+            maxOld = result.getTimestamp(1);
+        }
+        if (maxOld == null) return false;
+        Timestamp minNew;
+        try (ResultSet result = statement.executeQuery(
+            "SELECT min(entry_time) FROM chat_entry WHERE file_id >= " + marker)) {
+            result.next();
+            minNew = result.getTimestamp(1);
+        }
+        return minNew != null && minNew.before(maxOld);
     }
 
     /**
@@ -140,8 +194,8 @@ public final class Schema {
      * time since the last catch-up into fewer, larger row groups, which is cheap regardless of how large
      * the historical log history is.
      * <p>
-     * This is <b>not</b> a substitute for {@link #clusterEntries} after an import: it assumes the tail is
-     * chronologically last.
+     * This is <b>not</b> a substitute for {@link #clusterEntries} on an interleaved import: it assumes
+     * the tail is chronologically last. {@link #clusterAfterImport} chooses between this and a full rewrite.
      */
     public static void clusterTail(Statement statement) throws SQLException {
         long marker = readClusterMarker(statement);

@@ -209,10 +209,12 @@ public final class LogStore implements AutoCloseable {
     }
 
     /**
-     * After a batch import, optimizes the whole store, see {@link #optimize()}. Live session inserts already
-     * arrive in time order, so this stays off the hot path.
-     * User imports pass {@link ImportOptions#optimize()} as {@code true}. Startup refreshes compact
-     * only when more than {@link ImportOptions#STARTUP_OPTIMIZE_AFTER_MORE_THAN} files were newly stored.
+     * After a batch import, user imports ({@link ImportOptions#optimize()}) optimize the whole store, see
+     * {@link #optimize()}. Automatic imports at startup run only when more than
+     * {@link ImportOptions#STARTUP_OPTIMIZE_AFTER_MORE_THAN} files were newly stored, and then cluster just the
+     * new files when they come after everything stored, so starting the game stays quick. A full rewrite runs
+     * on the first import or when new files interleave older timestamps; compact follows only the latter.
+     * Live session inserts already arrive in time order, so this stays off the hot path.
      */
     private void optimizeAfterImport(ImportResult result, ImportProgressTracker tracker, ImportOptions options) {
         if (!options.shouldOptimize(result.importedFiles())) {
@@ -220,12 +222,29 @@ public final class LogStore implements AutoCloseable {
             return;
         }
         try {
-            optimize(fraction -> tracker.phase(ImportPhase.CHUNKING, fraction),
-                fraction -> tracker.phase(ImportPhase.OPTIMIZING, fraction));
+            DoubleConsumer clustering = fraction -> tracker.phase(ImportPhase.CHUNKING, fraction);
+            DoubleConsumer compacting = fraction -> tracker.phase(ImportPhase.OPTIMIZING, fraction);
+            if (options.optimize()) optimize(clustering, compacting);
+            else optimizeNewFiles(clustering, compacting);
             tracker.complete();
         } catch (SQLException | IOException e) {
             throw new LogDataException("could not optimize imported chat entries", e);
         }
+    }
+
+    private void optimizeNewFiles(DoubleConsumer clustering, DoubleConsumer compacting)
+        throws SQLException, IOException {
+        clustering.accept(0d);
+        boolean rewritten;
+        try (Statement statement = connection.createStatement()) {
+            rewritten = Schema.clusterAfterImport(statement, clustering);
+        }
+        compacting.accept(0d);
+        try (Statement statement = connection.createStatement()) {
+            StoreOptimizer.analyzeAndCheckpoint(statement);
+        }
+        compacting.accept(0.3);
+        if (rewritten && databasePath != null) bind(StoreOptimizer.replaceWithCompactCopy(connection, databasePath));
     }
 
     /**

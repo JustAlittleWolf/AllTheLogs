@@ -24,10 +24,11 @@ import java.util.function.Consumer;
  *                                       or the same SHA-256 of raw bytes) are not imported again; path matches are
  *                                       left unopened, identical copies at a new path are skipped after the bytes
  *                                       are read
- * @param optimize                       whether a successful import of new files should cluster {@code chat_entry} and
- *                                       compact the database file afterwards
- * @param optimizeIfImportedFilesExceed  when {@code optimize} is false, still cluster and compact if more than this
- *                                       many files were newly stored; {@code 0} disables that threshold
+ * @param optimize                       whether a successful import of new files should rewrite the whole
+ *                                       {@code chat_entry} table oldest-first and compact the database file afterwards
+ * @param optimizeIfImportedFilesExceed  when {@code optimize} is false, still cluster if more than this many files
+ *                                       were newly stored, only the new files when they come after everything
+ *                                       stored; {@code 0} disables that threshold
  * @param timezone                       timezone the timestamps inside the imported log files are expressed in; they
  *                                       are converted to the JVM's default timezone for storage, so that files written
  *                                       in different zones stay comparable. Passing the default timezone leaves the
@@ -69,7 +70,7 @@ public record ImportOptions(
     public static final String GAME_DIRECTORY_MATCHER = "**/logs/**";
     /**
      * Startup import of the running instance compacting the database only when more than this many files
-     * were newly stored. User-initiated imports still always optimize.
+     * were newly stored. User-initiated imports always optimize the whole store.
      */
     public static final int STARTUP_OPTIMIZE_AFTER_MORE_THAN = 15;
 
