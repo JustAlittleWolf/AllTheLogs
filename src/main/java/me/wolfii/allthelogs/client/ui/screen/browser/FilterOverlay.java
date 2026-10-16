@@ -191,9 +191,8 @@ final class FilterOverlay {
         content.child(listRow("allthelogs.filter.server", serverButton,
             () -> emit(filter.get().withServersOrWorlds(null))));
 
-        ScrollContainer<FlowLayout> panel = UIContainers.verticalScroll(
+        ScrollContainer<FlowLayout> panel = OverflowScrollbar.vertical(
             Sizing.fixed(PANEL_WIDTH), Sizing.fill(), content);
-        panel.scrollbar(OverflowScrollbar.vanillaFlat());
         panel.surface(PanelSurfaces.card());
         panel.margins(Insets.none());
         panel.padding(Insets.none());

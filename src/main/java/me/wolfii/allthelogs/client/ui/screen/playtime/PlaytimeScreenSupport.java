@@ -76,8 +76,7 @@ final class PlaytimeScreenSupport {
      */
     static FlowLayout body(UIComponent chart, TotalRow total, PlaytimeLegendWidget legend, List<UIComponent> filters,
                            ButtonComponent done) {
-        ScrollContainer<PlaytimeLegendWidget> legendScroll = UIContainers.verticalScroll(Sizing.fill(), Sizing.expand(), legend);
-        legendScroll.scrollbar(OverflowScrollbar.vanillaFlat());
+        ScrollContainer<PlaytimeLegendWidget> legendScroll = OverflowScrollbar.vertical(Sizing.fill(), Sizing.expand(), legend);
         FlowLayout side = UIContainers.verticalFlow(Sizing.fixed(SIDE_WIDTH), Sizing.fill());
         side.gap(2);
         side.child(total.row);

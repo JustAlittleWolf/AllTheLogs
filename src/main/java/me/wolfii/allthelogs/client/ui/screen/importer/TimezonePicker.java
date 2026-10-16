@@ -109,9 +109,8 @@ final class TimezonePicker {
         }
         int width = Math.max(220, box.width());
         int maxHeight = Math.max(48, Math.min(180, screenHeight.getAsInt() - box.y() - box.height() - 12));
-        ScrollContainer<FlowLayout> panel = UIContainers.verticalScroll(
+        ScrollContainer<FlowLayout> panel = OverflowScrollbar.vertical(
             Sizing.fixed(width), Sizing.fixed(maxHeight), items);
-        panel.scrollbar(OverflowScrollbar.vanillaFlat());
         panel.surface(PanelSurfaces.menu());
         AnchoredPopup.place(panel, box.x(), box.y(), box.height(), width, maxHeight,
             screenWidth.getAsInt(), screenHeight.getAsInt());

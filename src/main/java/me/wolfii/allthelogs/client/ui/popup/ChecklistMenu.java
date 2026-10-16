@@ -89,8 +89,7 @@ public final class ChecklistMenu {
 
         FlowLayout rows = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
         rows.gap(1);
-        ScrollContainer<FlowLayout> list = UIContainers.verticalScroll(Sizing.fill(), Sizing.fixed(listHeight), rows);
-        list.scrollbar(OverflowScrollbar.vanillaFlat());
+        ScrollContainer<FlowLayout> list = OverflowScrollbar.vertical(Sizing.fill(), Sizing.fixed(listHeight), rows);
         list.padding(Insets.right(list.scrollbarThiccness() + 1));
 
         TextBoxComponent search = UIComponents.textBox(Sizing.fill());

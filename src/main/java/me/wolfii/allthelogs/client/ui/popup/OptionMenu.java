@@ -89,8 +89,7 @@ public final class OptionMenu {
         int contentHeight = labels.size() * (ROW_HEIGHT + 1) - 1;
         int room = Math.max(ROW_HEIGHT, Math.max(screenHeight.getAsInt() - anchor.y() - anchor.height(), anchor.y()) - 12);
         int maxHeight = Math.min(contentHeight, Math.min(180, room));
-        ScrollContainer<FlowLayout> scroll = UIContainers.verticalScroll(Sizing.fixed(width), Sizing.fixed(maxHeight), items);
-        scroll.scrollbar(OverflowScrollbar.vanillaFlat());
+        ScrollContainer<FlowLayout> scroll = OverflowScrollbar.vertical(Sizing.fixed(width), Sizing.fixed(maxHeight), items);
         scroll.surface(PanelSurfaces.menu());
         AnchoredPopup.place(scroll, anchor.x(), anchor.y(), anchor.height(), width, maxHeight,
             screenWidth.getAsInt(), screenHeight.getAsInt());

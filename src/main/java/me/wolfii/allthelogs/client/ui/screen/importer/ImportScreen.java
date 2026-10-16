@@ -124,9 +124,8 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
         advanced.child(buildAdvanced(root));
         form.child(advanced);
 
-        ScrollContainer<FlowLayout> scroll = UIContainers.verticalScroll(
+        ScrollContainer<FlowLayout> scroll = OverflowScrollbar.vertical(
             Sizing.fill(), Sizing.expand(), form);
-        scroll.scrollbar(OverflowScrollbar.vanillaFlat());
         scroll.padding(Insets.right(6));
         content.child(scroll);
 

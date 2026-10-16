@@ -127,8 +127,7 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
         body.gap(6);
         preview = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
         preview.gap(2).padding(Insets.of(4));
-        ScrollContainer<FlowLayout> previewScroll = UIContainers.verticalScroll(Sizing.expand(), Sizing.fill(), preview);
-        previewScroll.scrollbar(OverflowScrollbar.vanillaFlat());
+        ScrollContainer<FlowLayout> previewScroll = OverflowScrollbar.vertical(Sizing.expand(), Sizing.fill(), preview);
         previewScroll.surface(Surface.flat(Colors.LIST_BACKGROUND));
         body.child(previewScroll);
         page.child(body);

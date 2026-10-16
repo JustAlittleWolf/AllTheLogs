@@ -83,9 +83,8 @@ final class CommonLocationMenu {
         }
         int width = Math.max(220, button.width());
         int maxHeight = Math.max(48, Math.min(220, screenHeight.getAsInt() - button.y() - button.height() - 12));
-        ScrollContainer<FlowLayout> panel = UIContainers.verticalScroll(
+        ScrollContainer<FlowLayout> panel = OverflowScrollbar.vertical(
             Sizing.fixed(width), Sizing.fixed(maxHeight), items);
-        panel.scrollbar(OverflowScrollbar.vanillaFlat());
         panel.surface(PanelSurfaces.menu());
         AnchoredPopup.place(panel, button.x(), button.y(), button.height(), width, maxHeight,
             screenWidth.getAsInt(), screenHeight.getAsInt());

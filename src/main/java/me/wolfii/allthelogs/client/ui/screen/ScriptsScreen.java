@@ -167,9 +167,8 @@ public final class ScriptsScreen extends BaseOwoScreen<FlowLayout> {
         console = UIComponents.label(Component.empty());
         console.color(Color.ofRgb(0xCCCCCC));
         console.sizing(Sizing.fill(100), Sizing.content());
-        ScrollContainer<LabelComponent> consoleScroll = UIContainers.verticalScroll(
+        ScrollContainer<LabelComponent> consoleScroll = OverflowScrollbar.vertical(
             Sizing.fill(), Sizing.expand(), console);
-        consoleScroll.scrollbar(OverflowScrollbar.vanillaFlat());
         card.child(consoleScroll);
 
         engineStatus = UIComponents.label(engineStatusText());
