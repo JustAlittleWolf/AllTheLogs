@@ -31,6 +31,8 @@ final class FilterOverlay {
     /** Shorter than a normal 20px button, and only as wide as the X plus the button border. */
     private static final int RESET_BUTTON_WIDTH = 14;
     private static final int RESET_BUTTON_HEIGHT = 14;
+    /** Date boxes are 4px shorter than a normal 20px text box to keep the filter panels compact. */
+    static final int DATE_BOX_HEIGHT = 16;
     private static boolean sessionOpen;
 
     private final FlowLayout host;
@@ -192,6 +194,7 @@ final class FilterOverlay {
         row.gap(2);
         row.child(resetHeader(key, () -> onParsed.accept(null)));
         TextBoxComponent box = UIComponents.textBox(Sizing.fill(), value);
+        box.verticalSizing(Sizing.fixed(DATE_BOX_HEIGHT));
         box.setMaxLength(32);
         box.setHint(Component.translatable("allthelogs.filter.date_hint"));
         box.onChanged().subscribe(text -> {

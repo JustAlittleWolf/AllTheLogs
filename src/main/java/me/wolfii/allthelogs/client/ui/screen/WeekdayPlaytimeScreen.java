@@ -155,6 +155,7 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
         FlowLayout row = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
         row.gap(2);
         TextBoxComponent box = UIComponents.textBox(Sizing.fill(), value);
+        box.verticalSizing(Sizing.fixed(FilterOverlay.DATE_BOX_HEIGHT));
         row.child(FilterOverlay.resetHeader(key, () -> box.setValue("")));
         box.setMaxLength(32);
         box.setHint(Component.translatable("allthelogs.filter.date_hint"));
