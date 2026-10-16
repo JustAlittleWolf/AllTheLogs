@@ -10,16 +10,17 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 class AllTheLogsCommandsTest {
     @Test
-    void registersGuiImportScriptsAndSettingsSubcommands() {
+    void registersAScreenSubcommandForEveryScreen() {
         CommandDispatcher<FabricClientCommandSource> dispatcher = new CommandDispatcher<>();
         AllTheLogsCommands.register(dispatcher);
 
         CommandNode<FabricClientCommandSource> root = dispatcher.getRoot().getChild("allthelogs");
         assertNotNull(root);
         assertNull(root.getCommand());
-        assertNotNull(root.getChild("gui"));
-        assertNotNull(root.getChild("import"));
-        assertNotNull(root.getChild("scripts"));
-        assertNotNull(root.getChild("settings"));
+        for (String screen : new String[]{"gui", "import", "playtime", "cleanup", "scripts", "settings"}) {
+            assertNotNull(root.getChild(screen), screen);
+            assertNotNull(root.getChild(screen).getCommand(), screen);
+        }
+        assertNotNull(root.getChild("playtime").getChild("weekdays").getCommand());
     }
 }

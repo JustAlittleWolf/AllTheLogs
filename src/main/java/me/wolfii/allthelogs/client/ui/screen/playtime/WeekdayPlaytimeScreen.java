@@ -32,8 +32,8 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
- * Playtime by weekday beside a heat map of the hours of the day. Opened from the timeline screen, not the
- * hamburger menu. The period, version, and server filters apply to both charts.
+ * Playtime by weekday beside a heat map of the hours of the day. Opened from the timeline screen, or by
+ * {@code /allthelogs playtime weekdays} on top of one. The period, version, and server filters apply to both charts.
  */
 public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
     private final Screen parent;

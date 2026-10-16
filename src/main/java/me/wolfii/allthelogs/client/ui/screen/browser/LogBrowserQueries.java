@@ -86,6 +86,13 @@ final class LogBrowserQueries {
         rememberSession(snapshot, matchSummary);
     }
 
+    /**
+     * Drops the kept viewport, so the next browser opens on fresh rows after messages changed elsewhere.
+     */
+    static void forgetSession() {
+        rememberSession(ListSnapshot.EMPTY, MatchSummary.empty());
+    }
+
     static void rememberSession(ListSnapshot saved, MatchSummary summary) {
         sessionSnapshot = saved == null ? ListSnapshot.EMPTY : saved;
         sessionMatchSummary = summary == null ? MatchSummary.empty() : summary;

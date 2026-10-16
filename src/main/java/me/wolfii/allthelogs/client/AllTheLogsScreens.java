@@ -6,8 +6,11 @@ import me.wolfii.allthelogs.client.script.ScriptFiles;
 import me.wolfii.allthelogs.client.script.ScriptRuntime;
 import me.wolfii.allthelogs.client.ui.screen.LibraryDownloadScreen;
 import me.wolfii.allthelogs.client.ui.screen.ScriptsScreen;
+import me.wolfii.allthelogs.client.ui.screen.browser.CleanupScreen;
 import me.wolfii.allthelogs.client.ui.screen.browser.LogBrowserScreen;
 import me.wolfii.allthelogs.client.ui.screen.importer.ImportScreen;
+import me.wolfii.allthelogs.client.ui.screen.playtime.PlaytimeScreen;
+import me.wolfii.allthelogs.client.ui.screen.playtime.WeekdayPlaytimeScreen;
 import me.wolfii.allthelogs.client.ui.widget.IconButtonWidget;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Tooltip;
@@ -47,6 +50,32 @@ public final class AllTheLogsScreens {
             return;
         }
         Minecraft.getInstance().gui.setScreen(LibraryDownloadScreen.scripts(parent));
+    }
+
+    /**
+     * Playtime opened without the messages screen. Picking messages from the chart opens a new one.
+     */
+    public static void openPlaytime(@Nullable Screen parent) {
+        Minecraft.getInstance().gui.setScreen(playtime(parent));
+    }
+
+    /**
+     * The weekday view on top of the timeline, so leaving it goes back to the timeline as usual.
+     */
+    public static void openWeekdayPlaytime(@Nullable Screen parent) {
+        Minecraft.getInstance().gui.setScreen(new WeekdayPlaytimeScreen(playtime(parent)));
+    }
+
+    private static PlaytimeScreen playtime(@Nullable Screen parent) {
+        return new PlaytimeScreen(parent, filter -> {
+            LogBrowserScreen messages = new LogBrowserScreen(parent);
+            messages.showFiltered(filter);
+            Minecraft.getInstance().gui.setScreen(messages);
+        });
+    }
+
+    public static void openCleanup(@Nullable Screen parent) {
+        Minecraft.getInstance().gui.setScreen(new CleanupScreen(parent));
     }
 
     public static void openSettings(@Nullable Screen parent) {

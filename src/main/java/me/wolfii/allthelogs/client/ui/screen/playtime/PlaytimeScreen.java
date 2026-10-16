@@ -36,7 +36,8 @@ import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * Full playtime history. The hamburger menu opens this screen. Weekdays are a separate view reached from here.
+ * Full playtime history, opened from the hamburger menu or {@code /allthelogs playtime}. Weekdays are a separate
+ * view reached from here.
  */
 public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
     private static final PlaytimeStyle[] STYLES = {
@@ -45,7 +46,7 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
 
     private final Screen parent;
     private boolean refreshOnShow = true;
-    private final Consumer<SearchFilter> onFilterMessages;
+    private final Consumer<SearchFilter> showMessages;
     private StackLayout overlays;
     private final SeriesHighlight highlight = new SeriesHighlight();
     private PlaytimeChartWidget chartWidget;
@@ -66,10 +67,13 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
     private Component statusMessage;
     private int loadToken;
 
-    public PlaytimeScreen(@Nullable Screen parent, Consumer<SearchFilter> onFilterMessages) {
+    /**
+     * @param showMessages opens the messages screen with the filter picked from the chart's right-click menu
+     */
+    public PlaytimeScreen(@Nullable Screen parent, Consumer<SearchFilter> showMessages) {
         super(Component.translatable("allthelogs.screen.playtime"));
         this.parent = parent;
-        this.onFilterMessages = onFilterMessages;
+        this.showMessages = showMessages;
     }
 
     @Override
@@ -303,8 +307,7 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
     }
 
     private void applyMessages(SearchFilter filter) {
-        if (onFilterMessages != null) onFilterMessages.accept(filter);
-        Minecraft.getInstance().gui.setScreen(parent);
+        showMessages.accept(filter);
     }
 
     private void closeContextMenu() {

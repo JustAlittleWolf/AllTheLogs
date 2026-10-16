@@ -392,7 +392,10 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
 
     private void showPlaytime() {
         if (tools != null) tools.close();
-        Minecraft.getInstance().gui.setScreen(new PlaytimeScreen(this, this::showFiltered));
+        Minecraft.getInstance().gui.setScreen(new PlaytimeScreen(this, filter -> {
+            showFiltered(filter);
+            Minecraft.getInstance().gui.setScreen(this);
+        }));
     }
 
     private void openCleanup() {
@@ -410,9 +413,9 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     }
 
     /**
-     * Applies a filter the next time this screen is shown. Used when playtime sends the user back to messages.
+     * Applies a filter the next time this screen is shown. Used when playtime sends the user to messages.
      */
-    private void showFiltered(SearchFilter next) {
+    public void showFiltered(SearchFilter next) {
         queries.updateFilter(next);
         BrowserSession.remember(next);
         queries.markReload();

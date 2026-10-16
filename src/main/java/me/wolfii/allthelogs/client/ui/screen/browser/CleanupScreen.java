@@ -16,6 +16,7 @@ import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.Surface;
 import io.wispforest.owo.ui.core.VerticalAlignment;
 import me.wolfii.allthelogs.client.AllTheLogsClient;
+import me.wolfii.allthelogs.client.config.BrowserSession;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
@@ -72,6 +73,13 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
     private boolean armed;
     private boolean busy;
     private int requestToken;
+
+    /**
+     * Starts with the filters the messages screen would open with, for opening without that screen.
+     */
+    public CleanupScreen(@Nullable Screen parent) {
+        this(parent, BrowserSession.openingFilter(), StoreCatalog.load(), LogBrowserQueries::forgetSession);
+    }
 
     /**
      * @param onChanged runs after stored messages changed, so the messages screen reloads
