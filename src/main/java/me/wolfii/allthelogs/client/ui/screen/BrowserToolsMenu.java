@@ -1,16 +1,20 @@
 package me.wolfii.allthelogs.client.ui.screen;
 
 import io.wispforest.owo.ui.component.ButtonComponent;
+import io.wispforest.owo.ui.component.LabelComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
+import io.wispforest.owo.ui.core.Color;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.Positioning;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.UIComponent;
+import io.wispforest.owo.ui.core.VerticalAlignment;
 import io.wispforest.owo.ui.util.NinePatchTexture;
 import me.wolfii.allthelogs.client.export.MessageExport;
+import me.wolfii.allthelogs.client.ui.theme.Colors;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -24,7 +28,8 @@ import java.util.function.IntSupplier;
 
 /**
  * Menu on the messages toolbar. Hovering or clicking the hamburger opens Playtime, Import, and Advanced
- * above it, top to bottom, with a ? button under those actions. Hovering ? shows the database summary.
+ * above it, top to bottom, with a database info row under those actions. The row is plain text, not a
+ * button, and hovering it shows the database summary.
  * A click keeps the menu open. Advanced opens Export, Clean up, and Scripts to the side; Export opens the
  * export scope beside that, and the chosen scope opens the file format. A row whose side menu is open stays
  * highlighted.
@@ -37,6 +42,7 @@ import java.util.function.IntSupplier;
 final class BrowserToolsMenu {
     static final long CLOSE_DELAY_MS = 1000;
     private static final int GAP = 2;
+    private static final int INFO_ROW_HEIGHT = 14;
 
     enum Scope {
         SELECTION, VISIBLE, QUERY
@@ -56,7 +62,7 @@ final class BrowserToolsMenu {
 
     private ButtonComponent anchor;
     private FlowLayout actions;
-    private ButtonComponent databaseButton;
+    private FlowLayout databaseRow;
     private List<Component> databaseTooltip = List.of(Component.translatable("allthelogs.meta.loading"));
     private ButtonComponent advancedButton;
     private FlowLayout advancedMenu;
@@ -139,7 +145,7 @@ final class BrowserToolsMenu {
         closeAdvanced();
         remove(actions);
         actions = null;
-        databaseButton = null;
+        databaseRow = null;
         advancedButton = null;
         placedActionsX = Integer.MIN_VALUE;
         placedActionsY = Integer.MIN_VALUE;
@@ -259,15 +265,16 @@ final class BrowserToolsMenu {
             placeActions();
             return;
         }
-        int width = labelWidth("allthelogs.menu.playtime", "allthelogs.menu.import", "allthelogs.menu.advanced");
+        int width = labelWidth("allthelogs.menu.playtime", "allthelogs.menu.import", "allthelogs.menu.advanced",
+            "allthelogs.meta.marker");
         FlowLayout menu = panel(width);
         menu.child(action(Component.translatable("allthelogs.menu.playtime"), openPlaytime));
         menu.child(action(Component.translatable("allthelogs.menu.import"), openImport));
         advancedButton = action(Component.translatable("allthelogs.menu.advanced"), this::ensureAdvanced);
         menu.child(advancedButton);
-        databaseButton = action(Component.translatable("allthelogs.meta.marker"), () -> {});
-        databaseButton.tooltip(databaseTooltip);
-        menu.child(databaseButton);
+        databaseRow = infoRow(Component.translatable("allthelogs.meta.marker"));
+        databaseRow.tooltip(databaseTooltip);
+        menu.child(databaseRow);
         actions = menu;
         overlays.child(menu);
         placeActions();
@@ -409,13 +416,13 @@ final class BrowserToolsMenu {
     }
 
     /**
-     * Tooltip for the ? row at the bottom of the menu. Safe to call before the menu is open.
+     * Tooltip for the database info row at the bottom of the menu. Safe to call before the menu is open.
      */
     void setDatabaseInfo(List<Component> lines) {
         databaseTooltip = lines == null || lines.isEmpty()
             ? List.of(Component.translatable("allthelogs.meta.unavailable"))
             : List.copyOf(lines);
-        if (databaseButton != null) databaseButton.tooltip(databaseTooltip);
+        if (databaseRow != null) databaseRow.tooltip(databaseTooltip);
     }
 
     /**
@@ -464,6 +471,18 @@ final class BrowserToolsMenu {
         ButtonComponent button = UIComponents.button(label, pressed -> onPress.run());
         button.horizontalSizing(Sizing.fill());
         return button;
+    }
+
+    /**
+     * Muted text row without button chrome, for information that cannot be clicked.
+     */
+    private static FlowLayout infoRow(Component text) {
+        FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(), Sizing.fixed(INFO_ROW_HEIGHT));
+        row.padding(Insets.horizontal(4)).verticalAlignment(VerticalAlignment.CENTER);
+        LabelComponent label = UIComponents.label(text);
+        label.color(Color.ofArgb(Colors.MUTED));
+        row.child(label);
+        return row;
     }
 
     private FlowLayout panel(int width) {
