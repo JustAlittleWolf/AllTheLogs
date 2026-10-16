@@ -307,6 +307,7 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
             overlays.removeChild(contextMenu);
         }
         contextMenu = null;
+        if (chartWidget != null) chartWidget.unpin();
     }
 
     private boolean menusOpen() {
@@ -315,7 +316,16 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
             || (styleMenu != null && styleMenu.isOpen())
             || (versionMenu != null && versionMenu.isOpen())
             || (serverMenu != null && serverMenu.isOpen())
-            || contextMenu != null;
+            || contextMenuOpen();
+    }
+
+    /**
+     * Whether the right-click menu is still shown. It can close itself, e.g. on a click elsewhere, so a stale
+     * reference is cleared here, which also releases the selected bucket.
+     */
+    private boolean contextMenuOpen() {
+        if (contextMenu != null && (overlays == null || !overlays.children().contains(contextMenu))) closeContextMenu();
+        return contextMenu != null;
     }
 
     private void closeMenus() {

@@ -36,7 +36,7 @@ public final class WeekdayChartWidget extends BaseUIComponent implements AutoClo
     private static final int HOVER_CELL = 0x48FFFFFF;
     /** Dividers between the bar chart and the heat map, and before "All". Brighter and wider than grid lines. */
     private static final int DIVIDER = 0xFF6A6A6A;
-    private static final int DIVIDER_WIDTH = 2;
+    private static final int DIVIDER_WIDTH = 1;
     private static final int DASH = 3;
 
     private final SeriesHighlight highlight;

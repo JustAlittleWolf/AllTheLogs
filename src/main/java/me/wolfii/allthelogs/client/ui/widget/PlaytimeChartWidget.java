@@ -64,6 +64,7 @@ public final class PlaytimeChartWidget extends BaseUIComponent implements AutoCl
     private int paintedHighlight;
     private int hoverColumn = -1;
     private int hoverFocus = -1;
+    private Hit pinned;
     private List<PlaytimeHover.Line> hoverLines = List.of();
 
     public PlaytimeChartWidget(SeriesHighlight highlight) {
@@ -121,11 +122,13 @@ public final class PlaytimeChartWidget extends BaseUIComponent implements AutoCl
         int plotY = y + plot.y();
         int plotBottom = plotY + plot.height();
 
-        int column = hoverBlocked.getAsBoolean() || !isInBoundingBox(mouseX, mouseY)
-            ? -1 : columnAt(mouseX * scale + scale / 2, scale);
+        boolean blocked = hoverBlocked.getAsBoolean();
+        int column = blocked || !isInBoundingBox(mouseX, mouseY) ? -1 : columnAt(mouseX * scale + scale / 2, scale);
         Hit hit = column < 0 ? null : chart.hit(column, mouseY - y, plot);
         if (hit == null) column = -1;
-        highlight.chart(hit == null ? -1 : hit.series());
+        boolean showPinned = blocked && pinned != null;
+        if (showPinned) column = pinned.column();
+        highlight.chart(showPinned ? pinned.series() : hit == null ? -1 : hit.series());
         int active = highlight.active();
         if (!painted || paintedHighlight != active) paint(plot, scale, active);
 
@@ -139,7 +142,7 @@ public final class PlaytimeChartWidget extends BaseUIComponent implements AutoCl
         }
         drawXAxis(graphics, plotX, scale, plotBottom + 3);
         drawViewIndicator(graphics, plotX, plot.width());
-        if (column >= 0) {
+        if (column >= 0 && !showPinned) {
             PlaytimePainter.hoverCard(graphics, hoverLines(column, hit.series()), mouseX, mouseY, x, y, width, height);
         }
     }
@@ -163,7 +166,10 @@ public final class PlaytimeChartWidget extends BaseUIComponent implements AutoCl
                 int scale = PlaytimePainter.scale();
                 int column = columnAt((int) Math.round((x + click.x()) * scale), scale);
                 Hit hit = chart.hit(column, click.y(), plot());
-                if (hit != null) onContext.open(hit, x + click.x(), y + click.y());
+                if (hit != null) {
+                    onContext.open(hit, x + click.x(), y + click.y());
+                    pinned = hit;
+                }
             }
             return true;
         }
@@ -206,6 +212,13 @@ public final class PlaytimeChartWidget extends BaseUIComponent implements AutoCl
     }
 
     /**
+     * Stops showing the bucket that was right-clicked as selected. Call when its context menu closes.
+     */
+    public void unpin() {
+        pinned = null;
+    }
+
+    /**
      * Width of the plot in GUI pixels, or 0 before the first layout.
      */
     public int plotWidth() {
@@ -235,6 +248,7 @@ public final class PlaytimeChartWidget extends BaseUIComponent implements AutoCl
         }
         drawnAt = layout.drawnAt(totals);
         painted = false;
+        pinned = null;
         hoverColumn = -1;
     }
 
