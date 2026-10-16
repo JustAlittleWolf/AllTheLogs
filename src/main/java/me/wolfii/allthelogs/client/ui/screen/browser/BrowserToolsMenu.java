@@ -7,6 +7,7 @@ import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Color;
+import io.wispforest.owo.ui.core.HorizontalAlignment;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.Positioning;
 import io.wispforest.owo.ui.core.Sizing;
@@ -478,7 +479,8 @@ final class BrowserToolsMenu {
      */
     private static FlowLayout infoRow(Component text) {
         FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(), Sizing.fixed(INFO_ROW_HEIGHT));
-        row.padding(Insets.horizontal(4)).verticalAlignment(VerticalAlignment.CENTER);
+        row.padding(Insets.horizontal(4)).horizontalAlignment(HorizontalAlignment.CENTER)
+            .verticalAlignment(VerticalAlignment.CENTER);
         LabelComponent label = UIComponents.label(text);
         label.color(Color.ofArgb(Colors.MUTED));
         row.child(label);
