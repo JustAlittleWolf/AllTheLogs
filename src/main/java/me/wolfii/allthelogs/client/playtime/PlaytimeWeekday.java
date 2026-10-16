@@ -4,9 +4,11 @@ import me.wolfii.allthelogs.data.playtime.PlaytimeSpan;
 
 import java.time.DayOfWeek;
 import java.time.LocalDateTime;
+import java.time.format.TextStyle;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -43,6 +45,21 @@ public final class PlaytimeWeekday {
         public boolean isEmpty() {
             return totalMillis <= 0;
         }
+    }
+
+    /**
+     * Full weekday name in the system locale. {@code mondayIndex} is 0 for Monday through 6 for Sunday.
+     */
+    public static String dayName(int mondayIndex) {
+        return DayOfWeek.of(mondayIndex + 1).getDisplayName(TextStyle.FULL, Locale.getDefault());
+    }
+
+    /**
+     * The first three characters of {@link #dayName(int)}, or the whole name when it is shorter.
+     */
+    public static String shortDayName(int mondayIndex) {
+        String name = dayName(mondayIndex);
+        return name.length() <= 3 ? name : name.substring(0, 3);
     }
 
     public static Result build(List<PlaytimeSpan> spans, PlaytimeFilter filter, PlaytimeBreakdown breakdown) {

@@ -50,6 +50,6 @@ final class PlaytimeLegend {
         if (selected == null) return Component.translatable(key, Component.translatable("allthelogs.playtime.filter.all"));
         if (selected.isEmpty()) return Component.translatable(key, Component.translatable("allthelogs.playtime.filter.none"));
         if (selected.size() == 1) return Component.translatable(key, named(selected.iterator().next()));
-        return Component.translatable(key, Component.translatable("allthelogs.playtime.filter.count", selected.size()));
+        return Component.translatable(key, Component.literal(Integer.toString(selected.size())));
     }
 }

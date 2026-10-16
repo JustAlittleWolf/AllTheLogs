@@ -38,15 +38,6 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
     private static final PlaytimeBreakdown[] GROUPS = {
         PlaytimeBreakdown.VERSION, PlaytimeBreakdown.SERVER, PlaytimeBreakdown.COMBINED
     };
-    private static final String[] DAY_KEYS = {
-        "allthelogs.playtime.day.monday",
-        "allthelogs.playtime.day.tuesday",
-        "allthelogs.playtime.day.wednesday",
-        "allthelogs.playtime.day.thursday",
-        "allthelogs.playtime.day.friday",
-        "allthelogs.playtime.day.saturday",
-        "allthelogs.playtime.day.sunday"
-    };
 
     private final Screen parent;
     private StackLayout overlays;
@@ -178,7 +169,7 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
     }
 
     private Component extreme(String key, int day) {
-        String name = Component.translatable(DAY_KEYS[day]).getString();
+        String name = PlaytimeWeekday.dayName(day);
         return Component.translatable(key, name, PlaytimeDuration.format(chart.bars().get(day).totalMillis()));
     }
 

@@ -16,15 +16,6 @@ import net.minecraft.network.chat.Component;
  * are outlined.
  */
 public final class WeekdayChartWidget extends BaseUIComponent {
-    private static final String[] DAY_KEYS = {
-        "allthelogs.playtime.day.mon",
-        "allthelogs.playtime.day.tue",
-        "allthelogs.playtime.day.wed",
-        "allthelogs.playtime.day.thu",
-        "allthelogs.playtime.day.fri",
-        "allthelogs.playtime.day.sat",
-        "allthelogs.playtime.day.sun"
-    };
     private static final float AXIS_SCALE = 0.75f;
     private static final int MOST = 0xFFFFFFFF;
     private static final int LEAST = 0xFF8E8E8E;
@@ -76,7 +67,7 @@ public final class WeekdayChartWidget extends BaseUIComponent {
             } else if (day == chart.leastDay() && chart.mostDay() != chart.leastDay()) {
                 PlaytimeBars.outline(graphics, left, Math.min(stackTop, plotBottom - 1), right, plotBottom, LEAST);
             }
-            String label = Component.translatable(DAY_KEYS[day]).getString();
+            String label = PlaytimeWeekday.shortDayName(day);
             int textWidth = Math.round(font.width(label) * AXIS_SCALE);
             int center = (left + right) / 2;
             graphics.drawText(Component.literal(label), center - textWidth / 2, plotBottom + 3, AXIS_SCALE, Colors.TICK_LABEL);

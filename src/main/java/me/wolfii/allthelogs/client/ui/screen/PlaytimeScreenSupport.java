@@ -27,7 +27,7 @@ final class PlaytimeScreenSupport {
     static void load(Screen screen, int request, IntSupplier token, Consumer<Component> status, Runnable ready) {
         var worker = AllTheLogsClient.worker();
         if (worker == null || !worker.isOpen()) {
-            status.accept(Component.translatable("allthelogs.playtime.unavailable"));
+            status.accept(Component.translatable("allthelogs.meta.unavailable"));
             return;
         }
         if (!PlaytimeSession.loaded()) status.accept(Component.translatable("allthelogs.playtime.loading"));

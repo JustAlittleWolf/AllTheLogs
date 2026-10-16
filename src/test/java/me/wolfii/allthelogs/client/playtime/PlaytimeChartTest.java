@@ -7,6 +7,7 @@ import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -157,6 +158,22 @@ class PlaytimeChartTest {
         assertEquals(DayOfWeek.TUESDAY, days.bars().get(days.mostDay()).day());
         assertEquals(DayOfWeek.WEDNESDAY, days.bars().get(days.leastDay()).day());
         assertEquals(List.of("a", "b"), days.series().stream().map(PlaytimeSeries::serverKey).toList());
+    }
+
+    @Test
+    void weekdayNamesComeFromTheSystemLocale() {
+        Locale previous = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.GERMANY);
+            assertEquals("Montag", PlaytimeWeekday.dayName(0));
+            assertEquals("Mon", PlaytimeWeekday.shortDayName(0));
+            assertEquals("Mit", PlaytimeWeekday.shortDayName(2));
+            Locale.setDefault(Locale.JAPAN);
+            assertEquals("月曜日", PlaytimeWeekday.dayName(0));
+            assertEquals("月曜日", PlaytimeWeekday.shortDayName(0));
+        } finally {
+            Locale.setDefault(previous);
+        }
     }
 
     @Test
