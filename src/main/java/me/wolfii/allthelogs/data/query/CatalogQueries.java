@@ -97,7 +97,7 @@ final class CatalogQueries {
         }
     }
 
-    private List<String> serverOrWorlds() throws SQLException {
+    List<String> serverOrWorlds() throws SQLException {
         List<String> servers = new ArrayList<>();
         try (Statement statement = connection.createStatement();
              ResultSet result = statement.executeQuery("""

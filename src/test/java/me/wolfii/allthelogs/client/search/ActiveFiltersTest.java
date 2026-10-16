@@ -44,7 +44,7 @@ class ActiveFiltersTest {
 
     @Test
     void defaultContextAndAllVersionsStayInactive() {
-        SearchFilter filter = SearchFilter.defaults().withVersion("ALL").withContextLines(SearchFilter.DEFAULT_CONTEXT_LINES);
+        SearchFilter filter = SearchFilter.defaults().withVersions(null).withContextLines(SearchFilter.DEFAULT_CONTEXT_LINES);
         assertTrue(ActiveFilters.of(filter).isEmpty());
     }
 }

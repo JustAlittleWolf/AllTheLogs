@@ -1,9 +1,13 @@
 package me.wolfii.allthelogs.client.search;
 
+import me.wolfii.allthelogs.client.playtime.PlaytimeSeries;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Sidebar filters that differ from {@link SearchFilter#defaults()}, in sidebar order. The search text
@@ -37,9 +41,28 @@ public final class ActiveFilters {
         if (filter.upUntil() != null) {
             active.add(new Entry(Kind.UNTIL, DateParser.formatUntil(filter.upUntil())));
         }
-        if (filter.hasVersion()) active.add(new Entry(Kind.VERSION, filter.version()));
-        if (filter.hasServerOrWorld()) active.add(new Entry(Kind.SERVER, filter.serverOrWorld()));
+        if (filter.hasVersion()) active.add(new Entry(Kind.VERSION, describe(filter.versions(), Function.identity())));
+        if (filter.hasServerOrWorld()) {
+            active.add(new Entry(Kind.SERVER, describe(filter.serversOrWorlds(), ActiveFilters::placeName)));
+        }
         return List.copyOf(active);
+    }
+
+    /**
+     * The chosen values by name, sorted and comma separated, "None" when the set is empty, or {@code null}
+     * when nothing is chosen because every value is kept.
+     */
+    public static String describe(Set<String> values, Function<String, String> name) {
+        if (values == null) return null;
+        if (values.isEmpty()) return Component.translatable("allthelogs.playtime.filter.none").getString();
+        return values.stream().map(name).sorted(String.CASE_INSENSITIVE_ORDER).collect(Collectors.joining(", "));
+    }
+
+    private static String placeName(String place) {
+        if (place == null || place.isEmpty()) {
+            return Component.translatable("allthelogs.playtime.server.unknown").getString();
+        }
+        return PlaytimeSeries.displayName(place);
     }
 
     public static Component buttonLabel(int count) {

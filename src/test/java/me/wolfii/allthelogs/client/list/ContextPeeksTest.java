@@ -202,7 +202,8 @@ class ContextPeeksTest {
     void expandCountsFilterMatchingLinesNotFileIndices() {
         ChatLog log = log("a.log");
         DisplayRow anchor = row(log, 10, "on hypixel", true, "hypixel.net");
-        SearchFilter filter = SearchFilter.defaults().withServerOrWorld("hypixel");
+        SearchFilter filter = SearchFilter.defaults()
+            .withServersOrWorlds(java.util.Set.of("hypixel.net", "mc.hypixel.net"));
         List<DisplayRow> fetched = List.of(
             anchor,
             row(log, 11, "other", false, "gommehd.net"),

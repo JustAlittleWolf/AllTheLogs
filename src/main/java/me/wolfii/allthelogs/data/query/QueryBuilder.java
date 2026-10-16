@@ -8,8 +8,11 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * Turns a {@link ChatQuery} into SQL.
@@ -92,10 +95,7 @@ public final class QueryBuilder {
             filters.add("e.entry_time < ?");
             parameters.add(Timestamp.valueOf(query.upUntil()));
         }
-        if (query.serverOrWorld() != null) {
-            filters.add("contains(lower(e.server_or_world), ?)");
-            parameters.add(query.serverOrWorld().toLowerCase(Locale.ROOT));
-        }
+        addServerConditions(query, "e.server_or_world", filters, parameters);
         return "SELECT e.file_id, e.line_index FROM chat_entry e WHERE "
             + String.join(" AND ", filters)
             + " ORDER BY e.line_index " + lineOrder + " LIMIT " + context;
@@ -157,10 +157,12 @@ public final class QueryBuilder {
             conditions.add("file_id IN (SELECT id FROM log_file WHERE minecraft_version = ?)");
             parameters.add(query.version());
         }
-        if (query.serverOrWorld() != null) {
-            conditions.add("contains(lower(server_or_world), ?)");
-            parameters.add(query.serverOrWorld().toLowerCase(Locale.ROOT));
+        if (query.versions() != null) {
+            conditions.add(query.versions().isEmpty() ? "FALSE"
+                : "file_id IN (SELECT id FROM log_file WHERE " + inList("minecraft_version", query.versions(),
+                    parameters) + ")");
         }
+        addServerConditions(query, "server_or_world", conditions, parameters);
         if (query.substring() != null) {
             if (query.caseSensitive()) {
                 conditions.add("contains(message, ?)");
@@ -174,6 +176,30 @@ public final class QueryBuilder {
             conditions.add("regexp_matches(message, ?)");
             parameters.add(query.regex());
         }
+    }
+
+    /**
+     * The server or world substring and the exact server set of {@code query}, applied to {@code column}.
+     * Matches and the context around them use the same conditions.
+     */
+    static void addServerConditions(ChatQuery query, String column, List<String> conditions, List<Object> parameters) {
+        if (query.serverOrWorld() != null) {
+            conditions.add("contains(lower(" + column + "), ?)");
+            parameters.add(query.serverOrWorld().toLowerCase(Locale.ROOT));
+        }
+        Set<String> places = query.serversOrWorlds();
+        if (places == null) return;
+        Set<String> named = new LinkedHashSet<>(places);
+        boolean none = named.remove(ChatQuery.NO_SERVER_OR_WORLD);
+        List<String> either = new ArrayList<>();
+        if (!named.isEmpty()) either.add(inList(column, named, parameters));
+        if (none) either.add(column + " IS NULL");
+        conditions.add(either.isEmpty() ? "FALSE" : "(" + String.join(" OR ", either) + ")");
+    }
+
+    private static String inList(String column, Set<String> values, List<Object> parameters) {
+        parameters.addAll(values);
+        return column + " IN (" + String.join(", ", Collections.nCopies(values.size(), "?")) + ")";
     }
 
     private static void addOffsetCondition(ChatQuery query, List<String> conditions, List<Object> parameters) {

@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -24,8 +25,9 @@ import java.util.regex.PatternSyntaxException;
  * @param regex        whether {@code text} is a regular expression rather than a literal substring
  * @param limit        matches per page; negative means no cap
  * @param offset       exclusive timestamp cursor the current page starts after, or {@code null} for the first page
- * @param version      Minecraft version to restrict to, or {@code null} for all of them
- * @param serverOrWorld substring of the server or world to keep, case insensitive, or {@code null} for all
+ * @param versions        Minecraft versions to keep, or {@code null} for all of them; empty keeps nothing
+ * @param serversOrWorlds exact servers or worlds to keep, with {@link ChatQuery#NO_SERVER_OR_WORLD} for messages
+ *                        without one, or {@code null} for all of them; empty keeps nothing
  */
 public record SearchFilter(
     String text,
@@ -37,16 +39,12 @@ public record SearchFilter(
     LocalDateTime startingAt,
     LocalDateTime upUntil,
     LocalDateTime offset,
-    String version,
-    String serverOrWorld
+    Set<String> versions,
+    Set<String> serversOrWorlds
 ) {
     public static final int MAX_CONTEXT_LINES = 1000;
     public static final int DEFAULT_LIMIT = 100;
     public static final int DEFAULT_CONTEXT_LINES = 3;
-    /**
-     * Value the version menu uses for "every version", stored as no version filter at all.
-     */
-    public static final String ALL_VERSIONS = "ALL";
 
     public SearchFilter {
         Objects.requireNonNull(text, "text");
@@ -56,12 +54,8 @@ public record SearchFilter(
             throw new IllegalArgumentException("contextLines must be at most " + MAX_CONTEXT_LINES);
         }
         if (limit == 0) throw new IllegalArgumentException("limit must not be zero");
-        if (version != null && version.isBlank()) version = null;
-        if (version != null && ALL_VERSIONS.equalsIgnoreCase(version)) version = null;
-        if (serverOrWorld != null) {
-            serverOrWorld = serverOrWorld.trim();
-            if (serverOrWorld.isEmpty()) serverOrWorld = null;
-        }
+        versions = versions == null ? null : Set.copyOf(versions);
+        serversOrWorlds = serversOrWorlds == null ? null : Set.copyOf(serversOrWorlds);
     }
 
     public static SearchFilter defaults() {
@@ -137,12 +131,26 @@ public record SearchFilter(
         return with(draft -> draft.offset = offset);
     }
 
+    /**
+     * Only {@code version}, or every version when it is null or blank.
+     */
     public SearchFilter withVersion(String version) {
-        return with(draft -> draft.version = version);
+        return withVersions(version == null || version.isBlank() ? null : Set.of(version));
     }
 
+    /**
+     * Only {@code serverOrWorld}, matched exactly, or every place when it is null or blank.
+     */
     public SearchFilter withServerOrWorld(String serverOrWorld) {
-        return with(draft -> draft.serverOrWorld = serverOrWorld);
+        return withServersOrWorlds(serverOrWorld == null || serverOrWorld.isBlank() ? null : Set.of(serverOrWorld));
+    }
+
+    public SearchFilter withVersions(Set<String> versions) {
+        return with(draft -> draft.versions = versions);
+    }
+
+    public SearchFilter withServersOrWorlds(Set<String> serversOrWorlds) {
+        return with(draft -> draft.serversOrWorlds = serversOrWorlds);
     }
 
     public SearchFilter withoutOffset() {
@@ -171,11 +179,11 @@ public record SearchFilter(
     }
 
     public boolean hasVersion() {
-        return version != null && !version.isEmpty();
+        return versions != null;
     }
 
     public boolean hasServerOrWorld() {
-        return serverOrWorld != null && !serverOrWorld.isEmpty();
+        return serversOrWorlds != null;
     }
 
     /**
@@ -232,8 +240,8 @@ public record SearchFilter(
         if (startingAt != null) query = query.startingAt(startingAt);
         if (upUntil != null) query = query.upUntil(upUntil);
         if (pageOffset != null) query = query.withOffset(pageOffset);
-        if (hasVersion()) query = query.withVersion(version);
-        if (hasServerOrWorld()) query = query.withServerOrWorld(serverOrWorld);
+        if (hasVersion()) query = query.withVersions(versions);
+        if (hasServerOrWorld()) query = query.withServersOrWorlds(serversOrWorlds);
         if (!includeText || !hasText()) return query;
         if (regex) return query.withRegex(regexPattern(text, caseSensitive));
         if (caseSensitive) return query.withSubstringCaseSensitive(text);
@@ -250,8 +258,7 @@ public record SearchFilter(
         if (upUntil != null && !entry.timestamp().isBefore(upUntil)) return false;
         if (!hasServerOrWorld()) return true;
         String place = entry.serverOrWorld();
-        if (place == null || place.isEmpty()) return false;
-        return place.toLowerCase(Locale.ROOT).contains(serverOrWorld.toLowerCase(Locale.ROOT));
+        return serversOrWorlds.contains(place == null || place.isEmpty() ? ChatQuery.NO_SERVER_OR_WORLD : place);
     }
 
     /**
@@ -295,8 +302,8 @@ public record SearchFilter(
         private LocalDateTime startingAt;
         private LocalDateTime upUntil;
         private LocalDateTime offset;
-        private String version;
-        private String serverOrWorld;
+        private Set<String> versions;
+        private Set<String> serversOrWorlds;
 
         private Draft(SearchFilter filter) {
             this.text = filter.text;
@@ -308,13 +315,13 @@ public record SearchFilter(
             this.startingAt = filter.startingAt;
             this.upUntil = filter.upUntil;
             this.offset = filter.offset;
-            this.version = filter.version;
-            this.serverOrWorld = filter.serverOrWorld;
+            this.versions = filter.versions;
+            this.serversOrWorlds = filter.serversOrWorlds;
         }
 
         private SearchFilter build() {
             return new SearchFilter(text, regex, caseSensitive, contextLines, limit, sort, startingAt,
-                upUntil, offset, version, serverOrWorld);
+                upUntil, offset, versions, serversOrWorlds);
         }
     }
 }

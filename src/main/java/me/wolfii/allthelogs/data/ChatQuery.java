@@ -1,7 +1,9 @@
 package me.wolfii.allthelogs.data;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Consumer;
 
 /**
@@ -13,6 +15,8 @@ import java.util.function.Consumer;
  * @param regex         RE2 pattern every matching message must match somewhere, or {@code null}
  * @param version       Minecraft version the matching entries' logs must have, or {@code null} for any
  * @param serverOrWorld server or world the matching entries must have been on, or {@code null} for any
+ * @param versions      Minecraft versions the entries' logs must have one of, or {@code null} for any
+ * @param serversOrWorlds exact servers or worlds the entries must have one of, or {@code null} for any
  * @param startingAt    earliest timestamp to return, inclusive, or {@code null} for no lower bound
  * @param upUntil       latest timestamp to return, exclusive, or {@code null} for no upper bound
  * @param contextLines  how many entries to also return either side of every match
@@ -29,6 +33,8 @@ public record ChatQuery(
     String regex,
     String version,
     String serverOrWorld,
+    Set<String> versions,
+    Set<String> serversOrWorlds,
     LocalDateTime startingAt,
     LocalDateTime upUntil,
     int contextLines,
@@ -41,6 +47,8 @@ public record ChatQuery(
 ) implements me.wolfii.allthelogs.api.ChatQuery {
     public ChatQuery {
         Objects.requireNonNull(sort, "sort");
+        versions = versions == null ? null : Set.copyOf(versions);
+        serversOrWorlds = serversOrWorlds == null ? null : Set.copyOf(serversOrWorlds);
         if (contextLines < 0) throw new IllegalArgumentException("contextLines must not be negative");
         if (offsetLine < 0) throw new IllegalArgumentException("offsetLine must not be negative");
         if (skip < 0) throw new IllegalArgumentException("skip must not be negative");
@@ -56,7 +64,8 @@ public record ChatQuery(
      * A query matching every stored entry, ordered by timestamp ascending.
      */
     public static ChatQuery all() {
-        return new ChatQuery(null, false, null, null, null, null, null, 0, -1, Sort.ASCENDING, null, null, 0, 0);
+        return new ChatQuery(null, false, null, null, null, null, null, null, null, 0, -1, Sort.ASCENDING, null, null,
+            0, 0);
     }
 
     /**
@@ -113,6 +122,16 @@ public record ChatQuery(
     public ChatQuery withServerOrWorld(String serverOrWorld) {
         Objects.requireNonNull(serverOrWorld, "serverOrWorld");
         return with(draft -> draft.serverOrWorld = serverOrWorld);
+    }
+
+    @Override
+    public ChatQuery withVersions(Collection<String> versions) {
+        return with(draft -> draft.versions = versions == null ? null : Set.copyOf(versions));
+    }
+
+    @Override
+    public ChatQuery withServersOrWorlds(Collection<String> serversOrWorlds) {
+        return with(draft -> draft.serversOrWorlds = serversOrWorlds == null ? null : Set.copyOf(serversOrWorlds));
     }
 
     /**
@@ -229,6 +248,8 @@ public record ChatQuery(
         private String regex;
         private String version;
         private String serverOrWorld;
+        private Set<String> versions;
+        private Set<String> serversOrWorlds;
         private LocalDateTime startingAt;
         private LocalDateTime upUntil;
         private int contextLines;
@@ -245,6 +266,8 @@ public record ChatQuery(
             this.regex = query.regex;
             this.version = query.version;
             this.serverOrWorld = query.serverOrWorld;
+            this.versions = query.versions;
+            this.serversOrWorlds = query.serversOrWorlds;
             this.startingAt = query.startingAt;
             this.upUntil = query.upUntil;
             this.contextLines = query.contextLines;
@@ -257,8 +280,8 @@ public record ChatQuery(
         }
 
         private ChatQuery build() {
-            return new ChatQuery(substring, caseSensitive, regex, version, serverOrWorld, startingAt, upUntil,
-                contextLines, limit, sort, offset, offsetSource, offsetLine, skip);
+            return new ChatQuery(substring, caseSensitive, regex, version, serverOrWorld, versions, serversOrWorlds,
+                startingAt, upUntil, contextLines, limit, sort, offset, offsetSource, offsetLine, skip);
         }
     }
 }

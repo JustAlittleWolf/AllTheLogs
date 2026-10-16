@@ -447,6 +447,13 @@ public final class LogStore implements AutoCloseable {
     }
 
     /**
+     * Every server or world that stored messages were on, for the message filter.
+     */
+    public List<String> serversOrWorlds() {
+        return queries.serversOrWorlds();
+    }
+
+    /**
      * Estimated playtime for every imported log. Each file contributes the time from its first logged line to
      * its last. That stretch is split where the server or world changes, and where a stored message names a
      * different Minecraft version.

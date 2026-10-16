@@ -31,6 +31,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
 import org.jetbrains.annotations.NotNull;
@@ -43,6 +44,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 
 /**
  * Transparent log browser: search bar, side filter panel, virtualised history, and a timeline of every hit.
@@ -122,7 +124,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         chrome.child(content);
 
         filters = new FilterOverlay(chrome, overlays, () -> this.width, () -> this.height,
-            queries::filter, queries::versions, this::applyFilter);
+            queries::filter, queries::versions, queries::serversOrWorlds, this::applyFilter);
         root.child(chrome);
         filters.restore();
         syncSearchBox();
@@ -174,9 +176,19 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     }
 
     @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (filters != null) filters.closeListsOnClickOutside(event.x(), event.y());
+        return super.mouseClicked(event, doubleClick);
+    }
+
+    @Override
     public boolean keyPressed(KeyEvent event) {
         if (event.isEscape() && tools != null && tools.isOpen()) {
             tools.close();
+            return true;
+        }
+        if (event.isEscape() && filters != null && filters.listOpen()) {
+            filters.closeLists();
             return true;
         }
         if (event.isSelectAll() && list != null && !searchHasFocus() && !filterOwnsFocus()) {
@@ -453,7 +465,8 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         };
         return new ExportMetadata(scopeName, filter.text(), filter.regex(), filter.caseSensitive(),
             filter.contextLines(), filter.sort().name().toLowerCase(Locale.ROOT), filter.startingAt(),
-            filter.upUntil(), filter.version(), filter.serverOrWorld());
+            filter.upUntil(), ActiveFilters.describe(filter.versions(), Function.identity()),
+            ActiveFilters.describe(filter.serversOrWorlds(), FilterOverlay::placeName));
     }
 
     private Component queryBlockedReason() {

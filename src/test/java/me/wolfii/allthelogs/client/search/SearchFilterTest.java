@@ -69,18 +69,34 @@ class SearchFilterTest {
 
     @Test
     void versionFilterIsOmittedByDefaultAndAppliedWhenSet() {
-        assertNull(SearchFilter.defaults().toQuery().version());
-        assertEquals("26.2", SearchFilter.defaults().withVersion("26.2").toQuery().version());
-        assertNull(SearchFilter.defaults().withVersion("ALL").toQuery().version());
-        assertNull(SearchFilter.defaults().withVersion("  ").version());
+        assertNull(SearchFilter.defaults().toQuery().versions());
+        assertEquals(java.util.Set.of("26.2"), SearchFilter.defaults().withVersion("26.2").toQuery().versions());
+        assertEquals(java.util.Set.of("1.21", "26.2"),
+            SearchFilter.defaults().withVersions(java.util.Set.of("1.21", "26.2")).toQuery().versions());
+        assertEquals(java.util.Set.of(), SearchFilter.defaults().withVersions(java.util.Set.of()).toQuery().versions());
+        assertNull(SearchFilter.defaults().withVersion("  ").versions());
     }
 
     @Test
     void serverFilterIsOmittedByDefaultAndAppliedWhenSet() {
-        assertNull(SearchFilter.defaults().toQuery().serverOrWorld());
-        assertEquals("hypixel.net", SearchFilter.defaults().withServerOrWorld("hypixel.net").toQuery().serverOrWorld());
-        assertEquals("ALL", SearchFilter.defaults().withServerOrWorld("ALL").toQuery().serverOrWorld());
-        assertNull(SearchFilter.defaults().withServerOrWorld("  ").serverOrWorld());
+        assertNull(SearchFilter.defaults().toQuery().serversOrWorlds());
+        assertEquals(java.util.Set.of("hypixel.net"),
+            SearchFilter.defaults().withServerOrWorld("hypixel.net").toQuery().serversOrWorlds());
+        assertNull(SearchFilter.defaults().withServerOrWorld("  ").serversOrWorlds());
+    }
+
+    @Test
+    void contextStaysOnTheChosenServersIncludingMessagesWithoutOne() {
+        SearchFilter filter = SearchFilter.defaults()
+            .withServersOrWorlds(java.util.Set.of("a.net", me.wolfii.allthelogs.api.ChatQuery.NO_SERVER_OR_WORLD));
+        assertTrue(filter.allowsContext(entry("a.net")));
+        assertTrue(filter.allowsContext(entry(null)));
+        assertFalse(filter.allowsContext(entry("b.net")));
+    }
+
+    private static me.wolfii.allthelogs.data.ChatEntry entry(String place) {
+        return new me.wolfii.allthelogs.data.ChatEntry(null, LocalDateTime.of(2026, 1, 1, 0, 0), 0, "hi", null, null,
+            place);
     }
 
     @Test
@@ -122,7 +138,7 @@ class SearchFilterTest {
             null, "player", "gommehd.net");
         ChatEntry tooEarly = new ChatEntry(log, LocalDateTime.of(2026, 8, 26, 9, 0), 0, "hi",
             null, "player", "Hypixel.net");
-        SearchFilter server = SearchFilter.defaults().withServerOrWorld("hypixel");
+        SearchFilter server = SearchFilter.defaults().withServerOrWorld("Hypixel.net");
         assertTrue(server.allowsContext(onHypixel));
         assertFalse(server.allowsContext(elsewhere));
         assertFalse(server.allowsContext(new ChatEntry(log, LocalDateTime.of(2026, 8, 26, 10, 7), 3, "hi")));
@@ -143,8 +159,8 @@ class SearchFilterTest {
         ChatQuery bar = filter.toFilterBarQuery();
         assertNull(bar.substring());
         assertNull(bar.regex());
-        assertEquals("hypixel.net", bar.serverOrWorld());
-        assertEquals("26.2", bar.version());
+        assertEquals(java.util.Set.of("hypixel.net"), bar.serversOrWorlds());
+        assertEquals(java.util.Set.of("26.2"), bar.versions());
         assertEquals("needle", filter.toQuery().substring());
     }
 
@@ -159,9 +175,9 @@ class SearchFilterTest {
         assertTrue(SearchFilter.defaults().withVersion("26.2").isNarrowed());
         assertTrue(SearchFilter.defaults().withStartingAt(LocalDateTime.of(2026, 1, 1, 0, 0)).isNarrowed());
         assertTrue(SearchFilter.defaults().withUpUntil(LocalDateTime.of(2026, 1, 2, 0, 0)).isNarrowed());
-        assertFalse(SearchFilter.defaults().withVersion("ALL").isNarrowed());
+        assertFalse(SearchFilter.defaults().withVersions(null).isNarrowed());
         assertTrue(SearchFilter.defaults().withServerOrWorld("hypixel.net").isNarrowed());
-        assertTrue(SearchFilter.defaults().withServerOrWorld("ALL").isNarrowed());
+        assertTrue(SearchFilter.defaults().withServersOrWorlds(java.util.Set.of()).isNarrowed());
     }
 
     @Test

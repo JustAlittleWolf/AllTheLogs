@@ -107,10 +107,7 @@ public final class ChatQueries {
             filters.add("e.entry_time < ?");
             parameters.add(Timestamp.valueOf(query.upUntil()));
         }
-        if (query != null && query.serverOrWorld() != null) {
-            filters.add("contains(lower(e.server_or_world), ?)");
-            parameters.add(query.serverOrWorld().toLowerCase(Locale.ROOT));
-        }
+        if (query != null) QueryBuilder.addServerConditions(query, "e.server_or_world", filters, parameters);
         String sql = SELECT_COLUMNS_AROUND + " FROM chat_entry e JOIN log_file f ON f.id = e.file_id WHERE "
             + String.join(" AND ", filters) + " ORDER BY e.line_index " + order + " LIMIT " + limit;
         try {
@@ -197,6 +194,17 @@ public final class ChatQueries {
      */
     public LogStoreMetadata browserMetadata(long databaseSizeBytes) {
         return catalog.metadata(databaseSizeBytes, false);
+    }
+
+    /**
+     * Every server or world that stored messages were on, ordered by first use. One scan of {@code chat_entry}.
+     */
+    public List<String> serversOrWorlds() {
+        try {
+            return catalog.serverOrWorlds();
+        } catch (SQLException e) {
+            throw new LogDataException("could not read servers and worlds", e);
+        }
     }
 
     /**

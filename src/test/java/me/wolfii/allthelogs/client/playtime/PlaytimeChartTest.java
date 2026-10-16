@@ -407,12 +407,12 @@ class PlaytimeChartTest {
         assertEquals("hi", period.text());
         assertEquals(at(1, 0), period.startingAt());
         assertEquals(at(2, 0), period.upUntil());
-        assertNull(period.version());
-        assertNull(period.serverOrWorld());
+        assertNull(period.versions());
+        assertNull(period.serversOrWorlds());
 
         PlaytimeSeries both = PlaytimeSeries.of(PlaytimeBreakdown.COMBINED, "1.21", "hypixel.net");
         var category = PlaytimeMessageFilter.category(current, at(1, 0), at(2, 0), PlaytimeBreakdown.COMBINED, both);
-        assertEquals("1.21", category.version());
-        assertEquals("hypixel.net", category.serverOrWorld());
+        assertEquals(java.util.Set.of("1.21"), category.versions());
+        assertEquals(java.util.Set.of("hypixel.net"), category.serversOrWorlds());
     }
 }

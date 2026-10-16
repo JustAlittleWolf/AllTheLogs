@@ -177,6 +177,10 @@ public final class LogStoreWorker implements AutoCloseable {
         return submit(() -> requireStore().browserMetadata());
     }
 
+    public CompletableFuture<List<String>> serversOrWorlds() {
+        return submit(() -> requireStore().serversOrWorlds());
+    }
+
     public CompletableFuture<List<PlaytimeSpan>> playtime() {
         return submit(() -> requireStore().playtime());
     }

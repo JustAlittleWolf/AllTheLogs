@@ -1,6 +1,8 @@
 package me.wolfii.allthelogs.api;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.Set;
 
 /**
  * Describes which chat entries to retrieve. Start from {@link #all()} and narrow it down with chained methods;
@@ -19,6 +21,12 @@ import java.time.LocalDateTime;
  *}
  */
 public interface ChatQuery {
+    /**
+     * Stands for "no known server or world" in {@link #withServersOrWorlds(Collection)}: it keeps entries whose
+     * {@link ChatEntry#serverOrWorld()} is {@code null}.
+     */
+    String NO_SERVER_OR_WORLD = "";
+
     /**
      * A query matching every stored entry, ordered by timestamp ascending.
      */
@@ -51,6 +59,18 @@ public interface ChatQuery {
      * Compared case insensitively.
      */
     String serverOrWorld();
+
+    /**
+     * Minecraft versions the matching entries' logs must have one of, or {@code null} for any. Empty matches
+     * nothing.
+     */
+    Set<String> versions();
+
+    /**
+     * Servers or worlds the matching entries must have exactly one of, with {@link #NO_SERVER_OR_WORLD} for
+     * entries without one, or {@code null} for any. Empty matches nothing.
+     */
+    Set<String> serversOrWorlds();
 
     /**
      * Earliest timestamp to return, inclusive, or {@code null} for no lower bound.
@@ -133,6 +153,21 @@ public interface ChatQuery {
      * address; local worlds use {@code world/{name}}. Context lines are taken from servers that also match.
      */
     ChatQuery withServerOrWorld(String serverOrWorld);
+
+    /**
+     * Keeps only entries from logs whose {@link ChatLog#minecraftVersion()} is one of {@code versions}, or
+     * removes that restriction when {@code versions} is {@code null}. An empty collection matches nothing.
+     * Combines with {@link #withVersion(String)}: both must hold.
+     */
+    ChatQuery withVersions(Collection<String> versions);
+
+    /**
+     * Keeps only entries whose {@link ChatEntry#serverOrWorld()} is exactly one of {@code serversOrWorlds};
+     * {@link #NO_SERVER_OR_WORLD} keeps entries without one. {@code null} removes the restriction and an
+     * empty collection matches nothing. Context lines are taken from the same servers. Combines with
+     * {@link #withServerOrWorld(String)}: both must hold.
+     */
+    ChatQuery withServersOrWorlds(Collection<String> serversOrWorlds);
 
     /**
      * Keeps only entries whose timestamp is at or after {@code startingAt}, inclusive.
