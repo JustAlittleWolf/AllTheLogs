@@ -50,6 +50,18 @@ class LogBrowserQueriesTest {
             assertTrue(LogBrowserQueries.hasNewLatestRow(first.reversed(), next.reversed(), ChatQuery.Sort.ASCENDING));
             assertFalse(LogBrowserQueries.hasNewLatestRow(next, next, ChatQuery.Sort.DESCENDING));
             assertFalse(LogBrowserQueries.hasNewLatestRow(next, List.of(), ChatQuery.Sort.DESCENDING));
+            ChatQuery probeQuery = LogBrowserQueries.newestProbe(filter.withContextLines(3));
+            assertEquals(1, probeQuery.limit());
+            assertEquals(0, probeQuery.contextLines());
+            List<ChatEntry> probe = store.findEntries(probeQuery);
+            assertEquals(List.of("hit two"), probe.stream().map(ChatEntry::message).toList());
+            List<DisplayRow> probeRows = DisplayRow.from(probe, filter);
+            DisplayRow context = new DisplayRow(new ChatEntry(next.getFirst().chatLog(),
+                time.plusSeconds(1), 99, "context"), false, List.of());
+            List<DisplayRow> withContext = List.of(context, next.getFirst(), next.getLast());
+            assertFalse(LogBrowserQueries.hasNewLatestRow(withContext, probeRows, ChatQuery.Sort.DESCENDING));
+            assertFalse(LogBrowserQueries.hasNewLatestRow(withContext.reversed(), probeRows, ChatQuery.Sort.ASCENDING));
+            assertTrue(LogBrowserQueries.hasNewLatestRow(first, probeRows, ChatQuery.Sort.ASCENDING));
         }
     }
 

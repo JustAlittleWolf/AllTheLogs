@@ -24,10 +24,14 @@ final class LatestMessagesPoll {
     }
 
     boolean finish(boolean following) {
-        boolean apply = pending && valid && following;
+        boolean apply = canApply(following);
         pending = false;
         valid = false;
         return apply;
+    }
+
+    boolean canApply(boolean following) {
+        return pending && valid && following;
     }
 
     void pause() {

@@ -10,6 +10,20 @@ class LatestMessagesPollTest {
     private static final long SECOND = TimeUnit.SECONDS.toNanos(1);
 
     @Test
+    void probeKeepsTheSlotUntilTheFullPageReturnsAndCanBeCancelledBetweenStages() {
+        LatestMessagesPoll poll = new LatestMessagesPoll();
+        assertTrue(poll.begin(0, true));
+        assertTrue(poll.canApply(true));
+        assertFalse(poll.begin(SECOND, true));
+        poll.pause();
+        assertFalse(poll.canApply(true));
+        assertFalse(poll.finish(true));
+        assertTrue(poll.begin(SECOND, true));
+        assertTrue(poll.canApply(true));
+        assertTrue(poll.finish(true));
+    }
+
+    @Test
     void pollsAtMostOncePerSecondAndNeverOverlapsSlowQueries() {
         LatestMessagesPoll poll = new LatestMessagesPoll();
         assertTrue(poll.begin(0, true));
