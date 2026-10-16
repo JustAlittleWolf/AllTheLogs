@@ -25,6 +25,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -139,6 +140,13 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         if (this.minecraft == null || this.minecraft.level != null) return;
         this.extractPanorama(graphics, delta);
+    }
+
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (versionMenu != null) versionMenu.closeOnClickOutside(event.x(), event.y());
+        if (serverMenu != null) serverMenu.closeOnClickOutside(event.x(), event.y());
+        return super.mouseClicked(event, doubleClick);
     }
 
     @Override

@@ -11,6 +11,7 @@ import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.ParentUIComponent;
 import io.wispforest.owo.ui.core.Sizing;
+import io.wispforest.owo.ui.core.UIComponent;
 import me.wolfii.allthelogs.client.playtime.PlaytimeFilter;
 import me.wolfii.allthelogs.client.ui.text.TextFit;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
@@ -41,6 +42,7 @@ final class ChecklistMenu {
     private final IntSupplier screenWidth;
     private final IntSupplier screenHeight;
     private ParentUIComponent menu;
+    private ButtonComponent anchor;
 
     ChecklistMenu(StackLayout overlays, IntSupplier screenWidth, IntSupplier screenHeight) {
         this.overlays = overlays;
@@ -55,6 +57,20 @@ final class ChecklistMenu {
     void close() {
         if (isOpen()) overlays.removeChild(menu);
         menu = null;
+        anchor = null;
+    }
+
+    /**
+     * Closes the list when a click lands neither on it nor on the button that opened it. The button
+     * handles its own clicks, so clicking it still toggles the list.
+     */
+    void closeOnClickOutside(double mouseX, double mouseY) {
+        if (isOpen() && !contains(menu, mouseX, mouseY) && !contains(anchor, mouseX, mouseY)) close();
+    }
+
+    private static boolean contains(UIComponent component, double mouseX, double mouseY) {
+        return component != null && mouseX >= component.x() && mouseX < component.x() + component.width()
+            && mouseY >= component.y() && mouseY < component.y() + component.height();
     }
 
     /**
@@ -64,6 +80,7 @@ final class ChecklistMenu {
     void show(ButtonComponent anchor, List<String> values, Supplier<Set<String>> selection,
               Function<String, String> name, Consumer<Set<String>> apply) {
         close();
+        this.anchor = anchor;
         int width = anchor.width();
         int spaceBelow = screenHeight.getAsInt() - anchor.y() - anchor.height() - 8;
         int spaceAbove = anchor.y() - 8;
