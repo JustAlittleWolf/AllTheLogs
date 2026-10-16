@@ -18,6 +18,9 @@ public final class PlaytimeWeekday {
     /** Heat map row that sums every weekday. Rows 0 to 6 are Monday to Sunday. */
     public static final int ALL_DAYS = 7;
     public static final int HOURS = 24;
+    /** Heat map detail for drawing: five-minute slots. Hover still sums whole hours. */
+    public static final int SLOTS_PER_HOUR = 12;
+    public static final int SLOTS = HOURS * SLOTS_PER_HOUR;
 
     private PlaytimeWeekday() {
     }
@@ -37,6 +40,7 @@ public final class PlaytimeWeekday {
 
     /**
      * @param heat playtime per heat map row ({@link #ALL_DAYS} last), hour of day, and series
+     * @param fine the same per five-minute slot of the day ({@link #SLOTS} of them) instead of per hour
      */
     public record Result(
         long totalMillis,
@@ -45,7 +49,8 @@ public final class PlaytimeWeekday {
         List<PlaytimeChartModel.LegendEntry> legend,
         List<Bar> bars,
         double axisMax,
-        long[][][] heat
+        long[][][] heat,
+        long[][][] fine
     ) {
         public boolean isEmpty() {
             return totalMillis <= 0;
@@ -54,6 +59,16 @@ public final class PlaytimeWeekday {
         public long heatMillis(int row, int hour) {
             long total = 0;
             for (long value : heat[row][hour]) total += value;
+            return total;
+        }
+
+        /**
+         * Playtime in one five-minute slot, of every series or only {@code series} when it is not negative.
+         */
+        public long fineMillis(int row, int slot, int series) {
+            if (series >= 0) return series < fine[row][slot].length ? fine[row][slot][series] : 0;
+            long total = 0;
+            for (long value : fine[row][slot]) total += value;
             return total;
         }
 
@@ -116,22 +131,30 @@ public final class PlaytimeWeekday {
             }
         }
         if (kept.isEmpty()) {
-            return new Result(0, group, List.of(), List.of(), List.of(), 1, new long[ALL_DAYS + 1][HOURS][0]);
+            return new Result(0, group, List.of(), List.of(), List.of(), 1, new long[ALL_DAYS + 1][HOURS][0],
+                new long[ALL_DAYS + 1][SLOTS][0]);
         }
         PlaytimeSeries.Index index = PlaytimeSeries.collect(kept, spans, group);
         int seriesCount = index.size();
         long[][][] heat = new long[ALL_DAYS + 1][HOURS][seriesCount];
+        long[][][] fine = new long[ALL_DAYS + 1][SLOTS][seriesCount];
         long total = 0;
+        int slotMinutes = 60 / SLOTS_PER_HOUR;
         for (PlaytimeSpan span : kept) {
             int seriesIndex = index.of(span);
             LocalDateTime cursor = span.start();
             while (cursor.isBefore(span.end())) {
-                LocalDateTime nextHour = cursor.withMinute(0).withSecond(0).withNano(0).plusHours(1);
-                LocalDateTime to = span.end().isBefore(nextHour) ? span.end() : nextHour;
+                int minute = cursor.getMinute() - cursor.getMinute() % slotMinutes;
+                LocalDateTime nextSlot = cursor.withMinute(minute).withSecond(0).withNano(0).plusMinutes(slotMinutes);
+                LocalDateTime to = span.end().isBefore(nextSlot) ? span.end() : nextSlot;
                 long millis = Duration.between(cursor, to).toMillis();
                 int day = cursor.getDayOfWeek().getValue() - 1;
-                heat[day][cursor.getHour()][seriesIndex] += millis;
-                heat[ALL_DAYS][cursor.getHour()][seriesIndex] += millis;
+                int hour = cursor.getHour();
+                int slot = hour * SLOTS_PER_HOUR + minute / slotMinutes;
+                heat[day][hour][seriesIndex] += millis;
+                heat[ALL_DAYS][hour][seriesIndex] += millis;
+                fine[day][slot][seriesIndex] += millis;
+                fine[ALL_DAYS][slot][seriesIndex] += millis;
                 total += millis;
                 cursor = to;
             }
@@ -158,7 +181,7 @@ public final class PlaytimeWeekday {
         }
         if (axisMax <= 0) axisMax = 1;
         return new Result(total, group, index.series(), PlaytimeChartModel.legend(seriesTotals),
-            List.copyOf(bars), axisMax, heat);
+            List.copyOf(bars), axisMax, heat, fine);
     }
 
     private static PlaytimeSpan clip(PlaytimeSpan span, LocalDateTime from, LocalDateTime until) {

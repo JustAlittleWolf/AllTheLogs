@@ -333,6 +333,9 @@ class PlaytimeChartTest {
         assertEquals(3_600_000L, days.heatMillis(DayOfWeek.SUNDAY.getValue() - 1, 23));
         assertEquals(3_600_000L, days.heatMillis(DayOfWeek.MONDAY.getValue() - 1, 0));
         assertEquals(2 * 3_600_000L, days.heatMillis(PlaytimeWeekday.ALL_DAYS, 0));
+        assertEquals(5 * 60_000L, days.fineMillis(DayOfWeek.SUNDAY.getValue() - 1,
+            23 * PlaytimeWeekday.SLOTS_PER_HOUR + 11, -1));
+        assertEquals(0L, days.fineMillis(DayOfWeek.SUNDAY.getValue() - 1, 22 * PlaytimeWeekday.SLOTS_PER_HOUR, -1));
 
         List<PlaytimeHover.Line> single = days.dayHover(DayOfWeek.TUESDAY.getValue() - 1, "Total", "Unknown", -1);
         assertEquals(2, single.size());
