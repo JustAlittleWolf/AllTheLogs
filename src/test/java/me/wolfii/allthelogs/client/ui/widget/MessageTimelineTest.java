@@ -19,6 +19,20 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class MessageTimelineTest {
     @Test
+    void followsOnlyTheNewestEdgeOfTheWholeResultInEitherSortOrder() {
+        var ascending = me.wolfii.allthelogs.api.ChatQuery.Sort.ASCENDING;
+        var descending = me.wolfii.allthelogs.api.ChatQuery.Sort.DESCENDING;
+        assertTrue(MessageTimeline.pinnedToLatest(ascending, 200, 400, 200, true, false));
+        assertFalse(MessageTimeline.pinnedToLatest(ascending, 100, 400, 200, true, false));
+        assertFalse(MessageTimeline.pinnedToLatest(ascending, 200, 400, 200, true, true));
+        assertTrue(MessageTimeline.pinnedToLatest(descending, 0, 400, 200, false, true));
+        assertFalse(MessageTimeline.pinnedToLatest(descending, 1, 400, 200, false, true));
+        assertFalse(MessageTimeline.pinnedToLatest(descending, 0, 400, 200, true, true));
+        assertTrue(MessageTimeline.pinnedToLatest(ascending, 0, 0, 200, false, false));
+        assertTrue(MessageTimeline.pinnedToLatest(descending, 0, 0, 200, false, false));
+    }
+
+    @Test
     void onScreenExportKeepsTheInclusiveVisibleSlice() {
         DisplayRow first = row("one");
         DisplayRow second = row("two");

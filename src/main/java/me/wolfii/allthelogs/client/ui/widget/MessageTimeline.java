@@ -5,6 +5,7 @@ import io.wispforest.owo.ui.core.CursorStyle;
 import io.wispforest.owo.ui.core.OwoUIGraphics;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.UIComponent;
+import me.wolfii.allthelogs.api.ChatQuery;
 import me.wolfii.allthelogs.client.list.*;
 import me.wolfii.allthelogs.client.timeline.ScrubJump;
 import me.wolfii.allthelogs.client.timeline.ScrubberGeometry;
@@ -867,6 +868,20 @@ public final class MessageTimeline extends BaseUIComponent {
      */
     public boolean pinnedToEnd() {
         return pinnedToEnd(scrollY, layout.contentHeight(), height, window.hasAfter());
+    }
+
+    /** Live updates follow the newest edge, except while the user is selecting or navigating. */
+    public boolean canFollowLatest(ChatQuery.Sort sort) {
+        return !draggingSelection && !pendingClear && !hasSelectedText() && !scrub.dragging()
+            && !autoScroll.active() && pinnedToLatest(sort, scrollY, layout.contentHeight(), height,
+                window.hasBefore(), window.hasAfter());
+    }
+
+    static boolean pinnedToLatest(ChatQuery.Sort sort, double scrollY, int contentHeight, int viewHeight,
+                                  boolean hasBefore, boolean hasAfter) {
+        return sort == ChatQuery.Sort.ASCENDING
+            ? pinnedToEnd(scrollY, contentHeight, viewHeight, hasAfter)
+            : !hasBefore && scrollY <= 0.5;
     }
 
     static boolean pinnedToEnd(double scrollY, int contentHeight, int viewHeight, boolean hasAfter) {
