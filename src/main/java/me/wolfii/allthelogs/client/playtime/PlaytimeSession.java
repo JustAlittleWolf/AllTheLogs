@@ -27,8 +27,13 @@ public final class PlaytimeSession {
         return filter;
     }
 
+    /**
+     * Changing the filter zooms the timeline all the way out, so the whole filtered history is visible.
+     */
     public static void filter(PlaytimeFilter next) {
-        filter = next == null ? PlaytimeFilter.all() : next;
+        PlaytimeFilter changed = next == null ? PlaytimeFilter.all() : next;
+        if (!changed.equals(filter)) window = null;
+        filter = changed;
     }
 
     public static PlaytimeBreakdown breakdown() {

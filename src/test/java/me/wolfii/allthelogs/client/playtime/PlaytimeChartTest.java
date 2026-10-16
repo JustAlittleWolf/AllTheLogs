@@ -196,6 +196,20 @@ class PlaytimeChartTest {
     }
 
     @Test
+    void changingTheFilterZoomsAllTheWayOut() {
+        PlaytimeSession.clear();
+        try {
+            PlaytimeSession.window(new PlaytimeWindow(at(1, 0), at(2, 0)));
+            PlaytimeSession.filter(PlaytimeFilter.all());
+            assertEquals(new PlaytimeWindow(at(1, 0), at(2, 0)), PlaytimeSession.window());
+            PlaytimeSession.filter(PlaytimeFilter.all().withVersions(Set.of()));
+            assertNull(PlaytimeSession.window());
+        } finally {
+            PlaytimeSession.clear();
+        }
+    }
+
+    @Test
     void zoomStopsAtTwentyDays() {
         PlaytimeWindow domain = new PlaytimeWindow(at(1, 0), at(1, 0).plusDays(100));
         PlaytimeWindow deep = PlaytimeWindow.zoom(domain, domain, 0.5, 40);
