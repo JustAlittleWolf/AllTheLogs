@@ -8,6 +8,7 @@ import me.wolfii.allthelogs.api.LogSource;
 import me.wolfii.allthelogs.api.LogStoreMetadata;
 import me.wolfii.allthelogs.api.MatchDay;
 import me.wolfii.allthelogs.api.MatchSummary;
+import me.wolfii.allthelogs.api.Playtime;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.proxy.ProxyExecutable;
 
@@ -39,6 +40,7 @@ final class ScriptBindings {
         bindings.putMember("LogStoreMetadata", HostObjects.wrap(LogStoreMetadata.class));
         bindings.putMember("MatchSummary", HostObjects.wrap(MatchSummary.class));
         bindings.putMember("MatchDay", HostObjects.wrap(MatchDay.class));
+        bindings.putMember("Playtime", HostObjects.wrap(Playtime.class));
         bindings.putMember("Sort", HostObjects.wrap(ChatQuery.Sort.class));
     }
 }

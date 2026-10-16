@@ -54,11 +54,20 @@
  *   readonly chatLogs: ChatLog[];
  *   readonly metadata: LogStoreMetadata;
  *   readonly databasePath: string | null;
+ *   readonly playtime: Playtime[];
  *   findEntries(query: ChatQuery): ChatEntry[];
  *   summarizeMatches(query: ChatQuery): MatchSummary;
  *   countMatches(query: ChatQuery): number;
  *   entriesAround(log: ChatLog, lineIndex: number, radius: number): ChatEntry[];
  *   entriesAround(log: ChatLog, lineIndex: number, before: number, after: number): ChatEntry[];
+ * }
+ *
+ * interface Playtime {
+ *   readonly start: string;
+ *   readonly end: string;
+ *   readonly minecraftVersion: string;
+ *   readonly serverOrWorld: string | null;
+ *   readonly millis: number;
  * }
  *
  * interface ChatEntry {
@@ -138,3 +147,12 @@ console.log(summary.matches + " messages matching /welcome/i (writing up to 50 n
 database.findEntries(query).forEach((entry) => {
     writeToOutputFile(entry.timestamp + " [" + entry.chatLog.minecraftVersion + "] " + entry.message);
 });
+
+const spans = database.playtime;
+let playtimeMillis = 0;
+spans.forEach((span) => {
+    playtimeMillis += span.millis;
+    const place = span.serverOrWorld || "";
+    writeToOutputFile(span.start + "\t" + span.minecraftVersion + "\t" + place + "\t" + span.millis);
+});
+console.log(spans.length + " playtime spans, " + playtimeMillis + " ms");

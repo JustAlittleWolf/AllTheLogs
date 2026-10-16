@@ -49,6 +49,7 @@ class ScriptHostTest {
         assertTrue(result.succeeded(), () -> result.console() + " / " + result.error());
         assertTrue(result.console().contains("4 entries"));
         assertTrue(result.console().contains("1 messages matching"));
+        assertTrue(result.console().contains("playtime spans"));
         assertFalse(result.console().contains("Welcome to the server"));
         assertFalse(result.console().contains("hello 26"));
         assertFalse(result.console().contains("legacy"));

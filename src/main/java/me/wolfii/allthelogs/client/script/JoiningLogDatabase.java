@@ -4,6 +4,7 @@ import me.wolfii.allthelogs.api.ChatEntry;
 import me.wolfii.allthelogs.api.ChatLog;
 import me.wolfii.allthelogs.api.ChatQuery;
 import me.wolfii.allthelogs.api.LogDatabase;
+import me.wolfii.allthelogs.api.Playtime;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -61,6 +62,10 @@ final class JoiningLogDatabase {
 
     public Optional<Path> databasePath() {
         return join(database.databasePath());
+    }
+
+    public List<Playtime> playtime() {
+        return join(database.playtime());
     }
 
     private static <T> T join(CompletableFuture<T> future) {
