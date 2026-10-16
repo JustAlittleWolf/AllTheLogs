@@ -45,7 +45,13 @@ class ContinuationTest {
         LocalDate day = LocalDate.of(2024, 5, 1);
         LocalDateTime end = day.atTime(23, 59, 50);
         assertTrue(LogContinuation.continues(day, end, day.plusDays(1), day.plusDays(1).atTime(0, 0, 1)));
-        assertFalse(LogContinuation.continues(day, end, day.plusDays(1), day.plusDays(1).atTime(0, 30)));
+        assertTrue(LogContinuation.continues(day, day.atTime(23, 45), day.plusDays(1), day.plusDays(1).atTime(0, 10)));
+        assertTrue(LogContinuation.continues(day, day.plusDays(1).atTime(0, 3), day.plusDays(1),
+            day.plusDays(1).atTime(0, 1)));
+        assertFalse(LogContinuation.continues(day, end, day.plusDays(1), day.plusDays(1).atTime(0, 40)));
+        assertFalse(LogContinuation.continues(day, day.atTime(22, 0), day.plusDays(1), day.plusDays(1).atTime(0, 0, 1)));
+        assertFalse(LogContinuation.continues(day, day.plusDays(1).atTime(13, 50), day.plusDays(1),
+            day.plusDays(1).atTime(14, 0)));
         assertFalse(LogContinuation.continues(day, end, day.plusDays(2), day.plusDays(1).atTime(0, 0, 1)));
         assertTrue(LogContinuation.lacksStart("unknown", null));
         assertFalse(LogContinuation.lacksStart("unknown", "Steve"));

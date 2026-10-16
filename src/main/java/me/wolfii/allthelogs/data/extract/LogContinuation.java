@@ -11,10 +11,13 @@ import java.time.LocalDateTime;
  * midnight, and that file has none of the start lines that name the version or the player.
  */
 public final class LogContinuation {
-    /** Largest gap between the previous log's last line and the continuation's first line. */
-    public static final Duration MAX_GAP = Duration.ofMinutes(10);
-    /** Small overlap allowed when the two files' clocks disagree by a little. */
-    public static final Duration MAX_OVERLAP = Duration.ofMinutes(1);
+    /**
+     * How long before midnight the previous log may end, how long after midnight the continuation may start,
+     * and the largest gap between the two.
+     */
+    public static final Duration MAX_GAP = Duration.ofMinutes(30);
+    /** How far the two logs may overlap, or reach past midnight, when their clocks disagree a little. */
+    public static final Duration MAX_OVERLAP = Duration.ofMinutes(5);
 
     private LogContinuation() {
     }
@@ -28,14 +31,33 @@ public final class LogContinuation {
     }
 
     /**
+     * Whether a log has a start line: a version or a player.
+     */
+    public static boolean hasStart(String minecraftVersion, String minecraftUser) {
+        return !lacksStart(minecraftVersion, minecraftUser);
+    }
+
+    /**
      * Whether a log dated {@code nextDate} whose first line is at {@code nextStart} picks up where a log dated
-     * {@code previousDate} ending at {@code previousEnd} stopped: dated one day later, starting at most
-     * {@link #MAX_GAP} after it ends. Both logs must come from the same {@link #folder}.
+     * {@code previousDate} ending at {@code previousEnd} stopped: it is dated one day later, the previous log
+     * ends late in the evening and the next one starts just after midnight, each within {@link #MAX_GAP} of
+     * midnight, and the gap between them is at most {@link #MAX_GAP}. {@link #MAX_OVERLAP} allows for clocks
+     * that disagree a little. Both logs must come from the same {@link #folder}, and only a log that
+     * {@link #lacksStart} can continue one that {@link #hasStart}.
      */
     public static boolean continues(LocalDate previousDate, LocalDateTime previousEnd,
                                     LocalDate nextDate, LocalDateTime nextStart) {
         if (!nextDate.equals(previousDate.plusDays(1))) return false;
-        Duration gap = Duration.between(previousEnd, nextStart);
+        LocalDateTime midnight = nextDate.atStartOfDay();
+        return within(previousEnd, midnight) && within(midnight, nextStart) && within(previousEnd, nextStart);
+    }
+
+    /**
+     * Whether {@code later} is at most {@link #MAX_GAP} after {@code earlier}, or at most {@link #MAX_OVERLAP}
+     * before it.
+     */
+    private static boolean within(LocalDateTime earlier, LocalDateTime later) {
+        Duration gap = Duration.between(earlier, later);
         return gap.compareTo(MAX_GAP) <= 0 && gap.compareTo(MAX_OVERLAP.negated()) >= 0;
     }
 

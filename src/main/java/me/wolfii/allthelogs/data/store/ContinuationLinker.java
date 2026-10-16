@@ -70,7 +70,7 @@ public final class ContinuationLinker {
     private static Log predecessor(List<Log> folder, Log log) {
         Log best = null;
         for (Log candidate : folder) {
-            if (candidate.id() == log.id()) continue;
+            if (candidate.id() == log.id() || !LogContinuation.hasStart(candidate.version(), candidate.user())) continue;
             if (!LogContinuation.continues(candidate.date(), candidate.end(), log.date(), log.start())) continue;
             if (best == null || candidate.end().isAfter(best.end())) best = candidate;
         }
