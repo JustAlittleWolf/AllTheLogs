@@ -80,7 +80,7 @@
   "allthelogs.menu.playtime": "Playtime",
   "allthelogs.screen.playtime": "Playtime",
   "allthelogs.screen.playtime.weekdays": "Playtime by weekday",
-  "allthelogs.playtime.total": "Total: %s",
+  "allthelogs.playtime.total": "Total",
   "allthelogs.playtime.loading": "Loading playtime...",
   "allthelogs.playtime.empty": "No playtime for these filters",
   "allthelogs.playtime.weekdays": "Weekdays",

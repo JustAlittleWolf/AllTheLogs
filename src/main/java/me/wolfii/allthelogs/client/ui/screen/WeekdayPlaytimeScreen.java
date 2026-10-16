@@ -41,7 +41,7 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
     private StackLayout overlays;
     private WeekdayChartWidget chartWidget;
     private PlaytimeLegendWidget legend;
-    private LabelComponent totalLabel;
+    private PlaytimeScreenSupport.TotalRow totalLabel;
     private ButtonComponent groupButton;
     private ButtonComponent versionButton;
     private ButtonComponent serverButton;
@@ -80,7 +80,7 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
 
         chartWidget = new WeekdayChartWidget(highlight);
         legend = new PlaytimeLegendWidget(highlight);
-        totalLabel = UIComponents.label(Component.empty());
+        totalLabel = new PlaytimeScreenSupport.TotalRow();
         chartWidget.hoverBlocked(this::menusOpen);
         legend.hoverBlocked(this::menusOpen);
         versionButton = PlaytimeScreenSupport.filterButton(PlaytimeScreenSupport.versionLabel(), pressed -> openVersions());

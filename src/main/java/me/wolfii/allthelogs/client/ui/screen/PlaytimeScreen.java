@@ -50,7 +50,7 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
     private final SeriesHighlight highlight = new SeriesHighlight();
     private PlaytimeChartWidget chartWidget;
     private PlaytimeLegendWidget legend;
-    private LabelComponent totalLabel;
+    private PlaytimeScreenSupport.TotalRow totalLabel;
     private ButtonComponent grainButton;
     private ButtonComponent breakdownButton;
     private ButtonComponent styleButton;
@@ -111,7 +111,7 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         chartWidget.onDismiss(this::closeContextMenu);
         chartWidget.onContext(this::openContextMenu);
         legend = new PlaytimeLegendWidget(highlight);
-        totalLabel = UIComponents.label(Component.empty());
+        totalLabel = new PlaytimeScreenSupport.TotalRow();
         chartWidget.hoverBlocked(this::menusOpen);
         legend.hoverBlocked(this::menusOpen);
         versionButton = PlaytimeScreenSupport.filterButton(PlaytimeScreenSupport.versionLabel(), pressed -> openVersions());

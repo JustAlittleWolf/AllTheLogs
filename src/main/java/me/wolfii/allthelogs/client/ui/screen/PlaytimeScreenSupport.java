@@ -73,13 +73,12 @@ final class PlaytimeScreenSupport {
      * The chart beside a column with the total, the scrolling legend under it, and the filter controls at the
      * bottom. Only the legend scrolls.
      */
-    static FlowLayout body(UIComponent chart, LabelComponent total, PlaytimeLegendWidget legend, List<UIComponent> filters) {
+    static FlowLayout body(UIComponent chart, TotalRow total, PlaytimeLegendWidget legend, List<UIComponent> filters) {
         ScrollContainer<PlaytimeLegendWidget> legendScroll = UIContainers.verticalScroll(Sizing.fill(), Sizing.expand(), legend);
         legendScroll.scrollbar(OverflowScrollbar.vanillaFlat());
         FlowLayout side = UIContainers.verticalFlow(Sizing.fixed(SIDE_WIDTH), Sizing.fill());
         side.gap(2);
-        total.horizontalSizing(Sizing.fill());
-        side.child(total);
+        side.child(total.row);
         side.child(legendScroll);
         filters.forEach(side::child);
 
@@ -88,6 +87,30 @@ final class PlaytimeScreenSupport {
         body.child(chart.horizontalSizing(Sizing.expand()).verticalSizing(Sizing.fill()));
         body.child(side);
         return body;
+    }
+
+    /**
+     * "Total" on the left and the playtime on the right, in line with the legend's durations below it.
+     */
+    static final class TotalRow {
+        final FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
+        private final LabelComponent name = UIComponents.label(Component.empty());
+        private final LabelComponent value = UIComponents.label(Component.empty());
+
+        TotalRow() {
+            row.padding(Insets.right(PlaytimeLegendWidget.VALUE_INSET));
+            name.horizontalSizing(Sizing.expand());
+            row.child(name);
+            row.child(value);
+        }
+
+        /**
+         * @param duration the formatted total, or null to leave the row empty while loading or on an error
+         */
+        void show(@Nullable String duration) {
+            name.text(duration == null ? Component.empty() : Component.translatable("allthelogs.playtime.total"));
+            value.text(duration == null ? Component.empty() : Component.literal(duration));
+        }
     }
 
     static void load(Screen screen, int request, IntSupplier token, Consumer<Component> status, Runnable ready) {
@@ -113,12 +136,9 @@ final class PlaytimeScreenSupport {
     /**
      * Puts the total above the legend, or a loading or error message in the chart.
      */
-    static void showTotal(@Nullable LabelComponent total, @Nullable Consumer<Component> placeholder,
+    static void showTotal(@Nullable TotalRow total, @Nullable Consumer<Component> placeholder,
                           @Nullable Component message, long totalMillis) {
-        if (total != null) {
-            total.text(message != null ? Component.empty()
-                : Component.translatable("allthelogs.playtime.total", PlaytimeDuration.format(totalMillis)));
-        }
+        if (total != null) total.show(message != null ? null : PlaytimeDuration.format(totalMillis));
         if (placeholder != null) placeholder.accept(message != null ? message : Component.translatable("allthelogs.playtime.empty"));
     }
 

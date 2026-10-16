@@ -24,6 +24,8 @@ public final class PlaytimeLegendWidget extends BaseUIComponent implements AutoC
     private static final int ROW = 11;
     private static final int SWATCH = 7;
     private static final int SCROLLBAR_ROOM = 5;
+    /** Gap between a duration and the right edge of the legend; the total above the legend uses it too. */
+    public static final int VALUE_INSET = SCROLLBAR_ROOM + 1;
     private static final int HIGHLIGHT_ROW = 0x30FFFFFF;
 
     private final SeriesHighlight highlight;
@@ -91,7 +93,8 @@ public final class PlaytimeLegendWidget extends BaseUIComponent implements AutoC
                 String name = TextFit.fit(fullName, right - durationWidth - 4 - nameX);
                 if (rowHovered && !name.equals(fullName)) cutName = fullName;
                 graphics.drawText(Component.literal(name), nameX, rowY + 2, 1f, Colors.TEXT);
-                graphics.drawText(Component.literal(duration), right - durationWidth - 1, rowY + 2, 1f, Colors.MUTED);
+                graphics.drawText(Component.literal(duration), x + width - VALUE_INSET - durationWidth, rowY + 2, 1f,
+                    Colors.MUTED);
             }
             rowY += ROW;
         }
