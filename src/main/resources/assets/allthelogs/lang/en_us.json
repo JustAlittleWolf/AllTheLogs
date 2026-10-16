@@ -79,6 +79,7 @@
   "allthelogs.menu.export": "Export",
   "allthelogs.menu.playtime": "Playtime",
   "allthelogs.menu.cleanup": "Clean up",
+  "allthelogs.menu.advanced": "Advanced",
   "allthelogs.screen.cleanup": "Clean up messages",
   "allthelogs.cleanup.text_hint": "Text or regex to match",
   "allthelogs.cleanup.mode": "Action: %s",
