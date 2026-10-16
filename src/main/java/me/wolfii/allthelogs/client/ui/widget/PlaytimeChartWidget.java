@@ -25,7 +25,8 @@ import java.util.function.BooleanSupplier;
 import java.util.function.DoubleConsumer;
 
 /**
- * Timeline of estimated playtime. Bars touch and fill the plot in screen pixels. The bars are painted into
+ * Timeline of estimated playtime. Bars touch and fill the plot in screen pixels. Zoomed out, every bar is
+ * whole; zoomed in, bars sit where their time falls, so panning moves them smoothly. The bars are painted into
  * a texture only when the chart, the size, or the highlighted series changes. The scroll wheel zooms
  * around the pointer and dragging pans. While zoomed in, a thin indicator under the axis shows where the
  * view sits in the whole history. The bucket under the pointer is shaded, and right-click reports it with
@@ -225,7 +226,8 @@ public final class PlaytimeChartWidget extends BaseUIComponent implements AutoCl
         laidOutScale = scale;
         axisWidth = Math.max(PlaytimeChartModel.PLOT_LEFT / 2, PlaytimePainter.yAxisWidth(chart.axisMax(), this::yLabel));
         List<PlaytimeChartModel.Column> columns = chart.columns();
-        layout = BarLayout.of(columns.size(), 0, plot().width() * scale);
+        int pixels = plot().width() * scale;
+        layout = zoomedIn() ? timedLayout(columns, pixels) : BarLayout.of(columns.size(), 0, pixels);
         double[] totals = new double[columns.size()];
         for (int index = 0; index < totals.length; index++) {
             for (double value : columns.get(index).display()) totals[index] += value;
@@ -233,6 +235,17 @@ public final class PlaytimeChartWidget extends BaseUIComponent implements AutoCl
         drawnAt = layout.drawnAt(totals);
         painted = false;
         hoverColumn = -1;
+    }
+
+    private boolean zoomedIn() {
+        return epoch(chart.viewStart()) > epoch(chart.domainStart()) || epoch(chart.viewEnd()) < epoch(chart.domainEnd());
+    }
+
+    private BarLayout timedLayout(List<PlaytimeChartModel.Column> columns, int pixelWidth) {
+        long[] edges = new long[columns.size() + 1];
+        for (int index = 0; index < columns.size(); index++) edges[index] = epoch(columns.get(index).start());
+        if (!columns.isEmpty()) edges[columns.size()] = epoch(columns.getLast().end());
+        return BarLayout.timed(edges, epoch(chart.viewStart()), epoch(chart.viewEnd()), 0, pixelWidth);
     }
 
     private void paint(Plot plot, int scale, int active) {
@@ -275,7 +288,8 @@ public final class PlaytimeChartWidget extends BaseUIComponent implements AutoCl
     }
 
     /**
-     * Labels under the bars. Labelled columns are a fixed multiple apart, so labels stay put while panning.
+     * Labels under the bars. Labelled buckets are a fixed multiple apart counted from a fixed point in time,
+     * so labels move with their bars while panning instead of jumping between them.
      */
     private void drawXAxis(OwoUIGraphics graphics, int plotX, int scale, int labelY) {
         List<PlaytimeChartModel.Column> columns = chart.columns();
@@ -284,14 +298,28 @@ public final class PlaytimeChartWidget extends BaseUIComponent implements AutoCl
         int widest = Math.max(labelWidth(columns.getFirst()), labelWidth(columns.getLast()));
         double averageBar = (layout.right() - layout.left()) / (double) count;
         int step = Math.max(1, (int) Math.ceil((widest + LABEL_GAP) * scale / Math.max(averageBar, 0.001)));
-        for (int column = 0; column < count; column += step) {
+        for (int column = 0; column < count; column++) {
             PlaytimeChartModel.Column bucket = columns.get(column);
+            if (Math.floorMod(ordinal(bucket.start()), step) != 0) continue;
+            if (layout.barRight(column) <= layout.barLeft(column)) continue;
             String label = PlaytimeChartModel.axisLabel(bucket.start(), bucket.end(), chart.grain());
             int textWidth = PlaytimePainter.axisWidth(label);
             int center = plotX + (layout.barLeft(column) + layout.barRight(column)) / 2 / scale;
             int textX = Math.max(x, Math.min(center - textWidth / 2, x + width - textWidth));
             PlaytimePainter.axisLabel(graphics, label, textX, labelY);
         }
+    }
+
+    /**
+     * Position of a bucket counted from a fixed date, in the chart's interval.
+     */
+    private long ordinal(LocalDateTime start) {
+        return switch (chart.grain()) {
+            case WEEKS -> Math.floorDiv(start.toLocalDate().toEpochDay() + 3, 7);
+            case MONTHS -> start.getYear() * 12L + start.getMonthValue();
+            case YEARS -> start.getYear();
+            case DAYS, AUTO -> start.toLocalDate().toEpochDay();
+        };
     }
 
     private int labelWidth(PlaytimeChartModel.Column bucket) {

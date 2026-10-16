@@ -42,13 +42,8 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         PlaytimeStyle.BARS, PlaytimeStyle.CUMULATIVE, PlaytimeStyle.PERCENT
     };
 
-    /** Time constant of the zoom animation: about 95% of the way after three of these. */
-    private static final double ZOOM_EASE_SECONDS = 0.05;
-
     private final Screen parent;
     private boolean refreshOnShow = true;
-    private PlaytimeWindow zoomTarget;
-    private long lastZoomFrame;
     private final Consumer<SearchFilter> onFilterMessages;
     private StackLayout overlays;
     private final SeriesHighlight highlight = new SeriesHighlight();
@@ -109,7 +104,6 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         chartWidget.onZoom(this::zoom);
         chartWidget.onPan(this::pan);
         chartWidget.onReset(() -> {
-            zoomTarget = null;
             PlaytimeSession.window(null);
             rebuild();
         });
@@ -135,7 +129,6 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
-        animateZoom();
         if (grainMenu != null) grainMenu.sync(mouseX, mouseY);
         if (styleMenu != null) styleMenu.sync(mouseX, mouseY);
         if (breakdownMenu != null) breakdownMenu.sync(mouseX, mouseY);
@@ -199,41 +192,15 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         if (serverButton != null) serverButton.setMessage(PlaytimeScreenSupport.serverLabel());
     }
 
-    /**
-     * Sets where the view is heading. {@link #animateZoom()} moves the view there over the next frames, and
-     * further scrolling continues from that target, so fast scrolling adds up instead of stepping.
-     */
     private void zoom(double fraction, double steps) {
         if (chart == null || chart.isEmpty()) return;
         PlaytimeWindow domain = new PlaytimeWindow(chart.domainStart(), chart.domainEnd());
         PlaytimeWindow view = new PlaytimeWindow(chart.viewStart(), chart.viewEnd());
-        PlaytimeWindow base = zoomTarget == null ? view : zoomTarget;
-        double anchor = PlaytimeWindow.fractionOf(base, PlaytimeWindow.at(view, fraction));
-        zoomTarget = PlaytimeWindow.zoom(domain, base, anchor, steps);
-        lastZoomFrame = System.nanoTime();
-    }
-
-    private void animateZoom() {
-        if (zoomTarget == null) return;
-        if (chart == null || chart.isEmpty()) {
-            zoomTarget = null;
-            return;
-        }
-        long now = System.nanoTime();
-        double seconds = Math.min(0.1, (now - lastZoomFrame) / 1e9);
-        lastZoomFrame = now;
-        PlaytimeWindow view = new PlaytimeWindow(chart.viewStart(), chart.viewEnd());
-        PlaytimeWindow next = PlaytimeWindow.toward(view, zoomTarget, 1 - Math.exp(-seconds / ZOOM_EASE_SECONDS));
-        if (PlaytimeWindow.close(next, zoomTarget)) {
-            next = zoomTarget;
-            zoomTarget = null;
-        }
-        PlaytimeSession.window(next);
+        PlaytimeSession.window(PlaytimeWindow.zoom(domain, view, fraction, steps));
         rebuild();
     }
 
     private void pan(double fractionDelta) {
-        zoomTarget = null;
         if (chart == null || chart.isEmpty()) return;
         PlaytimeWindow domain = new PlaytimeWindow(chart.domainStart(), chart.domainEnd());
         PlaytimeWindow view = new PlaytimeWindow(chart.viewStart(), chart.viewEnd());

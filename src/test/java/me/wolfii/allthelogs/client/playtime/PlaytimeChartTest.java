@@ -196,14 +196,23 @@ class PlaytimeChartTest {
     }
 
     @Test
-    void zoomStopsAtTwentyDaysAndAnimatesTowardTheTarget() {
+    void zoomStopsAtTwentyDays() {
         PlaytimeWindow domain = new PlaytimeWindow(at(1, 0), at(1, 0).plusDays(100));
         PlaytimeWindow deep = PlaytimeWindow.zoom(domain, domain, 0.5, 40);
         assertEquals(20, java.time.Duration.between(deep.start(), deep.end()).toDays());
+    }
 
-        PlaytimeWindow halfway = PlaytimeWindow.toward(domain, deep, 0.5);
-        assertTrue(halfway.start().isAfter(domain.start()) && halfway.start().isBefore(deep.start()));
-        assertTrue(PlaytimeWindow.close(PlaytimeWindow.toward(domain, deep, 1), deep));
+    @Test
+    void timedLayoutMovesBarsByLessThanABarAndClipsTheEdges() {
+        long day = 86_400;
+        long[] edges = {0, day, 2 * day, 3 * day};
+        BarLayout start = BarLayout.timed(edges, day / 2, day / 2 + 2 * day, 0, 200);
+        assertEquals(0, start.barLeft(0));
+        assertEquals(50, start.barRight(0));
+        assertEquals(150, start.barRight(1));
+        assertEquals(200, start.barRight(2));
+        BarLayout panned = BarLayout.timed(edges, day / 2 + day / 10, day / 2 + day / 10 + 2 * day, 0, 200);
+        assertEquals(40, panned.barRight(0));
     }
 
     @Test

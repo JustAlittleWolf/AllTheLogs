@@ -3,10 +3,12 @@ package me.wolfii.allthelogs.client.playtime;
 import java.util.Arrays;
 
 /**
- * Horizontal placement of bars in screen pixels, with no gaps. Bars are all equally wide when that leaves
- * at most a tenth of the width unused, split between both sides. Otherwise bars share the whole width and
- * differ by at most one pixel. With more columns than pixels, several columns fall on one pixel, and the
- * one with the most playtime is drawn there.
+ * Horizontal placement of bars in screen pixels, with no gaps. {@link #of} places whole bars: all equally
+ * wide when that leaves at most a tenth of the width unused, split between both sides, otherwise sharing
+ * the whole width and differing by at most one pixel. {@link #timed} places bars where their time falls in
+ * the view, so panning moves them by less than a bar and the bars at the edges can be partly visible. With
+ * more columns than pixels, several columns fall on one pixel, and the one with the most playtime is
+ * drawn there.
  *
  * @param edges screen pixel where each bar starts, plus the end of the last bar
  */
@@ -30,6 +32,20 @@ public record BarLayout(int[] edges) {
             }
         }
         return new BarLayout(edges);
+    }
+
+    /**
+     * Bars at their position in time. {@code edges} holds each bar's start and the end of the last bar, in
+     * seconds; {@code viewStart} and {@code viewEnd} are the seconds at the left and right edge of the plot.
+     */
+    public static BarLayout timed(long[] edges, long viewStart, long viewEnd, int pixelLeft, int pixelWidth) {
+        int[] pixels = new int[edges.length];
+        double span = Math.max(1, viewEnd - viewStart);
+        for (int index = 0; index < edges.length; index++) {
+            double fraction = Math.clamp((edges[index] - viewStart) / span, 0d, 1d);
+            pixels[index] = pixelLeft + (int) Math.round(fraction * pixelWidth);
+        }
+        return new BarLayout(pixels);
     }
 
     public int count() {
