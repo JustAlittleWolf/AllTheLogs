@@ -1,6 +1,7 @@
 package me.wolfii.allthelogs.data.importer;
 
 import me.wolfii.allthelogs.data.importer.discover.LogCandidate;
+import me.wolfii.allthelogs.data.parse.IngestFilter;
 import me.wolfii.allthelogs.data.parse.LogCharset;
 import me.wolfii.allthelogs.data.parse.LogDates;
 import me.wolfii.allthelogs.data.parse.LogParser;
@@ -39,6 +40,7 @@ public final class LogPreparer {
         List<String> users = new ArrayList<>(parsed.entries().size());
         List<String> places = new ArrayList<>(parsed.entries().size());
         for (ParsedLog.Entry entry : parsed.entries()) {
+            if (IngestFilter.ignores(entry.message())) continue;
             times.add(LogDates.toSystemLocal(calendarDate(entry.date(), fileDate), entry.time(), timezone));
             messages.add(entry.message());
             formattings.add(entry.formatting());

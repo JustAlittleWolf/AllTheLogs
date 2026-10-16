@@ -4,6 +4,7 @@ import me.wolfii.allthelogs.api.PendingImportMessage;
 import me.wolfii.allthelogs.data.*;
 import me.wolfii.allthelogs.data.playtime.PlaytimeSpan;
 import me.wolfii.allthelogs.data.parse.FormattingCodes;
+import me.wolfii.allthelogs.data.query.MessageCleanup;
 import me.wolfii.allthelogs.data.store.StoreCancellation;
 import net.minecraft.network.chat.Component;
 
@@ -18,6 +19,7 @@ import java.util.Queue;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.regex.Pattern;
 
 /**
  * Serialises every {@link LogStore} call onto one worker thread. The store is not safe for concurrent use, and
@@ -142,6 +144,22 @@ public final class LogStoreWorker implements AutoCloseable {
     public CompletableFuture<Long> countMatches(me.wolfii.allthelogs.api.ChatQuery query) {
         var copy = Objects.requireNonNull(query, "query");
         return submit(() -> requireStore().countMatches(copy));
+    }
+
+    public CompletableFuture<CleanupPreview> previewCleanup(me.wolfii.allthelogs.api.ChatQuery query, int sampleSize) {
+        var copy = Objects.requireNonNull(query, "query");
+        return submit(() -> requireStore().previewCleanup(copy, sampleSize));
+    }
+
+    /**
+     * Deletes the matching entries, or with a {@code part} cuts that text out of them. Runs on the store thread,
+     * so live chat queued meanwhile is written after it.
+     */
+    public CompletableFuture<MessageCleanup.Outcome> cleanUp(me.wolfii.allthelogs.api.ChatQuery query, Pattern part) {
+        var copy = Objects.requireNonNull(query, "query");
+        return submit(() -> part == null
+            ? requireStore().deleteMatches(copy)
+            : requireStore().removeMatchedText(copy, part));
     }
 
     public CompletableFuture<List<ChatEntry>> entriesAround(ChatLog log, int lineIndex, int before, int after) {

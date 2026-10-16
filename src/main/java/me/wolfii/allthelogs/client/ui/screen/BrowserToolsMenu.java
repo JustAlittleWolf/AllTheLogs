@@ -1,16 +1,20 @@
 package me.wolfii.allthelogs.client.ui.screen;
 
 import io.wispforest.owo.ui.component.ButtonComponent;
+import io.wispforest.owo.ui.component.LabelComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
+import io.wispforest.owo.ui.core.Color;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.Positioning;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.UIComponent;
+import io.wispforest.owo.ui.core.VerticalAlignment;
 import io.wispforest.owo.ui.util.NinePatchTexture;
 import me.wolfii.allthelogs.client.export.MessageExport;
+import me.wolfii.allthelogs.client.ui.theme.Colors;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -23,16 +27,22 @@ import java.util.function.BooleanSupplier;
 import java.util.function.IntSupplier;
 
 /**
- * Menu on the messages toolbar. Hovering or clicking the hamburger opens Export, Import, Scripts, and
- * Playtime above it, top to bottom, with a ? button under those actions. Hovering ? shows the database summary.
- * A click keeps the menu open so Import and Scripts can be chosen. Export opens to the side, then the
- * chosen scope opens the file format beside that. The scope row stays highlighted while its format menu
- * is open. Dragging the timeline scrollbar does not count as a hover, including the moment that drag
- * is released on the button.
+ * Menu on the messages toolbar. Hovering or clicking the hamburger opens Playtime, Import, and Advanced
+ * above it, top to bottom, with a database info row under those actions. The row is plain text, not a
+ * button, and hovering it shows the database summary.
+ * A click keeps the menu open. Advanced opens Export, Clean up, and Scripts to the side; Export opens the
+ * export scope beside that, and the chosen scope opens the file format. A row whose side menu is open stays
+ * highlighted.
+ * <p>
+ * Side menus grow upward from their row, so a menu at the bottom of the screen stays on it. Every menu stays
+ * open for {@link #CLOSE_DELAY_MS} after the pointer leaves it, so it can be reached again, unless the
+ * pointer moves onto another row of the menu it came from. Dragging the timeline scrollbar does not count
+ * as a hover, including the moment that drag is released on the button.
  */
 final class BrowserToolsMenu {
-    private static final int CLOSE_DELAY_MS = 160;
+    static final long CLOSE_DELAY_MS = 1000;
     private static final int GAP = 2;
+    private static final int INFO_ROW_HEIGHT = 14;
 
     enum Scope {
         SELECTION, VISIBLE, QUERY
@@ -47,12 +57,15 @@ final class BrowserToolsMenu {
     private final Runnable openScripts;
     private final Runnable openImport;
     private final Runnable openPlaytime;
+    private final Runnable openCleanup;
     private final BiConsumer<Scope, MessageExport.Format> export;
 
     private ButtonComponent anchor;
     private FlowLayout actions;
-    private ButtonComponent databaseButton;
+    private FlowLayout databaseRow;
     private List<Component> databaseTooltip = List.of(Component.translatable("allthelogs.meta.loading"));
+    private ButtonComponent advancedButton;
+    private FlowLayout advancedMenu;
     private ButtonComponent exportButton;
     private FlowLayout scopeMenu;
     private ButtonComponent selectionButton;
@@ -64,16 +77,15 @@ final class BrowserToolsMenu {
     private boolean pinned;
     private boolean blockHoverOpen;
     private long closeAt = Long.MAX_VALUE;
+    private long advancedCloseAt = Long.MAX_VALUE;
+    private long scopeCloseAt = Long.MAX_VALUE;
+    private long formatCloseAt = Long.MAX_VALUE;
     private int placedActionsX = Integer.MIN_VALUE;
     private int placedActionsY = Integer.MIN_VALUE;
-    private int placedScopeX = Integer.MIN_VALUE;
-    private int placedScopeY = Integer.MIN_VALUE;
-    private int placedFormatX = Integer.MIN_VALUE;
-    private int placedFormatY = Integer.MIN_VALUE;
 
     BrowserToolsMenu(StackLayout overlays, IntSupplier screenWidth, IntSupplier screenHeight,
                      BooleanSupplier hasSelection, BooleanSupplier suppressed, Runnable onOpened,
-                     Runnable openScripts, Runnable openImport, Runnable openPlaytime,
+                     Runnable openScripts, Runnable openImport, Runnable openPlaytime, Runnable openCleanup,
                      BiConsumer<Scope, MessageExport.Format> export) {
         this.overlays = overlays;
         this.screenWidth = screenWidth;
@@ -84,6 +96,7 @@ final class BrowserToolsMenu {
         this.openScripts = openScripts;
         this.openImport = openImport;
         this.openPlaytime = openPlaytime;
+        this.openCleanup = openCleanup;
         this.export = export;
     }
 
@@ -129,12 +142,11 @@ final class BrowserToolsMenu {
     void close() {
         pinned = false;
         closeAt = Long.MAX_VALUE;
-        closeFormat();
-        closeScope();
+        closeAdvanced();
         remove(actions);
         actions = null;
-        databaseButton = null;
-        exportButton = null;
+        databaseRow = null;
+        advancedButton = null;
         placedActionsX = Integer.MIN_VALUE;
         placedActionsY = Integer.MIN_VALUE;
     }
@@ -147,24 +159,74 @@ final class BrowserToolsMenu {
         }
         blockHoverOpen = blockHoverOpen(blockHoverOpen, scrollbarDrag, hit(anchor, mouseX, mouseY));
         if (blockHoverOpen && !isOpen()) return;
+        long now = System.currentTimeMillis();
         if (!inside(mouseX, mouseY) && !pinned) {
             if (!isOpen()) return;
-            if (closeAt == Long.MAX_VALUE) closeAt = System.currentTimeMillis() + CLOSE_DELAY_MS;
-            if (System.currentTimeMillis() >= closeAt) close();
+            if (closeAt == Long.MAX_VALUE) closeAt = now + CLOSE_DELAY_MS;
+            if (now >= closeAt) close();
             return;
         }
         closeAt = Long.MAX_VALUE;
         boolean wasOpen = isOpen();
         ensureActions();
-        if (exportHover(mouseX, mouseY)) ensureScope();
-        else closeScope();
+        syncAdvanced(mouseX, mouseY, now);
+        if (!wasOpen && isOpen()) onOpened.run();
+    }
+
+    /**
+     * Opens or keeps each side menu while the pointer is on its row or inside it. Leaving starts the close
+     * delay; moving onto another row of the parent menu closes it at once.
+     */
+    private void syncAdvanced(int mouseX, int mouseY, long now) {
+        if (advancedHover(mouseX, mouseY)) {
+            advancedCloseAt = Long.MAX_VALUE;
+            ensureAdvanced();
+        } else if (advancedMenu != null) {
+            if (hit(actions, mouseX, mouseY)) {
+                closeAdvanced();
+                return;
+            }
+            advancedCloseAt = expire(advancedCloseAt, now);
+            if (now >= advancedCloseAt) {
+                closeAdvanced();
+                return;
+            }
+        }
+        if (advancedMenu == null) return;
+
+        if (exportHover(mouseX, mouseY)) {
+            scopeCloseAt = Long.MAX_VALUE;
+            ensureScope();
+        } else if (scopeMenu != null) {
+            if (hit(advancedMenu, mouseX, mouseY)) {
+                closeScope();
+                return;
+            }
+            scopeCloseAt = expire(scopeCloseAt, now);
+            if (now >= scopeCloseAt) {
+                closeScope();
+                return;
+            }
+        }
+        if (scopeMenu == null) return;
+
         Scope hovered = scopeAt(mouseX, mouseY);
         if (hovered != null) {
+            formatCloseAt = Long.MAX_VALUE;
             ensureFormat(hovered);
-        } else if (!hit(formatMenu, mouseX, mouseY) && !horizontalGap(formatMenu, scopeButton(formatScope), mouseX, mouseY)) {
-            closeFormat();
+        } else if (hit(formatMenu, mouseX, mouseY) || horizontalGap(formatMenu, scopeButton(formatScope), mouseX, mouseY)) {
+            formatCloseAt = Long.MAX_VALUE;
+        } else if (formatMenu != null) {
+            formatCloseAt = expire(formatCloseAt, now);
+            if (now >= formatCloseAt) closeFormat();
         }
-        if (!wasOpen && isOpen()) onOpened.run();
+    }
+
+    /**
+     * Starts the close delay the first time the pointer is found outside, then keeps that deadline.
+     */
+    static long expire(long closeAt, long now) {
+        return closeAt == Long.MAX_VALUE ? now + CLOSE_DELAY_MS : closeAt;
     }
 
     /**
@@ -180,10 +242,14 @@ final class BrowserToolsMenu {
         return hit(anchor, mouseX, mouseY)
             || hit(actions, mouseX, mouseY)
             || verticalGap(actions, anchor, mouseX, mouseY)
-            || hit(scopeMenu, mouseX, mouseY)
-            || horizontalGap(scopeMenu, exportButton, mouseX, mouseY)
-            || hit(formatMenu, mouseX, mouseY)
-            || horizontalGap(formatMenu, scopeButton(formatScope), mouseX, mouseY);
+            || advancedHover(mouseX, mouseY);
+    }
+
+    private boolean advancedHover(int mouseX, int mouseY) {
+        return hit(advancedButton, mouseX, mouseY)
+            || hit(advancedMenu, mouseX, mouseY)
+            || horizontalGap(advancedMenu, advancedButton, mouseX, mouseY)
+            || exportHover(mouseX, mouseY);
     }
 
     private boolean exportHover(int mouseX, int mouseY) {
@@ -199,26 +265,42 @@ final class BrowserToolsMenu {
             placeActions();
             return;
         }
-        int width = labelWidth("allthelogs.menu.scripts", "allthelogs.menu.import", "allthelogs.menu.export",
-            "allthelogs.menu.playtime");
+        int width = labelWidth("allthelogs.menu.playtime", "allthelogs.menu.import", "allthelogs.menu.advanced",
+            "allthelogs.meta.marker");
         FlowLayout menu = panel(width);
-        exportButton = action(Component.translatable("allthelogs.menu.export"), this::ensureScope);
-        menu.child(exportButton);
-        menu.child(action(Component.translatable("allthelogs.menu.import"), openImport));
-        menu.child(action(Component.translatable("allthelogs.menu.scripts"), openScripts));
         menu.child(action(Component.translatable("allthelogs.menu.playtime"), openPlaytime));
-        databaseButton = action(Component.translatable("allthelogs.meta.marker"), () -> {});
-        databaseButton.tooltip(databaseTooltip);
-        menu.child(databaseButton);
+        menu.child(action(Component.translatable("allthelogs.menu.import"), openImport));
+        advancedButton = action(Component.translatable("allthelogs.menu.advanced"), this::ensureAdvanced);
+        menu.child(advancedButton);
+        databaseRow = infoRow(Component.translatable("allthelogs.meta.marker"));
+        databaseRow.tooltip(databaseTooltip);
+        menu.child(databaseRow);
         actions = menu;
         overlays.child(menu);
         placeActions();
     }
 
+    private void ensureAdvanced() {
+        if (advancedMenu != null) {
+            place(advancedMenu, advancedButton);
+            return;
+        }
+        int width = labelWidth("allthelogs.menu.export", "allthelogs.menu.cleanup", "allthelogs.menu.scripts");
+        FlowLayout menu = panel(width);
+        exportButton = action(Component.translatable("allthelogs.menu.export"), this::ensureScope);
+        menu.child(exportButton);
+        menu.child(action(Component.translatable("allthelogs.menu.cleanup"), openCleanup));
+        menu.child(action(Component.translatable("allthelogs.menu.scripts"), openScripts));
+        advancedMenu = menu;
+        overlays.child(menu);
+        place(advancedMenu, advancedButton);
+        markOpen(advancedButton, true);
+    }
+
     private void ensureScope() {
         boolean includeSelection = hasSelection.getAsBoolean();
         if (scopeMenu != null && scopeIncludesSelection == includeSelection) {
-            placeScope();
+            place(scopeMenu, exportButton);
             return;
         }
         closeScope();
@@ -238,12 +320,13 @@ final class BrowserToolsMenu {
         menu.child(queryButton);
         scopeMenu = menu;
         overlays.child(menu);
-        placeScope();
+        place(scopeMenu, exportButton);
+        markOpen(exportButton, true);
     }
 
     private void ensureFormat(Scope scope) {
         if (formatMenu != null && formatScope == scope) {
-            placeFormat();
+            place(formatMenu, scopeButton(formatScope));
             markSelectedScope();
             return;
         }
@@ -256,8 +339,17 @@ final class BrowserToolsMenu {
         menu.child(action(Component.translatable("allthelogs.export.csv"), () -> export.accept(scope, MessageExport.Format.CSV)));
         formatMenu = menu;
         overlays.child(menu);
-        placeFormat();
+        place(formatMenu, scopeButton(formatScope));
         markSelectedScope();
+    }
+
+    private void closeAdvanced() {
+        closeScope();
+        remove(advancedMenu);
+        advancedMenu = null;
+        exportButton = null;
+        advancedCloseAt = Long.MAX_VALUE;
+        markOpen(advancedButton, false);
     }
 
     private void closeScope() {
@@ -267,16 +359,15 @@ final class BrowserToolsMenu {
         selectionButton = null;
         onScreenButton = null;
         queryButton = null;
-        placedScopeX = Integer.MIN_VALUE;
-        placedScopeY = Integer.MIN_VALUE;
+        scopeCloseAt = Long.MAX_VALUE;
+        markOpen(exportButton, false);
     }
 
     private void closeFormat() {
         remove(formatMenu);
         formatMenu = null;
         formatScope = null;
-        placedFormatX = Integer.MIN_VALUE;
-        placedFormatY = Integer.MIN_VALUE;
+        formatCloseAt = Long.MAX_VALUE;
         markSelectedScope();
     }
 
@@ -285,17 +376,20 @@ final class BrowserToolsMenu {
      * or CSV does not make that choice look unselected.
      */
     private void markSelectedScope() {
-        markScope(selectionButton, formatScope == Scope.SELECTION);
-        markScope(onScreenButton, formatScope == Scope.VISIBLE);
-        markScope(queryButton, formatScope == Scope.QUERY);
+        markOpen(selectionButton, formatScope == Scope.SELECTION);
+        markOpen(onScreenButton, formatScope == Scope.VISIBLE);
+        markOpen(queryButton, formatScope == Scope.QUERY);
     }
 
-    private static void markScope(ButtonComponent button, boolean selected) {
+    /**
+     * Draws a row in the hovered style while its side menu is open.
+     */
+    private static void markOpen(ButtonComponent button, boolean open) {
         if (button == null) return;
         button.renderer((graphics, widget, delta) -> {
             Identifier texture = !widget.active()
                 ? ButtonComponent.DISABLED_TEXTURE
-                : selected || widget.isHovered()
+                : open || widget.isHovered()
                     ? ButtonComponent.HOVERED_TEXTURE
                     : ButtonComponent.ACTIVE_TEXTURE;
             NinePatchTexture.draw(texture, graphics, widget.getX(), widget.getY(), widget.width(), widget.height());
@@ -312,38 +406,27 @@ final class BrowserToolsMenu {
         placedActionsY = y;
     }
 
-    private void placeScope() {
-        if (scopeMenu == null || exportButton == null) return;
-        int[] at = beside(scopeMenu, exportButton);
-        if (at == null || (placedScopeX == at[0] && placedScopeY == at[1])) return;
-        scopeMenu.positioning(Positioning.absolute(at[0], at[1]));
-        placedScopeX = at[0];
-        placedScopeY = at[1];
-    }
-
-    private void placeFormat() {
-        ButtonComponent row = scopeButton(formatScope);
-        if (formatMenu == null || row == null) return;
-        int[] at = beside(formatMenu, row);
-        if (at == null || (placedFormatX == at[0] && placedFormatY == at[1])) return;
-        formatMenu.positioning(Positioning.absolute(at[0], at[1]));
-        placedFormatX = at[0];
-        placedFormatY = at[1];
+    private void place(FlowLayout menu, UIComponent row) {
+        if (menu == null || row == null) return;
+        int[] at = beside(menu, row);
+        if (at == null) return;
+        Positioning current = menu.positioning().get();
+        if (current.type == Positioning.Type.ABSOLUTE && current.x == at[0] && current.y == at[1]) return;
+        menu.positioning(Positioning.absolute(at[0], at[1]));
     }
 
     /**
-     * Tooltip for the ? row at the bottom of the menu. Safe to call before the menu is open.
+     * Tooltip for the database info row at the bottom of the menu. Safe to call before the menu is open.
      */
     void setDatabaseInfo(List<Component> lines) {
         databaseTooltip = lines == null || lines.isEmpty()
             ? List.of(Component.translatable("allthelogs.meta.unavailable"))
             : List.copyOf(lines);
-        if (databaseButton != null) databaseButton.tooltip(databaseTooltip);
+        if (databaseRow != null) databaseRow.tooltip(databaseTooltip);
     }
 
     /**
      * Prefers the left side of {@code row} so a menu on the right edge stays on screen.
-     * The menu's top padding is removed from {@code y} so its first row lines up with {@code row}.
      */
     private int[] beside(FlowLayout menu, UIComponent row) {
         if (menu.width() <= 0 || menu.height() <= 0) return null;
@@ -351,16 +434,18 @@ final class BrowserToolsMenu {
         int right = row.x() + row.width() + GAP;
         int x = left >= 4 ? left : right;
         if (x + menu.width() > screenWidth.getAsInt() - 4) x = Math.max(4, left);
-        int y = submenuTop(row.y(), menu.padding().get().top(), menu.height(), screenHeight.getAsInt());
+        int y = submenuTop(row.y() + row.height(), menu.padding().get().bottom(), menu.height(), screenHeight.getAsInt());
         return new int[]{x, y};
     }
 
     /**
-     * Top of a side menu whose first row should meet {@code rowY}. {@code paddingTop} is that
-     * menu's own top padding; leaving it in place drops the row by that many pixels.
+     * Top of a side menu that grows upward, so its last row meets the bottom of the row it opened from.
+     * {@code paddingBottom} is that menu's own bottom padding. The menu is moved down only when it would
+     * leave the top of the screen.
      */
-    static int submenuTop(int rowY, int paddingTop, int menuHeight, int screenHeight) {
-        int y = rowY - paddingTop;
+    static int submenuTop(int rowBottom, int paddingBottom, int menuHeight, int screenHeight) {
+        int y = rowBottom + paddingBottom - menuHeight;
+        if (y < 4) y = 4;
         int limit = screenHeight - 4;
         if (y + menuHeight > limit) y = Math.max(4, limit - menuHeight);
         return y;
@@ -386,6 +471,18 @@ final class BrowserToolsMenu {
         ButtonComponent button = UIComponents.button(label, pressed -> onPress.run());
         button.horizontalSizing(Sizing.fill());
         return button;
+    }
+
+    /**
+     * Muted text row without button chrome, for information that cannot be clicked.
+     */
+    private static FlowLayout infoRow(Component text) {
+        FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(), Sizing.fixed(INFO_ROW_HEIGHT));
+        row.padding(Insets.horizontal(4)).verticalAlignment(VerticalAlignment.CENTER);
+        LabelComponent label = UIComponents.label(text);
+        label.color(Color.ofArgb(Colors.MUTED));
+        row.child(label);
+        return row;
     }
 
     private FlowLayout panel(int width) {

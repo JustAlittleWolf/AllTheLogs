@@ -116,7 +116,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         list.onDismissContextMenu(this::closeMessageMenu);
         tools = new BrowserToolsMenu(overlays, () -> this.width, () -> this.height,
             () -> list.hasSelectedText(), () -> exportBusy, this::closeMessageMenu,
-            this::openScripts, this::openImport, this::openPlaytime, this::startExport);
+            this::openScripts, this::openImport, this::openPlaytime, this::openCleanup, this::startExport);
         FlowLayout toolbar = buildToolbar();
         queries.attach(list, tools::setDatabaseInfo);
         content.child(list.verticalSizing(Sizing.expand()));
@@ -392,6 +392,20 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     private void showPlaytime() {
         if (tools != null) tools.close();
         Minecraft.getInstance().gui.setScreen(new PlaytimeScreen(this, this::showFiltered));
+    }
+
+    private void openCleanup() {
+        if (overlays != null) {
+            overlays.queue(this::showCleanup);
+            return;
+        }
+        showCleanup();
+    }
+
+    private void showCleanup() {
+        if (tools != null) tools.close();
+        Minecraft.getInstance().gui.setScreen(new CleanupScreen(this, queries.filter(), queries::versions,
+            queries::markReload));
     }
 
     /**

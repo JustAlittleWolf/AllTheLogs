@@ -539,14 +539,7 @@ public final class LogWriter implements AutoCloseable {
      *         duplicate
      */
     private int refreshFileAggregates(Statement statement) throws SQLException {
-        statement.execute("""
-            UPDATE log_file SET entry_count = coalesce(stats.count, 0)
-            FROM (
-                SELECT f.id AS file_id, count(e.entry_time) AS count
-                FROM log_file f LEFT JOIN chat_entry e ON e.file_id = f.id
-                GROUP BY f.id
-            ) stats
-            WHERE log_file.id = stats.file_id""");
+        FileAggregates.refreshEntryCounts(statement);
 
         List<Long> emptyIds = new ArrayList<>();
         List<String> emptyLocations = new ArrayList<>();

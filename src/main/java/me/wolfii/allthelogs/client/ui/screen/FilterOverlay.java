@@ -58,6 +58,7 @@ final class FilterOverlay {
     private TextBoxComponent fromBox;
     private TextBoxComponent untilBox;
     private boolean syncing;
+    private boolean detached;
 
     FilterOverlay(FlowLayout host, StackLayout overlays, IntSupplier screenWidth, IntSupplier screenHeight,
                   Supplier<SearchFilter> filter, Supplier<List<String>> versions,
@@ -73,6 +74,15 @@ final class FilterOverlay {
 
     boolean open() {
         return filterPanel != null && host.children().contains(filterPanel);
+    }
+
+    /**
+     * Opens the panel on a screen other than the messages screen: without the context lines field, and
+     * without changing whether the messages screen reopens its panel.
+     */
+    void openDetached() {
+        detached = true;
+        openPanel();
     }
 
     void restore() {
@@ -110,7 +120,7 @@ final class FilterOverlay {
             host.removeChild(filterPanel);
             filterPanel = null;
         }
-        sessionOpen = false;
+        if (!detached) sessionOpen = false;
     }
 
     /**
@@ -153,7 +163,7 @@ final class FilterOverlay {
         if (open()) return;
         filterPanel = buildFilterPanel();
         host.child(filterPanel);
-        sessionOpen = true;
+        if (!detached) sessionOpen = true;
     }
 
     private ParentUIComponent buildFilterPanel() {
@@ -168,7 +178,7 @@ final class FilterOverlay {
         caseBox = checkbox("allthelogs.filter.case_sensitive", current.caseSensitive(), value ->
             emit(filter.get().withCaseSensitive(value)));
         content.child(caseBox);
-        content.child(contextField(current));
+        if (!detached) content.child(contextField(current));
 
         content.child(dateField("allthelogs.filter.from", DateParser.format(current.startingAt()),
             DateParser::parse, parsed -> emit(filter.get().withStartingAt(parsed)), true));

@@ -8,11 +8,24 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BrowserToolsMenuTest {
     @Test
-    void sideMenuFirstRowLinesUpWithTheSourceRow() {
-        int rowY = 100;
+    void sideMenuGrowsUpSoItsLastRowMeetsTheSourceRow() {
+        int rowBottom = 200;
         int padding = 3;
-        int top = BrowserToolsMenu.submenuTop(rowY, padding, 48, 240);
-        assertEquals(rowY, top + padding);
+        int height = 48;
+        int top = BrowserToolsMenu.submenuTop(rowBottom, padding, height, 240);
+        assertEquals(rowBottom, top + height - padding);
+    }
+
+    @Test
+    void sideMenuMovesDownOnlyWhenItWouldLeaveTheTop() {
+        assertEquals(4, BrowserToolsMenu.submenuTop(30, 3, 80, 240));
+    }
+
+    @Test
+    void leavingAMenuKeepsItOpenForTheCloseDelay() {
+        long deadline = BrowserToolsMenu.expire(Long.MAX_VALUE, 1_000);
+        assertEquals(1_000 + BrowserToolsMenu.CLOSE_DELAY_MS, deadline);
+        assertEquals(deadline, BrowserToolsMenu.expire(deadline, 1_500));
     }
 
     @Test
@@ -36,7 +49,7 @@ class BrowserToolsMenuTest {
     void sideMenuMovesUpToStayOnScreen() {
         int menuHeight = 80;
         int screenHeight = 220;
-        int top = BrowserToolsMenu.submenuTop(200, 3, menuHeight, screenHeight);
+        int top = BrowserToolsMenu.submenuTop(250, 3, menuHeight, screenHeight);
         assertTrue(top >= 4);
         assertTrue(top + menuHeight <= screenHeight - 4);
     }
