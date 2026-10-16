@@ -21,6 +21,8 @@ public enum PlaytimeGrain {
     static final long MAX_MONTHS = 3_660;
     /** Widest bar, in GUI pixels, that {@link #AUTO} allows before choosing a finer interval. */
     public static final int MAX_AUTO_BAR_WIDTH = 20;
+    /** Zooming in stops once this many bars of the interval are visible; {@link #AUTO} counts days. */
+    public static final int MIN_VISIBLE_BARS = 20;
     private static final PlaytimeGrain[] COARSE_TO_FINE = {YEARS, MONTHS, WEEKS};
 
     public static PlaytimeGrain resolve(PlaytimeGrain selected, LocalDateTime start, LocalDateTime end) {
@@ -48,6 +50,13 @@ public enum PlaytimeGrain {
         if (days <= MAX_WEEKS) return WEEKS;
         if (days <= MAX_MONTHS) return MONTHS;
         return YEARS;
+    }
+
+    /**
+     * Narrowest view for this interval: {@link #MIN_VISIBLE_BARS} bars, or days for {@link #AUTO}.
+     */
+    public long minViewSeconds() {
+        return Math.round(MIN_VISIBLE_BARS * days() * 86_400);
     }
 
     private double days() {

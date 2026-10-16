@@ -204,7 +204,7 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         if (chart == null || chart.isEmpty()) return;
         PlaytimeWindow domain = new PlaytimeWindow(chart.domainStart(), chart.domainEnd());
         PlaytimeWindow view = new PlaytimeWindow(chart.viewStart(), chart.viewEnd());
-        PlaytimeSession.window(PlaytimeWindow.zoom(domain, view, fraction, steps));
+        PlaytimeSession.window(PlaytimeWindow.zoom(domain, view, fraction, steps, PlaytimeSession.grain().minViewSeconds()));
         rebuild();
     }
 
@@ -227,6 +227,11 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         List<PlaytimeGrain> grains = grains();
         grainMenu.show(grainButton, grains.stream().map(PlaytimeScreen::grainName).toList(), index -> {
             PlaytimeSession.grain(grains.get(index));
+            if (PlaytimeSession.window() != null && chart != null && !chart.isEmpty()) {
+                PlaytimeWindow domain = new PlaytimeWindow(chart.domainStart(), chart.domainEnd());
+                PlaytimeSession.window(PlaytimeWindow.widen(domain, PlaytimeSession.window(),
+                    PlaytimeSession.grain().minViewSeconds()));
+            }
             rebuild();
         });
     }

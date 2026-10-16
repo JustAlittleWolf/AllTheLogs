@@ -9,7 +9,7 @@ import java.util.Objects;
  * pointer fixed and never leaves the domain of the filtered playtime.
  */
 public record PlaytimeWindow(LocalDateTime start, LocalDateTime end) {
-    /** Narrowest view: about twenty days, or the whole history when it is shorter. */
+    /** Narrowest view when no interval says otherwise: twenty days, or the whole history when it is shorter. */
     static final long MIN_SECONDS = 20 * 86_400L;
     private static final double ZOOM = 1.25;
 
@@ -37,6 +37,14 @@ public record PlaytimeWindow(LocalDateTime start, LocalDateTime end) {
      * @param steps    positive zooms in, negative zooms out
      */
     public static PlaytimeWindow zoom(PlaytimeWindow domain, PlaytimeWindow view, double fraction, double steps) {
+        return zoom(domain, view, fraction, steps, MIN_SECONDS);
+    }
+
+    /**
+     * @param minSeconds narrowest view allowed, or the whole domain when that is shorter
+     */
+    public static PlaytimeWindow zoom(PlaytimeWindow domain, PlaytimeWindow view, double fraction, double steps,
+                                      long minSeconds) {
         long domainStart = seconds(domain.start());
         long domainEnd = seconds(domain.end());
         long span = Math.max(1L, domainEnd - domainStart);
@@ -45,11 +53,25 @@ public record PlaytimeWindow(LocalDateTime start, LocalDateTime end) {
         long viewSpan = Math.max(1L, viewEnd - viewStart);
         double clamped = Math.clamp(fraction, 0d, 1d);
         long anchor = viewStart + Math.round(clamped * viewSpan);
-        long minSpan = Math.min(span, MIN_SECONDS);
+        long minSpan = Math.min(span, minSeconds);
         long newSpan = Math.round(viewSpan / Math.pow(ZOOM, steps));
         if (newSpan < minSpan) newSpan = minSpan;
         if (newSpan > span) newSpan = span;
         return place(domainStart, domainEnd, anchor, clamped, newSpan);
+    }
+
+    /**
+     * {@code view} widened around its middle to at least {@code minSeconds}, within the domain. Used when a
+     * coarser interval is picked while zoomed in.
+     */
+    public static PlaytimeWindow widen(PlaytimeWindow domain, PlaytimeWindow view, long minSeconds) {
+        long domainStart = seconds(domain.start());
+        long domainEnd = seconds(domain.end());
+        long viewStart = seconds(view.start());
+        long viewSpan = seconds(view.end()) - viewStart;
+        long span = Math.min(domainEnd - domainStart, Math.max(viewSpan, minSeconds));
+        if (span <= viewSpan) return view;
+        return place(domainStart, domainEnd, viewStart + viewSpan / 2, 0.5, span);
     }
 
     /**

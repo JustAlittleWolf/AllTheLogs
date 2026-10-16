@@ -228,6 +228,21 @@ class PlaytimeChartTest {
     }
 
     @Test
+    void theNarrowestViewShowsTwentyBarsOfTheChosenInterval() {
+        assertEquals(20 * 86_400L, PlaytimeGrain.AUTO.minViewSeconds());
+        assertEquals(20 * 7 * 86_400L, PlaytimeGrain.WEEKS.minViewSeconds());
+        LocalDateTime start = at(1, 0);
+        PlaytimeWindow domain = new PlaytimeWindow(start, start.plusYears(30));
+        PlaytimeWindow deep = PlaytimeWindow.zoom(domain, domain, 0.5, 100, PlaytimeGrain.YEARS.minViewSeconds());
+        assertTrue(java.time.Duration.between(deep.start(), deep.end()).toDays() >= 20 * 365);
+
+        PlaytimeWindow month = new PlaytimeWindow(start.plusYears(10), start.plusYears(10).plusDays(30));
+        PlaytimeWindow widened = PlaytimeWindow.widen(domain, month, PlaytimeGrain.YEARS.minViewSeconds());
+        assertTrue(java.time.Duration.between(widened.start(), widened.end()).toDays() >= 20 * 365);
+        assertTrue(!widened.start().isBefore(domain.start()) && !widened.end().isAfter(domain.end()));
+    }
+
+    @Test
     void zoomStopsAtTwentyDays() {
         PlaytimeWindow domain = new PlaytimeWindow(at(1, 0), at(1, 0).plusDays(100));
         PlaytimeWindow deep = PlaytimeWindow.zoom(domain, domain, 0.5, 40);
