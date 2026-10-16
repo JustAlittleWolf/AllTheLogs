@@ -155,11 +155,11 @@ final class PlaytimePainter {
         int plainWidth = 0;
         for (int index = 0; index < shown; index++) {
             PlaytimeHover.Line line = lines.get(index);
-            int width = font.width(text(line.label(), line.bold()));
+            int lineWidth = font.width(text(line.label(), line.bold()));
             if (line.value().isEmpty()) {
-                plainWidth = Math.max(plainWidth, width);
+                plainWidth = Math.max(plainWidth, lineWidth);
             } else {
-                labelWidth = Math.max(labelWidth, width);
+                labelWidth = Math.max(labelWidth, lineWidth);
                 valueWidth = Math.max(valueWidth, font.width(line.value()));
             }
         }
