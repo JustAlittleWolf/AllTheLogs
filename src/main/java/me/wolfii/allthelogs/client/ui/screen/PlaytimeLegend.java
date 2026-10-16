@@ -24,7 +24,7 @@ final class PlaytimeLegend {
 
     static void fill(FlowLayout legend, List<PlaytimeSeries> series, List<PlaytimeChartModel.LegendEntry> entries) {
         legend.clearChildren();
-        String unknown = Component.translatable("allthelogs.playtime.server.unknown").getString();
+        String unknown = Component.translatable("item.canUse.unknown").getString();
         for (PlaytimeChartModel.LegendEntry item : entries) {
             if (item.series() < 0 || item.series() >= series.size()) continue;
             PlaytimeSeries entry = series.get(item.series());
@@ -41,14 +41,14 @@ final class PlaytimeLegend {
 
     static Component named(String value) {
         if (PlaytimeFilter.UNKNOWN_SERVER.equals(value)) {
-            return Component.translatable("allthelogs.playtime.server.unknown");
+            return Component.translatable("item.canUse.unknown");
         }
         return Component.literal(value);
     }
 
     static Component selection(String key, java.util.Set<String> selected, List<String> all) {
-        if (selected == null) return Component.translatable(key, Component.translatable("allthelogs.playtime.filter.all"));
-        if (selected.isEmpty()) return Component.translatable(key, Component.translatable("allthelogs.playtime.filter.none"));
+        if (selected == null) return Component.translatable(key, Component.translatable("gui.all"));
+        if (selected.isEmpty()) return Component.translatable(key, Component.translatable("gui.none"));
         if (selected.size() == 1) return Component.translatable(key, named(selected.iterator().next()));
         return Component.translatable(key, Component.literal(Integer.toString(selected.size())));
     }

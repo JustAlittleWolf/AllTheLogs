@@ -48,7 +48,7 @@ final class ChecklistMenu {
         close();
         FlowLayout items = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
         items.gap(1);
-        ButtonComponent all = UIComponents.button(Component.translatable("allthelogs.playtime.filter.all"), ignored -> onAll.run());
+        ButtonComponent all = UIComponents.button(Component.translatable("gui.all"), ignored -> onAll.run());
         all.horizontalSizing(Sizing.fill());
         items.child(all);
         for (String value : values) {

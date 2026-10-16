@@ -224,7 +224,7 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         closeMenus();
         if (open) return;
         grainMenu.show(grainButton, List.of(
-            Component.translatable("allthelogs.playtime.grain.auto"),
+            Component.translatable("options.guiScale.auto"),
             Component.translatable("allthelogs.playtime.grain.days"),
             Component.translatable("allthelogs.playtime.grain.weeks"),
             Component.translatable("allthelogs.playtime.grain.months")
@@ -341,7 +341,7 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
 
     private Component grainLabel() {
         String key = switch (PlaytimeSession.grain()) {
-            case AUTO -> "allthelogs.playtime.grain.auto";
+            case AUTO -> "options.guiScale.auto";
             case DAYS -> "allthelogs.playtime.grain.days";
             case WEEKS -> "allthelogs.playtime.grain.weeks";
             case MONTHS -> "allthelogs.playtime.grain.months";

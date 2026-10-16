@@ -51,7 +51,7 @@ final class CommonLocationMenu {
     }
 
     private Component label() {
-        return Component.translatable("allthelogs.import.common");
+        return Component.translatable("createWorld.customize.presets");
     }
 
     private void syncButton() {

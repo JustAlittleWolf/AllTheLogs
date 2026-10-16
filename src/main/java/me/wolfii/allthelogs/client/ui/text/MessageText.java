@@ -104,7 +104,7 @@ public final class MessageText {
         lines.add(date);
         String version = displayVersion(row.chatLog());
         if (version != null) {
-            lines.add(labeled("allthelogs.info.version", colored(version, Colors.INFO_VERSION)));
+            lines.add(labeled("mco.version", colored(version, Colors.INFO_VERSION)));
         }
         String user = row.entry().minecraftUser();
         if (user != null && !user.isBlank()) {

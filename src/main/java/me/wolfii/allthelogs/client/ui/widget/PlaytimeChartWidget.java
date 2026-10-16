@@ -204,7 +204,7 @@ public final class PlaytimeChartWidget extends BaseUIComponent {
     }
 
     private void drawHover(OwoUIGraphics graphics, int mouseX, int mouseY, int column) {
-        String unknown = Component.translatable("allthelogs.playtime.server.unknown").getString();
+        String unknown = Component.translatable("item.canUse.unknown").getString();
         String total = Component.translatable("allthelogs.playtime.hover.total").getString();
         List<PlaytimeChartModel.HoverLine> lines = chart.hover(column, unknown, total);
         if (lines.isEmpty()) return;
