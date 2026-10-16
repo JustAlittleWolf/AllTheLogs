@@ -100,6 +100,33 @@ class ContinuationTest {
         }
     }
 
+    @Test
+    void aMetadataUpdateFromOnlyTheContinuationFileLinksItToTheStoredDayBefore() throws IOException, SQLException {
+        writeLogs();
+        Path database = tempDir.resolve("store.duckdb");
+        try (LogStore store = LogStore.open(database)) {
+            store.importDirectory(tempDir.resolve("instance"), ImportOptions.defaults().withOptimize(false));
+        }
+        try (Connection connection = DriverManager.getConnection("jdbc:duckdb:" + database);
+             Statement statement = connection.createStatement()) {
+            statement.execute("UPDATE log_file SET minecraft_version = 'unknown', minecraft_user = NULL "
+                + "WHERE file_name = '2024-05-02-1.log'");
+            statement.execute("UPDATE chat_entry SET minecraft_user = NULL, server_or_world = NULL "
+                + "WHERE file_id = (SELECT id FROM log_file WHERE file_name = '2024-05-02-1.log') AND line_index = 0");
+        }
+        Path picked = tempDir.resolve("picked/logs");
+        LogFixtures.writePlain(picked, "2024-05-02-1.log", AFTER_MIDNIGHT);
+        try (LogStore store = LogStore.open(database)) {
+            store.importDirectory(tempDir.resolve("picked"), ImportOptions.defaults()
+                .withOptimize(false)
+                .withSkipAlreadyImported(false)
+                .withUpdateMetadataOnly(true)
+                .withUpdateMinecraftUser(true)
+                .withUpdateMinecraftServer(true));
+            assertContinued(store);
+        }
+    }
+
     private void writeLogs() throws IOException {
         Path logs = tempDir.resolve("instance/logs");
         LogFixtures.writePlain(logs, "2024-05-01-1.log", BEFORE_MIDNIGHT);
