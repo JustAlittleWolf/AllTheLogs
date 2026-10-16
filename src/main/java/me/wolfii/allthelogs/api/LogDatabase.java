@@ -4,6 +4,7 @@ import me.wolfii.allthelogs.client.LogStoreWorker;
 import me.wolfii.allthelogs.data.LogStore;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -55,6 +56,14 @@ public final class LogDatabase {
 
     private static List<ChatLog> logs(List<? extends ChatLog> logs) {
         return List.copyOf(logs);
+    }
+
+    private static List<Playtime> asPlaytime(List<me.wolfii.allthelogs.data.playtime.PlaytimeSpan> spans) {
+        List<Playtime> copy = new ArrayList<>(spans.size());
+        for (me.wolfii.allthelogs.data.playtime.PlaytimeSpan span : spans) {
+            copy.add(new Playtime(span.start(), span.end(), span.version(), span.server()));
+        }
+        return List.copyOf(copy);
     }
 
     /**
@@ -137,6 +146,15 @@ public final class LogDatabase {
         return queries.databasePath();
     }
 
+    /**
+     * Estimated playtime, oldest first. Each imported log contributes the time from its first line to its last,
+     * split when the server or world changes. Overlapping logs are clipped so the same moment is counted once.
+     * The version is the one stored on the log file.
+     */
+    public CompletableFuture<List<Playtime>> playtime() {
+        return queries.playtime();
+    }
+
     private interface Queries {
         boolean isOpen();
 
@@ -155,6 +173,8 @@ public final class LogDatabase {
         CompletableFuture<LogStoreMetadata> metadata();
 
         CompletableFuture<Optional<Path>> databasePath();
+
+        CompletableFuture<List<Playtime>> playtime();
     }
 
     private static final class WorkerQueries implements Queries {
@@ -207,6 +227,11 @@ public final class LogDatabase {
         @Override
         public CompletableFuture<Optional<Path>> databasePath() {
             return worker.databasePath();
+        }
+
+        @Override
+        public CompletableFuture<List<Playtime>> playtime() {
+            return worker.playtime().thenApply(LogDatabase::asPlaytime);
         }
     }
 
@@ -269,6 +294,11 @@ public final class LogDatabase {
         public CompletableFuture<Optional<Path>> databasePath() {
             return complete(store::databasePath);
         }
+
+        @Override
+        public CompletableFuture<List<Playtime>> playtime() {
+            return complete(() -> asPlaytime(store.playtime()));
+        }
     }
 
     private static final class NotOpenQueries implements Queries {
@@ -320,6 +350,11 @@ public final class LogDatabase {
 
         @Override
         public CompletableFuture<Optional<Path>> databasePath() {
+            return notOpen();
+        }
+
+        @Override
+        public CompletableFuture<List<Playtime>> playtime() {
             return notOpen();
         }
     }

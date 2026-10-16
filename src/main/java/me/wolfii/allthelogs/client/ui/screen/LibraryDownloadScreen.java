@@ -92,7 +92,7 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
             new Text(
                 Component.translatable("allthelogs.duckdb.download.title"),
                 Component.translatable("allthelogs.duckdb.download.body"),
-                Component.translatable("allthelogs.duckdb.quit"),
+                Component.translatable("menu.quit"),
                 aboutLink(DUCKDB_ABOUT_KEY, DUCKDB_ABOUT_URL)
             ),
             () -> Snapshot.fromDuck(DuckDbRuntime.progress()),
@@ -110,7 +110,7 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
             new Text(
                 Component.translatable("allthelogs.scripts.download.title"),
                 Component.translatable("allthelogs.scripts.download.body"),
-                Component.translatable("allthelogs.done"),
+                Component.translatable("gui.done"),
                 aboutLink(GRAALJS_ABOUT_KEY, GRAALJS_ABOUT_URL)
             ),
             () -> Snapshot.fromGraal(ScriptRuntime.progress()),

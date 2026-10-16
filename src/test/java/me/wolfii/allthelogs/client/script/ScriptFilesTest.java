@@ -54,6 +54,9 @@ class ScriptFilesTest {
         assertTrue(source.contains("interface LogStoreMetadata"));
         assertTrue(source.contains("interface MatchSummary"));
         assertTrue(source.contains("interface MatchDay"));
+        assertTrue(source.contains("interface Playtime"));
+        assertTrue(source.contains("readonly playtime: Playtime[]"));
+        assertTrue(source.contains("database.playtime;"));
         assertTrue(source.contains("type LogSource"));
         assertTrue(source.contains("declare function allEntries()"));
         assertTrue(source.contains("declare function writeToOutputFile"));

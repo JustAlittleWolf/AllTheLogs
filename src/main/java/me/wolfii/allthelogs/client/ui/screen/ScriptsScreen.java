@@ -183,7 +183,7 @@ public final class ScriptsScreen extends BaseOwoScreen<FlowLayout> {
         run = UIComponents.button(Component.translatable("allthelogs.scripts.run"), button -> primaryAction());
         actions.child(run);
         actions.child(UIContainers.horizontalFlow(Sizing.expand(), Sizing.content()));
-        actions.child(UIComponents.button(Component.translatable("allthelogs.done"),
+        actions.child(UIComponents.button(Component.translatable("gui.done"),
             button -> Minecraft.getInstance().gui.setScreen(parent)));
         card.child(actions);
 

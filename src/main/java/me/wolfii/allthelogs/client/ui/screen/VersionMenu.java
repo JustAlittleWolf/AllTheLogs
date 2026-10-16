@@ -7,7 +7,6 @@ import io.wispforest.owo.ui.container.ScrollContainer;
 import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.ParentUIComponent;
-import io.wispforest.owo.ui.core.Positioning;
 import io.wispforest.owo.ui.core.Sizing;
 import me.wolfii.allthelogs.client.search.MinecraftVersions;
 import me.wolfii.allthelogs.client.search.SearchFilter;
@@ -101,12 +100,8 @@ final class VersionMenu {
             Sizing.fixed(width), Sizing.fixed(maxHeight), items);
         menu.scrollbar(OverflowScrollbar.vanillaFlat());
         menu.surface(PanelSurfaces.menu());
-        int menuX = Math.min(button.x(), Math.max(0, screenWidth.getAsInt() - width - 4));
-        int menuY = button.y() + button.height();
-        if (menuY + maxHeight > screenHeight.getAsInt() - 4) {
-            menuY = Math.max(4, button.y() - maxHeight);
-        }
-        menu.positioning(Positioning.absolute(menuX, menuY));
+        AnchoredPopup.place(menu, button.x(), button.y(), button.height(), width, maxHeight,
+            screenWidth.getAsInt(), screenHeight.getAsInt());
         versionMenu = menu;
         overlays.child(menu);
     }

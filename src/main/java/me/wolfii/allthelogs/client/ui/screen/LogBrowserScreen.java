@@ -114,7 +114,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         list.onDismissContextMenu(this::closeMessageMenu);
         tools = new BrowserToolsMenu(overlays, () -> this.width, () -> this.height,
             () -> list.hasSelectedText(), () -> exportBusy, this::closeMessageMenu,
-            this::openScripts, this::openImport, this::startExport);
+            this::openScripts, this::openImport, this::openPlaytime, this::startExport);
         FlowLayout toolbar = buildToolbar();
         queries.attach(list, tools::setDatabaseInfo);
         content.child(list.verticalSizing(Sizing.expand()));
@@ -359,6 +359,31 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         }
         if (tools != null) tools.close();
         AllTheLogsScreens.openScripts(this);
+    }
+
+    private void openPlaytime() {
+        if (overlays != null) {
+            overlays.queue(() -> {
+                if (tools != null) tools.close();
+                showPlaytime();
+            });
+            return;
+        }
+        showPlaytime();
+    }
+
+    private void showPlaytime() {
+        if (tools != null) tools.close();
+        Minecraft.getInstance().gui.setScreen(new PlaytimeScreen(this, this::showFiltered));
+    }
+
+    /**
+     * Applies a filter the next time this screen is shown. Used when playtime sends the user back to messages.
+     */
+    private void showFiltered(SearchFilter next) {
+        queries.updateFilter(next);
+        BrowserSession.remember(next);
+        queries.markReload();
     }
 
     private void openImport() {

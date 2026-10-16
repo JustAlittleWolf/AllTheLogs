@@ -8,7 +8,6 @@ import io.wispforest.owo.ui.container.ScrollContainer;
 import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.ParentUIComponent;
-import io.wispforest.owo.ui.core.Positioning;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.UIComponent;
 import io.wispforest.owo.ui.core.VerticalAlignment;
@@ -113,12 +112,8 @@ final class TimezonePicker {
             Sizing.fixed(width), Sizing.fixed(maxHeight), items);
         panel.scrollbar(OverflowScrollbar.vanillaFlat());
         panel.surface(PanelSurfaces.menu());
-        int menuX = Math.min(box.x(), Math.max(0, screenWidth.getAsInt() - width - 4));
-        int menuY = box.y() + box.height();
-        if (menuY + maxHeight > screenHeight.getAsInt() - 4) {
-            menuY = Math.max(4, box.y() - maxHeight);
-        }
-        panel.positioning(Positioning.absolute(menuX, menuY));
+        AnchoredPopup.place(panel, box.x(), box.y(), box.height(), width, maxHeight,
+            screenWidth.getAsInt(), screenHeight.getAsInt());
         menu = panel;
         overlays.child(panel);
     }

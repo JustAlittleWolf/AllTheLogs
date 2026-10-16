@@ -2,7 +2,9 @@ package me.wolfii.allthelogs.data;
 
 import me.wolfii.allthelogs.api.PendingImportMessage;
 import me.wolfii.allthelogs.data.importer.LogImporter;
+import me.wolfii.allthelogs.data.playtime.PlaytimeSpan;
 import me.wolfii.allthelogs.data.query.ChatQueries;
+import me.wolfii.allthelogs.data.query.PlaytimeQueries;
 import me.wolfii.allthelogs.data.store.Schema;
 import me.wolfii.allthelogs.data.store.SessionCapture;
 import me.wolfii.allthelogs.data.store.StoreConnections;
@@ -52,6 +54,7 @@ public final class LogStore implements AutoCloseable {
     private DuckDBConnection connection;
     private LogImporter importer;
     private ChatQueries queries;
+    private PlaytimeQueries playtime;
 
     private LogStore(DuckDBConnection connection, Path databasePath) {
         this.databasePath = databasePath;
@@ -110,6 +113,7 @@ public final class LogStore implements AutoCloseable {
         this.importer = new LogImporter(connection);
         this.sessions.attach(connection);
         this.queries = new ChatQueries(connection);
+        this.playtime = new PlaytimeQueries(connection);
     }
 
     /**
@@ -440,6 +444,15 @@ public final class LogStore implements AutoCloseable {
      */
     public LogStoreMetadata browserMetadata() {
         return queries.browserMetadata(databaseSizeBytes());
+    }
+
+    /**
+     * Estimated playtime for every imported log. Each file contributes the time from its first logged line to
+     * its last. That stretch is split where the server or world changes, and where a stored message names a
+     * different Minecraft version.
+     */
+    public List<PlaytimeSpan> playtime() {
+        return playtime.load();
     }
 
     private long databaseSizeBytes() {
