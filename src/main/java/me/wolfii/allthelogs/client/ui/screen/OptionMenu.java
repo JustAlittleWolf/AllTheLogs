@@ -19,20 +19,18 @@ import java.util.function.IntSupplier;
 
 /**
  * Small choice list anchored under a button and exactly as wide. Choosing an entry closes the list. With
- * {@link #opensOnHover} it behaves like the messages menu: hovering the button opens it, and it closes
- * {@link #CLOSE_DELAY_MS} after the pointer leaves both the button and the list, like the messages menu.
+ * {@link #opensOnHover}, hovering the button opens it, and it closes as soon as the pointer leaves both the
+ * button and the list, which sits directly under the button.
  */
 final class OptionMenu {
     private final StackLayout overlays;
     private final IntSupplier screenWidth;
     private final IntSupplier screenHeight;
     private static final int ROW_HEIGHT = 20;
-    static final long CLOSE_DELAY_MS = 1000;
 
     private ParentUIComponent menu;
     private ButtonComponent hoverAnchor;
     private Runnable hoverOpen;
-    private long closeAt = Long.MAX_VALUE;
 
     OptionMenu(StackLayout overlays, IntSupplier screenWidth, IntSupplier screenHeight) {
         this.overlays = overlays;
@@ -47,7 +45,6 @@ final class OptionMenu {
     void close() {
         if (isOpen()) overlays.removeChild(menu);
         menu = null;
-        closeAt = Long.MAX_VALUE;
     }
 
     /**
@@ -61,15 +58,8 @@ final class OptionMenu {
     void sync(int mouseX, int mouseY) {
         if (hoverAnchor == null) return;
         boolean over = hit(hoverAnchor, mouseX, mouseY) || (isOpen() && hit(menu, mouseX, mouseY));
-        long now = System.currentTimeMillis();
-        if (over) {
-            closeAt = Long.MAX_VALUE;
-            if (!isOpen()) hoverOpen.run();
-            return;
-        }
-        if (!isOpen()) return;
-        if (closeAt == Long.MAX_VALUE) closeAt = now + CLOSE_DELAY_MS;
-        if (now >= closeAt) close();
+        if (over && !isOpen()) hoverOpen.run();
+        else if (!over && isOpen()) close();
     }
 
     private static boolean hit(UIComponent component, int mouseX, int mouseY) {
