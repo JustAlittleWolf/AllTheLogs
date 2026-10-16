@@ -19,6 +19,7 @@ import java.time.Duration;
 import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.concurrent.CancellationException;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
@@ -34,6 +35,7 @@ public final class GraalJsInstaller {
     private final ClassPathAppender classPath;
     private final BooleanSupplier alreadyPresent;
     private final HttpClient http;
+    private volatile boolean cancelled;
 
     public GraalJsInstaller(Path cacheDirectory, String repository, ClassPathAppender classPath) {
         this(cacheDirectory, repository, classPath, GraalJs::enginePresent);
@@ -81,6 +83,14 @@ public final class GraalJsInstaller {
     }
 
     /**
+     * Stops a running {@link #install} at the next file or the next chunk read, which then throws
+     * {@link CancellationException}. Jars already downloaded stay cached for the next attempt.
+     */
+    public void cancel() {
+        cancelled = true;
+    }
+
+    /**
      * Ensures GraalJS is on the classpath, downloading jars when needed.
      */
     public void install(Consumer<Progress> progress) throws Exception {
@@ -92,6 +102,7 @@ public final class GraalJsInstaller {
         int downloads = GraalJs.ARTIFACTS.size();
         notify(progress, Progress.working(Progress.Stage.LOADING, 0, downloads, 0, 0, "graaljs"));
         for (int index = 0; index < downloads; index++) {
+            throwIfCancelled();
             GraalJs.Artifact artifact = GraalJs.ARTIFACTS.get(index);
             Path jar = cacheDirectory.resolve(artifact.jarFileName());
             if (!isValidCache(jar, artifact.name(), progress, index, downloads)) {
@@ -151,6 +162,7 @@ public final class GraalJsInstaller {
             byte[] buffer = new byte[64 * 1024];
             int read;
             while ((read = body.read(buffer)) >= 0) {
+                throwIfCancelled();
                 if (read == 0) continue;
                 out.write(buffer, 0, read);
                 copied += read;
@@ -169,6 +181,10 @@ public final class GraalJsInstaller {
         Files.move(part, jar, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         Files.writeString(shaPath(jar), actual, StandardCharsets.UTF_8);
         LOGGER.info("Downloaded GraalJS jar to {}", jar);
+    }
+
+    private void throwIfCancelled() {
+        if (cancelled) throw new CancellationException("GraalJS download cancelled");
     }
 
     private String fetchSha256(String url) throws Exception {
