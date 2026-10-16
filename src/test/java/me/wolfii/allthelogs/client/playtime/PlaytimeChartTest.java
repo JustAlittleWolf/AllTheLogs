@@ -108,8 +108,11 @@ class PlaytimeChartTest {
         PlaytimeChartModel.Result chart = PlaytimeChartModel.build(
             List.of(span(1, 1, "1.20.4", "a"), span(1, 3, "1.21", "b")),
             PlaytimeFilter.all(), PlaytimeBreakdown.VERSION, PlaytimeStyle.BARS, PlaytimeGrain.DAYS, null);
-        List<String> lines = chart.hover(0, "Unknown", "Total").stream().map(PlaytimeHover.Line::text).toList();
-        assertEquals(List.of("2024-01-01", "Total  4h", "", "1.21  3h", "1.20.4  1h"), lines);
+        List<PlaytimeHover.Line> lines = chart.hover(0, "Unknown");
+        assertEquals(List.of("2024-01-01", "4h", "", "1.21", "1.20.4"),
+            lines.stream().map(PlaytimeHover.Line::label).toList());
+        assertEquals(List.of("", "", "", "3h", "1h"), lines.stream().map(PlaytimeHover.Line::value).toList());
+        assertTrue(lines.get(1).bold());
     }
 
     @Test
@@ -147,17 +150,41 @@ class PlaytimeChartTest {
     }
 
     @Test
-    void barLayoutGivesEveryBarTheSameWidthAndCentersTheRest() {
-        BarLayout layout = BarLayout.of(3, 10, 100);
-        assertEquals(33, layout.barWidth());
-        assertEquals(10, layout.left());
-        assertEquals(0, layout.columnAt(10));
-        assertEquals(2, layout.columnAt(10 + 98));
-        assertEquals(-1, layout.columnAt(10 + 99));
-        BarLayout crowded = BarLayout.of(500, 0, 100);
-        assertEquals(100, crowded.count());
-        assertEquals(1, crowded.barWidth());
-        assertEquals(200, crowded.first());
+    void barLayoutKeepsEqualWidthsOnlyWhenLittleSpaceIsLeft() {
+        BarLayout even = BarLayout.of(3, 10, 100);
+        assertEquals(33, even.barRight(0) - even.barLeft(0));
+        assertEquals(10, even.left());
+        assertEquals(0, even.columnAt(10));
+        assertEquals(2, even.columnAt(10 + 98));
+        assertEquals(-1, even.columnAt(10 + 99));
+
+        BarLayout uneven = BarLayout.of(60, 0, 100);
+        assertEquals(0, uneven.left());
+        assertEquals(100, uneven.right());
+        for (int column = 0; column < 60; column++) {
+            int width = uneven.barRight(column) - uneven.barLeft(column);
+            assertTrue(width == 1 || width == 2);
+        }
+
+        BarLayout crowded = BarLayout.of(4, 0, 2);
+        int[] drawn = crowded.drawnAt(new double[]{1, 5, 2, 3});
+        assertEquals(2, drawn.length);
+        assertEquals(1, drawn[0]);
+        assertEquals(3, drawn[1]);
+    }
+
+    @Test
+    void axisLabelsUseClockTimeOnceDaysAreReached() {
+        assertEquals("6h 36m", PlaytimeDuration.axis(6 * 3_600_000L + 36 * 60_000L));
+        assertEquals("2d 06:05", PlaytimeDuration.axis(2 * 86_400_000L + 6 * 3_600_000L + 5 * 60_000L));
+    }
+
+    @Test
+    void neighboringColorGroupsGetDifferentPatterns() {
+        assertEquals(PlaytimePattern.SOLID, PlaytimeColors.pattern(0));
+        assertEquals(PlaytimePattern.SOLID, PlaytimeColors.pattern(2));
+        assertTrue(PlaytimeColors.pattern(2) != PlaytimeColors.pattern(5));
+        assertTrue(PlaytimeColors.pattern(5) != PlaytimeColors.pattern(8));
     }
 
     @Test
@@ -223,11 +250,11 @@ class PlaytimeChartTest {
         assertEquals(3_600_000L, days.heatMillis(DayOfWeek.MONDAY.getValue() - 1, 0));
         assertEquals(2 * 3_600_000L, days.heatMillis(PlaytimeWeekday.ALL_DAYS, 0));
 
-        List<String> hover = days.dayHover(DayOfWeek.TUESDAY.getValue() - 1, "Total", "Unknown").stream()
-            .map(PlaytimeHover.Line::text).toList();
-        assertEquals("Total  3h", hover.get(1));
-        assertEquals("", hover.get(2));
-        assertEquals("b  3h", hover.get(3));
+        List<PlaytimeHover.Line> hover = days.dayHover(DayOfWeek.TUESDAY.getValue() - 1, "Unknown");
+        assertEquals("3h", hover.get(1).label());
+        assertEquals("", hover.get(2).label());
+        assertEquals("b", hover.get(3).label());
+        assertEquals("3h", hover.get(3).value());
     }
 
     @Test

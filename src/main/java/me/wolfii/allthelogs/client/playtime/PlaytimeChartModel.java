@@ -69,14 +69,14 @@ public final class PlaytimeChartModel {
             return columns.isEmpty();
         }
 
-        public List<PlaytimeHover.Line> hover(int column, String unknownServer, String totalLabel) {
+        public List<PlaytimeHover.Line> hover(int column, String unknownServer) {
             if (column < 0 || column >= columns.size()) return List.of();
             Column current = columns.get(column);
             boolean cumulative = style == PlaytimeStyle.CUMULATIVE;
             long total = cumulative ? Math.round(sum(current.display())) : current.totalMillis();
             double[] weights = cumulative ? current.display() : PlaytimeHover.weights(current.millis());
             return PlaytimeHover.lines(spanLabel(current.start(), current.end(), grain),
-                totalLabel + "  " + PlaytimeDuration.format(total), series, weights, index -> switch (style) {
+                PlaytimeDuration.format(total), series, weights, index -> switch (style) {
                     case PERCENT -> percent(current.millis()[index], current.totalMillis())
                         + "  " + PlaytimeDuration.format(current.millis()[index]);
                     case CUMULATIVE -> PlaytimeDuration.format(Math.round(current.display()[index]));
@@ -105,7 +105,8 @@ public final class PlaytimeChartModel {
             int column = layout.columnAt(clampedX);
             if (column < 0 || column >= columns.size()) return 0.5;
             Column bucket = columns.get(column);
-            double within = (clampedX - layout.barLeft(column)) / layout.barWidth();
+            int barWidth = Math.max(1, layout.barRight(column) - layout.barLeft(column));
+            double within = Math.clamp((clampedX - layout.barLeft(column)) / barWidth, 0d, 1d);
             long bucketStart = epoch(bucket.start());
             double at = bucketStart + within * (epoch(bucket.end()) - bucketStart);
             return Math.clamp((at - start) / (end - start), 0d, 1d);
@@ -113,8 +114,15 @@ public final class PlaytimeChartModel {
     }
 
     public static Plot plot(int width, int height) {
-        return new Plot(PLOT_LEFT, PLOT_TOP,
-            Math.max(1, width - PLOT_LEFT - PLOT_RIGHT),
+        return plot(width, height, PLOT_LEFT);
+    }
+
+    /**
+     * @param left room for the value labels left of the plot
+     */
+    public static Plot plot(int width, int height, int left) {
+        return new Plot(left, PLOT_TOP,
+            Math.max(1, width - left - PLOT_RIGHT),
             Math.max(1, height - PLOT_TOP - PLOT_BOTTOM));
     }
 

@@ -10,6 +10,7 @@ import me.wolfii.allthelogs.client.playtime.PlaytimeChartModel.Hit;
 import me.wolfii.allthelogs.client.playtime.PlaytimeChartModel.Plot;
 import me.wolfii.allthelogs.client.playtime.PlaytimeChartModel.Result;
 import me.wolfii.allthelogs.client.playtime.PlaytimeDuration;
+import me.wolfii.allthelogs.client.playtime.PlaytimeHover;
 import me.wolfii.allthelogs.client.playtime.PlaytimeStyle;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -20,18 +21,21 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.function.BiConsumer;
+import java.util.function.BooleanSupplier;
 import java.util.function.DoubleConsumer;
 
 /**
- * Timeline of estimated playtime. Every bucket is a bar of the same width in screen pixels, with no gap
- * between bars. The scroll wheel zooms around the pointer and dragging pans. While zoomed in, a thin
- * indicator under the axis shows where the view sits in the whole history. Right-click reports the
- * bucket, and the colored section when the pointer is on one.
+ * Timeline of estimated playtime. Bars touch and fill the plot in screen pixels. The bars are painted into
+ * a texture only when the chart, the size, or the highlighted series changes. The scroll wheel zooms
+ * around the pointer and dragging pans. While zoomed in, a thin indicator under the axis shows where the
+ * view sits in the whole history. The bucket under the pointer is shaded, and right-click reports it with
+ * the colored section when the pointer is on one.
  */
-public final class PlaytimeChartWidget extends BaseUIComponent {
+public final class PlaytimeChartWidget extends BaseUIComponent implements AutoCloseable {
     private static final int LABEL_GAP = 8;
 
     private final SeriesHighlight highlight;
+    private final PixelCanvas canvas = new PixelCanvas();
     private Result chart;
     private Component placeholder = Component.empty();
     private BiConsumer<Double, Double> onZoom = (fraction, steps) -> {
@@ -44,7 +48,20 @@ public final class PlaytimeChartWidget extends BaseUIComponent {
     };
     private Runnable onDismiss = () -> {
     };
+    private BooleanSupplier hoverBlocked = () -> false;
     private boolean panning;
+
+    private Result laidOut;
+    private int laidOutWidth;
+    private int laidOutHeight;
+    private int laidOutScale;
+    private int axisWidth;
+    private BarLayout layout;
+    private int[] drawnAt = new int[0];
+    private boolean painted;
+    private int paintedHighlight;
+    private int hoverColumn = -1;
+    private List<PlaytimeHover.Line> hoverLines = List.of();
 
     public PlaytimeChartWidget(SeriesHighlight highlight) {
         this.highlight = highlight;
@@ -79,6 +96,13 @@ public final class PlaytimeChartWidget extends BaseUIComponent {
         this.onDismiss = onDismiss;
     }
 
+    /**
+     * While this is true the pointer neither highlights nor shows a hover card, e.g. while a menu is open.
+     */
+    public void hoverBlocked(BooleanSupplier hoverBlocked) {
+        this.hoverBlocked = hoverBlocked;
+    }
+
     @Override
     public void draw(OwoUIGraphics graphics, int mouseX, int mouseY, float partialTicks, float delta) {
         graphics.fill(x, y, x + width, y + height, Colors.LIST_BACKGROUND);
@@ -87,38 +111,42 @@ public final class PlaytimeChartWidget extends BaseUIComponent {
             PlaytimePainter.centered(graphics, placeholder, x, y, width, height);
             return;
         }
-        Plot plot = PlaytimeChartModel.plot(width, height);
+        int scale = PlaytimePainter.scale();
+        layOut(scale);
+        Plot plot = plot();
         int plotX = x + plot.x();
         int plotY = y + plot.y();
         int plotBottom = plotY + plot.height();
-        int scale = PlaytimePainter.scale();
-        BarLayout layout = layout(plot, scale);
-        Hit hit = isInBoundingBox(mouseX, mouseY) ? hitAt(layout, scale, mouseX - x, mouseY - y) : null;
+
+        int column = hoverBlocked.getAsBoolean() || !isInBoundingBox(mouseX, mouseY)
+            ? -1 : columnAt(mouseX * scale + scale / 2, scale);
+        Hit hit = column < 0 ? null : chart.hit(column, mouseY - y, plot);
+        if (hit == null) column = -1;
         highlight.chart(hit == null ? -1 : hit.series());
-        PlaytimePainter.yAxis(graphics, y, plotX, plotY, plot.width(), plot.height(), chart.axisMax(), this::yLabel);
         int active = highlight.active();
-        PlaytimePainter.inPixels(graphics, scale, () -> {
-            for (int column = layout.first(); column < layout.first() + layout.count(); column++) {
-                int left = layout.barLeft(column);
-                PlaytimePainter.stacked(graphics, left, left + layout.barWidth(), plotBottom * scale,
-                    plot.height() * scale, chart.axisMax(), chart.columns().get(column).display(), chart.series(), active);
-            }
-        });
-        drawXAxis(graphics, layout, scale, plotBottom + 3);
+        if (!painted || paintedHighlight != active) paint(plot, scale, active);
+
+        PlaytimePainter.yAxis(graphics, y, plotX, plotY, plot.width(), plot.height(), chart.axisMax(), this::yLabel);
+        canvas.draw(graphics, scale, plotX * scale, plotY * scale);
+        if (column >= 0) {
+            int left = plotX * scale + layout.barLeft(column);
+            int right = Math.max(left + 1, plotX * scale + layout.barRight(column));
+            PlaytimePainter.inPixels(graphics, scale, () ->
+                graphics.fill(left, plotY * scale, right, plotBottom * scale, PlaytimePainter.HOVER_BAND));
+        }
+        drawXAxis(graphics, plotX, scale, plotBottom + 3);
         drawViewIndicator(graphics, plotX, plot.width());
-        if (hit != null) {
-            String unknown = Component.translatable("allthelogs.playtime.server.unknown").getString();
-            String total = Component.translatable("allthelogs.playtime.hover.total").getString();
-            PlaytimePainter.hoverCard(graphics, chart.hover(hit.column(), unknown, total), mouseX, mouseY, x, y, width, height);
+        if (column >= 0) {
+            PlaytimePainter.hoverCard(graphics, hoverLines(column), mouseX, mouseY, x, y, width, height);
         }
     }
 
     @Override
     public boolean onMouseScroll(double mouseX, double mouseY, double amount) {
-        if (chart == null || chart.isEmpty()) return false;
+        if (chart == null || chart.isEmpty() || layout == null) return false;
         int scale = PlaytimePainter.scale();
-        BarLayout layout = layout(PlaytimeChartModel.plot(width, height), scale);
-        onZoom.accept(chart.fractionAt(layout, (x + mouseX) * scale), Math.clamp(amount, -5d, 5d));
+        double pixelX = (x + mouseX) * scale - (x + plot().x()) * scale;
+        onZoom.accept(chart.fractionAt(layout, pixelX), Math.clamp(amount, -5d, 5d));
         return true;
     }
 
@@ -128,9 +156,10 @@ public final class PlaytimeChartWidget extends BaseUIComponent {
             focusHandler().focus(this, UIComponent.FocusSource.MOUSE_CLICK);
         }
         if (click.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
-            if (chart != null && !chart.isEmpty()) {
+            if (chart != null && !chart.isEmpty() && layout != null) {
                 int scale = PlaytimePainter.scale();
-                Hit hit = hitAt(layout(PlaytimeChartModel.plot(width, height), scale), scale, click.x(), click.y());
+                int column = columnAt((int) Math.round((x + click.x()) * scale), scale);
+                Hit hit = chart.hit(column, click.y(), plot());
                 if (hit != null) onContext.open(hit, x + click.x(), y + click.y());
             }
             return true;
@@ -153,7 +182,7 @@ public final class PlaytimeChartWidget extends BaseUIComponent {
         if (!panning || click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT || chart == null || chart.isEmpty()) {
             return super.onMouseDrag(click, deltaX, deltaY);
         }
-        Plot plot = PlaytimeChartModel.plot(width, height);
+        Plot plot = plot();
         if (plot.width() > 0) onPan.accept(-deltaX / plot.width());
         return true;
     }
@@ -164,30 +193,88 @@ public final class PlaytimeChartWidget extends BaseUIComponent {
         return super.onMouseUp(click);
     }
 
-    private BarLayout layout(Plot plot, int scale) {
-        return BarLayout.of(chart.columns().size(), (x + plot.x()) * scale, plot.width() * scale);
+    @Override
+    public void close() {
+        canvas.close();
     }
 
-    private Hit hitAt(BarLayout layout, int scale, double localX, double localY) {
-        int column = layout.columnAt((x + localX) * scale);
-        return chart.hit(column, localY, PlaytimeChartModel.plot(width, height));
+    private Plot plot() {
+        return PlaytimeChartModel.plot(width, height, axisWidth);
+    }
+
+    /**
+     * Recomputes bar positions when the chart or the size changed. Bar positions are relative to the plot.
+     */
+    private void layOut(int scale) {
+        if (chart == laidOut && width == laidOutWidth && height == laidOutHeight && scale == laidOutScale) return;
+        laidOut = chart;
+        laidOutWidth = width;
+        laidOutHeight = height;
+        laidOutScale = scale;
+        axisWidth = Math.max(PlaytimeChartModel.PLOT_LEFT / 2, PlaytimePainter.yAxisWidth(chart.axisMax(), this::yLabel));
+        List<PlaytimeChartModel.Column> columns = chart.columns();
+        layout = BarLayout.of(columns.size(), 0, plot().width() * scale);
+        double[] totals = new double[columns.size()];
+        for (int index = 0; index < totals.length; index++) {
+            for (double value : columns.get(index).display()) totals[index] += value;
+        }
+        drawnAt = layout.drawnAt(totals);
+        painted = false;
+        hoverColumn = -1;
+    }
+
+    private void paint(Plot plot, int scale, int active) {
+        canvas.reset(plot.width() * scale, plot.height() * scale);
+        int unit = PlaytimePainter.patternUnit(scale);
+        int bottom = plot.height() * scale;
+        int offset = layout.left();
+        int start = 0;
+        for (int pixel = 1; pixel <= drawnAt.length; pixel++) {
+            if (pixel < drawnAt.length && drawnAt[pixel] == drawnAt[start]) continue;
+            int column = drawnAt[start];
+            if (column >= 0) {
+                PlaytimePainter.stack(canvas, offset + start, offset + pixel, bottom, bottom, chart.axisMax(),
+                    chart.columns().get(column).display(), chart.series(), active, unit);
+            }
+            start = pixel;
+        }
+        canvas.upload();
+        painted = true;
+        paintedHighlight = active;
+    }
+
+    /**
+     * Column drawn at the screen pixel {@code pixelX}, or -1 beside the bars.
+     */
+    private int columnAt(int pixelX, int scale) {
+        int relative = pixelX - (x + plot().x()) * scale - layout.left();
+        if (relative < 0 || relative >= drawnAt.length) return -1;
+        return drawnAt[relative];
+    }
+
+    private List<PlaytimeHover.Line> hoverLines(int column) {
+        if (column != hoverColumn) {
+            hoverColumn = column;
+            hoverLines = chart.hover(column, Component.translatable("allthelogs.playtime.server.unknown").getString());
+        }
+        return hoverLines;
     }
 
     /**
      * Labels under the bars. Labelled columns are a fixed multiple apart, so labels stay put while panning.
      */
-    private void drawXAxis(OwoUIGraphics graphics, BarLayout layout, int scale, int labelY) {
+    private void drawXAxis(OwoUIGraphics graphics, int plotX, int scale, int labelY) {
         List<PlaytimeChartModel.Column> columns = chart.columns();
-        if (layout.count() == 0) return;
-        int widest = Math.max(labelWidth(columns.get(layout.first())),
-            labelWidth(columns.get(layout.first() + layout.count() - 1)));
-        int step = Math.max(1, (int) Math.ceil((widest + LABEL_GAP) * scale / (double) layout.barWidth()));
-        int first = Math.ceilDiv(layout.first(), step) * step;
-        for (int column = first; column < layout.first() + layout.count(); column += step) {
+        int count = layout.count();
+        if (count == 0) return;
+        int widest = Math.max(labelWidth(columns.getFirst()), labelWidth(columns.getLast()));
+        double averageBar = (layout.right() - layout.left()) / (double) count;
+        int step = Math.max(1, (int) Math.ceil((widest + LABEL_GAP) * scale / Math.max(averageBar, 0.001)));
+        for (int column = 0; column < count; column += step) {
             PlaytimeChartModel.Column bucket = columns.get(column);
             String label = PlaytimeChartModel.spanLabel(bucket.start(), bucket.end(), chart.grain());
             int textWidth = PlaytimePainter.axisWidth(label);
-            int center = (layout.barLeft(column) + layout.barWidth() / 2) / scale;
+            int center = plotX + (layout.barLeft(column) + layout.barRight(column)) / 2 / scale;
             int textX = Math.max(x, Math.min(center - textWidth / 2, x + width - textWidth));
             PlaytimePainter.axisLabel(graphics, label, textX, labelY);
         }
@@ -213,7 +300,7 @@ public final class PlaytimeChartWidget extends BaseUIComponent {
 
     private String yLabel(double value) {
         if (chart.style() == PlaytimeStyle.PERCENT) return Math.round(value * 100) + "%";
-        return PlaytimeDuration.format(Math.round(value));
+        return PlaytimeDuration.axis(Math.round(value));
     }
 
     private static long epoch(LocalDateTime time) {

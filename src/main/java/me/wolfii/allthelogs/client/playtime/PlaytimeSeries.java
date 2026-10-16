@@ -13,12 +13,12 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
- * One colored slice of a bar. {@code hatched} slices get diagonal stripes where bars are wide enough, so
+ * One colored slice of a bar. The {@code pattern} is drawn over the color where bars are wide enough, so
  * series with similar colors still look different. {@code version} is null when the chart is grouped only by server.
  * {@code serverKey} is null when it is grouped only by version, and {@link PlaytimeFilter#UNKNOWN_SERVER}
  * when a combined or server chart has no place.
  */
-public record PlaytimeSeries(String version, String serverKey, int color, boolean hatched) {
+public record PlaytimeSeries(String version, String serverKey, int color, PlaytimePattern pattern) {
     /** Longest name shown in hover cards before it is cut with an ellipsis. */
     public static final int MAX_LABEL_LENGTH = 32;
     public static final Comparator<PlaytimeSeries> STACK_ORDER = (left, right) -> {
@@ -34,7 +34,7 @@ public record PlaytimeSeries(String version, String serverKey, int color, boolea
     public static PlaytimeSeries of(PlaytimeBreakdown breakdown, String version, String server) {
         String versionKey = breakdown == PlaytimeBreakdown.SERVER ? null : version;
         String place = breakdown == PlaytimeBreakdown.VERSION ? null : PlaytimeFilter.serverKey(server);
-        return new PlaytimeSeries(versionKey, place, 0, false);
+        return new PlaytimeSeries(versionKey, place, 0, PlaytimePattern.SOLID);
     }
 
     /**
@@ -52,7 +52,7 @@ public record PlaytimeSeries(String version, String serverKey, int color, boolea
             index.put(key, series.size());
             int rank = ranks.getOrDefault(key, -1);
             series.add(new PlaytimeSeries(key.version, key.serverKey, key.colorFor(rank),
-                rank >= 0 && PlaytimeColors.hatched(rank)));
+                rank >= 0 ? PlaytimeColors.pattern(rank) : PlaytimePattern.SOLID));
         }
         return new Index(List.copyOf(series), index, breakdown);
     }

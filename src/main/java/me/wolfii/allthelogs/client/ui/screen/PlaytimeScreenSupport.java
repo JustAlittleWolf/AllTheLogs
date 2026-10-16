@@ -1,6 +1,7 @@
 package me.wolfii.allthelogs.client.ui.screen;
 
 import io.wispforest.owo.ui.component.ButtonComponent;
+import io.wispforest.owo.ui.component.LabelComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.ScrollContainer;
@@ -69,14 +70,16 @@ final class PlaytimeScreenSupport {
     }
 
     /**
-     * The chart beside a column with the scrolling legend on top and the filter controls at the bottom.
+     * The chart beside a column with the total, the scrolling legend under it, and the filter controls at the
+     * bottom. Only the legend scrolls.
      */
-    static FlowLayout body(UIComponent chart, PlaytimeLegendWidget legend, List<UIComponent> filters) {
+    static FlowLayout body(UIComponent chart, LabelComponent total, PlaytimeLegendWidget legend, List<UIComponent> filters) {
         ScrollContainer<PlaytimeLegendWidget> legendScroll = UIContainers.verticalScroll(Sizing.fill(), Sizing.expand(), legend);
         legendScroll.scrollbar(OverflowScrollbar.vanillaFlat());
-        legendScroll.padding(Insets.right(legendScroll.scrollbarThiccness() + 1));
         FlowLayout side = UIContainers.verticalFlow(Sizing.fixed(SIDE_WIDTH), Sizing.fill());
         side.gap(3);
+        total.horizontalSizing(Sizing.fill());
+        side.child(total);
         side.child(legendScroll);
         filters.forEach(side::child);
 
@@ -108,12 +111,12 @@ final class PlaytimeScreenSupport {
     }
 
     /**
-     * Puts the total at the top of the legend, or a loading or error message in the chart.
+     * Puts the total above the legend, or a loading or error message in the chart.
      */
-    static void showTotal(@Nullable PlaytimeLegendWidget legend, @Nullable Consumer<Component> placeholder,
+    static void showTotal(@Nullable LabelComponent total, @Nullable Consumer<Component> placeholder,
                           @Nullable Component message, long totalMillis) {
-        if (legend != null) {
-            legend.total(message != null ? Component.empty()
+        if (total != null) {
+            total.text(message != null ? Component.empty()
                 : Component.translatable("allthelogs.playtime.total", PlaytimeDuration.format(totalMillis)));
         }
         if (placeholder != null) placeholder.accept(message != null ? message : Component.translatable("allthelogs.playtime.empty"));

@@ -2,7 +2,9 @@ package me.wolfii.allthelogs.client.ui.screen;
 
 import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.ButtonComponent;
+import io.wispforest.owo.ui.component.LabelComponent;
 import io.wispforest.owo.ui.component.DropdownComponent;
+import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
@@ -46,6 +48,7 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
     private final SeriesHighlight highlight = new SeriesHighlight();
     private PlaytimeChartWidget chartWidget;
     private PlaytimeLegendWidget legend;
+    private LabelComponent totalLabel;
     private ButtonComponent grainButton;
     private ButtonComponent breakdownButton;
     private ButtonComponent styleButton;
@@ -103,9 +106,12 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         chartWidget.onDismiss(this::closeContextMenu);
         chartWidget.onContext(this::openContextMenu);
         legend = new PlaytimeLegendWidget(highlight);
+        totalLabel = UIComponents.label(Component.empty());
+        chartWidget.hoverBlocked(this::menusOpen);
+        legend.hoverBlocked(this::menusOpen);
         versionButton = PlaytimeScreenSupport.filterButton(PlaytimeScreenSupport.versionLabel(), pressed -> openVersions());
         serverButton = PlaytimeScreenSupport.filterButton(PlaytimeScreenSupport.serverLabel(), pressed -> openServers());
-        page.child(PlaytimeScreenSupport.body(chartWidget, legend, List.of(versionButton, serverButton)));
+        page.child(PlaytimeScreenSupport.body(chartWidget, totalLabel, legend, List.of(versionButton, serverButton)));
         root.child(page);
         rebuild();
     }
@@ -137,6 +143,13 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         Minecraft.getInstance().gui.setScreen(parent);
     }
 
+    @Override
+    public void removed() {
+        super.removed();
+        if (chartWidget != null) chartWidget.close();
+        if (legend != null) legend.close();
+    }
+
     private void load() {
         int request = ++loadToken;
         PlaytimeScreenSupport.load(this, request, () -> loadToken, this::status, this::rebuild);
@@ -153,7 +166,7 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
 
     private void status(@Nullable Component message) {
         statusMessage = message;
-        PlaytimeScreenSupport.showTotal(legend, chartWidget == null ? null : chartWidget::placeholder,
+        PlaytimeScreenSupport.showTotal(totalLabel, chartWidget == null ? null : chartWidget::placeholder,
             message, chart == null ? 0 : chart.totalMillis());
     }
 

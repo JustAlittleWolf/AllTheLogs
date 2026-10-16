@@ -23,6 +23,8 @@ final class OptionMenu {
     private final StackLayout overlays;
     private final IntSupplier screenWidth;
     private final IntSupplier screenHeight;
+    private static final int ROW_HEIGHT = 20;
+
     private ParentUIComponent menu;
 
     OptionMenu(StackLayout overlays, IntSupplier screenWidth, IntSupplier screenHeight) {
@@ -58,7 +60,9 @@ final class OptionMenu {
             items.child(button);
         }
         int width = anchor.width();
-        int maxHeight = Math.max(48, Math.min(180, screenHeight.getAsInt() - anchor.y() - anchor.height() - 12));
+        int contentHeight = labels.size() * (ROW_HEIGHT + 1) - 1;
+        int room = Math.max(ROW_HEIGHT, Math.max(screenHeight.getAsInt() - anchor.y() - anchor.height(), anchor.y()) - 12);
+        int maxHeight = Math.min(contentHeight, Math.min(180, room));
         ScrollContainer<FlowLayout> scroll = UIContainers.verticalScroll(Sizing.fixed(width), Sizing.fixed(maxHeight), items);
         scroll.scrollbar(OverflowScrollbar.vanillaFlat());
         scroll.surface(PanelSurfaces.menu());

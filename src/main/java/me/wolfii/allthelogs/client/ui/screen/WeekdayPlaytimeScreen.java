@@ -2,6 +2,7 @@ package me.wolfii.allthelogs.client.ui.screen;
 
 import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.ButtonComponent;
+import io.wispforest.owo.ui.component.LabelComponent;
 import io.wispforest.owo.ui.component.TextBoxComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
@@ -39,6 +40,7 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
     private StackLayout overlays;
     private WeekdayChartWidget chartWidget;
     private PlaytimeLegendWidget legend;
+    private LabelComponent totalLabel;
     private ButtonComponent groupButton;
     private ButtonComponent versionButton;
     private ButtonComponent serverButton;
@@ -76,9 +78,12 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
 
         chartWidget = new WeekdayChartWidget(highlight);
         legend = new PlaytimeLegendWidget(highlight);
+        totalLabel = UIComponents.label(Component.empty());
+        chartWidget.hoverBlocked(this::menusOpen);
+        legend.hoverBlocked(this::menusOpen);
         versionButton = PlaytimeScreenSupport.filterButton(PlaytimeScreenSupport.versionLabel(), pressed -> openVersions());
         serverButton = PlaytimeScreenSupport.filterButton(PlaytimeScreenSupport.serverLabel(), pressed -> openServers());
-        page.child(PlaytimeScreenSupport.body(chartWidget, legend, List.of(
+        page.child(PlaytimeScreenSupport.body(chartWidget, totalLabel, legend, List.of(
             dateField("allthelogs.filter.from", DateParser.format(PlaytimeSession.weekdayFrom()), DateParser::parse,
                 PlaytimeSession::weekdayFrom),
             dateField("allthelogs.filter.until", DateParser.formatUntil(PlaytimeSession.weekdayUntil()),
@@ -113,6 +118,13 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
     @Override
     public void onClose() {
         Minecraft.getInstance().gui.setScreen(parent);
+    }
+
+    @Override
+    public void removed() {
+        super.removed();
+        if (chartWidget != null) chartWidget.close();
+        if (legend != null) legend.close();
     }
 
     /**
@@ -152,7 +164,7 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
 
     private void status(@Nullable Component message) {
         statusMessage = message;
-        PlaytimeScreenSupport.showTotal(legend, chartWidget == null ? null : chartWidget::placeholder,
+        PlaytimeScreenSupport.showTotal(totalLabel, chartWidget == null ? null : chartWidget::placeholder,
             message, chart == null ? 0 : chart.totalMillis());
     }
 

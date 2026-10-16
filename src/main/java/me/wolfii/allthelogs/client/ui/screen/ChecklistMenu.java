@@ -86,11 +86,12 @@ final class ChecklistMenu {
 
         FlowLayout bulk = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
         bulk.gap(GAP);
-        bulk.child(bulkButton("allthelogs.playtime.filter.all", () -> {
+        int bulkWidth = (width - PADDING * 2 - GAP) / 2;
+        bulk.child(bulkButton("allthelogs.playtime.filter.all", bulkWidth, () -> {
             apply.accept(PlaytimeFilter.select(selection.get(), matching(values, name, search.getValue()), true, values));
             refill.run();
         }));
-        bulk.child(bulkButton("allthelogs.playtime.filter.none", () -> {
+        bulk.child(bulkButton("allthelogs.playtime.filter.none", bulkWidth, () -> {
             apply.accept(PlaytimeFilter.select(selection.get(), matching(values, name, search.getValue()), false, values));
             refill.run();
         }));
@@ -127,9 +128,9 @@ final class ChecklistMenu {
         return values.stream().filter(value -> name.apply(value).toLowerCase(Locale.ROOT).contains(needle)).toList();
     }
 
-    private static ButtonComponent bulkButton(String key, Runnable action) {
+    private static ButtonComponent bulkButton(String key, int width, Runnable action) {
         ButtonComponent button = UIComponents.button(Component.translatable(key), ignored -> action.run());
-        button.horizontalSizing(Sizing.expand());
+        button.horizontalSizing(Sizing.fixed(width));
         return button;
     }
 }

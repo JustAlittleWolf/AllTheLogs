@@ -85,7 +85,7 @@
   "allthelogs.playtime.empty": "No playtime for these filters",
   "allthelogs.playtime.weekdays": "Weekdays",
   "allthelogs.playtime.timeline": "Timeline",
-  "allthelogs.playtime.grain": "Time: %s",
+  "allthelogs.playtime.grain": "Interval: %s",
   "allthelogs.playtime.grain.auto": "Auto",
   "allthelogs.playtime.grain.days": "Days",
   "allthelogs.playtime.grain.weeks": "Weeks",

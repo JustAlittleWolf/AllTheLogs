@@ -30,15 +30,16 @@ public final class PlaytimeColors {
      */
     public static int ofRankMuted(int rank) {
         double hue = (0.08 + rank * GOLDEN) % 1.0;
-        return hsb((float) hue, 0.22f, 0.72f);
+        return hsb((float) hue, 0.38f, 0.8f);
     }
 
     /**
-     * Every other group of three ranks is hatched. Ranks three apart are the closest in hue within a group of
-     * neighbors, so this puts them in different patterns.
+     * Each group of three ranks shares a pattern, and neighboring groups differ. Ranks three apart are the
+     * closest in hue within a group of neighbors, so this puts them in different patterns.
      */
-    public static boolean hatched(int rank) {
-        return Math.floorDiv(rank, 3) % 2 == 1;
+    public static PlaytimePattern pattern(int rank) {
+        PlaytimePattern[] patterns = PlaytimePattern.values();
+        return patterns[Math.floorMod(Math.floorDiv(rank, 3), patterns.length)];
     }
 
     /**
@@ -52,7 +53,7 @@ public final class PlaytimeColors {
     }
 
     /**
-     * Stripe color for a hatched section: the fill color at about 60% brightness.
+     * Pattern color for a section: the fill color at about 60% brightness.
      */
     public static int stripe(int color) {
         int red = ((color >> 16) & 0xFF) * 6 / 10;

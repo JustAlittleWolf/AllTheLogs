@@ -60,9 +60,9 @@ public final class PlaytimeWeekday {
         /**
          * Hover card for one bar: the day, its total, and each series in it.
          */
-        public List<PlaytimeHover.Line> dayHover(int day, String totalLabel, String unknownServer) {
+        public List<PlaytimeHover.Line> dayHover(int day, String unknownServer) {
             Bar bar = bars.get(day);
-            return hover(dayName(day), totalLabel, bar.millis(), unknownServer);
+            return hover(dayName(day), bar.millis(), unknownServer);
         }
 
         /**
@@ -70,15 +70,14 @@ public final class PlaytimeWeekday {
          *
          * @param heading the row and hour, already formatted
          */
-        public List<PlaytimeHover.Line> heatHover(int row, int hour, String heading, String totalLabel,
-                                                  String unknownServer) {
-            return hover(heading, totalLabel, heat[row][hour], unknownServer);
+        public List<PlaytimeHover.Line> heatHover(int row, int hour, String heading, String unknownServer) {
+            return hover(heading, heat[row][hour], unknownServer);
         }
 
-        private List<PlaytimeHover.Line> hover(String heading, String totalLabel, long[] millis, String unknownServer) {
+        private List<PlaytimeHover.Line> hover(String heading, long[] millis, String unknownServer) {
             long total = 0;
             for (long value : millis) total += value;
-            return PlaytimeHover.lines(heading, totalLabel + "  " + PlaytimeDuration.format(total), series,
+            return PlaytimeHover.lines(heading, PlaytimeDuration.format(total), series,
                 PlaytimeHover.weights(millis), index -> PlaytimeDuration.format(millis[index]), unknownServer);
         }
     }
