@@ -405,7 +405,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     private void showCleanup() {
         if (tools != null) tools.close();
         Minecraft.getInstance().gui.setScreen(new CleanupScreen(this, queries.filter(), queries::versions,
-            queries::markReload));
+            queries::serversOrWorlds, queries::markReload));
     }
 
     /**
