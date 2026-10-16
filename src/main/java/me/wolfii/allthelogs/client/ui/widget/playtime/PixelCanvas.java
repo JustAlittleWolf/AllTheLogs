@@ -1,6 +1,7 @@
 package me.wolfii.allthelogs.client.ui.widget.playtime;
 
 import com.mojang.blaze3d.platform.NativeImage;
+import com.mojang.blaze3d.systems.RenderSystem;
 import io.wispforest.owo.ui.core.OwoUIGraphics;
 import me.wolfii.allthelogs.client.playtime.PlaytimeColors;
 import me.wolfii.allthelogs.client.playtime.PlaytimePattern;
@@ -9,7 +10,9 @@ import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.Identifier;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -17,13 +20,15 @@ import java.util.concurrent.atomic.AtomicInteger;
  * quad. Painting tens of thousands of small rectangles every frame is what made large charts slow.
  * Callers repaint only when the data, the size, or the highlight changes, and {@link #close()} the canvas
  * when their screen closes.
+ * <p>
+ * A canvas taller than the GPU's largest texture, such as a long legend at a high GUI scale, is uploaded as
+ * several strips stacked on top of each other.
  */
 final class PixelCanvas implements AutoCloseable {
     private static final AtomicInteger NEXT_ID = new AtomicInteger();
 
-    private final Identifier id = Identifier.fromNamespaceAndPath("allthelogs",
-        "dynamic/playtime_" + NEXT_ID.getAndIncrement());
-    private DynamicTexture texture;
+    private final String idPrefix = "dynamic/playtime_" + NEXT_ID.getAndIncrement();
+    private final List<Strip> strips = new ArrayList<>();
     private int[] pixels = new int[0];
     private int width;
     private int height;
@@ -46,7 +51,7 @@ final class PixelCanvas implements AutoCloseable {
             this.width = w;
             this.height = h;
             pixels = new int[w * h];
-            releaseTexture();
+            releaseTextures();
         } else {
             Arrays.fill(pixels, 0);
         }
@@ -100,36 +105,52 @@ final class PixelCanvas implements AutoCloseable {
      * Sends the painted pixels to the GPU. Call after painting and before {@link #draw}.
      */
     void upload() {
-        if (texture == null) {
-            texture = new DynamicTexture(id::toString, new NativeImage(width, height, false));
-            Minecraft.getInstance().getTextureManager().register(id, texture);
+        if (strips.isEmpty()) createStrips();
+        for (Strip strip : strips) {
+            NativeImage image = strip.texture().getPixels();
+            if (image == null) continue;
+            for (int y = 0; y < strip.height(); y++) {
+                int row = (strip.top() + y) * width;
+                for (int x = 0; x < width; x++) image.setPixel(x, y, pixels[row + x]);
+            }
+            strip.texture().upload();
         }
-        NativeImage image = texture.getPixels();
-        if (image == null) return;
-        for (int y = 0; y < height; y++) {
-            int row = y * width;
-            for (int x = 0; x < width; x++) image.setPixel(x, y, pixels[row + x]);
-        }
-        texture.upload();
     }
 
     /**
      * Draws the whole canvas with its top-left corner at screen pixel {@code x}, {@code y}.
      */
     void draw(OwoUIGraphics graphics, int scale, int x, int y) {
-        if (texture == null) return;
-        PlaytimePainter.inPixels(graphics, scale, () ->
-            graphics.blit(RenderPipelines.GUI_TEXTURED, id, x, y, 0f, 0f, width, height, width, height));
+        if (strips.isEmpty()) return;
+        PlaytimePainter.inPixels(graphics, scale, () -> {
+            for (Strip strip : strips) {
+                graphics.blit(RenderPipelines.GUI_TEXTURED, strip.id(), x, y + strip.top(), 0f, 0f, width,
+                    strip.height(), width, strip.height());
+            }
+        });
     }
 
     @Override
     public void close() {
-        releaseTexture();
+        releaseTextures();
     }
 
-    private void releaseTexture() {
-        if (texture == null) return;
-        Minecraft.getInstance().getTextureManager().release(id);
-        texture = null;
+    private void createStrips() {
+        int limit = RenderSystem.getDevice().getDeviceInfo().limits().maxTextureSize();
+        for (int top = 0; top < height; top += limit) {
+            Identifier id = Identifier.fromNamespaceAndPath("allthelogs", idPrefix + "_" + strips.size());
+            int stripHeight = Math.min(limit, height - top);
+            DynamicTexture texture = new DynamicTexture(id::toString, new NativeImage(width, stripHeight, false));
+            Minecraft.getInstance().getTextureManager().register(id, texture);
+            strips.add(new Strip(id, texture, top, stripHeight));
+        }
+    }
+
+    private void releaseTextures() {
+        for (Strip strip : strips) Minecraft.getInstance().getTextureManager().release(strip.id());
+        strips.clear();
+    }
+
+    private record Strip(Identifier id, DynamicTexture texture, int top, int height) {
     }
 }
