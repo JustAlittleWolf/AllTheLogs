@@ -92,9 +92,7 @@ public final class ContextPeeks {
                 peeks.add(row);
             }
         }
-        for (DisplayRow peek : peeks) {
-            markNearestEdges(visible, peek, chains.get(logDay(peek)), rankFromHit, probeDistance);
-        }
+        markEdges(visible, peeks, chains, rankFromHit, probeDistance);
         return List.copyOf(visible);
     }
 
@@ -117,75 +115,131 @@ public final class ContextPeeks {
     }
 
     /**
-     * Every visible row at the closest stored-chat distance gets the caret. Distance walks the fetched
-     * lines, so a line-index hole left by dedup does not pull the caret onto only the nearer index.
-     * A tie used to keep only the earlier row, so a gap showed a down arrow and no up arrow. A second
-     * probe on the same row also has to update the row already replaced by the first probe; matching the
-     * original instance misses it once its flags change.
+     * Marks the nearest shown row on each side of every hidden probe. Stored distance only grows as the
+     * walk leaves the probe, so that row is the first shown line in that direction. The chain is indexed
+     * once; each probe then stops at the first shown row instead of measuring every visible row.
+     * <p>
+     * A tie marks both sides. The caret records the probe's line index, so a later page can tell that
+     * hidden line from a different cluster's probe. A second probe on the same row updates the row already
+     * replaced by the first probe.
      */
-    private static void markNearestEdges(List<DisplayRow> visible, DisplayRow peek, List<DisplayRow> chain,
-                                         Map<DisplayRow, Integer> rank, int probeDistance) {
-        if (chain == null || chain.isEmpty()) return;
-        int peekAt = -1;
-        Map<Integer, Integer> position = new HashMap<>();
-        for (int i = 0; i < chain.size(); i++) {
-            DisplayRow row = chain.get(i);
-            if (row == peek) peekAt = i;
-            position.putIfAbsent(row.lineIndex(), i);
-        }
-        if (peekAt < 0) {
-            Integer fallback = position.get(peek.lineIndex());
-            if (fallback == null) return;
-            peekAt = fallback;
-        }
-        LocalDate peekDay = peek.entry().timestamp().toLocalDate();
-        int best = Integer.MAX_VALUE;
-        List<Integer> edges = new ArrayList<>();
-        for (int i = 0; i < visible.size(); i++) {
-            DisplayRow row = visible.get(i);
-            if (!row.sameLog(peek)) continue;
-            if (!row.entry().timestamp().toLocalDate().equals(peekDay)) continue;
-            Integer at = position.get(row.lineIndex());
-            if (at == null || at == peekAt) continue;
-            int gap = storedDistance(chain, peekAt, at, rank, probeDistance);
-            if (gap <= 0 || gap > best) continue;
-            if (gap < best) {
-                best = gap;
-                edges.clear();
+    private static void markEdges(List<DisplayRow> visible, List<DisplayRow> peeks,
+                                 Map<LogDay, List<DisplayRow>> chains, Map<DisplayRow, Integer> rank,
+                                 int probeDistance) {
+        Map<LogDay, ChainIndex> indexes = new HashMap<>();
+        for (DisplayRow peek : peeks) {
+            LogDay day = logDay(peek);
+            ChainIndex index = indexes.get(day);
+            if (index == null) {
+                index = ChainIndex.of(chains.get(day), visible, day);
+                indexes.put(day, index);
             }
-            edges.add(i);
-        }
-        for (int index : edges) {
-            DisplayRow edge = visible.get(index);
-            boolean moreBefore = edge.lineIndex() > peek.lineIndex();
-            visible.set(index, addFileExpand(edge, moreBefore, !moreBefore));
+            markNearestEdge(visible, peek, index, rank, probeDistance);
         }
     }
 
+    private static void markNearestEdge(List<DisplayRow> visible, DisplayRow peek, ChainIndex index,
+                                       Map<DisplayRow, Integer> rank, int probeDistance) {
+        if (index == null || index.chain.isEmpty()) return;
+        int peekAt = index.positionOf(peek);
+        if (peekAt < 0) return;
+        ChainIndex.Side older = index.nearestShown(peekAt, -1, rank, probeDistance);
+        ChainIndex.Side newer = index.nearestShown(peekAt, 1, rank, probeDistance);
+        if (older.index >= 0 && older.distance <= newer.distance) {
+            markShown(visible, index, peek, older.index);
+        }
+        if (newer.index >= 0 && newer.distance <= older.distance) {
+            markShown(visible, index, peek, newer.index);
+        }
+    }
+
+    private static void markShown(List<DisplayRow> visible, ChainIndex index, DisplayRow peek, int at) {
+        Integer visibleIndex = index.visibleIndex.get(index.chain.get(at).lineIndex());
+        if (visibleIndex == null) return;
+        DisplayRow edge = visible.get(visibleIndex);
+        boolean moreBefore = edge.lineIndex() > peek.lineIndex();
+        visible.set(visibleIndex, addFileExpand(edge, moreBefore, !moreBefore, peek.lineIndex()));
+    }
+
     /**
-     * Steps along the fetched chain. A stored neighbour counts as one chat line. A hole between two probe
-     * rows counts as the raw index span, because chat outside every context window was not fetched.
+     * One log-day chain, with shown rows flagged so a probe walk can stop at the first one.
      */
-    private static int storedDistance(List<DisplayRow> chain, int from, int to, Map<DisplayRow, Integer> rank,
-                                     int probeDistance) {
-        int step = from < to ? 1 : -1;
-        int distance = 0;
-        for (int i = from; i != to; i += step) {
-            DisplayRow first = chain.get(i);
-            DisplayRow second = chain.get(i + step);
-            if (storedAdjacent(first, second, rank, probeDistance)) {
-                distance++;
-            } else {
-                distance += Math.abs(second.lineIndex() - first.lineIndex());
+    private static final class ChainIndex {
+        private final List<DisplayRow> chain;
+        private final boolean[] shown;
+        private final Map<Integer, Integer> position = new HashMap<>();
+        private final Map<DisplayRow, Integer> byIdentity = new IdentityHashMap<>();
+        private final Map<Integer, Integer> visibleIndex = new HashMap<>();
+
+        private ChainIndex(List<DisplayRow> chain, boolean[] shown) {
+            this.chain = chain;
+            this.shown = shown;
+            for (int i = 0; i < chain.size(); i++) {
+                DisplayRow row = chain.get(i);
+                position.putIfAbsent(row.lineIndex(), i);
+                byIdentity.putIfAbsent(row, i);
             }
         }
-        return distance;
+
+        private static final class Side {
+            private final int index;
+            private final int distance;
+
+            private Side(int index, int distance) {
+                this.index = index;
+                this.distance = distance;
+            }
+        }
+
+        private static ChainIndex of(List<DisplayRow> chain, List<DisplayRow> visible, LogDay day) {
+            if (chain == null || chain.isEmpty()) return new ChainIndex(List.of(), new boolean[0]);
+            boolean[] shown = new boolean[chain.size()];
+            ChainIndex index = new ChainIndex(chain, shown);
+            for (int i = 0; i < visible.size(); i++) {
+                DisplayRow row = visible.get(i);
+                if (!day.source().equals(row.chatLog().source())) continue;
+                if (!day.day().equals(row.entry().timestamp().toLocalDate())) continue;
+                Integer at = index.position.get(row.lineIndex());
+                if (at == null) continue;
+                shown[at] = true;
+                index.visibleIndex.putIfAbsent(row.lineIndex(), i);
+            }
+            return index;
+        }
+
+        private int positionOf(DisplayRow peek) {
+            Integer at = byIdentity.get(peek);
+            if (at != null) return at;
+            Integer fallback = position.get(peek.lineIndex());
+            return fallback == null ? -1 : fallback;
+        }
+
+        /**
+         * First shown row in {@code step}'s direction. Stored distance only grows along the walk, so that
+         * row is the nearest. A stored neighbour counts as one line. A hole between two probe rows counts
+         * as the raw index span, because chat outside every window was not fetched.
+         */
+        private Side nearestShown(int from, int step, Map<DisplayRow, Integer> rank, int probeDistance) {
+            int distance = 0;
+            for (int i = from; i + step >= 0 && i + step < chain.size(); i += step) {
+                DisplayRow first = chain.get(i);
+                DisplayRow second = chain.get(i + step);
+                if (storedAdjacent(first, second, rank, probeDistance)) {
+                    distance++;
+                } else {
+                    distance += Math.abs(second.lineIndex() - first.lineIndex());
+                }
+                if (shown[i + step]) return new Side(i + step, distance);
+            }
+            return new Side(-1, Integer.MAX_VALUE);
+        }
     }
 
     /**
      * Nothing stored sits between these two fetched rows. Consecutive indices always touch. A line-index
      * hole inside a context window is a row dedup removed, so the next fetched line is still the next chat
-     * line. A hole with a probe on both sides can hide chat that no window reached.
+     * line. A hole with a probe on both sides can hide chat that no window reached. A row already on the
+     * page is not inside this fetch, so it only touches the hidden line its own caret recorded.
      */
     private static boolean storedAdjacent(DisplayRow left, DisplayRow right, Map<DisplayRow, Integer> rank,
                                          int probeDistance) {
@@ -193,8 +247,20 @@ public final class ContextPeeks {
         if (Math.abs(right.lineIndex() - left.lineIndex()) <= 1) return true;
         int leftRank = rank.getOrDefault(left, Integer.MAX_VALUE);
         int rightRank = rank.getOrDefault(right, Integer.MAX_VALUE);
-        if (leftRank == Integer.MAX_VALUE || rightRank == Integer.MAX_VALUE) return false;
+        if (leftRank == Integer.MAX_VALUE || rightRank == Integer.MAX_VALUE) {
+            return facesRecordedProbe(left, right) || facesRecordedProbe(right, left);
+        }
         return leftRank < probeDistance || rightRank < probeDistance;
+    }
+
+    /**
+     * {@code edge} was already shown, and {@code probe} is the hidden line its caret was aimed at.
+     */
+    private static boolean facesRecordedProbe(DisplayRow edge, DisplayRow probe) {
+        if (edge.lineIndex() < probe.lineIndex()) {
+            return edge.expandDown() && edge.probeBelow() == probe.lineIndex();
+        }
+        return edge.expandUp() && edge.probeAbove() == probe.lineIndex();
     }
 
     /**
@@ -242,7 +308,7 @@ public final class ContextPeeks {
         for (int i = 0; i < kept.size(); i++) {
             DisplayRow row = kept.get(i);
             if (row.sameLog(anchor) && row.lineIndex() == far.lineIndex()) {
-                kept.set(i, addFileExpand(row, olderInFile, !olderInFile));
+                kept.set(i, addFileExpand(row, olderInFile, !olderInFile, peek.lineIndex()));
             }
         }
         return List.copyOf(kept);
@@ -332,8 +398,8 @@ public final class ContextPeeks {
         List<DisplayRow> cleared = new ArrayList<>(rows.size());
         for (DisplayRow row : rows) {
             Set<Integer> lines = linesBySource.get(row.chatLog().source());
-            boolean up = row.expandUp() && (lines == null || !lines.contains(row.lineIndex() - 1));
-            boolean down = row.expandDown() && (lines == null || !lines.contains(row.lineIndex() + 1));
+            boolean up = row.expandUp() && !loadedToward(lines, row.lineIndex() - 1, row.probeAbove());
+            boolean down = row.expandDown() && !loadedToward(lines, row.lineIndex() + 1, row.probeBelow());
             cleared.add(row.withExpand(up, down));
         }
         return List.copyOf(cleared);
@@ -356,7 +422,7 @@ public final class ContextPeeks {
             if (!previous.entry().timestamp().toLocalDate().equals(current.entry().timestamp().toLocalDate())) {
                 continue;
             }
-            if (Math.abs(current.lineIndex() - previous.lineIndex()) > 1) continue;
+            if (!storedTouch(previous, current)) continue;
             out[i - 1] = previous.withExpand(previous.expandUp(), false);
             out[i] = current.withExpand(false, current.expandDown());
         }
@@ -366,12 +432,38 @@ public final class ContextPeeks {
     /**
      * The list is oldest at the top, so a line earlier in the file is list-up and a later line is list-down.
      */
-    static DisplayRow addFileExpand(DisplayRow row, boolean moreBefore, boolean moreAfter) {
+    static DisplayRow addFileExpand(DisplayRow row, boolean moreBefore, boolean moreAfter, int probeLine) {
         boolean up = row.expandUp();
         boolean down = row.expandDown();
-        if (moreBefore) up = true;
-        if (moreAfter) down = true;
-        return row.withExpand(up, down);
+        int above = row.probeAbove();
+        int below = row.probeBelow();
+        if (moreBefore) {
+            up = true;
+            // Two peeks can share an edge. The nearer one has the higher line index.
+            if (above < 0 || probeLine > above) above = probeLine;
+        }
+        if (moreAfter) {
+            down = true;
+            // The nearer peek below the edge has the lower line index.
+            if (below < 0 || probeLine < below) below = probeLine;
+        }
+        return row.withExpand(up, down, above, below);
+    }
+
+    /**
+     * The next stored line in this direction is already on the page. {@code adjacentIndex} is the
+     * neighbouring line number; {@code probeLine} is the hidden line a caret recorded, which can sit
+     * further away when dedup left a hole.
+     */
+    private static boolean loadedToward(Set<Integer> lines, int adjacentIndex, int probeLine) {
+        if (lines == null) return false;
+        if (lines.contains(adjacentIndex)) return true;
+        return probeLine >= 0 && lines.contains(probeLine);
+    }
+
+    private static boolean storedTouch(DisplayRow previous, DisplayRow current) {
+        if (Math.abs(current.lineIndex() - previous.lineIndex()) <= 1) return true;
+        return previous.probeBelow() == current.lineIndex() || current.probeAbove() == previous.lineIndex();
     }
 
     private static DisplayRow clearExpandedSide(DisplayRow row, boolean olderInFile) {

@@ -385,6 +385,41 @@ class ContextPeeksTest {
     }
 
     /**
+     * Scrolling loads the next hit on its own page. The earlier page already hid line 1355 behind the caret
+     * on 1352, and dedup removed 1353 and 1354. The new page must show 1355 instead of drawing carets for it.
+     */
+    @Test
+    void scrollingShowsTheDeletedHoleLineAlreadyFetchedOnThePreviousPage() {
+        ChatLog log = log("2022-07-21-4.log.gz");
+        List<DisplayRow> first = ContextPeeks.strip(lines(log, new int[]{1349, 1350, 1351, 1352, 1355}, 1349), 3, true);
+        assertEquals(1355, rowAt(first, 1352).probeBelow());
+        assertTrue(rowAt(first, 1352).expandDown());
+        List<DisplayRow> second = ContextPeeks.forSearchPage(
+            lines(log, new int[]{1355, 1356, 1357, 1358, 1359}, 1359), true, 3, first);
+        assertEquals(List.of(1355, 1356, 1357, 1358, 1359), second.stream().map(DisplayRow::lineIndex).toList());
+        assertFalse(rowAt(second, 1356).expandUp());
+        List<DisplayRow> merged = ContextPeeks.clearCaretsFacingLoadedLines(DisplayRows.mergeUnique(first, second));
+        assertFalse(rowAt(merged, 1352).expandDown());
+        assertFalse(rowAt(merged, 1355).expandUp() || rowAt(merged, 1355).expandDown());
+        assertEquals(0, MessageListLayout.of(merged, 3).separators().stream()
+            .filter(separator -> separator.expandUp() || separator.expandDown()).count());
+    }
+
+    @Test
+    void doesNotBridgeANeighbourToAProbeFromALaterCluster() {
+        ChatLog log = log("a.log");
+        List<DisplayRow> first = ContextPeeks.strip(lines(log, new int[]{10, 11, 12, 13, 20}, 10), 3, true);
+        assertEquals(20, rowAt(first, 13).probeBelow());
+        List<DisplayRow> second = ContextPeeks.forSearchPage(
+            lines(log, new int[]{90, 91, 92, 93, 100}, 100), true, 3, first);
+        assertFalse(second.stream().anyMatch(row -> row.lineIndex() == 90));
+        assertTrue(rowAt(second, 91).expandUp());
+        List<DisplayRow> merged = ContextPeeks.clearCaretsFacingLoadedLines(DisplayRows.mergeUnique(first, second));
+        assertTrue(rowAt(merged, 13).expandDown());
+        assertFalse(merged.stream().anyMatch(row -> row.lineIndex() == 90 || row.lineIndex() == 20));
+    }
+
+    /**
      * Search {@code 0bcn} on 2026-08-30: sixteen hits in one session, context 3. Line 342 is the only
      * fetched message between the clusters around it, so it stays visible and does not grow a down caret.
      */
@@ -413,6 +448,14 @@ class ContextPeeksTest {
         assertTrue(rowAt(visible, 308).expandDown());
         assertTrue(rowAt(visible, 315).expandUp());
         assertTrue(rowAt(visible, 356).expandDown());
+    }
+
+    private static List<DisplayRow> lines(ChatLog log, int[] lines, int hit) {
+        List<DisplayRow> rows = new ArrayList<>();
+        for (int line : lines) {
+            rows.add(row(log, line, "m" + line, line == hit));
+        }
+        return rows;
     }
 
     private static DisplayRow rowAt(List<DisplayRow> rows, int line) {
