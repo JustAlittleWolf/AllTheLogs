@@ -11,9 +11,14 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Splits each log file's {@code [start, end)} into spans. The file's stored version applies until a later
- * log message names a different one. The server stays unknown until a message is tagged with a place, then
- * follows each change, including a return to no place.
+ * Splits each log file's {@code [start, end)} at place changes. The version stored on the file covers the whole
+ * file: one game process runs one version, so a version named in chat is not a change.
+ * The server stays unknown until a message is tagged with a place, then follows each change, including a return
+ * to no place.
+ * <p>
+ * Spans from different files are then clipped so the same moment is counted once. Ordered by start, a longer span
+ * wins when two start together. That drops a duplicate such as Forge's {@code debug.log} when it covers the same
+ * session as the dated log, and it also covers two clients running at once.
  */
 public final class PlaytimeSessions {
     private PlaytimeSessions() {
@@ -33,26 +38,13 @@ public final class PlaytimeSessions {
     public record PlaceMark(long fileId, LocalDateTime time, int lineIndex, String server) {
     }
 
-    /**
-     * A message that names a Minecraft version. Marks equal to the version already in effect are ignored.
-     */
-    public record VersionMark(long fileId, LocalDateTime time, int lineIndex, String version) {
-    }
-
-    public static List<PlaytimeSpan> build(List<FileSession> files, List<PlaceMark> places, List<VersionMark> versions) {
+    public static List<PlaytimeSpan> build(List<FileSession> files, List<PlaceMark> places) {
         Map<Long, List<Event>> events = new HashMap<>();
         if (places != null) {
             for (PlaceMark mark : places) {
                 if (mark == null || mark.time() == null) continue;
                 events.computeIfAbsent(mark.fileId(), id -> new ArrayList<>())
-                    .add(Event.place(mark.time(), mark.lineIndex(), mark.server()));
-            }
-        }
-        if (versions != null) {
-            for (VersionMark mark : versions) {
-                if (mark == null || mark.time() == null || mark.version() == null || mark.version().isBlank()) continue;
-                events.computeIfAbsent(mark.fileId(), id -> new ArrayList<>())
-                    .add(Event.version(mark.time(), mark.lineIndex(), mark.version().strip()));
+                    .add(new Event(mark.time(), mark.lineIndex(), mark.server()));
             }
         }
         List<PlaytimeSpan> spans = new ArrayList<>();
@@ -61,11 +53,33 @@ public final class PlaytimeSessions {
             if (file == null || file.start() == null || file.end() == null || !file.end().isAfter(file.start())) continue;
             List<Event> fileEvents = events.getOrDefault(file.id(), List.of());
             if (fileEvents.size() > 1) {
-                fileEvents.sort(Comparator.comparing(Event::time).thenComparingInt(Event::line).thenComparingInt(Event::order));
+                fileEvents.sort(Comparator.comparing(Event::time).thenComparingInt(Event::line));
             }
             append(spans, file, fileEvents);
         }
-        return List.copyOf(spans);
+        return withoutOverlap(spans);
+    }
+
+    /**
+     * Drops any part of a span that another span, starting no later, already covers. Half-open ranges that only
+     * touch at an endpoint both stay.
+     */
+    private static List<PlaytimeSpan> withoutOverlap(List<PlaytimeSpan> spans) {
+        if (spans.isEmpty()) return List.of();
+        List<PlaytimeSpan> ordered = new ArrayList<>(spans);
+        ordered.sort(Comparator.comparing(PlaytimeSpan::start).thenComparing(PlaytimeSpan::end, Comparator.reverseOrder()));
+        List<PlaytimeSpan> kept = new ArrayList<>();
+        LocalDateTime coveredUntil = null;
+        for (PlaytimeSpan span : ordered) {
+            LocalDateTime start = span.start();
+            if (coveredUntil != null && start.isBefore(coveredUntil)) start = coveredUntil;
+            if (!span.end().isAfter(start)) continue;
+            kept.add(start.equals(span.start())
+                ? span
+                : new PlaytimeSpan(start, span.end(), span.version(), span.server()));
+            coveredUntil = span.end();
+        }
+        return List.copyOf(kept);
     }
 
     private static void append(List<PlaytimeSpan> spans, FileSession file, List<Event> events) {
@@ -76,37 +90,19 @@ public final class PlaytimeSessions {
         LocalDateTime cursor = file.start();
         for (Event event : events) {
             if (!event.time().isBefore(file.end())) continue;
-            String nextVersion = version;
-            String nextServer = server;
-            boolean placeChanged = false;
-            if (event.version() != null && !event.version().equals(version)) {
-                nextVersion = event.version();
-            }
-            if (event.place()) {
-                String place = event.server() == null || event.server().isBlank() ? null : event.server();
-                placeChanged = !Objects.equals(place, server);
-                nextServer = place;
-            }
-            if (nextVersion.equals(version) && !placeChanged) continue;
+            String place = event.server() == null || event.server().isBlank() ? null : event.server();
+            if (Objects.equals(place, server)) continue;
             if (event.time().isAfter(cursor)) {
                 spans.add(new PlaytimeSpan(cursor, event.time(), version, server));
                 cursor = event.time();
             }
-            version = nextVersion;
-            server = nextServer;
+            server = place;
         }
         if (file.end().isAfter(cursor)) {
             spans.add(new PlaytimeSpan(cursor, file.end(), version, server));
         }
     }
 
-    private record Event(LocalDateTime time, int line, int order, String version, String server, boolean place) {
-        static Event version(LocalDateTime time, int line, String version) {
-            return new Event(time, line, 0, version, null, false);
-        }
-
-        static Event place(LocalDateTime time, int line, String server) {
-            return new Event(time, line, 1, null, server, true);
-        }
+    private record Event(LocalDateTime time, int line, String server) {
     }
 }

@@ -1,11 +1,9 @@
 package me.wolfii.allthelogs.data.query;
 
 import me.wolfii.allthelogs.data.LogDataException;
-import me.wolfii.allthelogs.data.extract.MinecraftVersionExtractor;
 import me.wolfii.allthelogs.data.playtime.PlaytimeSessions;
 import me.wolfii.allthelogs.data.playtime.PlaytimeSessions.FileSession;
 import me.wolfii.allthelogs.data.playtime.PlaytimeSessions.PlaceMark;
-import me.wolfii.allthelogs.data.playtime.PlaytimeSessions.VersionMark;
 import me.wolfii.allthelogs.data.playtime.PlaytimeSpan;
 import org.duckdb.DuckDBConnection;
 
@@ -16,9 +14,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Estimates playtime from imported logs. Each log file contributes the time from its first line to its last.
- * Server and world changes come from the place stamped on chat lines. A chat line that itself names a Minecraft
- * version starts a new version from that moment; the version stored on the file covers everything before that.
+ * Estimates playtime from imported logs. Each log file contributes the time from its first line to its last,
+ * under the version stored on that file. Overlapping files are clipped in {@link PlaytimeSessions} so the same
+ * moment is not added twice.
+ * <p>
+ * Server and world changes come from the place stamped on chat lines. A connect line is not its own event, so
+ * time on a new server counts toward the previous place until the first chat line there. Recording those changes
+ * at import needs a schema change and is left as a follow-up.
  */
 public final class PlaytimeQueries {
     private final DuckDBConnection connection;
@@ -29,7 +31,7 @@ public final class PlaytimeQueries {
 
     public List<PlaytimeSpan> load() {
         try {
-            return PlaytimeSessions.build(files(), places(), versions());
+            return PlaytimeSessions.build(files(), places());
         } catch (SQLException e) {
             throw new LogDataException("could not read playtime", e);
         }
@@ -82,38 +84,5 @@ public final class PlaytimeQueries {
             }
         }
         return marks;
-    }
-
-    private List<VersionMark> versions() throws SQLException {
-        List<VersionMark> marks = new ArrayList<>();
-        try (Statement statement = connection.createStatement();
-             ResultSet result = statement.executeQuery("""
-                 SELECT file_id, entry_time, line_index, message
-                 FROM chat_entry
-                 WHERE contains(lower(message), 'minecraft')
-                    OR contains(lower(message), 'optifine')
-                    OR contains(message, '--version')
-                 ORDER BY file_id, entry_time, line_index""")) {
-            while (result.next()) {
-                String version = versionOf(result.getString(4));
-                if (version == null) continue;
-                marks.add(new VersionMark(
-                    result.getLong(1),
-                    result.getTimestamp(2).toLocalDateTime(),
-                    result.getInt(3),
-                    version));
-            }
-        }
-        return marks;
-    }
-
-    /**
-     * Version named by one stored message, or null when the line is not a version source.
-     */
-    static String versionOf(String message) {
-        if (message == null || message.isBlank()) return null;
-        MinecraftVersionExtractor extractor = new MinecraftVersionExtractor();
-        extractor.accept(message);
-        return extractor.version();
     }
 }

@@ -9,7 +9,9 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -32,7 +34,7 @@ class PlaytimeQueriesTest {
     }
 
     @Test
-    void playtimeFollowsLogBoundsPlaceChangesAndVersionMessages() throws IOException {
+    void playtimeFollowsLogBoundsAndPlaceChanges() throws IOException {
         Path logs = tempDir.resolve("logs");
         Files.createDirectories(logs);
         Files.writeString(logs.resolve("2024-03-04-1.log"), """
@@ -65,9 +67,36 @@ class PlaytimeQueriesTest {
         assertSpan(spans.get(3), LocalDateTime.of(2024, 3, 5, 9, 0), LocalDateTime.of(2024, 3, 5, 10, 0),
             "1.21.1", null);
         assertSpan(spans.get(4), LocalDateTime.of(2024, 3, 5, 10, 0), LocalDateTime.of(2024, 3, 5, 11, 0),
-            "1.21.4", "hypixel.net");
+            "1.21.1", "hypixel.net");
         long total = spans.stream().mapToLong(PlaytimeSpan::millis).sum();
         assertTrue(total == 4 * 3_600_000L);
+    }
+
+    @Test
+    void aDebugLogCoveringTheSameSessionIsNotCountedTwice() throws IOException {
+        Path logs = tempDir.resolve("overlap");
+        Files.createDirectories(logs);
+        String dated = """
+            [10:00:00] [main/INFO]: Loading Minecraft 1.20.4 with Fabric Loader 0.19.3
+            [10:00:01] [Render thread/INFO]: Connecting to hypixel.net, 25565
+            [12:00:00] [Render thread/INFO]: [CHAT] done
+            """;
+        String debugLog = """
+            [10:00:00] [main/INFO]: Loading Minecraft 1.20.4 with Fabric Loader 0.19.3
+            [10:00:01] [Render thread/INFO]: Connecting to hypixel.net, 25565
+            [11:00:00] [Render thread/INFO]: [CHAT] from the debug log
+            [12:00:00] [Render thread/INFO]: [CHAT] done
+            """;
+        Files.writeString(logs.resolve("2024-03-06-1.log"), dated);
+        Path debug = logs.resolve("debug.log");
+        Files.writeString(debug, debugLog);
+        Files.setLastModifiedTime(debug, FileTime.from(
+            LocalDateTime.of(2024, 3, 6, 12, 0).atZone(ZoneId.systemDefault()).toInstant()));
+
+        store.importDirectory(logs, ImportOptions.defaults().withOptimize(false));
+        List<PlaytimeSpan> spans = store.playtime();
+        assertEquals(2 * 3_600_000L, spans.stream().mapToLong(PlaytimeSpan::millis).sum());
+        assertTrue(spans.stream().allMatch(span -> span.version().equals("1.20.4")));
     }
 
     private static void assertSpan(PlaytimeSpan span, LocalDateTime start, LocalDateTime end, String version, String server) {
