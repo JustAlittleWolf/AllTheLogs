@@ -9,6 +9,7 @@ import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.*;
 import me.wolfii.allthelogs.client.AllTheLogsClient;
+import me.wolfii.allthelogs.client.config.BrowserSession;
 import me.wolfii.allthelogs.client.ui.text.ImportProgressText;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
 import me.wolfii.allthelogs.data.importer.ImportOptions;
@@ -125,6 +126,7 @@ public final class ImportProgressScreen extends BaseOwoScreen<FlowLayout> {
             finished = true;
             done.active(true);
             cancel.active(false);
+            if (error != null || imported.importedFiles() > 0) BrowserSession.reset();
             if (error != null) {
                 AllTheLogsClient.LOGGER.warn("User import from {} failed", path, error);
                 heading.text(Component.translatable("allthelogs.status.import.failed"));

@@ -2,6 +2,7 @@ package me.wolfii.allthelogs.client.ui.screen.browser;
 
 import me.wolfii.allthelogs.api.ChatQuery;
 import me.wolfii.allthelogs.client.AllTheLogsClient;
+import me.wolfii.allthelogs.client.config.BrowserSession;
 import me.wolfii.allthelogs.client.list.*;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.timeline.ScrubJump;
@@ -48,6 +49,7 @@ final class LogBrowserQueries {
     private ListSnapshot snapshot = ListSnapshot.EMPTY;
     private static ListSnapshot sessionSnapshot = ListSnapshot.EMPTY;
     private static MatchSummary sessionMatchSummary = MatchSummary.empty();
+    private static int sessionResets;
 
     LogBrowserQueries() {
         this(SearchFilter.defaults());
@@ -64,7 +66,7 @@ final class LogBrowserQueries {
      * sit past that saved offset, so the next open reloads and starts at the new bottom.
      */
     void restoreSessionLocation() {
-        if (!restoreSavedViewport(sessionSnapshot)) return;
+        if (sessionResets != BrowserSession.resets() || !restoreSavedViewport(sessionSnapshot)) return;
         snapshot = sessionSnapshot;
         matchSummary = sessionMatchSummary;
         reloadPending = false;
@@ -86,16 +88,10 @@ final class LogBrowserQueries {
         rememberSession(snapshot, matchSummary);
     }
 
-    /**
-     * Drops the kept viewport, so the next browser opens on fresh rows after messages changed elsewhere.
-     */
-    static void forgetSession() {
-        rememberSession(ListSnapshot.EMPTY, MatchSummary.empty());
-    }
-
     static void rememberSession(ListSnapshot saved, MatchSummary summary) {
         sessionSnapshot = saved == null ? ListSnapshot.EMPTY : saved;
         sessionMatchSummary = summary == null ? MatchSummary.empty() : summary;
+        sessionResets = BrowserSession.resets();
     }
 
     private static long elapsedMs(long startedAtNanos) {
@@ -154,6 +150,16 @@ final class LogBrowserQueries {
 
     void setFilter(SearchFilter next) {
         updateFilter(next);
+        reload();
+    }
+
+    /**
+     * Searches with {@code next} from the newest messages, dropping the place in the list instead of keeping
+     * it like {@link #reload()} does.
+     */
+    void startOver(SearchFilter next) {
+        updateFilter(next);
+        if (list != null) list.reset(List.of(), false, false);
         reload();
     }
 

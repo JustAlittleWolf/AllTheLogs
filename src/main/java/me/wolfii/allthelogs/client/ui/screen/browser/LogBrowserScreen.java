@@ -79,6 +79,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     private int exportToken;
     private int noticeToken;
     private boolean exportBusy;
+    private int sessionResets = BrowserSession.resets();
 
     public LogBrowserScreen() {
         this(null);
@@ -135,13 +136,26 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     @Override
     protected void init() {
         super.init();
+        boolean startOver = sessionResets != BrowserSession.resets();
+        if (startOver) startOver();
         revealSearchQuery();
         if (search != null && search.focusHandler() != null) {
             search.focusHandler().focus(search, UIComponent.FocusSource.KEYBOARD_CYCLE);
         }
-        if (list != null && queries.consumeReload()) {
+        if (!startOver && list != null && queries.consumeReload()) {
             queries.reload();
         }
+    }
+
+    /**
+     * Drops the search and filters after an import or a cleanup changed the stored messages while this
+     * screen waited underneath, and loads the newest messages.
+     */
+    private void startOver() {
+        sessionResets = BrowserSession.resets();
+        queries.startOver(BrowserSession.openingFilter());
+        refreshSearchDecorations();
+        if (filters != null) filters.syncFromFilter();
     }
 
     @Override
@@ -410,8 +424,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
 
     private void showCleanup() {
         if (tools != null) tools.close();
-        Minecraft.getInstance().gui.setScreen(new CleanupScreen(this, queries.filter(), queries.catalog(),
-            queries::markReload));
+        Minecraft.getInstance().gui.setScreen(new CleanupScreen(this, queries.filter(), queries.catalog()));
     }
 
     /**

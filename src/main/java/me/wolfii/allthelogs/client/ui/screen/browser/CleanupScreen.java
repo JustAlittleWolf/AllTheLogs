@@ -45,7 +45,8 @@ import java.util.regex.Pattern;
 /**
  * Deletes stored messages, or cuts the search text out of them, for everything the filters match. It starts
  * with the messages screen's filters. Before anything is changed it shows how many messages are affected,
- * the oldest and newest of them, and a few picked at random, and the action needs a second click.
+ * the oldest and newest of them, and a few picked at random, and the action needs a second click. Once
+ * messages changed, the messages screen starts over, see {@link BrowserSession#reset()}.
  */
 public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
     private static final int SAMPLE_SIZE = 6;
@@ -59,7 +60,6 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
 
     private final Screen parent;
     private final StoreCatalog catalog;
-    private final Runnable onChanged;
     private SearchFilter filter;
     private Mode mode = Mode.DELETE;
     private StackLayout overlays;
@@ -79,18 +79,14 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
      * Starts with the filters the messages screen would open with, for opening without that screen.
      */
     public CleanupScreen(@Nullable Screen parent) {
-        this(parent, BrowserSession.openingFilter(), StoreCatalog.load(), LogBrowserQueries::forgetSession);
+        this(parent, BrowserSession.openingFilter(), StoreCatalog.load());
     }
 
-    /**
-     * @param onChanged runs after stored messages changed, so the messages screen reloads
-     */
-    public CleanupScreen(@Nullable Screen parent, SearchFilter filter, StoreCatalog catalog, Runnable onChanged) {
+    public CleanupScreen(@Nullable Screen parent, SearchFilter filter, StoreCatalog catalog) {
         super(Component.translatable("allthelogs.screen.cleanup"));
         this.parent = parent;
         this.filter = filter == null ? SearchFilter.defaults() : filter;
         this.catalog = catalog;
-        this.onChanged = onChanged;
     }
 
     @Override
@@ -305,7 +301,7 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
     private void finished(MessageCleanup.Outcome outcome, Throwable error) {
         busy = false;
         if (Minecraft.getInstance().gui.screen() != this) {
-            if (error == null) onChanged.run();
+            if (error == null) BrowserSession.reset();
             return;
         }
         if (error != null) {
@@ -314,7 +310,7 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
             syncApply();
             return;
         }
-        onChanged.run();
+        BrowserSession.reset();
         notice = Component.translatable("allthelogs.cleanup.done",
             String.format("%,d", outcome.changed()), String.format("%,d", outcome.deleted())).withStyle(ChatFormatting.GREEN);
         refresh();

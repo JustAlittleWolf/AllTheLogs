@@ -33,6 +33,16 @@ class BrowserSessionTest {
     }
 
     @Test
+    void resetForgetsTheFilterAndCountsTheReset() {
+        AllTheLogsConfig config = AllTheLogsConfig.load(temp.resolve("cfg.json"));
+        BrowserSession.remember(SearchFilter.defaults().withText("before-import"));
+        int resets = BrowserSession.resets();
+        BrowserSession.reset();
+        assertEquals(resets + 1, BrowserSession.resets());
+        assertEquals("", BrowserSession.openingFilter(config).text());
+    }
+
+    @Test
     void emptySessionUsesTheConfiguredDefaultContextLines() {
         AllTheLogsConfig config = AllTheLogsConfig.load(temp.resolve("cfg.json"));
         config.setDefaultContextLines(9);

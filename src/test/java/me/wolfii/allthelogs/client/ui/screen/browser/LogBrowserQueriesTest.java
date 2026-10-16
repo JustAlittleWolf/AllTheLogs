@@ -1,6 +1,7 @@
 package me.wolfii.allthelogs.client.ui.screen.browser;
 
 import me.wolfii.allthelogs.api.ChatQuery;
+import me.wolfii.allthelogs.client.config.BrowserSession;
 import me.wolfii.allthelogs.client.list.DisplayRow;
 import me.wolfii.allthelogs.client.list.PageBounds;
 import me.wolfii.allthelogs.data.ChatEntry;
@@ -149,6 +150,21 @@ class LogBrowserQueriesTest {
             LogBrowserQueries reopenedInPlace = new LogBrowserQueries();
             reopenedInPlace.restoreSessionLocation();
             assertFalse(reopenedInPlace.consumeReload());
+        } finally {
+            LogBrowserQueries.rememberSession(ListSnapshot.EMPTY, MatchSummary.empty());
+        }
+    }
+
+    @Test
+    void aViewportSavedBeforeMessagesChangedIsNotRestored() {
+        LocalDateTime time = LocalDateTime.of(2026, 8, 27, 10, 0, 0);
+        ListSnapshot middle = new ListSnapshot(List.of(row(time, 0)), true, false, 40, false, 1, false, 12);
+        try {
+            LogBrowserQueries.rememberSession(middle, MatchSummary.empty());
+            BrowserSession.reset();
+            LogBrowserQueries reopened = new LogBrowserQueries();
+            reopened.restoreSessionLocation();
+            assertTrue(reopened.consumeReload());
         } finally {
             LogBrowserQueries.rememberSession(ListSnapshot.EMPTY, MatchSummary.empty());
         }
