@@ -17,6 +17,8 @@ import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.LocalDateTime;
+
 /**
  * Fabric client entry: opens the log store, imports this instance's {@code logs} folder plus extra configured
  * directories, captures live {@code [CHAT]} lines from {@code ChatComponent#logChatMessage}, and registers
@@ -29,6 +31,8 @@ public final class AllTheLogsClient implements ClientModInitializer {
     private static final LogStoreBoot boot = new LogStoreBoot();
     private static LogStoreWorker worker;
     private static long lastSessionEndTouchMs;
+    private static volatile String sessionId;
+    private static volatile SessionMarkerRepeats markerRepeats;
 
     public static LogStoreWorker worker() {
         return worker;
@@ -108,6 +112,8 @@ public final class AllTheLogsClient implements ClientModInitializer {
                 }
                 if (log != null && log.source() instanceof LogSource.Session session && session.id() != null) {
                     LOGGER.info(SessionMarker.message(session.id()));
+                    sessionId = session.id();
+                    markerRepeats = new SessionMarkerRepeats(LocalDateTime.now());
                 }
                 if (log == null) return;
                 StartupLogImports.importOnBoot(
@@ -115,6 +121,15 @@ public final class AllTheLogsClient implements ClientModInitializer {
                     AllTheLogsPaths.gameDirectory(),
                     AllTheLogsConfig.get().extraImportDirectories());
             });
+    }
+
+    /**
+     * Writes the session marker again after midnight, so the log file Minecraft starts then also names the
+     * running session. See {@link SessionMarkerRepeats}.
+     */
+    private static void repeatSessionMarker() {
+        SessionMarkerRepeats repeats = markerRepeats;
+        if (repeats != null && repeats.due(LocalDateTime.now())) LOGGER.info(SessionMarker.message(sessionId));
     }
 
     @Override
@@ -136,6 +151,7 @@ public final class AllTheLogsClient implements ClientModInitializer {
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             worker.flushQueuedLiveMessages();
+            repeatSessionMarker();
             long now = System.currentTimeMillis();
             if (now - lastSessionEndTouchMs < SESSION_END_TOUCH_INTERVAL_MS) return;
             lastSessionEndTouchMs = now;
