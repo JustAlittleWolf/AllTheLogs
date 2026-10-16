@@ -1,9 +1,9 @@
 package me.wolfii.allthelogs.data.importer.discover;
 
-import me.wolfii.allthelogs.data.ImportPhase;
-import me.wolfii.allthelogs.data.ImportProgress;
 import me.wolfii.allthelogs.data.LogSource;
 
+import me.wolfii.allthelogs.data.importer.ImportPhase;
+import me.wolfii.allthelogs.data.importer.ImportProgress;
 import java.nio.file.Path;
 import java.util.function.Consumer;
 

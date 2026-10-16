@@ -10,7 +10,7 @@ import java.sql.Statement;
  * those native threads keep the process alive after the window is gone.
  */
 public final class StoreCancellation {
-    static final String CLOSED_MESSAGE = "log store closed";
+    public static final String CLOSED_MESSAGE = "log store closed";
     private static final ThreadLocal<StoreCancellation> CURRENT = new ThreadLocal<>();
 
     private volatile Statement active;

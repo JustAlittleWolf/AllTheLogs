@@ -6,8 +6,8 @@ import me.wolfii.allthelogs.data.parse.LogCharset;
 import me.wolfii.allthelogs.data.parse.LogDates;
 import me.wolfii.allthelogs.data.parse.LogParser;
 import me.wolfii.allthelogs.data.parse.ParsedLog;
-import me.wolfii.allthelogs.data.store.PreparedLog;
 
+import me.wolfii.allthelogs.data.store.write.PreparedLog;
 import java.io.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;

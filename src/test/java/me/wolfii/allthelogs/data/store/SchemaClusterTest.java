@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.data.store;
 
+import me.wolfii.allthelogs.data.store.schema.Schema;
 import org.junit.jupiter.api.Test;
 
 import java.sql.SQLException;

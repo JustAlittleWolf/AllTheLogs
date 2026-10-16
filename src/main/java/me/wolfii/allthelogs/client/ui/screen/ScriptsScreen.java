@@ -26,6 +26,7 @@ import me.wolfii.allthelogs.client.script.ScriptHost;
 import me.wolfii.allthelogs.client.script.ScriptRuntime;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
+import me.wolfii.allthelogs.client.ui.widget.DoneButton;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
@@ -183,8 +184,7 @@ public final class ScriptsScreen extends BaseOwoScreen<FlowLayout> {
         run = UIComponents.button(Component.translatable("allthelogs.scripts.run"), button -> primaryAction());
         actions.child(run);
         actions.child(UIContainers.horizontalFlow(Sizing.expand(), Sizing.content()));
-        actions.child(UIComponents.button(Component.translatable("gui.done"),
-            button -> Minecraft.getInstance().gui.setScreen(parent)));
+        actions.child(DoneButton.of(this));
         card.child(actions);
 
         reloadScripts();

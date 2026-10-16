@@ -19,7 +19,7 @@ import java.util.List;
  * @param lastLineDate             calendar date from the last timestamped line when that line included one,
  *                                 {@code null} for time-only logs
  * @param lastLineTime             wall clock time of the last line with a recognisable timestamp, {@code null} if none
- * @param sessionId                id from an {@link me.wolfii.allthelogs.data.store.SessionMarker} line, or {@code null}
+ * @param sessionId                id from an {@link me.wolfii.allthelogs.data.session.SessionMarker} line, or {@code null}
  */
 public record ParsedLog(
     String minecraftVersion,

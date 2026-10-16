@@ -36,7 +36,7 @@ public sealed interface LogSource extends me.wolfii.allthelogs.api.LogSource
     /**
      * Captured from a running Minecraft client with {@link LogStore#startSession(String, String)}. A session is not a file,
      * so it has no name or path. {@code id} is a UUID written to the Minecraft log as a
-     * {@link me.wolfii.allthelogs.data.store.SessionMarker} so a later import of that log can skip the file.
+     * {@link me.wolfii.allthelogs.data.session.SessionMarker} so a later import of that log can skip the file.
      *
      * @param id unique id of this capture session, or {@code null} when none is stored.
      *           {@link LogStore#startSession(String, String)} always assigns one

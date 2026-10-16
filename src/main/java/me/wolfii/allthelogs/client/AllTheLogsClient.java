@@ -4,7 +4,7 @@ import me.wolfii.allthelogs.client.config.AllTheLogsConfig;
 import me.wolfii.allthelogs.client.config.StartupLogImports;
 import me.wolfii.allthelogs.data.LogSource;
 import me.wolfii.allthelogs.data.duckdb.DuckDbJdbcInstaller;
-import me.wolfii.allthelogs.data.store.SessionMarker;
+import me.wolfii.allthelogs.data.session.SessionMarker;
 import me.wolfii.allthelogs.data.store.StoreCancellation;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;

@@ -2,9 +2,9 @@ package me.wolfii.allthelogs.client.config;
 
 import me.wolfii.allthelogs.client.AllTheLogsClient;
 import me.wolfii.allthelogs.client.LogStoreWorker;
-import me.wolfii.allthelogs.data.ImportOptions;
-import me.wolfii.allthelogs.data.ImportResult;
 
+import me.wolfii.allthelogs.data.importer.ImportOptions;
+import me.wolfii.allthelogs.data.importer.ImportResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;

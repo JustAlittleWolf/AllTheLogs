@@ -1,7 +1,7 @@
 package me.wolfii.allthelogs.client.files;
 
-import me.wolfii.allthelogs.data.ImportOptions;
 
+import me.wolfii.allthelogs.data.importer.ImportOptions;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
