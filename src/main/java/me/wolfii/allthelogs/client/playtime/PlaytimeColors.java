@@ -53,6 +53,17 @@ public final class PlaytimeColors {
     }
 
     /**
+     * Pattern color for the small legend swatches: the fill color at about 60% brightness, so the pattern
+     * is still visible at that size.
+     */
+    public static int swatchStripe(int color) {
+        int red = ((color >> 16) & 0xFF) * 6 / 10;
+        int green = ((color >> 8) & 0xFF) * 6 / 10;
+        int blue = (color & 0xFF) * 6 / 10;
+        return (color & 0xFF000000) | (red << 16) | (green << 8) | blue;
+    }
+
+    /**
      * Pattern color for a section: the fill color at about 85% brightness, close enough to stay calm.
      */
     public static int stripe(int color) {

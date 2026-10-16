@@ -74,11 +74,18 @@ final class PixelCanvas implements AutoCloseable {
      */
     void fill(int left, int top, int right, int bottom, int argb, PlaytimePattern pattern, int unit,
               int patternShift) {
+        fill(left, top, right, bottom, argb, PlaytimeColors.stripe(argb), pattern, unit, patternShift);
+    }
+
+    /**
+     * @param shade color of the pattern pixels
+     */
+    void fill(int left, int top, int right, int bottom, int argb, int shade, PlaytimePattern pattern, int unit,
+              int patternShift) {
         if (pattern == PlaytimePattern.SOLID) {
             fill(left, top, right, bottom, argb);
             return;
         }
-        int shade = PlaytimeColors.stripe(argb);
         int x0 = Math.max(0, left);
         int x1 = Math.min(width, right);
         int y0 = Math.max(0, top);

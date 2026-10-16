@@ -4,6 +4,7 @@ import io.wispforest.owo.ui.base.BaseUIComponent;
 import io.wispforest.owo.ui.core.OwoUIGraphics;
 import io.wispforest.owo.ui.core.Sizing;
 import me.wolfii.allthelogs.client.playtime.PlaytimeChartModel;
+import me.wolfii.allthelogs.client.playtime.PlaytimeColors;
 import me.wolfii.allthelogs.client.playtime.PlaytimeDuration;
 import me.wolfii.allthelogs.client.playtime.PlaytimeSeries;
 import me.wolfii.allthelogs.client.ui.text.TextFit;
@@ -111,7 +112,8 @@ public final class PlaytimeLegendWidget extends BaseUIComponent implements AutoC
             if (index < 0 || index >= series.size()) continue;
             PlaytimeSeries item = series.get(index);
             int top = row * ROW * scale + offset;
-            swatches.fill(0, top, SWATCH * scale, top + SWATCH * scale, item.color(), item.pattern(), unit);
+            swatches.fill(0, top, SWATCH * scale, top + SWATCH * scale, item.color(),
+                PlaytimeColors.swatchStripe(item.color()), item.pattern(), unit, 0);
         }
         swatches.upload();
         swatchesPainted = true;
