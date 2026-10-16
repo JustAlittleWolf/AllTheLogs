@@ -260,7 +260,12 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         });
     }
 
+    /**
+     * Searches again with {@code next}. A filter equal to the current one, e.g. from clearing a field that is
+     * already empty, changes nothing, so the list keeps its place.
+     */
     private void applyFilter(SearchFilter next) {
+        if (next.equals(queries.filter())) return;
         queries.setFilter(next);
         BrowserSession.remember(next);
         refreshSearchDecorations();
