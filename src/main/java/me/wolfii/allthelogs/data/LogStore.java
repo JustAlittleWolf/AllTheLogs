@@ -4,6 +4,7 @@ import me.wolfii.allthelogs.api.PendingImportMessage;
 import me.wolfii.allthelogs.data.importer.LogImporter;
 import me.wolfii.allthelogs.data.playtime.PlaytimeSpan;
 import me.wolfii.allthelogs.data.query.ChatQueries;
+import me.wolfii.allthelogs.data.query.MessageCleanup;
 import me.wolfii.allthelogs.data.query.PlaytimeQueries;
 import me.wolfii.allthelogs.data.store.Schema;
 import me.wolfii.allthelogs.data.store.SessionCapture;
@@ -24,6 +25,7 @@ import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 
 /**
  * Imports Minecraft chat logs into a single portable database file and queries them back as plain Java objects.
@@ -54,6 +56,7 @@ public final class LogStore implements AutoCloseable {
     private DuckDBConnection connection;
     private LogImporter importer;
     private ChatQueries queries;
+    private MessageCleanup cleanup;
     private PlaytimeQueries playtime;
 
     private LogStore(DuckDBConnection connection, Path databasePath) {
@@ -113,6 +116,7 @@ public final class LogStore implements AutoCloseable {
         this.importer = new LogImporter(connection);
         this.sessions.attach(connection);
         this.queries = new ChatQueries(connection);
+        this.cleanup = new MessageCleanup(connection);
         this.playtime = new PlaytimeQueries(connection);
     }
 
@@ -229,6 +233,52 @@ public final class LogStore implements AutoCloseable {
             tracker.complete();
         } catch (SQLException | IOException e) {
             throw new LogDataException("could not optimize imported chat entries", e);
+        }
+    }
+
+    /**
+     * Count, oldest, newest, and {@code sampleSize} random entries among those {@code query} matches.
+     * Context, paging, and sort are ignored.
+     */
+    public CleanupPreview previewCleanup(me.wolfii.allthelogs.api.ChatQuery query, int sampleSize) {
+        me.wolfii.allthelogs.api.ChatQuery matches = query.withContextLines(0).withLimit(-1);
+        long count = queries.countMatches(matches);
+        if (count == 0) return new CleanupPreview(0, null, null, List.of());
+        ChatEntry first = queries.findEntries(matches.withLimit(1)
+            .withSort(me.wolfii.allthelogs.api.ChatQuery.Sort.ASCENDING)).getFirst();
+        ChatEntry last = queries.findEntries(matches.withLimit(1)
+            .withSort(me.wolfii.allthelogs.api.ChatQuery.Sort.DESCENDING)).getFirst();
+        return new CleanupPreview(count, first, last, queries.sampleEntries(matches, sampleSize));
+    }
+
+    /**
+     * Deletes every entry {@code query} matches, then compacts the store.
+     */
+    public MessageCleanup.Outcome deleteMatches(me.wolfii.allthelogs.api.ChatQuery query) {
+        return compactAfter(cleanup.delete(query));
+    }
+
+    /**
+     * Cuts every match of {@code part} out of the entries {@code query} matches, then compacts the store.
+     * Entries left blank are deleted.
+     */
+    public MessageCleanup.Outcome removeMatchedText(me.wolfii.allthelogs.api.ChatQuery query, Pattern part) {
+        return compactAfter(cleanup.removeText(query, Objects.requireNonNull(part, "part")));
+    }
+
+    /**
+     * Deleted rows and rewritten strings keep their old bytes in the file until it is copied.
+     */
+    private MessageCleanup.Outcome compactAfter(MessageCleanup.Outcome outcome) {
+        if (outcome.changed() == 0 && outcome.deleted() == 0) return outcome;
+        try {
+            try (Statement statement = connection.createStatement()) {
+                StoreOptimizer.analyzeAndCheckpoint(statement);
+            }
+            if (databasePath != null) bind(StoreOptimizer.replaceWithCompactCopy(connection, databasePath));
+            return outcome;
+        } catch (SQLException | IOException e) {
+            throw new LogDataException("could not compact the store after cleaning up messages", e);
         }
     }
 

@@ -140,6 +140,36 @@ public final class QueryBuilder {
         return new QueryBuilder(sql, parameters);
     }
 
+    /**
+     * Up to {@code count} matching entries picked at random. Ignores context, limit, offset, and sort.
+     */
+    public static QueryBuilder sample(ChatQuery query, int count) {
+        return matching(query, SELECT_COLUMNS + " FROM chat_entry e", " ORDER BY random() LIMIT " + Math.max(0, count));
+    }
+
+    /**
+     * Deletes every matching entry. Ignores context, limit, offset, and sort.
+     */
+    public static QueryBuilder delete(ChatQuery query) {
+        return matching(query, "DELETE FROM chat_entry", "");
+    }
+
+    /**
+     * Row id, message, and formatting (as JSON) of every matching entry, for rewriting them in place.
+     * Row ids are only valid until the table is next rewritten, so callers use them in the same transaction.
+     */
+    public static QueryBuilder rewriteCandidates(ChatQuery query) {
+        return matching(query, "SELECT rowid, message, to_json(formatting) FROM chat_entry", "");
+    }
+
+    private static QueryBuilder matching(ChatQuery query, String head, String tail) {
+        List<Object> parameters = new ArrayList<>();
+        List<String> conditions = new ArrayList<>();
+        addMatchConditions(query, false, conditions, parameters);
+        String where = conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions);
+        return new QueryBuilder(head + where + tail, parameters);
+    }
+
     private static void addMatchConditions(ChatQuery query, boolean includeOffset, List<String> conditions,
                                            List<Object> parameters) {
         if (query.startingAt() != null) {

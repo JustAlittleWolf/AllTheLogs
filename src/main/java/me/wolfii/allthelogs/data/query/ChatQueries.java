@@ -160,6 +160,21 @@ public final class ChatQueries {
     }
 
     /**
+     * Up to {@code count} matching entries picked at random, oldest first. Ignores context and paging.
+     */
+    public List<ChatEntry> sampleEntries(ChatQuery query, int count) {
+        rejectUnsupportedRegex(query);
+        QueryBuilder builder = QueryBuilder.sample(query, count);
+        try {
+            List<ChatEntry> entries = new ArrayList<>(readEntries(builder.sql(), builder::bind, count));
+            entries.sort(Comparator.comparing(ChatEntry::timestamp).thenComparingInt(ChatEntry::lineIndex));
+            return entries;
+        } catch (SQLException | RuntimeException e) {
+            throw queryFailed("could not sample matches", query, e);
+        }
+    }
+
+    /**
      * Number of matching entries for {@code query}. Honours offset and limit; ignores context lines.
      */
     public long countMatches(ChatQuery query) {
@@ -254,7 +269,7 @@ public final class ChatQueries {
      * DuckDB's RE2 engine rejects lookarounds and other Java-only constructs. Catching that here keeps the
      * failure out of SQL, where the native error message is only on the cause and is easy to drop from logs.
      */
-    private static void rejectUnsupportedRegex(ChatQuery query) {
+    static void rejectUnsupportedRegex(ChatQuery query) {
         if (query.regex() == null) return;
         String feature = Re2Regex.unsupportedConstruct(query.regex());
         if (feature != null) {
@@ -262,7 +277,7 @@ public final class ChatQueries {
         }
     }
 
-    private static LogDataException queryFailed(String action, ChatQuery query, Exception error) {
+    static LogDataException queryFailed(String action, ChatQuery query, Exception error) {
         String detail = innermostMessage(error);
         if (query.regex() != null && hasText(detail)) {
             return new LogDataException("could not run regex " + query.regex() + ": " + detail, error);

@@ -164,6 +164,13 @@ class AllTheLogsConfigTest {
                 categories.add(autoGen.category());
             }
         }
-        assertEquals(List.of("browser", "import"), categories);
+        assertEquals(List.of("browser", "import", "ignore"), categories);
+    }
+
+    @Test
+    void ignoredPatternsSkipBlankAndMalformedEntries() {
+        var compiled = AllTheLogsConfig.compileIgnored(List.of("^spam", "", "  ", "([unclosed"));
+        assertEquals(1, compiled.size());
+        assertEquals("^spam", compiled.getFirst().pattern());
     }
 }

@@ -5,6 +5,7 @@ import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.LogDataException;
 import me.wolfii.allthelogs.data.LogSource;
 import me.wolfii.allthelogs.data.parse.FormattingCodes;
+import me.wolfii.allthelogs.data.parse.IngestFilter;
 import me.wolfii.allthelogs.data.parse.MessageCharacters;
 import me.wolfii.allthelogs.data.parse.PackedFormatting;
 import org.duckdb.DuckDBConnection;
@@ -101,6 +102,8 @@ public final class SessionCapture {
      * stripped like on file import; {@code formatting} is stored as packed runs, or parsed from the
      * message when {@code null}.
      *
+     * Lines that {@link IngestFilter} ignores are not stored.
+     *
      * @return {@code true} if stored
      * @throws LogDataException if no session is active, or the entry cannot be written
      */
@@ -113,6 +116,7 @@ public final class SessionCapture {
         Objects.requireNonNull(timestamp, "timestamp");
         requireActiveSession();
         StoredLine line = resolve(message, formatting, timestamp);
+        if (IngestFilter.ignores(line.text())) return false;
         try {
             return writeEntry(line.text(), line.formatting(), line.timestamp());
         } catch (SQLException e) {
@@ -143,9 +147,10 @@ public final class SessionCapture {
                     Objects.requireNonNull(pending, "messages");
                     stampLiveCapture(pending.minecraftUser(), pending.serverOrWorld());
                     StoredLine line = resolve(pending.text(), pending.formatting(), pending.capturedAt());
+                    if (latest == null || line.timestamp().isAfter(latest)) latest = line.timestamp();
+                    if (IngestFilter.ignores(line.text())) continue;
                     bindEntry(insert, nextLine, line.text(), line.formatting(), line.timestamp());
                     insert.execute();
-                    if (latest == null || line.timestamp().isAfter(latest)) latest = line.timestamp();
                     nextLine++;
                 }
             }

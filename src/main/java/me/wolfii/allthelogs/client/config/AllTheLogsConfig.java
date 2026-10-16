@@ -18,6 +18,7 @@ import dev.isxander.yacl3.config.v2.api.serializer.GsonConfigSerializerBuilder;
 import me.wolfii.allthelogs.client.AllTheLogsClient;
 import me.wolfii.allthelogs.client.list.MessageListLayout;
 import me.wolfii.allthelogs.client.search.SearchFilter;
+import me.wolfii.allthelogs.data.parse.IngestFilter;
 import me.wolfii.allthelogs.data.parse.MessageCharacters;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.gui.screens.Screen;
@@ -31,6 +32,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 /**
  * User settings stored as {@code config/allthelogs.json}. Extra logs folders and browser chrome are
@@ -74,6 +77,11 @@ public class AllTheLogsConfig {
     @ListGroup(valueFactory = StringListFactory.class, controllerFactory = StringListFactory.class)
     @SerialEntry
     public List<String> extraImportDirectories = new ArrayList<>();
+
+    @AutoGen(category = "ignore")
+    @ListGroup(valueFactory = PatternListFactory.class, controllerFactory = PatternListFactory.class)
+    @SerialEntry(required = false)
+    public List<String> ignoredMessagePatterns = new ArrayList<>();
 
     public static Path defaultPath() {
         return FabricLoader.getInstance().getConfigDir().resolve(FILE_NAME);
@@ -123,6 +131,27 @@ public class AllTheLogsConfig {
 
     public Path file() {
         return file;
+    }
+
+    public List<String> ignoredMessagePatterns() {
+        return ignoredMessagePatterns == null ? List.of() : List.copyOf(ignoredMessagePatterns);
+    }
+
+    /**
+     * {@code patterns} compiled as Java regular expressions. Blank and malformed entries are skipped.
+     */
+    static List<Pattern> compileIgnored(List<String> patterns) {
+        List<Pattern> compiled = new ArrayList<>();
+        if (patterns == null) return compiled;
+        for (String pattern : patterns) {
+            if (pattern == null || pattern.isBlank()) continue;
+            try {
+                compiled.add(Pattern.compile(pattern));
+            } catch (PatternSyntaxException error) {
+                AllTheLogsClient.LOGGER.warn("Ignoring malformed ignored-message pattern {}", pattern);
+            }
+        }
+        return compiled;
     }
 
     public List<String> extraImportDirectories() {
@@ -213,12 +242,14 @@ public class AllTheLogsConfig {
         messageFontSize = clampFontSize(messageFontSize == 0 ? DEFAULT_MESSAGE_FONT_SIZE : messageFontSize);
         contextMessageBrightness = clampContextMessageBrightness(
             contextMessageBrightness == 0 ? DEFAULT_CONTEXT_MESSAGE_BRIGHTNESS : contextMessageBrightness);
+        ignoredMessagePatterns = ignoredMessagePatterns == null ? new ArrayList<>() : new ArrayList<>(ignoredMessagePatterns);
         publishCharacterFilter();
     }
 
     private void publishCharacterFilter() {
         if (handler != null && this == handler.instance()) {
             MessageCharacters.setDropPrivateUseCharacters(filterPrivateUseCharacters);
+            IngestFilter.setIgnored(compileIgnored(ignoredMessagePatterns));
         }
     }
 

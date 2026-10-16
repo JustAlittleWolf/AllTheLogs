@@ -23,8 +23,8 @@ import java.util.function.BooleanSupplier;
 import java.util.function.IntSupplier;
 
 /**
- * Menu on the messages toolbar. Hovering or clicking the hamburger opens Export, Import, Scripts, and
- * Playtime above it, top to bottom, with a ? button under those actions. Hovering ? shows the database summary.
+ * Menu on the messages toolbar. Hovering or clicking the hamburger opens Export, Import, Scripts,
+ * Playtime, and Clean up above it, top to bottom, with a ? button under those actions. Hovering ? shows the database summary.
  * A click keeps the menu open so Import and Scripts can be chosen. Export opens to the side, then the
  * chosen scope opens the file format beside that. The scope row stays highlighted while its format menu
  * is open. Dragging the timeline scrollbar does not count as a hover, including the moment that drag
@@ -47,6 +47,7 @@ final class BrowserToolsMenu {
     private final Runnable openScripts;
     private final Runnable openImport;
     private final Runnable openPlaytime;
+    private final Runnable openCleanup;
     private final BiConsumer<Scope, MessageExport.Format> export;
 
     private ButtonComponent anchor;
@@ -73,7 +74,7 @@ final class BrowserToolsMenu {
 
     BrowserToolsMenu(StackLayout overlays, IntSupplier screenWidth, IntSupplier screenHeight,
                      BooleanSupplier hasSelection, BooleanSupplier suppressed, Runnable onOpened,
-                     Runnable openScripts, Runnable openImport, Runnable openPlaytime,
+                     Runnable openScripts, Runnable openImport, Runnable openPlaytime, Runnable openCleanup,
                      BiConsumer<Scope, MessageExport.Format> export) {
         this.overlays = overlays;
         this.screenWidth = screenWidth;
@@ -84,6 +85,7 @@ final class BrowserToolsMenu {
         this.openScripts = openScripts;
         this.openImport = openImport;
         this.openPlaytime = openPlaytime;
+        this.openCleanup = openCleanup;
         this.export = export;
     }
 
@@ -200,13 +202,14 @@ final class BrowserToolsMenu {
             return;
         }
         int width = labelWidth("allthelogs.menu.scripts", "allthelogs.menu.import", "allthelogs.menu.export",
-            "allthelogs.menu.playtime");
+            "allthelogs.menu.playtime", "allthelogs.menu.cleanup");
         FlowLayout menu = panel(width);
         exportButton = action(Component.translatable("allthelogs.menu.export"), this::ensureScope);
         menu.child(exportButton);
         menu.child(action(Component.translatable("allthelogs.menu.import"), openImport));
         menu.child(action(Component.translatable("allthelogs.menu.scripts"), openScripts));
         menu.child(action(Component.translatable("allthelogs.menu.playtime"), openPlaytime));
+        menu.child(action(Component.translatable("allthelogs.menu.cleanup"), openCleanup));
         databaseButton = action(Component.translatable("allthelogs.meta.marker"), () -> {});
         databaseButton.tooltip(databaseTooltip);
         menu.child(databaseButton);

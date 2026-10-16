@@ -255,6 +255,16 @@ public record SearchFilter(
     }
 
     /**
+     * The search text as a Java pattern for cutting it out of messages: the regex itself, or the literal
+     * text. Honours case sensitivity. Empty without text or with an invalid regex.
+     */
+    public Optional<Pattern> removalPattern() {
+        if (!hasText() || invalidRegex()) return Optional.empty();
+        if (regex) return compiledRegex(text, caseSensitive);
+        return compiledRegex(Pattern.quote(text), caseSensitive);
+    }
+
+    /**
      * Java-side matching used to mark hits after a query. Invalid regex never matches.
      */
     public Predicate<String> messagePredicate() {
