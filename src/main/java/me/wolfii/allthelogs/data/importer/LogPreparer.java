@@ -49,13 +49,11 @@ public final class LogPreparer {
             calendarDate(parsed.firstLineDate(), fileDate), parsed.firstLineTime(), timezone);
         LocalDateTime lastLineTime = LogDates.toSystemLocal(
             calendarDate(parsed.lastLineDate(), fileDate), parsed.lastLineTime(), timezone);
-        LocalDateTime firstPlaceTime = parsed.firstPlaceTime() == null ? null : LogDates.toSystemLocal(
-            calendarDate(parsed.firstPlaceDate(), fileDate), parsed.firstPlaceTime(), timezone);
         return new PreparedLog(candidate.fileName(), candidate.sourceKind(), candidate.sourcePath(),
             candidate.entryPath(), fileDate, parsed.minecraftVersion(),
             times, messages, formattings, parsed.resourceManagerReloaded(),
             firstLineTime, lastLineTime, parsed.sessionId(), parsed.minecraftUser(),
-            users, places, candidate.contentHash(), parsed.startup(), parsed.endPlace(), firstPlaceTime);
+            users, places, candidate.contentHash());
     }
 
     /**

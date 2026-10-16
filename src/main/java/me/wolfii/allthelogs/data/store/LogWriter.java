@@ -8,7 +8,6 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -169,17 +168,6 @@ public final class LogWriter implements AutoCloseable {
         } else {
             fileAppender.append(log.minecraftUser());
         }
-        fileAppender.append(log.startup());
-        if (log.endPlace() == null) {
-            fileAppender.appendNull();
-        } else {
-            fileAppender.append(log.endPlace());
-        }
-        if (log.firstPlaceTime() == null) {
-            fileAppender.appendNull();
-        } else {
-            fileAppender.append(log.firstPlaceTime());
-        }
         fileAppender.endRow();
 
         for (int i = 0; i < times.size(); i++) {
@@ -230,7 +218,6 @@ public final class LogWriter implements AutoCloseable {
      */
     public void updateMetadata(PreparedLog log, ImportOptions options) throws SQLException {
         markConsidered(log.sourcePath(), log.entryPath(), log.contentHash());
-        updateContinuationFacts(log);
         if (!options.updatesAnyMetadata() || log.messages().isEmpty()) {
             return;
         }
@@ -269,36 +256,6 @@ public final class LogWriter implements AutoCloseable {
             metadataAppender.endRow();
         }
         metadataPatchFiles++;
-    }
-
-    /**
-     * Stores whether the file has a game start line and how its place ends, so {@link #linkContinuations()}
-     * can also join logs that were imported before those facts were kept.
-     */
-    private void updateContinuationFacts(PreparedLog log) throws SQLException {
-        if (!existingLocations.containsKey(locationKey(log.sourcePath(), log.entryPath()))) return;
-        flushAppenders();
-        try (PreparedStatement update = connection.prepareStatement("""
-            UPDATE log_file SET has_startup = ?, end_place = ?, first_place_time = ?
-            WHERE source_path = ? AND entry_path = ?""")) {
-            update.setBoolean(1, log.startup());
-            update.setString(2, log.endPlace());
-            update.setTimestamp(3, log.firstPlaceTime() == null ? null : Timestamp.valueOf(log.firstPlaceTime()));
-            update.setString(4, log.sourcePath());
-            update.setString(5, log.entryPath());
-            update.execute();
-        }
-    }
-
-    /**
-     * Gives logs that continue the previous day's log its version, player, and place. Run after every file
-     * of an import is written or updated.
-     *
-     * @return how many logs were joined to their predecessor
-     */
-    public int linkContinuations() throws SQLException {
-        flushAppenders();
-        return ContinuationLinker.link(connection);
     }
 
     /**

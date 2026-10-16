@@ -57,7 +57,7 @@ class StoreOptimizerTest {
         var connection = StoreConnections.openFile(database);
         try (Statement statement = connection.createStatement()) {
             statement.execute("""
-                INSERT INTO log_file (id, file_name, source_kind, source_path, entry_path, log_date, minecraft_version, start_time, end_time, entry_count, minecraft_user) VALUES (
+                INSERT INTO log_file VALUES (
                     1, 'chat.log', 'FILE', '/tmp/chat.log', '/tmp/chat.log',
                     DATE '2026-08-24', '26.2',
                     TIMESTAMP '2026-08-24 10:00:00', TIMESTAMP '2026-08-24 10:00:10', 1, NULL)""");

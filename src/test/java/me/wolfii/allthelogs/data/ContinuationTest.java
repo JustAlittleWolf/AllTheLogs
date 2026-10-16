@@ -1,25 +1,21 @@
 package me.wolfii.allthelogs.data;
 
-import me.wolfii.allthelogs.data.parse.LogParser;
-import me.wolfii.allthelogs.data.parse.ParsedLog;
+import me.wolfii.allthelogs.data.extract.LogContinuation;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.StringReader;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Comparator;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ContinuationTest {
@@ -45,27 +41,21 @@ class ContinuationTest {
     Path tempDir;
 
     @Test
-    void parserTellsWhetherAFileStartsTheGameAndHowItsPlaceEnds() throws IOException {
-        ParsedLog start = LogParser.parse(new BufferedReader(new StringReader(BEFORE_MIDNIGHT)));
-        assertTrue(start.startup());
-        assertNotNull(start.endPlace());
-        assertFalse(start.endPlace().isEmpty());
-        ParsedLog rest = LogParser.parse(new BufferedReader(new StringReader(AFTER_MIDNIGHT)));
-        assertFalse(rest.startup());
-        assertEquals(java.time.LocalTime.of(0, 10), rest.firstPlaceTime());
-        ParsedLog quiet = LogParser.parse(new BufferedReader(new StringReader("[00:00:01] [Render thread/INFO]: [CHAT] hi\n")));
-        assertNull(quiet.endPlace());
-        ParsedLog left = LogParser.parse(new BufferedReader(new StringReader(
-            BEFORE_MIDNIGHT + "[23:59:59] [Render thread/INFO]: Stopping!\n")));
-        assertEquals("", left.endPlace());
+    void aContinuationIsDatedTheNextDayAndStartsRightAfterThePreviousLogEnds() {
+        LocalDate day = LocalDate.of(2024, 5, 1);
+        LocalDateTime end = day.atTime(23, 59, 50);
+        assertTrue(LogContinuation.continues(day, end, day.plusDays(1), day.plusDays(1).atTime(0, 0, 1)));
+        assertFalse(LogContinuation.continues(day, end, day.plusDays(1), day.plusDays(1).atTime(0, 30)));
+        assertFalse(LogContinuation.continues(day, end, day.plusDays(2), day.plusDays(1).atTime(0, 0, 1)));
+        assertTrue(LogContinuation.lacksStart("unknown", null));
+        assertFalse(LogContinuation.lacksStart("unknown", "Steve"));
+        assertEquals("/logs", LogContinuation.folder(false, "/logs/2024-05-01-1.log.gz", ""));
+        assertEquals("/a.zip!.minecraft/logs", LogContinuation.folder(true, "/a.zip", ".minecraft/logs/x.log"));
     }
 
     @Test
     void aLogThatContinuesPastMidnightTakesTheVersionPlayerAndPlace() throws IOException {
-        Path logs = tempDir.resolve("instance/logs");
-        LogFixtures.writePlain(logs, "2024-05-01-1.log", BEFORE_MIDNIGHT);
-        LogFixtures.writePlain(logs, "2024-05-02-1.log", AFTER_MIDNIGHT);
-        LogFixtures.writePlain(logs, "2024-05-02-2.log", NEXT_LAUNCH);
+        writeLogs();
         try (LogStore store = LogStore.openInMemory()) {
             store.importDirectory(tempDir.resolve("instance"));
             assertContinued(store);
@@ -84,48 +74,45 @@ class ContinuationTest {
             ChatLog third = log(store, "2024-05-03-1.log");
             assertEquals("1.21", third.minecraftVersion());
             assertEquals("Steve", third.minecraftUser());
-            ChatEntry dayThree = entry(store, "day three");
-            assertEquals(entry(store, "before midnight").serverOrWorld(), dayThree.serverOrWorld());
+            assertEquals(entry(store, "before midnight").serverOrWorld(), entry(store, "day three").serverOrWorld());
         }
     }
 
     @Test
-    void aMetadataUpdateImportLinksLogsStoredBeforeContinuationsWereTracked() throws IOException, SQLException {
-        Path logs = tempDir.resolve("instance/logs");
-        LogFixtures.writePlain(logs, "2024-05-01-1.log", BEFORE_MIDNIGHT);
-        LogFixtures.writePlain(logs, "2024-05-02-1.log", AFTER_MIDNIGHT);
-        LogFixtures.writePlain(logs, "2024-05-02-2.log", NEXT_LAUNCH);
+    void logsStoredEarlierAreFilledInByTheNextImport() throws IOException, SQLException {
+        writeLogs();
         Path database = tempDir.resolve("store.duckdb");
         try (LogStore store = LogStore.open(database)) {
             store.importDirectory(tempDir.resolve("instance"), ImportOptions.defaults().withOptimize(false));
         }
         try (Connection connection = DriverManager.getConnection("jdbc:duckdb:" + database);
              Statement statement = connection.createStatement()) {
-            statement.execute("UPDATE log_file SET has_startup = NULL, end_place = NULL, first_place_time = NULL");
             statement.execute("UPDATE log_file SET minecraft_version = 'unknown', minecraft_user = NULL "
                 + "WHERE file_name = '2024-05-02-1.log'");
             statement.execute("UPDATE chat_entry SET minecraft_user = NULL, server_or_world = NULL "
-                + "WHERE file_id = (SELECT id FROM log_file WHERE file_name = '2024-05-02-1.log')");
+                + "WHERE file_id = (SELECT id FROM log_file WHERE file_name = '2024-05-02-1.log') AND line_index = 0");
         }
         try (LogStore store = LogStore.open(database)) {
             assertEquals("unknown", log(store, "2024-05-02-1.log").minecraftVersion());
-            store.importDirectory(tempDir.resolve("instance"), ImportOptions.defaults()
-                .withOptimize(false)
-                .withSkipAlreadyImported(false)
-                .withUpdateMetadataOnly(true)
-                .withUpdateMinecraftUser(true)
-                .withUpdateMinecraftServer(true));
+            store.importDirectory(tempDir.resolve("instance"),
+                ImportOptions.defaults().withOptimize(false).withSkipAlreadyImported(true));
             assertContinued(store);
         }
+    }
+
+    private void writeLogs() throws IOException {
+        Path logs = tempDir.resolve("instance/logs");
+        LogFixtures.writePlain(logs, "2024-05-01-1.log", BEFORE_MIDNIGHT);
+        LogFixtures.writePlain(logs, "2024-05-02-1.log", AFTER_MIDNIGHT);
+        LogFixtures.writePlain(logs, "2024-05-02-2.log", NEXT_LAUNCH);
     }
 
     private static void assertContinued(LogStore store) {
         ChatLog continued = log(store, "2024-05-02-1.log");
         assertEquals("1.21", continued.minecraftVersion());
         assertEquals("Steve", continued.minecraftUser());
-        ChatEntry before = entry(store, "before midnight");
         ChatEntry after = entry(store, "after midnight");
-        assertEquals(before.serverOrWorld(), after.serverOrWorld());
+        assertEquals(entry(store, "before midnight").serverOrWorld(), after.serverOrWorld());
         assertEquals("Steve", after.minecraftUser());
         assertTrue(entry(store, "on the other server").serverOrWorld().contains("other.example.com"));
 
@@ -136,13 +123,13 @@ class ContinuationTest {
 
     private static ChatLog log(LogStore store, String fileName) {
         return store.chatLogs().stream()
-            .filter(log -> log.source() instanceof LogSource.File file && file.path().getFileName().toString().equals(fileName))
+            .filter(log -> log.source() instanceof LogSource.File file
+                && file.path().getFileName().toString().equals(fileName))
             .findFirst().orElseThrow();
     }
 
     private static ChatEntry entry(LogStore store, String message) {
-        List<ChatEntry> entries = store.allEntries();
-        return entries.stream().filter(entry -> entry.message().equals(message))
+        return store.allEntries().stream().filter(entry -> entry.message().equals(message))
             .min(Comparator.comparing(ChatEntry::timestamp)).orElseThrow();
     }
 }

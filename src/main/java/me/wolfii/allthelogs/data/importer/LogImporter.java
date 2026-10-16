@@ -6,6 +6,7 @@ import me.wolfii.allthelogs.data.importer.discover.FileCountEstimator;
 import me.wolfii.allthelogs.data.importer.discover.ImportObserver;
 import me.wolfii.allthelogs.data.importer.discover.LogCandidate;
 import me.wolfii.allthelogs.data.importer.discover.LogDiscovery;
+import me.wolfii.allthelogs.data.store.ContinuationLinker;
 import me.wolfii.allthelogs.data.store.LogWriter;
 import me.wolfii.allthelogs.data.store.PreparedLog;
 import me.wolfii.allthelogs.data.store.SourceKind;
@@ -227,7 +228,7 @@ public final class LogImporter {
             } else {
                 writer.applyMetadataPatches(options);
             }
-            writer.linkContinuations();
+            ContinuationLinker.link(connection);
 
             List<ImportResult.Failure> failures = new ArrayList<>(discovery.failures());
             failures.addAll(parseFailures);

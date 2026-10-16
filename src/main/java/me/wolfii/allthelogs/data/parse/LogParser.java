@@ -13,7 +13,6 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 /**
  * Extracts chat lines and log metadata from a log file.
@@ -50,9 +49,6 @@ public final class LogParser {
         LocalDate lastLineDate = null;
         LocalTime lastLineTime = null;
         String sessionId = null;
-        boolean placeEvent = false;
-        LocalDate firstPlaceDate = null;
-        LocalTime firstPlaceTime = null;
 
         String line;
         while ((line = reader.readLine()) != null) {
@@ -95,15 +91,7 @@ public final class LogParser {
                     sessionId = SessionMarker.find(line).orElse(null);
                 }
                 users.accept(line);
-                String placeBefore = places.current();
                 places.accept(line);
-                if (!Objects.equals(placeBefore, places.current()) || ServerOrWorldExtractor.isLeave(line)) {
-                    if (!placeEvent && stamp != null) {
-                        firstPlaceDate = stamp.date();
-                        firstPlaceTime = stamp.time();
-                    }
-                    placeEvent = true;
-                }
                 if (places.current() != null) {
                     backfillPlace(entries, pendingPlace, places.current());
                 } else if (!places.inSession()) {
@@ -123,11 +111,8 @@ public final class LogParser {
         }
 
         String version = versions.version();
-        boolean startup = version != null || users.user() != null;
-        String endPlace = !placeEvent ? null : places.current() == null ? "" : places.current();
         return new ParsedLog(version == null ? ChatLog.UNKNOWN_VERSION : version, users.user(), places.last(),
-            entries, resourceManagerReloaded, firstLineDate, firstLineTime, lastLineDate, lastLineTime, sessionId,
-            startup, endPlace, firstPlaceDate, firstPlaceTime);
+            entries, resourceManagerReloaded, firstLineDate, firstLineTime, lastLineDate, lastLineTime, sessionId);
     }
 
     private static void flushPending(List<ParsedLog.Entry> entries, List<Integer> pendingPlace, LocalDate date,

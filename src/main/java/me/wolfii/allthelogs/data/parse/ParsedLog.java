@@ -20,13 +20,6 @@ import java.util.List;
  *                                 {@code null} for time-only logs
  * @param lastLineTime             wall clock time of the last line with a recognisable timestamp, {@code null} if none
  * @param sessionId                id from an {@link me.wolfii.allthelogs.data.store.SessionMarker} line, or {@code null}
- * @param startup                  whether the file has a game start line (a version or a {@code Setting user:} line).
- *                                 A file without one usually continues a session whose log rolled over at midnight
- * @param endPlace                 place in effect at the end of the file: the server or world, an empty string after
- *                                 a disconnect, or {@code null} when the file has no join or leave line at all
- * @param firstPlaceDate           calendar date of the first join or leave line, {@code null} for time-only logs or
- *                                 when there is none
- * @param firstPlaceTime           wall clock time of the first join or leave line, or {@code null} when there is none
  */
 public record ParsedLog(
     String minecraftVersion,
@@ -38,11 +31,7 @@ public record ParsedLog(
     LocalTime firstLineTime,
     LocalDate lastLineDate,
     LocalTime lastLineTime,
-    String sessionId,
-    boolean startup,
-    String endPlace,
-    LocalDate firstPlaceDate,
-    LocalTime firstPlaceTime
+    String sessionId
 ) {
     /**
      * @param date           calendar date from the line prefix, or {@code null} when the line is time-only
