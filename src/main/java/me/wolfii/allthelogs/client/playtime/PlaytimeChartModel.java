@@ -142,6 +142,16 @@ public final class PlaytimeChartModel {
      */
     public static Result build(List<PlaytimeSpan> spans, PlaytimeFilter filter, PlaytimeBreakdown breakdown,
                                PlaytimeStyle style, PlaytimeGrain grain, PlaytimeWindow view, int chartWidth) {
+        return build(spans, filter, breakdown, style, grain, view, chartWidth, false);
+    }
+
+    /**
+     * @param chartWidth    plot width in GUI pixels, used by {@link PlaytimeGrain#AUTO}, or 0 when unknown
+     * @param majorVersions group by the first two version components, so {@code 1.8.9} shares a series with {@code 1.8}
+     */
+    public static Result build(List<PlaytimeSpan> spans, PlaytimeFilter filter, PlaytimeBreakdown breakdown,
+                               PlaytimeStyle style, PlaytimeGrain grain, PlaytimeWindow view, int chartWidth,
+                               boolean majorVersions) {
         PlaytimeFilter active = filter == null ? PlaytimeFilter.all() : filter;
         PlaytimeBreakdown group = breakdown == null ? PlaytimeBreakdown.VERSION : breakdown;
         PlaytimeStyle drawn = style == null ? PlaytimeStyle.BARS : style;
@@ -166,7 +176,7 @@ public final class PlaytimeChartModel {
         PlaytimeWindow visible = PlaytimeWindow.clamp(domain, view);
         PlaytimeGrain resolved = PlaytimeGrain.resolve(grain, visible.start(), visible.end(), chartWidth);
         if (resolved == PlaytimeGrain.YEARS && !severalYears(domainStart, domainEnd)) resolved = PlaytimeGrain.MONTHS;
-        PlaytimeSeries.Index index = PlaytimeSeries.collect(kept, spans, group);
+        PlaytimeSeries.Index index = PlaytimeSeries.collect(kept, spans, group, majorVersions);
         List<PlaytimeSeries> series = index.series();
         List<LocalDateTime> buckets = buckets(domainStart, visible.end(), resolved);
         long[][] grid = new long[buckets.size()][series.size()];

@@ -1,6 +1,7 @@
 package me.wolfii.allthelogs.client.ui.screen.playtime;
 
 import io.wispforest.owo.ui.component.ButtonComponent;
+import io.wispforest.owo.ui.component.CheckboxComponent;
 import io.wispforest.owo.ui.component.LabelComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
@@ -21,6 +22,7 @@ import me.wolfii.allthelogs.client.playtime.PlaytimeSeries;
 import me.wolfii.allthelogs.client.playtime.PlaytimeSession;
 import me.wolfii.allthelogs.client.ui.popup.ChecklistMenu;
 import me.wolfii.allthelogs.client.ui.text.TextFit;
+import me.wolfii.allthelogs.client.ui.text.WrappedTooltip;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
 import me.wolfii.allthelogs.client.ui.widget.playtime.PlaytimeLegendWidget;
@@ -161,6 +163,38 @@ final class PlaytimeScreenSupport {
                 PlaytimeSession.filter(PlaytimeSession.filter().withServers(selected));
                 rebuild.run();
             });
+    }
+
+    /**
+     * Shown beside the group-by button while the chart groups by version. Checking it keeps only the first
+     * two version components, so {@code 1.8.9} is drawn as {@code 1.8} and {@code 26.2} stays {@code 26.2}.
+     */
+    static CheckboxComponent majorVersionsBox(Runnable rebuild) {
+        CheckboxComponent box = UIComponents.checkbox(Component.translatable("allthelogs.playtime.major_versions"));
+        box.tooltip(WrappedTooltip.of(Component.translatable("allthelogs.playtime.major_versions.hint")));
+        box.checked(PlaytimeSession.majorVersions());
+        box.onChanged(checked -> {
+            if (checked == PlaytimeSession.majorVersions()) return;
+            PlaytimeSession.majorVersions(checked);
+            rebuild.run();
+        });
+        return box;
+    }
+
+    /**
+     * Puts {@code box} immediately after the group-by button while grouping includes version, and removes it
+     * otherwise. The checked state is remembered either way.
+     */
+    static void syncMajorVersions(FlowLayout options, ButtonComponent groupButton, CheckboxComponent box) {
+        if (options == null || groupButton == null || box == null) return;
+        boolean show = PlaytimeSession.breakdown().byVersion();
+        boolean present = options.children().contains(box);
+        if (show && !present) {
+            int index = options.children().indexOf(groupButton);
+            options.child(index < 0 ? options.children().size() : index + 1, box);
+        } else if (!show && present) {
+            options.removeChild(box);
+        }
     }
 
     static Component versionLabel() {
