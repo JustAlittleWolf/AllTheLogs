@@ -1,17 +1,23 @@
 package me.wolfii.allthelogs.client.ui.popup;
 
 import io.wispforest.owo.ui.component.ButtonComponent;
+import io.wispforest.owo.ui.component.CheckboxComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.ScrollContainer;
 import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
+import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.ParentUIComponent;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.UIComponent;
+import io.wispforest.owo.ui.core.VerticalAlignment;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.Checkbox;
 import net.minecraft.network.chat.Component;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.function.IntConsumer;
@@ -27,6 +33,8 @@ public final class OptionMenu {
     private final IntSupplier screenWidth;
     private final IntSupplier screenHeight;
     private static final int ROW_HEIGHT = 20;
+    /** Inset so the checkbox box is not flush with the menu edge. */
+    private static final int CHECKBOX_PAD = 2;
 
     private ParentUIComponent menu;
     private ButtonComponent hoverAnchor;
@@ -69,13 +77,27 @@ public final class OptionMenu {
     }
 
     public void show(ButtonComponent anchor, List<Component> labels, IntConsumer pick) {
-        close();
-        open(anchor, labels, pick);
+        show(anchor, labels, pick, null);
     }
 
-    private void open(ButtonComponent anchor, List<Component> labels, IntConsumer pick) {
+    /**
+     * @param leading checkbox drawn as the first row, or null. Checking it leaves the list open.
+     */
+    public void show(ButtonComponent anchor, List<Component> labels, IntConsumer pick,
+                     @Nullable CheckboxComponent leading) {
+        close();
+        open(anchor, labels, pick, leading);
+    }
+
+    private void open(ButtonComponent anchor, List<Component> labels, IntConsumer pick,
+                      @Nullable CheckboxComponent leading) {
         FlowLayout items = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
         items.gap(1);
+        int rows = labels.size();
+        if (leading != null) {
+            items.child(checkboxRow(leading));
+            rows++;
+        }
         for (int index = 0; index < labels.size(); index++) {
             int chosen = index;
             ButtonComponent button = UIComponents.button(labels.get(index), ignored -> {
@@ -86,7 +108,8 @@ public final class OptionMenu {
             items.child(button);
         }
         int width = anchor.width();
-        int contentHeight = labels.size() * (ROW_HEIGHT + 1) - 1;
+        if (leading != null) width = Math.max(width, checkboxWidth(leading));
+        int contentHeight = rows * (ROW_HEIGHT + 1) - 1;
         int room = Math.max(ROW_HEIGHT, Math.max(screenHeight.getAsInt() - anchor.y() - anchor.height(), anchor.y()) - 12);
         int maxHeight = Math.min(contentHeight, Math.min(180, room));
         ScrollContainer<FlowLayout> scroll = OverflowScrollbar.vertical(Sizing.fixed(width), Sizing.fixed(maxHeight), items);
@@ -95,5 +118,23 @@ public final class OptionMenu {
             screenWidth.getAsInt(), screenHeight.getAsInt());
         menu = scroll;
         overlays.child(scroll);
+    }
+
+    /**
+     * The checkbox box is shorter than a menu button, so the row is button-height and the box sits in the middle.
+     */
+    private static FlowLayout checkboxRow(CheckboxComponent box) {
+        box.horizontalSizing(Sizing.fill());
+        box.verticalSizing(Sizing.fixed(Checkbox.getBoxSize(Minecraft.getInstance().font)));
+        FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(), Sizing.fixed(ROW_HEIGHT));
+        row.verticalAlignment(VerticalAlignment.CENTER);
+        row.padding(Insets.horizontal(CHECKBOX_PAD));
+        row.child(box);
+        return row;
+    }
+
+    private static int checkboxWidth(CheckboxComponent box) {
+        var font = Minecraft.getInstance().font;
+        return font.width(box.getMessage()) + Checkbox.getBoxSize(font) + 4 + CHECKBOX_PAD * 2;
     }
 }

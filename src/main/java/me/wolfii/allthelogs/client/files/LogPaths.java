@@ -6,8 +6,8 @@ import me.wolfii.allthelogs.data.importer.discover.LogDiscovery;
 import java.nio.file.Path;
 
 /**
- * Filesystem path a log can be opened at. A log read out of an archive opens that archive, because the
- * path inside a zip is not a file the operating system can open. A path that continues past an archive
+ * Filesystem path a log can be shown at. A log read out of an archive shows that archive, because the
+ * path inside a zip is not a file the file manager can select. A path that continues past an archive
  * segment stops at the archive too.
  */
 public final class LogPaths {
@@ -15,7 +15,7 @@ public final class LogPaths {
     }
 
     /**
-     * Absolute path to open for {@code source}, or {@code null} when the log is not a file (a live session).
+     * Absolute path to show for {@code source}, or {@code null} when the log is not a file (a live session).
      * Archive entries resolve to the archive file itself.
      */
     public static Path openable(LogSource source) {
