@@ -30,11 +30,11 @@ import java.util.function.IntSupplier;
 
 /**
  * Menu at the top of the timeline scrollbar. Hovering or clicking the hamburger opens Playtime, Import,
- * and Advanced to its left, top to bottom. A click keeps the menu open until a click outside it. Advanced
- * opens Export, Scripts, DB Cleanup, and Optimize database further to the side, dropping down from its
- * row, with a database info row under them. The row is plain text, not a button, and hovering it shows
- * the database summary. Export opens the export scope beside that, and the chosen scope opens the file
- * format. A row whose side menu is open stays highlighted.
+ * and Advanced below it, top to bottom. A click keeps the menu open until a click outside it. Advanced
+ * opens Export, Scripts, DB Cleanup, and Optimize database to the side, dropping down from its row, with
+ * a database info row under them. The row is plain text, not a button, and hovering it shows the database
+ * summary. Export opens the export scope beside that, and the chosen scope opens the file format. A row
+ * whose side menu is open stays highlighted.
  * <p>
  * The export menus are centered on the row they open from, moved only as far as the screen edge needs.
  * Every menu stays open for {@link #CLOSE_DELAY_MS} after the pointer leaves it, so it can be reached
@@ -115,9 +115,8 @@ final class BrowserToolsMenu {
     }
 
     /**
-     * Button at the top of the timeline scrollbar, one pixel taller than the message-count chip
-     * and two pixels above the list. The first menu opens to its left, into the screen, instead
-     * of off the top or the right edge.
+     * Button at the top of the timeline scrollbar. The first menu drops down from it, lined up
+     * with the button's right edge.
      */
     ButtonComponent button() {
         if (anchor != null) return anchor;
@@ -279,14 +278,12 @@ final class BrowserToolsMenu {
 
     /**
      * The strip between the hamburger and the menu counts as inside, so crossing it does not start the
-     * close delay. The menu opens to the left, and only sits below or above the button when that side
-     * does not fit.
+     * close delay. The menu drops down, and only sits above the button when the screen is too short for that.
      */
     private boolean anchorGap(int mouseX, int mouseY) {
         if (actions == null || anchor == null) return false;
-        return horizontalGap(actions, anchor, mouseX, mouseY)
-            || verticalGap(anchor, actions, mouseX, mouseY)
-            || verticalGap(actions, anchor, mouseX, mouseY);
+        if (actions.y() >= anchor.y() + anchor.height()) return verticalGap(anchor, actions, mouseX, mouseY);
+        return verticalGap(actions, anchor, mouseX, mouseY);
     }
 
     private boolean advancedHover(int mouseX, int mouseY) {
@@ -444,12 +441,12 @@ final class BrowserToolsMenu {
 
     private void placeActions() {
         if (actions == null || anchor == null || actions.width() <= 0 || actions.height() <= 0) return;
-        int[] at = beside(actions, anchor, false);
-        if (at == null) return;
-        if (placedActionsX == at[0] && placedActionsY == at[1]) return;
-        actions.positioning(Positioning.absolute(at[0], at[1]));
-        placedActionsX = at[0];
-        placedActionsY = at[1];
+        int x = dropdownX(anchor.x(), anchor.width(), actions.width());
+        int y = dropdownTop(anchor.y(), anchor.height(), GAP, actions.height(), screenHeight.getAsInt());
+        if (placedActionsX == x && placedActionsY == y) return;
+        actions.positioning(Positioning.absolute(x, y));
+        placedActionsX = x;
+        placedActionsY = y;
     }
 
     private void place(FlowLayout menu, UIComponent row) {
@@ -501,6 +498,14 @@ final class BrowserToolsMenu {
         int x = left >= 4 ? left : right;
         if (x + menuWidth > screenWidth - 4) x = Math.max(4, left);
         return x;
+    }
+
+    /**
+     * Left edge of a menu that drops down from an anchor on the right. The menu's right edge meets the
+     * anchor's right edge, and the menu shifts right only when that would leave the left of the screen.
+     */
+    static int dropdownX(int anchorX, int anchorWidth, int menuWidth) {
+        return Math.max(4, anchorX + anchorWidth - menuWidth);
     }
 
     /**
