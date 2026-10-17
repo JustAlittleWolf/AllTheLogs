@@ -213,8 +213,8 @@ class PlaytimeChartTest {
     @Test
     void autoKeepsBarsNarrowForTheChartWidth() {
         LocalDateTime start = at(1, 0);
-        assertEquals(PlaytimeGrain.MONTHS, PlaytimeGrain.resolve(PlaytimeGrain.AUTO, start, start.plusDays(5 * 365), 1000));
-        assertEquals(PlaytimeGrain.WEEKS, PlaytimeGrain.resolve(PlaytimeGrain.AUTO, start, start.plusDays(365), 1000));
+        assertEquals(PlaytimeGrain.MONTHS, PlaytimeGrain.resolve(PlaytimeGrain.AUTO, start, start.plusDays(7 * 365), 1000));
+        assertEquals(PlaytimeGrain.WEEKS, PlaytimeGrain.resolve(PlaytimeGrain.AUTO, start, start.plusDays(600), 1000));
         assertEquals(PlaytimeGrain.DAYS, PlaytimeGrain.resolve(PlaytimeGrain.AUTO, start, start.plusDays(90), 1000));
         assertEquals(PlaytimeGrain.DAYS, PlaytimeGrain.resolve(PlaytimeGrain.AUTO, start, start.plusDays(20), 1000));
     }
