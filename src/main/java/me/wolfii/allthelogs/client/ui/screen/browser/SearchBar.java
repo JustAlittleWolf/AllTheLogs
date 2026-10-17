@@ -4,6 +4,7 @@ import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.UIComponent;
+import io.wispforest.owo.ui.core.VerticalAlignment;
 import me.wolfii.allthelogs.client.search.SearchDecorations;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
@@ -24,6 +25,13 @@ import java.util.function.Supplier;
 final class SearchBar {
     /** Edit-box cap. Long chat patterns need more than the old 256, and 2^16 is still one string. */
     static final int MAX_LENGTH = 1 << 16;
+    /**
+     * Search fields are 20px and fill that box. A vanilla button paints a 1px black frame inside the same
+     * 20px, so its gray face is shorter. Two extra pixels let that face match the field.
+     */
+    static final int FILTER_BUTTON_HEIGHT = 22;
+    /** Negative top margin. Pulls the taller button up so the black frame sits outside the field. */
+    static final int FILTER_BUTTON_LIFT = -1;
 
     private final FlowLayout column = UIContainers.verticalFlow(Sizing.expand(), Sizing.content());
     private final SearchErrorChip errorChip = new SearchErrorChip();
@@ -50,6 +58,19 @@ final class SearchBar {
 
     DecoratedSearchField field() {
         return field;
+    }
+
+    /**
+     * Puts {@code trailing} on the field's row, under the error chip. The two stay centered on each other
+     * when the chip appears above them.
+     */
+    void trailing(UIComponent trailing) {
+        FlowLayout row = UIContainers.horizontalFlow(Sizing.expand(), Sizing.content());
+        row.gap(4).verticalAlignment(VerticalAlignment.CENTER).allowOverflow(true);
+        column.removeChild(field);
+        row.child(field);
+        row.child(trailing);
+        column.child(row);
     }
 
     /**

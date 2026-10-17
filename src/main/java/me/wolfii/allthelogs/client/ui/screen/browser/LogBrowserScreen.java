@@ -250,19 +250,22 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
 
     private FlowLayout buildToolbar() {
         FlowLayout bar = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
-        bar.gap(4).verticalAlignment(VerticalAlignment.BOTTOM);
 
         searchBar = new SearchBar(queries::filter, Component.translatable("allthelogs.search.placeholder"),
             this::applySearchText);
         search = searchBar.field();
-        bar.child(searchBar.component());
 
         filterButton = UIComponents.button(ActiveFilters.buttonLabel(ActiveFilters.of(queries.filter()).size()),
             button -> {
                 filters.toggle();
                 refreshSearchDecorations();
             });
-        bar.child(filterButton);
+        // The button texture keeps a 1px black frame inside its bounds. Two extra pixels, shifted up by
+        // one, put the gray face on the search field's edges.
+        filterButton.verticalSizing(Sizing.fixed(SearchBar.FILTER_BUTTON_HEIGHT));
+        filterButton.margins(Insets.top(SearchBar.FILTER_BUTTON_LIFT));
+        searchBar.trailing(filterButton);
+        bar.child(searchBar.component());
         refreshFilterButton();
         return bar;
     }
