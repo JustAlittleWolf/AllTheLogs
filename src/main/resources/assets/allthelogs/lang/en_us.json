@@ -136,7 +136,7 @@
   "allthelogs.playtime.breakdown.server_player": "Server, Player",
   "allthelogs.playtime.breakdown.player": "Player",
   "allthelogs.playtime.major_versions": "Major Only",
-  "allthelogs.playtime.major_versions.hint": "Shows versions grouped by major version only",
+  "allthelogs.playtime.major_versions.hint": "Versions are grouped by major version only",
   "allthelogs.playtime.style": "Chart: %s",
   "allthelogs.playtime.style.bars": "Bars",
   "allthelogs.playtime.style.cumulative": "Cumulative",
