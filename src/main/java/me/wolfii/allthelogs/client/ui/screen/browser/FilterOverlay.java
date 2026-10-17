@@ -195,7 +195,7 @@ final class FilterOverlay {
 
         ScrollContainer<FlowLayout> panel = OverflowScrollbar.vertical(
             Sizing.fixed(PANEL_WIDTH), Sizing.fill(), content);
-        panel.surface(PanelSurfaces.card());
+        panel.surface(detached ? PanelSurfaces.card() : PanelSurfaces.filterSidebar());
         panel.margins(Insets.none());
         panel.padding(Insets.none());
         panel.verticalSizing(Sizing.fill());

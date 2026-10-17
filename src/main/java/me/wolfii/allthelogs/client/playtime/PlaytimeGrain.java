@@ -20,7 +20,7 @@ public enum PlaytimeGrain {
     static final long MAX_WEEKS = 366;
     static final long MAX_MONTHS = 3_660;
     /** Widest bar, in GUI pixels, that {@link #AUTO} allows before choosing a finer interval. */
-    public static final int MAX_AUTO_BAR_WIDTH = 20;
+    public static final int MAX_AUTO_BAR_WIDTH = 12;
     /** Zooming in stops once this many bars of the interval are visible; {@link #AUTO} counts days. */
     public static final int MIN_VISIBLE_BARS = 20;
     private static final PlaytimeGrain[] COARSE_TO_FINE = {YEARS, MONTHS, WEEKS};

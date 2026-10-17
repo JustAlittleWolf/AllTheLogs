@@ -116,10 +116,16 @@ public final class LogImporter {
                         }
                         try {
                             PreparedLog prepared = LogPreparer.prepare(candidate, options.timezone());
+                            boolean storedMetadataRepair = options.updateMetadataOnly()
+                                && (writer.hasStoredLocation(candidate.sourcePath(), candidate.entryPath())
+                                    || (prepared.sessionId() != null && writer.hasSession(prepared.sessionId())));
                             // Not stored: missing timestamps, or no chat and no resource-manager reload.
                             // Empty files are stored logs that have no chat lines.
-                            if (prepared.firstLineTime() == null || prepared.lastLineTime() == null
-                                || (prepared.messages().isEmpty() && !prepared.resourceManagerReloaded())) {
+                            boolean missingTimestamps = prepared.firstLineTime() == null
+                                || prepared.lastLineTime() == null;
+                            boolean emptyWithoutReload = prepared.messages().isEmpty()
+                                && !prepared.resourceManagerReloaded();
+                            if ((missingTimestamps || emptyWithoutReload) && !storedMetadataRepair) {
                                 skipped.incrementAndGet();
                                 writer.markConsidered(candidate.sourcePath(), candidate.entryPath(),
                                     candidate.contentHash());
@@ -216,9 +222,11 @@ public final class LogImporter {
             }
 
             observer.finished();
-            observer.enterPhase(options.shouldOptimize(writer.writtenFiles())
-                ? ImportPhase.CHUNKING
-                : ImportPhase.OPTIMIZING, 0d);
+            if (!options.updateMetadataOnly()) {
+                observer.enterPhase(options.shouldOptimize(writer.writtenFiles())
+                    ? ImportPhase.CHUNKING
+                    : ImportPhase.OPTIMIZING, 0d);
+            }
 
             RuntimeException discoveryFailure = failureRef.get();
             if (discoveryFailure != null && !stop.getAsBoolean()) throw discoveryFailure;
@@ -229,6 +237,13 @@ public final class LogImporter {
                 writer.applyMetadataPatches(options);
             }
             ContinuationLinker.link(connection, writer.touchedFiles());
+
+            // Metadata file counts are final only after applying the queued patches.
+            if (options.updateMetadataOnly()) {
+                observer.enterPhase(options.shouldOptimize(writer.writtenFiles())
+                    ? ImportPhase.CHUNKING
+                    : ImportPhase.OPTIMIZING, 0d);
+            }
 
             List<ImportResult.Failure> failures = new ArrayList<>(discovery.failures());
             failures.addAll(parseFailures);

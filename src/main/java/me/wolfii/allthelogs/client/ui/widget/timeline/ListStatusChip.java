@@ -1,32 +1,23 @@
 package me.wolfii.allthelogs.client.ui.widget.timeline;
 
-import io.wispforest.owo.ui.core.OwoUIGraphics;
-import me.wolfii.allthelogs.client.list.MessageListLayout;
 import me.wolfii.allthelogs.client.ui.text.MessageText;
-import me.wolfii.allthelogs.client.ui.theme.Colors;
-import me.wolfii.allthelogs.client.ui.widget.HoverChip;
-import net.minecraft.client.gui.Font;
 import net.minecraft.network.chat.Component;
 
 /**
- * The chip in the top-right of the list: a persistent overlay message, a loading label, or the
- * message/match count and search duration.
+ * Match count and query time drawn at the top-right of the message list: a persistent overlay message,
+ * a loading label, or the message/match count.
  * <p>
- * A fresh count is shown for {@link #VISIBLE_MS} and stays up for as long as the pointer is over the list, so
- * it can be re-read on demand without re-running the search. Loading is only announced after
- * {@link #LOADING_DELAY_MS} so that fast queries do not flash it.
+ * The count stays on screen once a search has produced one, and is replaced by {@code Loading...} only
+ * after the query has already run for more than a second. A finished query shows its duration only when
+ * it took longer than that.
  */
 final class ListStatusChip {
-    private static final int VISIBLE_MS = 5000;
-    private static final int LOADING_DELAY_MS = 100;
-    private static final int PAD_X = 8;
 
     private long matchCount;
     private boolean exactMatchCount;
     private long elapsedMs;
     private boolean showMatchCount;
     private boolean narrowed;
-    private long visibleUntilMs;
     private Component overlay = Component.empty();
     private boolean loading;
     private long loadingSinceMs;
@@ -48,8 +39,12 @@ final class ListStatusChip {
     }
 
     void setLoading(boolean loading) {
+        setLoading(loading, System.currentTimeMillis());
+    }
+
+    void setLoading(boolean loading, long nowMs) {
         this.loading = loading;
-        this.loadingSinceMs = loading ? System.currentTimeMillis() : 0;
+        this.loadingSinceMs = loading ? nowMs : 0;
     }
 
     /**
@@ -92,31 +87,29 @@ final class ListStatusChip {
     }
 
     /**
-     * Whether the loading label has been pending long enough to be worth showing.
+     * Whether {@code Loading...} is due. Fast queries never reach this, and the label does not include
+     * the time still elapsing.
      */
     boolean showingLoading() {
-        return loading && loadingSinceMs > 0 && System.currentTimeMillis() - loadingSinceMs >= LOADING_DELAY_MS;
+        return showingLoading(System.currentTimeMillis());
     }
 
-    void draw(OwoUIGraphics graphics, ListView view, boolean pointerOverList) {
-        boolean persistent = !overlay.getString().isEmpty();
-        boolean timed = showMatchCount && (pointerOverList || System.currentTimeMillis() < visibleUntilMs);
-        boolean showLoading = showingLoading();
-        if (!persistent && !timed && !showLoading) {
-            showMatchCount = false;
-            return;
-        }
-        Component text = MessageText.listStatus(overlay, showLoading, timed || showMatchCount, matchCount,
+    boolean showingLoading(long nowMs) {
+        return loading && loadingSinceMs > 0 && nowMs - loadingSinceMs > MessageText.TIMED_STATUS_MS;
+    }
+
+    /**
+     * Status for {@code nowMs}. The count does not expire. A query that has already run for more than a
+     * second replaces it with {@code Loading...}. A finished query shows its duration only when that was
+     * over a second.
+     */
+    Component text(long nowMs) {
+        return MessageText.listStatus(overlay, showingLoading(nowMs), showMatchCount, matchCount,
             exactMatchCount, elapsedMs, narrowed);
-        Font font = view.font();
-        int listWidth = view.listWidth();
-        int boxWidth = Math.min(listWidth - 2 * PAD_X, font.width(text) + 2 * PAD_X);
-        int boxHeight = MessageListLayout.DATE_HEIGHT;
-        int boxX = view.x() + Math.max(PAD_X, listWidth - PAD_X - boxWidth);
-        int boxY = view.y();
-        HoverChip.fill(graphics, boxX, boxY, boxWidth, boxHeight, Colors.STATUS_CHIP);
-        int textY = boxY + Math.max(0, (boxHeight - font.lineHeight) / 2) + 2;
-        graphics.drawText(text, boxX + PAD_X, textY, 1, Colors.TEXT);
+    }
+
+    Component text() {
+        return text(System.currentTimeMillis());
     }
 
     private void show(long matches, boolean exact, long elapsedMs) {
@@ -124,6 +117,5 @@ final class ListStatusChip {
         this.exactMatchCount = exact;
         this.elapsedMs = Math.max(0, elapsedMs);
         this.showMatchCount = true;
-        this.visibleUntilMs = System.currentTimeMillis() + VISIBLE_MS;
     }
 }

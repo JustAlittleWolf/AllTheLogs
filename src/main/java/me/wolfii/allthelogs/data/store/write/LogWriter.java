@@ -35,6 +35,7 @@ public final class LogWriter implements AutoCloseable {
     private final DuckDBAppender fileAppender;
     private final DuckDBAppender entryAppender;
     private DuckDBAppender metadataAppender;
+    private DuckDBAppender versionMetadataAppender;
     private final Map<String, Long> existingLocations = new ConcurrentHashMap<>();
     private final Set<String> seenLocations = ConcurrentHashMap.newKeySet();
     private final Set<String> seenHashes = ConcurrentHashMap.newKeySet();
@@ -44,6 +45,7 @@ public final class LogWriter implements AutoCloseable {
     /** First file id handed out by this writer; counters and dedup bookkeeping are scoped to this import. */
     private final long sessionStartId;
     private final Set<Long> touchedFiles = new HashSet<>();
+    private final Set<Long> metadataCountedFiles = new HashSet<>();
     private final PickedContinuations pickedContinuations = new PickedContinuations();
     private long nextFileId;
     private long bufferedEntries;
@@ -51,6 +53,8 @@ public final class LogWriter implements AutoCloseable {
     private int writtenFiles;
     private boolean metadataPatchReady;
     private int metadataPatchFiles;
+    private boolean versionMetadataPatchReady;
+    private int versionMetadataPatchFiles;
 
     public LogWriter(DuckDBConnection connection) throws SQLException {
         this.connection = connection;
@@ -101,6 +105,11 @@ public final class LogWriter implements AutoCloseable {
     public boolean isAlreadyImported(String sourcePath, String entryPath) {
         String key = locationKey(sourcePath, entryPath);
         return existingLocations.containsKey(key) || seenLocations.contains(key);
+    }
+
+    /** Whether a log file row exists at this exact source and entry path. */
+    public boolean hasStoredLocation(String sourcePath, String entryPath) {
+        return existingLocations.containsKey(locationKey(sourcePath, entryPath));
     }
 
     /**
@@ -226,6 +235,7 @@ public final class LogWriter implements AutoCloseable {
     public void updateMetadata(PreparedLog log, ImportOptions options) throws SQLException {
         markConsidered(log.sourcePath(), log.entryPath(), log.contentHash());
         pickedContinuations.add(log);
+        queueVersionMetadata(log);
         if (log.messages().isEmpty()) {
             return;
         }
@@ -274,11 +284,18 @@ public final class LogWriter implements AutoCloseable {
      * what made metadata-only imports sit on "Optimizing database..." until they timed out.
      */
     public void applyMetadataPatches(ImportOptions options) throws SQLException {
-        if (!metadataPatchReady || metadataPatchFiles == 0) {
-            return;
+        if (metadataPatchReady && metadataPatchFiles > 0) {
+            flushMetadataAppender();
+            pickedContinuations.apply(connection);
+            applyChatMetadataPatches(options);
         }
-        flushMetadataAppender();
-        pickedContinuations.apply(connection);
+        if (versionMetadataPatchReady && versionMetadataPatchFiles > 0) {
+            flushVersionMetadataAppender();
+            applyVersionMetadataPatches(options);
+        }
+    }
+
+    private void applyChatMetadataPatches(ImportOptions options) throws SQLException {
         String session = SourceKind.SESSION.name();
         String formattingFlag = overwrite(options.overwriteFormatting(), options.overwriteLive(), session);
         String userFlag = overwrite(options.overwriteMinecraftUser(), options.overwriteLive(), session);
@@ -357,10 +374,100 @@ public final class LogWriter implements AutoCloseable {
             if (updated > 0) {
                 writtenFiles += metadataPatchFiles;
                 writtenEntries += updated;
+                metadataCountedFiles.addAll(touchedFiles);
             }
         }
         metadataPatchReady = false;
         metadataPatchFiles = 0;
+    }
+
+    private void queueVersionMetadata(PreparedLog log) throws SQLException {
+        String version = log.minecraftVersion();
+        if (version == null || version.isBlank() || "unknown".equalsIgnoreCase(version.trim())) return;
+        if (!versionMetadataPatchReady) {
+            flushAppenders();
+            try (Statement statement = connection.createStatement()) {
+                statement.execute("""
+                    CREATE TABLE IF NOT EXISTS metadata_version_patch (
+                        source_path VARCHAR,
+                        entry_path VARCHAR,
+                        session_id VARCHAR,
+                        minecraft_version VARCHAR
+                    )
+                    """);
+            }
+            versionMetadataAppender = connection.createAppender(DuckDBConnection.DEFAULT_SCHEMA,
+                "metadata_version_patch");
+            versionMetadataPatchReady = true;
+        }
+        versionMetadataAppender.beginRow();
+        versionMetadataAppender.append(log.sourcePath());
+        versionMetadataAppender.append(log.entryPath());
+        if (log.sessionId() == null) versionMetadataAppender.appendNull();
+        else versionMetadataAppender.append(log.sessionId());
+        versionMetadataAppender.append(version.trim());
+        versionMetadataAppender.endRow();
+        versionMetadataPatchFiles++;
+    }
+
+    private void applyVersionMetadataPatches(ImportOptions options) throws SQLException {
+        String session = SourceKind.SESSION.name();
+        String overwriteFile = options.overwriteMinecraftVersion() ? "true" : "false";
+        String overwriteSession = options.overwriteMinecraftVersion() && options.overwriteLive() ? "true" : "false";
+        Set<Long> updatedIds = new HashSet<>();
+        try (Statement statement = connection.createStatement()) {
+            collectUpdatedIds(statement, """
+                UPDATE log_file AS f
+                SET minecraft_version = p.minecraft_version
+                FROM (
+                    SELECT source_path, entry_path, min(minecraft_version) AS minecraft_version
+                    FROM metadata_version_patch
+                    GROUP BY source_path, entry_path
+                    HAVING count(DISTINCT minecraft_version) = 1
+                ) p
+                WHERE f.source_path = p.source_path AND f.entry_path = p.entry_path
+                  AND (f.minecraft_version IS NULL OR trim(f.minecraft_version) = ''
+                       OR lower(trim(f.minecraft_version)) = 'unknown'
+                       OR (%s AND (f.source_kind <> '%s' OR %s)))
+                RETURNING id
+                """.formatted(overwriteFile, session, overwriteSession), updatedIds);
+            // A marked file can also be the disk copy of a live capture. Only its UUID may identify the
+            // session row, and only an explicit version overwrite with overwriteLive can replace a known value.
+            collectUpdatedIds(statement, """
+                UPDATE log_file AS f
+                SET minecraft_version = p.minecraft_version
+                FROM (
+                    SELECT session_id, min(minecraft_version) AS minecraft_version
+                    FROM metadata_version_patch
+                    WHERE session_id IS NOT NULL
+                    GROUP BY session_id
+                    HAVING count(DISTINCT minecraft_version) = 1
+                ) p
+                WHERE f.source_kind = '%s'
+                  AND f.entry_path = 'session/' || lower(p.session_id)
+                  AND (SELECT count(*) FROM log_file s
+                       WHERE s.source_kind = '%s'
+                         AND s.entry_path = 'session/' || lower(p.session_id)) = 1
+                  AND (f.minecraft_version IS NULL OR trim(f.minecraft_version) = ''
+                       OR lower(trim(f.minecraft_version)) = 'unknown' OR %s)
+                RETURNING id
+                """.formatted(session, session, overwriteSession), updatedIds);
+            touchedFiles.addAll(updatedIds);
+            // Existing chat files are counted by the chat patch path above; version-only and chat-free rows
+            // still count as imported metadata work.
+            updatedIds.removeAll(metadataCountedFiles);
+            writtenFiles += updatedIds.size();
+            statement.execute("DROP TABLE IF EXISTS metadata_version_patch");
+        }
+        versionMetadataPatchReady = false;
+        versionMetadataPatchFiles = 0;
+    }
+
+    private static void collectUpdatedIds(Statement statement, String sql, Set<Long> updatedIds) throws SQLException {
+        statement.execute(sql);
+        try (ResultSet result = statement.getResultSet()) {
+            while (result != null && result.next()) updatedIds.add(result.getLong(1));
+        }
     }
 
     /**
@@ -601,14 +708,23 @@ public final class LogWriter implements AutoCloseable {
         metadataAppender = null;
     }
 
+    private void flushVersionMetadataAppender() throws SQLException {
+        if (versionMetadataAppender == null) return;
+        versionMetadataAppender.flush();
+        versionMetadataAppender.close();
+        versionMetadataAppender = null;
+    }
+
     @Override
     public void close() throws SQLException {
         fileAppender.close();
         entryAppender.close();
         flushMetadataAppender();
+        flushVersionMetadataAppender();
         persistSeen();
         try (Statement statement = connection.createStatement()) {
             statement.execute("DROP TABLE IF EXISTS metadata_patch");
+            statement.execute("DROP TABLE IF EXISTS metadata_version_patch");
             statement.execute("COMMIT");
         }
     }
