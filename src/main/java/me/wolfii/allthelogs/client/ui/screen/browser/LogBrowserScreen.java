@@ -18,6 +18,7 @@ import me.wolfii.allthelogs.client.config.BrowserSession;
 import me.wolfii.allthelogs.client.export.ExportMetadata;
 import me.wolfii.allthelogs.client.export.ExportProgress;
 import me.wolfii.allthelogs.client.export.MessageExport;
+import me.wolfii.allthelogs.client.files.FileReveal;
 import me.wolfii.allthelogs.client.files.LogPaths;
 import me.wolfii.allthelogs.client.list.DisplayRow;
 import me.wolfii.allthelogs.client.list.MessageSelection;
@@ -35,7 +36,6 @@ import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
-import net.minecraft.util.Util;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -347,23 +347,24 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
             }
             Path openable = LogPaths.openable(row.chatLog().source());
             if (openable != null) {
-                menu.button(Component.translatable("allthelogs.menu.open_path"), ignored -> {
+                menu.button(Component.translatable("allthelogs.menu.open_log_file_path"), ignored -> {
                     closeMessageMenu();
-                    openPath(openable);
+                    showLogFile(openable);
                 });
             }
         });
     }
 
     /**
-     * Opens the log file in the operating system, or the archive when the line was read from one.
+     * Shows the log file in the file manager with that file selected, or the archive when the line
+     * was read from one.
      */
-    private static void openPath(Path path) {
-        try {
-            Util.getPlatform().openPath(path);
-        } catch (RuntimeException error) {
-            AllTheLogsClient.LOGGER.warn("Could not open {}", path, error);
-        }
+    private static void showLogFile(Path path) {
+        FileReveal.reveal(path).whenComplete((ignored, error) -> {
+            if (error != null) {
+                AllTheLogsClient.LOGGER.warn("Could not show {}", path, error);
+            }
+        });
     }
 
     private void openScripts() {

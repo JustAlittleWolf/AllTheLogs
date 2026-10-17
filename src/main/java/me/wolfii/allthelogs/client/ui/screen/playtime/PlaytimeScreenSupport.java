@@ -21,6 +21,7 @@ import me.wolfii.allthelogs.client.playtime.PlaytimeFilter;
 import me.wolfii.allthelogs.client.playtime.PlaytimeSeries;
 import me.wolfii.allthelogs.client.playtime.PlaytimeSession;
 import me.wolfii.allthelogs.client.ui.popup.ChecklistMenu;
+import me.wolfii.allthelogs.client.ui.popup.OptionMenu;
 import me.wolfii.allthelogs.client.ui.text.TextFit;
 import me.wolfii.allthelogs.client.ui.text.WrappedTooltip;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
@@ -166,10 +167,23 @@ final class PlaytimeScreenSupport {
     }
 
     /**
-     * Shown beside the group-by button while the chart groups by version. Checking it keeps only the first
-     * two version components, so {@code 1.8.9} is drawn as {@code 1.8} and {@code 26.2} stays {@code 26.2}.
+     * Group menu. While the chart is grouped by version, the first row is a checkbox that keeps only the
+     * first two version components, so {@code 1.8.9} is drawn as {@code 1.8} and {@code 26.2} stays {@code 26.2}.
      */
-    static CheckboxComponent majorVersionsBox(Runnable rebuild) {
+    static void openBreakdown(OptionMenu menu, ButtonComponent button, Runnable closeMenus, Runnable rebuild) {
+        if (menu.isOpen()) return;
+        closeMenus.run();
+        menu.show(button, groupChoices(), index -> {
+            PlaytimeSession.breakdown(GROUPS[index]);
+            rebuild.run();
+        }, majorVersionsChoice(rebuild));
+    }
+
+    /**
+     * The group menu's leading checkbox, or null when the current grouping does not include a version.
+     */
+    private static @Nullable CheckboxComponent majorVersionsChoice(Runnable rebuild) {
+        if (!PlaytimeSession.breakdown().byVersion()) return null;
         CheckboxComponent box = UIComponents.checkbox(Component.translatable("allthelogs.playtime.major_versions"));
         box.tooltip(WrappedTooltip.of(Component.translatable("allthelogs.playtime.major_versions.hint")));
         box.checked(PlaytimeSession.majorVersions());
@@ -179,22 +193,6 @@ final class PlaytimeScreenSupport {
             rebuild.run();
         });
         return box;
-    }
-
-    /**
-     * Puts {@code box} immediately after the group-by button while grouping includes version, and removes it
-     * otherwise. The checked state is remembered either way.
-     */
-    static void syncMajorVersions(FlowLayout options, ButtonComponent groupButton, CheckboxComponent box) {
-        if (options == null || groupButton == null || box == null) return;
-        boolean show = PlaytimeSession.breakdown().byVersion();
-        boolean present = options.children().contains(box);
-        if (show && !present) {
-            int index = options.children().indexOf(groupButton);
-            options.child(index < 0 ? options.children().size() : index + 1, box);
-        } else if (!show && present) {
-            options.removeChild(box);
-        }
     }
 
     static Component versionLabel() {
