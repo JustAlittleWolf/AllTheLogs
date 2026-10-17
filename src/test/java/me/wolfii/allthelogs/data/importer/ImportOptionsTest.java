@@ -35,9 +35,38 @@ class ImportOptionsTest {
         assertTrue(ImportOptions.defaults().shouldOptimize(1));
         assertFalse(ImportOptions.defaults().shouldOptimize(0));
         ImportOptions metadata = ImportOptions.defaults().withUpdateMetadataOnly(true);
-        assertFalse(metadata.shouldOptimize(16));
+        assertTrue(metadata.shouldOptimize(16));
+        assertFalse(metadata.shouldOptimize(0));
+        assertFalse(metadata.withOptimize(false).shouldOptimize(16));
+        ImportOptions threshold = metadata.withOptimize(false).withOptimizeIfImportedFilesExceed(15);
+        assertFalse(threshold.shouldOptimize(15));
+        assertTrue(threshold.shouldOptimize(16));
         assertFalse(ImportOptions.defaults().reparseExistingLogs());
         assertTrue(metadata.withSkipAlreadyImported(false).reparseExistingLogs());
         assertFalse(metadata.withSkipAlreadyImported(true).reparseExistingLogs());
+    }
+
+    @Test
+    void versionOverwriteIsOptInAndSurvivesOptionCopies() {
+        ImportOptions defaults = ImportOptions.defaults();
+        assertFalse(defaults.overwriteMinecraftVersion());
+        assertFalse(defaults.overwritesAnyMetadata());
+
+        ImportOptions versionOverwrite = defaults.withOverwriteMinecraftVersion(true);
+        assertTrue(versionOverwrite.overwriteMinecraftVersion());
+        assertTrue(versionOverwrite.overwritesAnyMetadata());
+        assertTrue(versionOverwrite.withParallelism(defaults.parallelism()).overwriteMinecraftVersion());
+
+        ImportOptions noOverwrite = versionOverwrite.withOverwriteMinecraftVersion(false);
+        assertFalse(noOverwrite.overwriteMinecraftVersion());
+        assertFalse(noOverwrite.overwritesAnyMetadata());
+    }
+
+    @Test
+    void originalConstructorDefaultsVersionOverwriteToFalse() {
+        ImportOptions options = new ImportOptions(true, true, null, 1, false, true, 0,
+            ZoneId.systemDefault(), false, false, false, false, false);
+
+        assertFalse(options.overwriteMinecraftVersion());
     }
 }
