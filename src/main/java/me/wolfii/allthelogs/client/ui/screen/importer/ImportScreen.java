@@ -50,6 +50,7 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
     private boolean overwriteFormatting;
     private boolean overwriteMinecraftUser;
     private boolean overwriteMinecraftServer;
+    private boolean overwriteMinecraftVersion;
     private boolean overwriteLive;
     private String pathMatcher = "";
     private ZoneId timezone = ZoneId.systemDefault();
@@ -62,6 +63,7 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
     private CheckboxComponent overwriteFormattingBox;
     private CheckboxComponent overwriteMinecraftUserBox;
     private CheckboxComponent overwriteMinecraftServerBox;
+    private CheckboxComponent overwriteMinecraftVersionBox;
     private CheckboxComponent overwriteLiveBox;
     private FlowLayout advancedOptions;
     private FlowLayout metadataFields;
@@ -213,15 +215,24 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
             });
         row.child(overwriteFormattingBox);
         row.child(overwriteMinecraftUserBox);
-        row.child(overwriteMinecraftServerBox);
         fields.child(row);
+        FlowLayout secondRow = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
+        secondRow.gap(12).verticalAlignment(VerticalAlignment.CENTER);
+        secondRow.child(overwriteMinecraftServerBox);
+        overwriteMinecraftVersionBox = optionCheckbox("allthelogs.import.overwrite.version", overwriteMinecraftVersion,
+            value -> {
+                overwriteMinecraftVersion = value;
+                syncOverwriteLive();
+            });
+        secondRow.child(overwriteMinecraftVersionBox);
+        fields.child(secondRow);
         overwriteLiveBox = optionCheckbox("allthelogs.import.overwrite.live", overwriteLive, value -> overwriteLive = value);
         if (overwritesAny()) fields.child(overwriteLiveBox);
         return fields;
     }
 
     private boolean overwritesAny() {
-        return overwriteFormatting || overwriteMinecraftUser || overwriteMinecraftServer;
+        return overwriteFormatting || overwriteMinecraftUser || overwriteMinecraftServer || overwriteMinecraftVersion;
     }
 
     private void syncOverwriteLive() {
@@ -299,6 +310,7 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
         overwriteFormatting = options.overwriteFormatting();
         overwriteMinecraftUser = options.overwriteMinecraftUser();
         overwriteMinecraftServer = options.overwriteMinecraftServer();
+        overwriteMinecraftVersion = options.overwriteMinecraftVersion();
         overwriteLive = options.overwriteLive();
         pathMatcher = options.pathMatcher() == null ? "" : options.pathMatcher();
         if (recursiveBox != null) recursiveBox.checked(recursive);
@@ -307,6 +319,7 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
         if (overwriteFormattingBox != null) overwriteFormattingBox.checked(overwriteFormatting);
         if (overwriteMinecraftUserBox != null) overwriteMinecraftUserBox.checked(overwriteMinecraftUser);
         if (overwriteMinecraftServerBox != null) overwriteMinecraftServerBox.checked(overwriteMinecraftServer);
+        if (overwriteMinecraftVersionBox != null) overwriteMinecraftVersionBox.checked(overwriteMinecraftVersion);
         if (overwriteLiveBox != null) overwriteLiveBox.checked(overwriteLive);
         syncOverwriteLive();
         if (updateMetadataBox != null) updateMetadataBox.checked(updateMetadataOnly);
@@ -343,7 +356,9 @@ public final class ImportScreen extends BaseOwoScreen<StackLayout> {
             .withOverwriteFormatting(overwriteFormatting)
             .withOverwriteMinecraftUser(overwriteMinecraftUser)
             .withOverwriteMinecraftServer(overwriteMinecraftServer)
-            .withOverwriteLive(overwriteLive && (overwriteFormatting || overwriteMinecraftUser || overwriteMinecraftServer))
+            .withOverwriteMinecraftVersion(overwriteMinecraftVersion)
+            .withOverwriteLive(overwriteLive && (overwriteFormatting || overwriteMinecraftUser
+                || overwriteMinecraftServer || overwriteMinecraftVersion))
             .withParallelism(parallelism)
             .withTimezone(ImportTimezones.forImport(zone, summerTime));
         if (!pathMatcher.isBlank()) {

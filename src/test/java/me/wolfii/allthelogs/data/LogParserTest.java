@@ -20,6 +20,37 @@ class LogParserTest {
     }
 
     @Test
+    void removesNulsBeforeRecognizingMetadataAndChat() throws IOException {
+        ParsedLog parsed = parse("""
+            \u0000\u0000[12:16:20] [main/INFO]: Loading Mine\u0000craft 1.21.8 with Fabric Loader 0.17.2\u0000
+            \u0000[12:16:21] [Render thread/INFO]: Connecting to example.org, 25565\u0000
+            \u0000[12:16:22] [Render thread/INFO]: [CHAT] \u00a7ahe\u0000llo\u0000
+            con\u0000tinued\u0000
+            \u0000[12:16:23] [Render thread/INFO]: Stopping!\u0000
+            [12:16:24] [Render thread/INFO]: [CHAT] after
+            """);
+        assertEquals("1.21.8", parsed.minecraftVersion());
+        assertEquals(2, parsed.entries().size());
+        ParsedLog.Entry first = parsed.entries().getFirst();
+        assertEquals("hello\ncontinued", first.message());
+        assertEquals("example.org", first.serverOrWorld());
+        assertEquals(LocalTime.of(12, 16, 22), first.time());
+        assertEquals(PackedFormatting.color(0x55FF55), PackedFormatting.at(first.formatting(), 0));
+        assertNull(parsed.entries().get(1).serverOrWorld());
+    }
+
+    @Test
+    void nulRemovalDoesNotMakeChatIntoPlaceEvidence() throws IOException {
+        ParsedLog parsed = parse("""
+            \u0000[12:16:21] [Render thread/INFO]: [CH\u0000AT] Connecting to fake.example, 25565\u0000
+            [12:16:22] [Render thread/INFO]: [CHAT] Saving chunks for level 'ServerLevel[Fake]'/minecraft:overworld
+            """);
+        assertEquals(2, parsed.entries().size());
+        assertNull(parsed.serverOrWorld());
+        assertTrue(parsed.entries().stream().allMatch(entry -> entry.serverOrWorld() == null));
+    }
+
+    @Test
     void dropsChatHeadPlaceholdersFromImportedLines() throws IOException {
         ParsedLog parsed = parse("""
             [12:16:21] [Client thread/INFO]: [CHAT] \uFFFCJustAlittleWolf sagt: Test

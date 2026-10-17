@@ -24,11 +24,11 @@ import java.util.function.Consumer;
  *                                       or the same SHA-256 of raw bytes) are not imported again; path matches are
  *                                       left unopened, identical copies at a new path are skipped after the bytes
  *                                       are read
- * @param optimize                       whether a successful import of new files should rewrite the whole
+ * @param optimize                       whether a successful import or metadata update should rewrite the whole
  *                                       {@code chat_entry} table oldest-first and compact the database file afterwards
  * @param optimizeIfImportedFilesExceed  when {@code optimize} is false, still cluster if more than this many files
- *                                       were newly stored, only the new files when they come after everything
- *                                       stored; {@code 0} disables that threshold
+ *                                       were stored or updated. New-file imports can cluster only the appended
+ *                                       files; metadata updates rewrite the whole table. {@code 0} disables the threshold
  * @param timezone                       timezone the timestamps inside the imported log files are expressed in; they
  *                                       are converted to the JVM's default timezone for storage, so that files written
  *                                       in different zones stay comparable. Passing the default timezone leaves the
@@ -36,11 +36,13 @@ import java.util.function.Consumer;
  * @param updateMetadataOnly             whether parsed logs are used only to add metadata to messages already
  *                                       stored, never to insert new chat lines or log files. Formatting, player, and
  *                                       server or world are always filled in where a message has none, live
- *                                       messages included. A value is never cleared
+ *                                       messages included. Known parsed versions fill missing file versions.
+ *                                       A value is never cleared
  * @param overwriteFormatting            when {@code updateMetadataOnly}, also replace existing formatting of
  *                                       messages imported from files when the log line has formatting
  * @param overwriteMinecraftUser         the same for the Minecraft player
  * @param overwriteMinecraftServer       the same for the server or world
+ * @param overwriteMinecraftVersion      the same for the Minecraft version, when the log has a known version
  * @param overwriteLive                  whether the chosen overwrites also apply to messages captured live
  */
 public record ImportOptions(
@@ -56,6 +58,7 @@ public record ImportOptions(
     boolean overwriteFormatting,
     boolean overwriteMinecraftUser,
     boolean overwriteMinecraftServer,
+    boolean overwriteMinecraftVersion,
     boolean overwriteLive
 ) {
     /**
@@ -73,6 +76,18 @@ public record ImportOptions(
      * were newly stored. User-initiated imports always optimize the whole store.
      */
     public static final int STARTUP_OPTIMIZE_AFTER_MORE_THAN = 15;
+
+    /**
+     * Compatibility constructor for callers using the original option set. Version overwrites remain opt-in.
+     */
+    public ImportOptions(boolean recursive, boolean nestedArchives, String pathMatcher, int parallelism,
+                         boolean skipAlreadyImported, boolean optimize, int optimizeIfImportedFilesExceed,
+                         ZoneId timezone, boolean updateMetadataOnly, boolean overwriteFormatting,
+                         boolean overwriteMinecraftUser, boolean overwriteMinecraftServer, boolean overwriteLive) {
+        this(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported, optimize,
+            optimizeIfImportedFilesExceed, timezone, updateMetadataOnly, overwriteFormatting,
+            overwriteMinecraftUser, overwriteMinecraftServer, false, overwriteLive);
+    }
 
     public ImportOptions {
         if (parallelism < 1) throw new IllegalArgumentException("parallelism must be at least 1, was " + parallelism);
@@ -141,7 +156,7 @@ public record ImportOptions(
      * Whether any overwrite is chosen. Overwriting live messages only matters together with one.
      */
     public boolean overwritesAnyMetadata() {
-        return overwriteFormatting || overwriteMinecraftUser || overwriteMinecraftServer;
+        return overwriteFormatting || overwriteMinecraftUser || overwriteMinecraftServer || overwriteMinecraftVersion;
     }
 
     public ImportOptions withRecursive(boolean recursive) {
@@ -207,16 +222,18 @@ public record ImportOptions(
         return with(draft -> draft.overwriteMinecraftServer = overwriteMinecraftServer);
     }
 
+    public ImportOptions withOverwriteMinecraftVersion(boolean overwriteMinecraftVersion) {
+        return with(draft -> draft.overwriteMinecraftVersion = overwriteMinecraftVersion);
+    }
+
     public ImportOptions withOverwriteLive(boolean overwriteLive) {
         return with(draft -> draft.overwriteLive = overwriteLive);
     }
 
     /**
-     * Whether this run should cluster and compact after {@code importedFiles} were newly stored.
-     * Metadata-only runs never rewrite the table: they only patch columns on existing rows.
+     * Whether this run should cluster and compact after {@code importedFiles} were stored or updated.
      */
     public boolean shouldOptimize(int importedFiles) {
-        if (updateMetadataOnly) return false;
         if (importedFiles <= 0) return false;
         if (optimize) return true;
         return optimizeIfImportedFilesExceed > 0 && importedFiles > optimizeIfImportedFilesExceed;
@@ -244,6 +261,7 @@ public record ImportOptions(
         private boolean overwriteFormatting;
         private boolean overwriteMinecraftUser;
         private boolean overwriteMinecraftServer;
+        private boolean overwriteMinecraftVersion;
         private boolean overwriteLive;
 
         private Draft(ImportOptions options) {
@@ -259,13 +277,14 @@ public record ImportOptions(
             overwriteFormatting = options.overwriteFormatting;
             overwriteMinecraftUser = options.overwriteMinecraftUser;
             overwriteMinecraftServer = options.overwriteMinecraftServer;
+            overwriteMinecraftVersion = options.overwriteMinecraftVersion;
             overwriteLive = options.overwriteLive;
         }
 
         private ImportOptions build() {
             return new ImportOptions(recursive, nestedArchives, pathMatcher, parallelism, skipAlreadyImported,
                 optimize, optimizeIfImportedFilesExceed, timezone, updateMetadataOnly, overwriteFormatting,
-                overwriteMinecraftUser, overwriteMinecraftServer, overwriteLive);
+                overwriteMinecraftUser, overwriteMinecraftServer, overwriteMinecraftVersion, overwriteLive);
         }
     }
 }
