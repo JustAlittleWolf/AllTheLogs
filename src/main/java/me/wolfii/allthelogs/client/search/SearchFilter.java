@@ -174,8 +174,53 @@ public record SearchFilter(
      * (lookarounds, backreferences, possessive quantifiers). Incomplete patterns while typing count too.
      */
     public boolean invalidRegex() {
-        return regex && hasText() && (compiledRegex(text, caseSensitive).isEmpty()
-            || Re2Regex.unsupportedConstruct(text) != null);
+        return regexIssue() != null;
+    }
+
+    /**
+     * Why this regex cannot be searched, or {@code null} when regex is off or the pattern is usable.
+     * Syntax errors name the problem and the character. Constructs RE2 rejects name the construct.
+     */
+    public String regexIssue() {
+        synchronized (REGEX_ISSUE) {
+            if (REGEX_ISSUE.filter == this) return REGEX_ISSUE.issue;
+            String issue = computeRegexIssue();
+            REGEX_ISSUE.filter = this;
+            REGEX_ISSUE.issue = issue;
+            return issue;
+        }
+    }
+
+    private String computeRegexIssue() {
+        if (!regex || !hasText()) return null;
+        try {
+            int flags = caseSensitive ? 0 : Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE;
+            Pattern.compile(text, flags);
+        } catch (PatternSyntaxException error) {
+            return syntaxIssue(error);
+        }
+        String feature = Re2Regex.unsupportedConstruct(text);
+        if (feature == null) return null;
+        return unsupportedIssue(feature);
+    }
+
+    private static String syntaxIssue(PatternSyntaxException error) {
+        String description = error.getDescription();
+        if (description == null || description.isBlank()) description = "Invalid pattern";
+        int index = error.getIndex();
+        String pattern = error.getPattern();
+        if (index < 0 || pattern == null) return description;
+        if (index >= pattern.length()) return description + " at the end";
+        return description + " at character " + (index + 1);
+    }
+
+    /**
+     * {@code feature} is the short name from {@link Re2Regex#unsupportedConstruct(String)}, such as
+     * {@code negative lookahead}.
+     */
+    private static String unsupportedIssue(String feature) {
+        String name = feature.isBlank() ? "This construct" : feature;
+        return Character.toUpperCase(name.charAt(0)) + name.substring(1) + " is not supported by RE2";
     }
 
     public boolean hasVersion() {
@@ -298,6 +343,17 @@ public record SearchFilter(
         change.accept(draft);
         return draft.build();
     }
+
+    /**
+     * Last pattern checked by {@link #regexIssue()}. The search field asks on every frame, and a long
+     * pattern is expensive to compile, so a repeat on the same filter reuses the answer.
+     */
+    private static final class RegexIssueCache {
+        private SearchFilter filter;
+        private String issue;
+    }
+
+    private static final RegexIssueCache REGEX_ISSUE = new RegexIssueCache();
 
     /**
      * Mutable copy of a filter, used only between a {@code with*} call and the record it builds.
