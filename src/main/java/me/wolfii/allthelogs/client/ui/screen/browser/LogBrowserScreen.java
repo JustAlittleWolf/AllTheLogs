@@ -108,7 +108,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         chrome.padding(Insets.none());
 
         FlowLayout content = UIContainers.verticalFlow(Sizing.expand(), Sizing.fill());
-        content.gap(6);
+        content.gap(BrowserToolsMenu.TRACK_GAP);
         content.allowOverflow(true);
         content.surface(Surface.blur(5, 10).and(PanelSurfaces.overlay()))
             .padding(Insets.of(8))
