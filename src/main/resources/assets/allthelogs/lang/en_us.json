@@ -175,6 +175,7 @@
   "allthelogs.menu.copy_message": "Copy message",
   "allthelogs.menu.filter_day": "Filter messages from this day",
   "allthelogs.menu.filter_server": "Filter messages from this server/world",
+  "allthelogs.menu.open_path": "Open path",
   "allthelogs.status.importing": "Importing...",
   "allthelogs.status.chunking": "Chunking chat entries...",
   "allthelogs.status.optimizing": "Optimizing database...",

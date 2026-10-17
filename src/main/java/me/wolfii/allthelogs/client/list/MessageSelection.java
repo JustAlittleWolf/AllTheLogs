@@ -90,6 +90,46 @@ public final class MessageSelection {
         selectRange(row, range[0], range[1]);
     }
 
+    /**
+     * Grows a double-click selection so both ends stay on word boundaries.
+     * {@code anchorStart} and {@code anchorEnd} are the word that was double-clicked on {@code anchorRow}.
+     * The pointer snaps to the word at {@code character} on {@code focusRow}, and the selection covers every
+     * word from the anchor through that word, including when the drag moves to another message.
+     */
+    public void extendWords(List<DisplayRow> rows, int anchorRow, int anchorStart, int anchorEnd,
+                            int focusRow, int character) {
+        if (rows == null || rows.isEmpty()
+            || anchorRow < 0 || anchorRow >= rows.size()
+            || focusRow < 0 || focusRow >= rows.size()) {
+            return;
+        }
+        String anchorMessage = rows.get(anchorRow).message();
+        int wordStart = Math.clamp(Math.min(anchorStart, anchorEnd), 0, anchorMessage.length());
+        int wordEnd = Math.clamp(Math.max(anchorStart, anchorEnd), 0, anchorMessage.length());
+        if (wordStart == wordEnd) {
+            int[] word = wordRange(anchorMessage, wordStart);
+            wordStart = word[0];
+            wordEnd = word[1];
+        }
+        int[] focus = wordRange(rows.get(focusRow).message(), character);
+        if (anchorRow == focusRow) {
+            selectRange(anchorRow, Math.min(wordStart, focus[0]), Math.max(wordEnd, focus[1]));
+            return;
+        }
+        empty = false;
+        if (focusRow > anchorRow) {
+            startRow = anchorRow;
+            startChar = wordStart;
+            endRow = focusRow;
+            endChar = focus[1];
+            return;
+        }
+        startRow = anchorRow;
+        startChar = wordEnd;
+        endRow = focusRow;
+        endChar = focus[0];
+    }
+
     public void extend(int row, int character) {
         if (empty) {
             start(row, character);

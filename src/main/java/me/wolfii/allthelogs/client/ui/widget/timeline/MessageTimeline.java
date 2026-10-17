@@ -34,7 +34,8 @@ import java.util.function.Consumer;
  * than the viewport sits on its bottom edge only when it is the tail of the result; anywhere earlier, including
  * a page the scrubber just loaded, the date header stays on the top edge.
  * <p>
- * Double-click selects a word and triple-click selects the line. Expand carets on cluster
+ * Double-click selects a word. Dragging while that click is held extends the selection by whole words.
+ * Triple-click selects the line. Expand carets on cluster
  * separators load more context through {@link #onExpand}; shift-click fetches a larger chunk.
  * its owner to fetch more through {@link #onApproachEdge}, {@link #onJump} and {@link #onExpand} rather than
  * touching the store itself. Drawing lives in {@link MessageListPainter} and {@link TimelineTrackPainter},
@@ -89,6 +90,9 @@ public final class MessageTimeline extends BaseUIComponent {
     private int trackTopInset;
 
     private boolean draggingSelection;
+    private boolean wordDrag;
+    private int wordAnchorStart;
+    private int wordAnchorEnd;
     private boolean pendingClear;
     private int clickCount;
     private long lastClickTime;
@@ -511,6 +515,7 @@ public final class MessageTimeline extends BaseUIComponent {
 
     @Override
     public boolean onMouseDown(MouseButtonEvent click, boolean doubled) {
+        wordDrag = false;
         if (focusHandler() != null) {
             focusHandler().focus(this, UIComponent.FocusSource.MOUSE_CLICK);
         }
@@ -570,7 +575,12 @@ public final class MessageTimeline extends BaseUIComponent {
         draggingSelection = false;
         if (clicks == 2) {
             pendingClear = false;
-            selection.selectWord(row, window.rows().get(row).message(), clickChar);
+            String message = window.rows().get(row).message();
+            int[] word = MessageSelection.wordRange(message, clickChar);
+            wordAnchorStart = word[0];
+            wordAnchorEnd = word[1];
+            wordDrag = true;
+            selection.selectRange(row, word[0], word[1]);
             return true;
         }
         if (clicks >= 3) {
@@ -597,9 +607,19 @@ public final class MessageTimeline extends BaseUIComponent {
             draggingSelection = true;
             selection.start(clickRow, clickChar);
         }
+        if (wordDrag && movedPastSelectSlop(click.x(), click.y())) {
+            draggingSelection = true;
+        }
         if (draggingSelection) {
             int row = view().rowAt(click.y());
-            if (row >= 0) selection.extend(row, charAt(row, click.x(), click.y()));
+            if (row >= 0) {
+                int character = charAt(row, click.x(), click.y());
+                if (wordDrag) {
+                    selection.extendWords(window.rows(), clickRow, wordAnchorStart, wordAnchorEnd, row, character);
+                } else {
+                    selection.extend(row, character);
+                }
+            }
             return true;
         }
         return super.onMouseDrag(click, deltaX, deltaY);
@@ -619,6 +639,7 @@ public final class MessageTimeline extends BaseUIComponent {
         }
         draggingSelection = false;
         pendingClear = false;
+        wordDrag = false;
         return super.onMouseUp(click);
     }
 
@@ -678,6 +699,7 @@ public final class MessageTimeline extends BaseUIComponent {
     private void clearClick() {
         pendingClear = false;
         draggingSelection = false;
+        wordDrag = false;
         clickRow = -1;
         clickKey = null;
     }
