@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.client.ui.widget.timeline;
 
+import me.wolfii.allthelogs.client.ui.theme.Colors;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -21,6 +22,16 @@ class MessageListPainterTest {
         var grown = MessageListPainter.statusChipBounds(10, 400, 180, sample);
         assertEquals(180 + padding, grown.width());
         assertEquals(10 + 400, grown.x() + grown.width());
+    }
+
+    @Test
+    void theMenuWashCoversTheWholeMessageIncludingWrappedLines() {
+        var band = MessageListPainter.menuBand(4, 320, 100, 36);
+        assertEquals(4, band.x());
+        assertEquals(100, band.y());
+        assertEquals(324, band.right());
+        assertEquals(136, band.bottom());
+        assertEquals(0x30FFFFFF, Colors.MENU_ROW);
     }
 
     @Test

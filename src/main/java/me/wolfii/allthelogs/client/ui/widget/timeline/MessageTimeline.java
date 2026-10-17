@@ -112,6 +112,8 @@ public final class MessageTimeline extends BaseUIComponent {
     };
     private Runnable onDismissContextMenu = () -> {
     };
+    /** Message whose context menu is open. The list keeps a wash on it until the menu closes. */
+    private DisplayRow.RowKey menuRow;
     private Runnable onScrubBegin = () -> {
     };
 
@@ -155,6 +157,20 @@ public final class MessageTimeline extends BaseUIComponent {
 
     public void onDismissContextMenu(Runnable onDismissContextMenu) {
         this.onDismissContextMenu = onDismissContextMenu;
+    }
+
+    /**
+     * Washes {@code key} for as long as its context menu is open. {@link #unpinMenuRow()} clears it.
+     */
+    public void pinMenuRow(DisplayRow.RowKey key) {
+        menuRow = key;
+    }
+
+    /**
+     * Stops washing the message that was right-clicked. Call when its context menu closes.
+     */
+    public void unpinMenuRow() {
+        menuRow = null;
     }
 
     public void onScrubBegin(Runnable onScrubBegin) {
@@ -483,7 +499,8 @@ public final class MessageTimeline extends BaseUIComponent {
         applyAutoScroll(mouseY, delta);
 
         ListView view = view();
-        listPainter.drawRows(graphics, view, selection, status.loading(), status.text());
+        listPainter.drawRows(graphics, view, selection, status.loading(), status.text(),
+            DisplayRows.indexOf(view.rows(), menuRow));
         // Overlays such as the tools menu sit above this list. Hover is still reported from the raw pointer,
         // which would light up the scrubber underneath the menu. Only the component that owns the pointer draws it.
         boolean pointerHere = hovered || scrub.dragging();
