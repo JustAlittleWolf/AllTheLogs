@@ -126,6 +126,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         dialog = new ModalDialog(overlays, () -> this.width);
         list.setTrackTopInset(BrowserToolsMenu.BUTTON_SIZE + BrowserToolsMenu.TRACK_GAP);
         StackLayout messages = UIContainers.stack(Sizing.fill(), Sizing.expand());
+        messages.allowOverflow(true);
         messages.horizontalAlignment(HorizontalAlignment.LEFT).verticalAlignment(VerticalAlignment.TOP);
         list.sizing(Sizing.fill(), Sizing.fill());
         messages.child(list);
