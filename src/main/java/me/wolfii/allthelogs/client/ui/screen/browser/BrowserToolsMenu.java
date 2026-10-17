@@ -15,6 +15,7 @@ import io.wispforest.owo.ui.core.UIComponent;
 import io.wispforest.owo.ui.core.VerticalAlignment;
 import io.wispforest.owo.ui.util.NinePatchTexture;
 import me.wolfii.allthelogs.client.export.MessageExport;
+import me.wolfii.allthelogs.client.list.MessageListLayout;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
 import net.minecraft.client.Minecraft;
@@ -43,10 +44,10 @@ import java.util.function.IntSupplier;
  */
 final class BrowserToolsMenu {
     static final long CLOSE_DELAY_MS = 1000;
-    /** Square hamburger that caps the timeline scrollbar. */
-    static final int BUTTON_SIZE = 20;
-    /** Clear pixels between the hamburger and the top of the scrubber. */
-    static final int TRACK_GAP = 4;
+    /** Square hamburger, the same height as the message-count chip. */
+    static final int BUTTON_SIZE = MessageListLayout.DATE_HEIGHT;
+    /** Space between the scrubber and the hamburger above it, and the filter button below it. */
+    static final int TRACK_GAP = 6;
     private static final int GAP = 2;
     private static final int INFO_ROW_HEIGHT = 14;
 
