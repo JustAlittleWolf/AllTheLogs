@@ -20,8 +20,8 @@ import java.util.function.DoubleFunction;
  */
 final class PlaytimePainter {
     static final float AXIS_SCALE = 0.75f;
-    /** Translucent band over the bar or day under the pointer. */
-    static final int HOVER_BAND = 0x30FFFFFF;
+    /** Translucent band over the bar or day under the pointer. Same wash as {@link Colors#MENU_ROW}. */
+    static final int HOVER_BAND = Colors.MENU_ROW;
     private static final int AXIS_STEPS = 3;
     private static final int AXIS_GAP = 4;
     private static final int VALUE_GAP = 12;

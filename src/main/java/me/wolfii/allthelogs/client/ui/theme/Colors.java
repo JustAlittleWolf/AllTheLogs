@@ -43,6 +43,11 @@ public final class Colors {
     public static final int LIST_BACKGROUND = 0x80000000;
     public static final int DATE_BAND = 0xE0141414;
     public static final int SELECTION = 0x663A6EA5;
+    /**
+     * Translucent wash over the message a context menu was opened on. The playtime chart uses the same
+     * wash on the bar under the pointer.
+     */
+    public static final int MENU_ROW = 0x30FFFFFF;
     public static final int STATUS_CHIP = 0xE0181818;
     public static final int HOVER_CHIP = 0xFb1C1C1C;
     /** Playtime chart hover card at about 85% opacity, so the bars under it stay visible. */

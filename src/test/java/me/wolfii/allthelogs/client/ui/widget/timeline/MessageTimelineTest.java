@@ -2,6 +2,7 @@ package me.wolfii.allthelogs.client.ui.widget.timeline;
 
 import io.wispforest.owo.ui.core.CursorStyle;
 import me.wolfii.allthelogs.client.list.DisplayRow;
+import me.wolfii.allthelogs.client.list.DisplayRows;
 import me.wolfii.allthelogs.client.timeline.ScrubJump;
 import me.wolfii.allthelogs.data.ChatEntry;
 import me.wolfii.allthelogs.data.ChatLog;
@@ -43,10 +44,25 @@ class MessageTimelineTest {
         assertEquals(List.of(first.entry()), MessageTimeline.entriesOnScreen(List.of(first, second), -4, -1));
     }
 
+    @Test
+    void theMenuWashFollowsTheMessageRatherThanItsOldIndex() {
+        DisplayRow first = row(0, "one");
+        DisplayRow second = row(1, "two");
+        DisplayRow.RowKey pinned = second.key();
+        assertEquals(1, DisplayRows.indexOf(List.of(first, second), pinned));
+        assertEquals(0, DisplayRows.indexOf(List.of(second, first), pinned));
+        assertEquals(-1, DisplayRows.indexOf(List.of(first), pinned));
+        assertEquals(-1, DisplayRows.indexOf(List.of(first, second), null));
+    }
+
     private static DisplayRow row(String message) {
+        return row(0, message);
+    }
+
+    private static DisplayRow row(int line, String message) {
         LocalDateTime time = LocalDateTime.of(2026, 9, 26, 14, 3, 1);
         ChatLog log = new ChatLog(new LogSource.File(Path.of("a.log")), time.toLocalDate(), "26.2", time, time);
-        return new DisplayRow(new ChatEntry(log, time, 0, message), true, List.of());
+        return new DisplayRow(new ChatEntry(log, time, line, message), true, List.of());
     }
 
     @Test

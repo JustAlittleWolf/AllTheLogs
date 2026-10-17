@@ -172,6 +172,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+        releaseClosedMessageMenu();
         if (tools != null && overlays != null) {
             boolean scrollbarDrag = list != null && list.draggingScrollbar();
             overlays.queue(() -> tools.sync(mouseX, mouseY, scrollbarDrag));
@@ -193,6 +194,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     @Override
     public void tick() {
         super.tick();
+        releaseClosedMessageMenu();
         drainExportProgress();
         queries.pollLatest(!exportBusy && messageMenu == null && (tools == null || !tools.isOpen())
             && (filters == null || !filters.listOpen()) && (dialog == null || !dialog.isOpen()));
@@ -316,17 +318,29 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     }
 
     private void closeMessageMenu() {
-        if (messageMenu == null || overlays == null) return;
-        if (overlays.children().contains(messageMenu)) {
+        if (messageMenu != null && overlays != null && overlays.children().contains(messageMenu)) {
             overlays.removeChild(messageMenu);
         }
         messageMenu = null;
+        if (list != null) list.unpinMenuRow();
+    }
+
+    /**
+     * The menu removes itself on a click outside the list. Drop the reference so the washed message clears
+     * on the same frame.
+     */
+    private void releaseClosedMessageMenu() {
+        if (messageMenu == null) return;
+        if (overlays != null && overlays.children().contains(messageMenu)) return;
+        messageMenu = null;
+        if (list != null) list.unpinMenuRow();
     }
 
     private void openMessageMenu(DisplayRow row, MessageSelection selection, List<DisplayRow> rows,
                                  double screenX, double screenY) {
         if (tools != null) tools.close();
         closeMessageMenu();
+        if (list != null) list.pinMenuRow(row.key());
         messageMenu = DropdownComponent.openContextMenu(this, overlays, StackLayout::child, screenX, screenY, menu -> {
             if (!selection.isEmpty()) {
                 menu.button(Component.translatable("allthelogs.menu.copy_selection"), ignored -> {
