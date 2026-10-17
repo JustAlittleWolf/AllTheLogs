@@ -240,12 +240,12 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
 
     private FlowLayout buildToolbar() {
         FlowLayout bar = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
-        bar.gap(4).verticalAlignment(VerticalAlignment.CENTER);
+        bar.gap(4).verticalAlignment(VerticalAlignment.BOTTOM);
 
         searchBar = new SearchBar(queries::filter, Component.translatable("allthelogs.search.placeholder"),
             this::applySearchText);
         search = searchBar.field();
-        bar.child(search);
+        bar.child(searchBar.component());
 
         filterButton = UIComponents.button(ActiveFilters.buttonLabel(ActiveFilters.of(queries.filter()).size()),
             button -> {
