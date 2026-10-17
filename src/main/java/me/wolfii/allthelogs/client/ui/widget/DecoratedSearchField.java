@@ -45,6 +45,14 @@ public final class DecoratedSearchField extends TextBoxComponent {
     }
 
     /**
+     * Width the closing mark follows. An empty field shows the placeholder in that spot, so the mark
+     * sits after the placeholder. A typed query keeps the mark on the visible text.
+     */
+    static int contentWidth(int visibleWidth, boolean placeholder, int hintWidth) {
+        return placeholder ? Math.max(0, hintWidth) : Math.max(0, visibleWidth);
+    }
+
+    /**
      * Scrolls the stored query into the visible window after the box has a real width.
      */
     public void revealValue() {
@@ -120,12 +128,12 @@ public final class DecoratedSearchField extends TextBoxComponent {
     public void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         revealIfHidden();
         applyTextInset();
-        boolean moveHint = hintFollowsSuffix();
-        if (moveHint) super.setHint(Component.empty());
+        boolean placeholder = showsPlaceholder();
+        if (placeholder) super.setHint(Component.empty());
         try {
             super.extractWidgetRenderState(graphics, mouseX, mouseY, delta);
         } finally {
-            if (moveHint) super.setHint(hint);
+            if (placeholder) super.setHint(hint);
         }
         Font font = Minecraft.getInstance().font;
         if (font == null) return;
@@ -133,13 +141,13 @@ public final class DecoratedSearchField extends TextBoxComponent {
         if (!prefix.isEmpty()) {
             drawDecoration(graphics, font, prefix, getX() + horizontalPadding(), textY);
         }
+        if (placeholder) {
+            EditBoxAccessor access = (EditBoxAccessor) (EditBox) this;
+            graphics.text(font, hint, access.allthelogs$getTextX(), textY, 0xFF000000 | TextColor.DARK_GRAY.getValue());
+        }
         int suffixAt = suffixX(font);
         if (suffixAt >= 0) {
             drawDecoration(graphics, font, suffix, suffixAt, textY);
-        }
-        if (moveHint && suffixAt >= 0) {
-            int hintX = suffixAt + font.width(suffix) + SearchDecorations.GAP;
-            graphics.text(font, hint, hintX, textY, 0xFF000000 | TextColor.DARK_GRAY.getValue());
         }
     }
 
@@ -161,13 +169,17 @@ public final class DecoratedSearchField extends TextBoxComponent {
         access.allthelogs$setTextX(access.allthelogs$getTextX() + leading);
     }
 
-    private boolean hintFollowsSuffix() {
+    /**
+     * Empty regex field. The placeholder is painted in the text area, between the opening slash and the
+     * closing mark. The edit box would draw it in the query colour, so it is painted here instead.
+     */
+    private boolean showsPlaceholder() {
         return !suffix.isEmpty() && getValue().isEmpty() && !isFocused() && !hint.getString().isEmpty();
     }
 
     /**
      * Closing mark, or {@code -1} when it should stay hidden. The editable text already starts after the
-     * opening slash, so this is that text's right edge plus the padding.
+     * opening slash. The mark follows that text, or the placeholder when the field is empty.
      */
     private int suffixX(Font font) {
         if (suffix.isEmpty()) return -1;
@@ -175,7 +187,8 @@ public final class DecoratedSearchField extends TextBoxComponent {
         String value = getValue();
         int displayPos = Math.min(Math.max(0, access.allthelogs$getDisplayPos()), value.length());
         String visible = font.plainSubstrByWidth(value.substring(displayPos), getInnerWidth());
-        return suffixX(access.allthelogs$getTextX(), font.width(visible), SearchDecorations.GAP,
+        int contentWidth = contentWidth(font.width(visible), showsPlaceholder(), font.width(hint));
+        return suffixX(access.allthelogs$getTextX(), contentWidth, SearchDecorations.suffixGap(),
             value.length(), displayPos, visible.length());
     }
 
@@ -184,7 +197,9 @@ public final class DecoratedSearchField extends TextBoxComponent {
     }
 
     private int trailingInset() {
-        return inset(suffix);
+        int inset = inset(suffix);
+        if (inset == 0) return 0;
+        return inset + SearchDecorations.SUFFIX_EXTRA_MARGIN;
     }
 
     private int inset(String decoration) {

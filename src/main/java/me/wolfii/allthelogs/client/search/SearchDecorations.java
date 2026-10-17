@@ -12,6 +12,14 @@ public final class SearchDecorations {
     /** Space between a decoration and the editable pattern, in pixels. */
     public static final int GAP = 3;
 
+    /** Extra left margin of the closing {@code /} or {@code /i}, beyond {@link #GAP}. */
+    public static final int SUFFIX_EXTRA_MARGIN = 2;
+
+    /** Pixels between the pattern (or the placeholder) and the closing mark. */
+    public static int suffixGap() {
+        return GAP + SUFFIX_EXTRA_MARGIN;
+    }
+
     private SearchDecorations() {
     }
 
