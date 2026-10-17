@@ -135,7 +135,7 @@
   "allthelogs.playtime.breakdown.server": "Server",
   "allthelogs.playtime.breakdown.server_player": "Server, Player",
   "allthelogs.playtime.breakdown.player": "Player",
-  "allthelogs.playtime.major_versions": "Major Versions Only",
+  "allthelogs.playtime.major_versions": "Major Versions",
   "allthelogs.playtime.major_versions.hint": "Combine patch versions in the chart. 1.8.9 is shown as 1.8, and 26.2 stays 26.2.",
   "allthelogs.playtime.style": "Chart: %s",
   "allthelogs.playtime.style.bars": "Bars",
