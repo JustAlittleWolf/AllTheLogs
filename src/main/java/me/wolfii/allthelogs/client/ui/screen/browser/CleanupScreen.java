@@ -253,7 +253,8 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
     private @Nullable Component blockedReason() {
         var worker = AllTheLogsClient.worker();
         if (worker == null || !worker.isOpen()) return Component.translatable("allthelogs.meta.unavailable");
-        if (filter.invalidRegex()) return Component.translatable("allthelogs.cleanup.invalid_regex");
+        Component regexError = SearchBar.regexError(filter);
+        if (regexError != null) return regexError;
         if (mode == Mode.REMOVE_TEXT && !filter.hasText()) return Component.translatable("allthelogs.cleanup.need_text");
         if (!filter.isNarrowed()) return Component.translatable("allthelogs.cleanup.need_filter");
         return null;

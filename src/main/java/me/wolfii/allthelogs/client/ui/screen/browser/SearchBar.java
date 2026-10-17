@@ -2,19 +2,23 @@ package me.wolfii.allthelogs.client.ui.screen.browser;
 
 import me.wolfii.allthelogs.client.search.SearchDecorations;
 import me.wolfii.allthelogs.client.search.SearchFilter;
+import me.wolfii.allthelogs.client.ui.text.WrappedTooltip;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
 import me.wolfii.allthelogs.client.ui.widget.DecoratedSearchField;
 import net.minecraft.network.chat.Component;
 
+import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
  * The search box of the messages and DB Cleanup screens. The regex and case marks sit around the text,
- * regex syntax is highlighted, and an invalid regex turns the text red, all following {@code filter}.
+ * regex syntax is highlighted, and an invalid regex turns the text red. Hovering the field then explains
+ * the RE2 or syntax problem, all following {@code filter}.
  */
 final class SearchBar {
-    private static final int MAX_LENGTH = 256;
+    /** Edit-box cap. Long chat patterns need more than the old 256, and 2^16 is still one string. */
+    static final int MAX_LENGTH = 1 << 16;
 
     private final DecoratedSearchField field = new DecoratedSearchField();
     private final Supplier<SearchFilter> filter;
@@ -55,7 +59,20 @@ final class SearchBar {
     }
 
     void refreshColor() {
-        field.setTextColor(filter.get().invalidRegex() ? Colors.SEARCH_INVALID : Colors.SEARCH_TEXT);
+        SearchFilter current = filter.get();
+        Component error = regexError(current);
+        field.setTextColor(error != null ? Colors.SEARCH_INVALID : Colors.SEARCH_TEXT);
+        field.tooltip(error == null ? List.of() : WrappedTooltip.of(error));
+    }
+
+    /**
+     * The hover text for an invalid regex, or {@code null} when this filter can be searched.
+     */
+    static Component regexError(SearchFilter filter) {
+        if (filter == null) return null;
+        String issue = filter.regexIssue();
+        if (issue == null) return null;
+        return Component.translatable("allthelogs.search.regex_error", issue);
     }
 
     /**

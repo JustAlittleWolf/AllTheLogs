@@ -503,6 +503,8 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         if (AllTheLogsClient.worker() == null || !AllTheLogsClient.worker().isOpen()) {
             return Component.translatable("allthelogs.meta.unavailable");
         }
+        Component regexError = SearchBar.regexError(queries.filter());
+        if (regexError != null) return regexError;
         if (!queries.filter().canQuery()) return Component.translatable("allthelogs.status.error");
         return null;
     }

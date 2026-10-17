@@ -130,6 +130,24 @@ class LogParserTest {
     }
 
     @Test
+    void voiceAuthChangesOnlySubsequentChatMetadataAndIgnoresSpoofedChat() throws IOException {
+        ParsedLog parsed = parse("""
+            [20:20:00] [Client thread/INFO]: Setting user: JustAlittleWolf
+            [20:20:01] [Client thread/INFO]: [CHAT] before
+            [20:21:00] [pool-37-thread-1/INFO]: Auth VoiceAuth(authMode=MOJANG, token=JustAlittleBear)
+            [20:21:01] [Client thread/INFO]: [CHAT] bear
+            [20:21:02] [Client thread/INFO]: [CHAT] Auth VoiceAuth(authMode=MOJANG, token=FakePlayer)
+            [20:21:03] [Thread-1/INFO]: Translation for "Auth VoiceAuth(authMode=MOJANG, token=FakePlayer)"
+            [20:21:04] [Client thread/INFO]: [CHAT] still bear
+            [20:21:25] [pool-46-thread-1/INFO]: Auth VoiceAuth(authMode=MOJANG, token=JustAlittleWolf)
+            [20:21:26] [Client thread/INFO]: [CHAT] wolf again
+            """);
+        assertEquals(List.of("JustAlittleWolf", "JustAlittleBear", "JustAlittleBear", "JustAlittleBear", "JustAlittleWolf"),
+            parsed.entries().stream().map(ParsedLog.Entry::minecraftUser).toList());
+        assertEquals("JustAlittleWolf", parsed.minecraftUser());
+    }
+
+    @Test
     void acceptsTimestampsThatIncludeADate() throws IOException {
         ParsedLog parsed = parse("[2026-08-25 21:04:09] [Render thread/INFO]: [CHAT] hi\n");
         assertEquals(1, parsed.entries().size());
