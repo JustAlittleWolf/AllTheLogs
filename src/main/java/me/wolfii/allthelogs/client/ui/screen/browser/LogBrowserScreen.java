@@ -18,6 +18,7 @@ import me.wolfii.allthelogs.client.config.BrowserSession;
 import me.wolfii.allthelogs.client.export.ExportMetadata;
 import me.wolfii.allthelogs.client.export.ExportProgress;
 import me.wolfii.allthelogs.client.export.MessageExport;
+import me.wolfii.allthelogs.client.files.LogPaths;
 import me.wolfii.allthelogs.client.list.DisplayRow;
 import me.wolfii.allthelogs.client.list.MessageSelection;
 import me.wolfii.allthelogs.client.search.ActiveFilters;
@@ -34,6 +35,7 @@ import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
+import net.minecraft.util.Util;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -337,7 +339,25 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
                     applyFilter(queries.filter().withServerOrWorld(row.entry().serverOrWorld()));
                 });
             }
+            Path openable = LogPaths.openable(row.chatLog().source());
+            if (openable != null) {
+                menu.button(Component.translatable("allthelogs.menu.open_path"), ignored -> {
+                    closeMessageMenu();
+                    openPath(openable);
+                });
+            }
         });
+    }
+
+    /**
+     * Opens the log file in the operating system, or the archive when the line was read from one.
+     */
+    private static void openPath(Path path) {
+        try {
+            Util.getPlatform().openPath(path);
+        } catch (RuntimeException error) {
+            AllTheLogsClient.LOGGER.warn("Could not open {}", path, error);
+        }
     }
 
     private void openScripts() {
