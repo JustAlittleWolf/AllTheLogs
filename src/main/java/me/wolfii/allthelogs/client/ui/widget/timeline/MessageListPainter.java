@@ -13,7 +13,7 @@ import java.util.List;
 
 /**
  * Draws the message list: only the rows that intersect the viewport, their match highlights and selection,
- * the sticky date headers, and the hover card for the row under the pointer.
+ * the sticky date headers, the match-count chip at the top-right, and the hover card for the row under the pointer.
  */
 final class MessageListPainter {
     private static final float DATE_SCALE = 1.25f;
@@ -46,7 +46,8 @@ final class MessageListPainter {
         return MessageListLayout.expandAtLocalX(separator, view.messageLocalX(), localX);
     }
 
-    void drawRows(OwoUIGraphics graphics, ListView view, MessageSelection selection, boolean showingLoading) {
+    void drawRows(OwoUIGraphics graphics, ListView view, MessageSelection selection, boolean showingLoading,
+                  Component matchStatus) {
         List<DisplayRow> rows = view.rows();
         int listWidth = view.listWidth();
         graphics.enableScissor(view.x(), view.y(), view.x() + listWidth, view.y() + view.height());
@@ -56,6 +57,7 @@ final class MessageListPainter {
                     graphics.drawText(Component.translatable("allthelogs.status.empty"),
                         view.x() + 8, view.y() + 8, 1, Colors.MUTED);
                 }
+                drawMatchStatus(graphics, view, matchStatus);
                 return;
             }
             MessageListLayout layout = view.layout();
@@ -89,9 +91,41 @@ final class MessageListPainter {
             }
             drawSeparators(graphics, view);
             drawDateHeaders(graphics, view);
+            drawMatchStatus(graphics, view, matchStatus);
         } finally {
             graphics.disableScissor();
         }
+    }
+
+    /** Horizontal padding inside the match-count chip, and the gap between the chip and the list edge. */
+    private static final int STATUS_PAD_X = 8;
+    /**
+     * Width floor for the chip: a 7-digit count plus a two-digit duration. Wider than {@code Loading...}
+     * and the plain count, so those swaps do not move the chip.
+     */
+    private static final String STATUS_MIN_COUNT = "0000000";
+    private static final String STATUS_MIN_DURATION = "00.0";
+
+    /**
+     * Match count in a chip at the top-right of the list. The chip is always drawn, at least
+     * {@link #STATUS_MIN_COUNT} wide, and the label is right-aligned inside it.
+     */
+    void drawMatchStatus(OwoUIGraphics graphics, ListView view, Component status) {
+        Font font = view.font();
+        boolean hasText = status != null && !status.getString().isEmpty();
+        int textWidth = hasText ? font.width(status) : 0;
+        int minTextWidth = font.width(Component.translatable("allthelogs.status.messages.timed",
+            STATUS_MIN_COUNT, STATUS_MIN_DURATION));
+        int listWidth = view.listWidth();
+        int boxWidth = Math.min(Math.max(0, listWidth - 2 * STATUS_PAD_X),
+            Math.max(textWidth, minTextWidth) + 2 * STATUS_PAD_X);
+        int boxHeight = MessageListLayout.DATE_HEIGHT;
+        int boxX = view.x() + Math.max(STATUS_PAD_X, listWidth - STATUS_PAD_X - boxWidth);
+        int boxY = view.y();
+        HoverChip.fill(graphics, boxX, boxY, boxWidth, boxHeight, Colors.STATUS_CHIP);
+        if (!hasText) return;
+        int textY = boxY + Math.max(0, (boxHeight - font.lineHeight) / 2) + 2;
+        graphics.drawText(status, boxX + boxWidth - STATUS_PAD_X - textWidth, textY, 1, Colors.TEXT);
     }
 
     /**
