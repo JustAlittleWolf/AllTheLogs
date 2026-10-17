@@ -106,7 +106,7 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         styleMenu.opensOnHover(styleButton, this::openStyle);
         breakdownMenu.opensOnHover(breakdownButton, this::openBreakdown);
         majorVersionsBox = PlaytimeScreenSupport.majorVersionsBox(this::rebuild);
-        options = PlaytimeScreenSupport.optionsRow(List.of(grainButton, styleButton, breakdownButton),
+        options = PlaytimeScreenSupport.optionsColumn(List.of(grainButton, styleButton, breakdownButton),
             PlaytimeScreenSupport.button("allthelogs.playtime.weekdays", pressed -> openWeekdays()));
         page.child(options);
 
@@ -207,7 +207,7 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         if (styleButton != null) styleButton.setMessage(styleLabel(PlaytimeSession.style()));
         if (versionButton != null) versionButton.setMessage(PlaytimeScreenSupport.versionLabel());
         if (serverButton != null) serverButton.setMessage(PlaytimeScreenSupport.serverLabel());
-        PlaytimeScreenSupport.syncMajorVersions(options, breakdownButton, majorVersionsBox);
+        PlaytimeScreenSupport.syncMajorVersions(options, majorVersionsBox);
     }
 
     private void zoom(double fraction, double steps) {

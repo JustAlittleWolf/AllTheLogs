@@ -60,9 +60,18 @@ final class PlaytimeScreenSupport {
     }
 
     /**
-     * Row of display options with {@code end} pushed to the right edge.
+     * Row of display options with {@code end} pushed to the right edge. The major-version checkbox sits on
+     * the line under this row, so a control taller than a button does not shift the buttons and the row
+     * stays narrow enough for a small window.
      */
-    static FlowLayout optionsRow(List<UIComponent> options, UIComponent end) {
+    static FlowLayout optionsColumn(List<UIComponent> options, UIComponent end) {
+        FlowLayout column = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
+        column.gap(2);
+        column.child(optionsRow(options, end));
+        return column;
+    }
+
+    private static FlowLayout optionsRow(List<UIComponent> options, UIComponent end) {
         FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
         row.gap(4).verticalAlignment(VerticalAlignment.CENTER);
         options.forEach(row::child);
@@ -166,7 +175,7 @@ final class PlaytimeScreenSupport {
     }
 
     /**
-     * Shown beside the group-by button while the chart groups by version. Checking it keeps only the first
+     * Shown under the option buttons while the chart groups by version. Checking it keeps only the first
      * two version components, so {@code 1.8.9} is drawn as {@code 1.8} and {@code 26.2} stays {@code 26.2}.
      */
     static CheckboxComponent majorVersionsBox(Runnable rebuild) {
@@ -182,19 +191,15 @@ final class PlaytimeScreenSupport {
     }
 
     /**
-     * Puts {@code box} immediately after the group-by button while grouping includes version, and removes it
+     * Puts {@code box} on the line under the option buttons while grouping includes version, and removes it
      * otherwise. The checked state is remembered either way.
      */
-    static void syncMajorVersions(FlowLayout options, ButtonComponent groupButton, CheckboxComponent box) {
-        if (options == null || groupButton == null || box == null) return;
+    static void syncMajorVersions(FlowLayout options, CheckboxComponent box) {
+        if (options == null || box == null) return;
         boolean show = PlaytimeSession.breakdown().byVersion();
         boolean present = options.children().contains(box);
-        if (show && !present) {
-            int index = options.children().indexOf(groupButton);
-            options.child(index < 0 ? options.children().size() : index + 1, box);
-        } else if (!show && present) {
-            options.removeChild(box);
-        }
+        if (show && !present) options.child(box);
+        else if (!show && present) options.removeChild(box);
     }
 
     static Component versionLabel() {
