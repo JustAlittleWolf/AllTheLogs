@@ -15,6 +15,7 @@ import io.wispforest.owo.ui.core.UIComponent;
 import io.wispforest.owo.ui.core.VerticalAlignment;
 import io.wispforest.owo.ui.util.NinePatchTexture;
 import me.wolfii.allthelogs.client.export.MessageExport;
+import me.wolfii.allthelogs.client.list.MessageListLayout;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
 import net.minecraft.client.Minecraft;
@@ -28,22 +29,29 @@ import java.util.function.BooleanSupplier;
 import java.util.function.IntSupplier;
 
 /**
- * Menu on the messages toolbar. Hovering or clicking the hamburger opens Playtime, Import, and Advanced
- * above it, top to bottom. A click keeps the menu open until a click outside it. Advanced opens Export,
- * DB Cleanup, Scripts, and Optimize database to the side, with a database info row under them. The row is
- * plain text, not a button, and hovering it shows the database summary. Export opens the export scope
- * beside that, and the chosen
- * scope opens the file format. A row whose side menu is open stays highlighted.
+ * Menu at the top of the timeline scrollbar. Hovering or clicking the hamburger opens Playtime, Import,
+ * and Advanced to its left, top to bottom. A click keeps the menu open until a click outside it. Advanced
+ * opens Export, Scripts, DB Cleanup, and Optimize database further to the side, dropping down from its
+ * row, with a database info row under them. The row is plain text, not a button, and hovering it shows
+ * the database summary. Export opens the export scope beside that, and the chosen scope opens the file
+ * format. A row whose side menu is open stays highlighted.
  * <p>
- * Advanced grows upward from its row, so it stays on screen at the bottom. The export menus are centered on
- * the row they open from, moved only as far as the screen edge needs. Every menu stays
- * open for {@link #CLOSE_DELAY_MS} after the pointer leaves it, so it can be reached again, unless the
- * pointer moves onto another row of the menu it came from. A click outside closes it at once. Dragging
- * the timeline scrollbar does not count as a hover, including the moment that drag is released on the
- * button.
+ * The export menus are centered on the row they open from, moved only as far as the screen edge needs.
+ * Every menu stays open for {@link #CLOSE_DELAY_MS} after the pointer leaves it, so it can be reached
+ * again, unless the pointer moves onto another row of the menu it came from. A click outside closes it
+ * at once. Dragging the timeline scrollbar does not count as a hover, including the moment that drag is
+ * released on the button.
  */
 final class BrowserToolsMenu {
     static final long CLOSE_DELAY_MS = 1000;
+    /** Hamburger width, and the height the scrollbar inset is measured from. Matches the message-count chip. */
+    static final int BUTTON_SIZE = MessageListLayout.DATE_HEIGHT;
+    /** The button is one pixel taller than the chip. */
+    static final int BUTTON_EXTRA_HEIGHT = 1;
+    /** Negative top margin. Sits the hamburger two pixels above the list without moving the scrollbar. */
+    static final int BUTTON_LIFT = -2;
+    /** Space between the scrubber and the hamburger above it, and the filter button below it. */
+    static final int TRACK_GAP = 6;
     private static final int GAP = 2;
     private static final int INFO_ROW_HEIGHT = 14;
 
@@ -106,13 +114,15 @@ final class BrowserToolsMenu {
     }
 
     /**
-     * Square button at the right end of the messages toolbar. Menus grow up and to the left,
-     * into the screen, instead of off the right edge.
+     * Button at the top of the timeline scrollbar, one pixel taller than the message-count chip
+     * and two pixels above the list. The first menu opens to its left, into the screen, instead
+     * of off the top or the right edge.
      */
     ButtonComponent button() {
         if (anchor != null) return anchor;
         anchor = UIComponents.button(Component.empty(), pressed -> toggle());
-        anchor.horizontalSizing(Sizing.fixed(20));
+        anchor.sizing(Sizing.fixed(BUTTON_SIZE), Sizing.fixed(BUTTON_SIZE + BUTTON_EXTRA_HEIGHT));
+        anchor.margins(Insets.top(BUTTON_LIFT));
         anchor.renderer((graphics, widget, delta) -> {
             ButtonComponent.Renderer.VANILLA.draw(graphics, widget, delta);
             int bar = 10;
@@ -262,8 +272,20 @@ final class BrowserToolsMenu {
     private boolean inside(int mouseX, int mouseY) {
         return hit(anchor, mouseX, mouseY)
             || hit(actions, mouseX, mouseY)
-            || verticalGap(actions, anchor, mouseX, mouseY)
+            || anchorGap(mouseX, mouseY)
             || advancedHover(mouseX, mouseY);
+    }
+
+    /**
+     * The strip between the hamburger and the menu counts as inside, so crossing it does not start the
+     * close delay. The menu opens to the left, and only sits below or above the button when that side
+     * does not fit.
+     */
+    private boolean anchorGap(int mouseX, int mouseY) {
+        if (actions == null || anchor == null) return false;
+        return horizontalGap(actions, anchor, mouseX, mouseY)
+            || verticalGap(anchor, actions, mouseX, mouseY)
+            || verticalGap(actions, anchor, mouseX, mouseY);
     }
 
     private boolean advancedHover(int mouseX, int mouseY) {
@@ -421,12 +443,12 @@ final class BrowserToolsMenu {
 
     private void placeActions() {
         if (actions == null || anchor == null || actions.width() <= 0 || actions.height() <= 0) return;
-        int x = Math.max(4, anchor.x() + anchor.width() - actions.width());
-        int y = Math.max(4, anchor.y() - actions.height() - GAP);
-        if (placedActionsX == x && placedActionsY == y) return;
-        actions.positioning(Positioning.absolute(x, y));
-        placedActionsX = x;
-        placedActionsY = y;
+        int[] at = beside(actions, anchor, false);
+        if (at == null) return;
+        if (placedActionsX == at[0] && placedActionsY == at[1]) return;
+        actions.positioning(Positioning.absolute(at[0], at[1]));
+        placedActionsX = at[0];
+        placedActionsY = at[1];
     }
 
     private void place(FlowLayout menu, UIComponent row) {
@@ -461,27 +483,46 @@ final class BrowserToolsMenu {
      */
     private int[] beside(FlowLayout menu, UIComponent row, boolean centered) {
         if (menu.width() <= 0 || menu.height() <= 0) return null;
-        int left = row.x() - menu.width() - GAP;
-        int right = row.x() + row.width() + GAP;
-        int x = left >= 4 ? left : right;
-        if (x + menu.width() > screenWidth.getAsInt() - 4) x = Math.max(4, left);
+        int x = sideLeft(row.x(), row.width(), menu.width(), screenWidth.getAsInt());
         int y = centered
             ? centeredTop(row.y() + row.height() / 2, menu.height(), screenHeight.getAsInt())
-            : submenuTop(row.y() + row.height(), menu.padding().get().bottom(), menu.height(), screenHeight.getAsInt());
+            : submenuTop(row.y(), menu.padding().get().top(), menu.height(), screenHeight.getAsInt());
         return new int[]{x, y};
     }
 
     /**
-     * Top of a side menu that grows upward, so its last row meets the bottom of the row it opened from.
-     * {@code paddingBottom} is that menu's own bottom padding. The menu is moved down only when it would
-     * leave the top of the screen.
+     * Left edge of a menu that opens beside an anchor. The left side is preferred so a control on the right
+     * edge stays on screen; the right side is used only when the left side does not fit.
      */
-    static int submenuTop(int rowBottom, int paddingBottom, int menuHeight, int screenHeight) {
-        int y = rowBottom + paddingBottom - menuHeight;
-        if (y < 4) y = 4;
+    static int sideLeft(int anchorX, int anchorWidth, int menuWidth, int screenWidth) {
+        int left = anchorX - menuWidth - GAP;
+        int right = anchorX + anchorWidth + GAP;
+        int x = left >= 4 ? left : right;
+        if (x + menuWidth > screenWidth - 4) x = Math.max(4, left);
+        return x;
+    }
+
+    /**
+     * Top of a popup that drops down from an anchor. Moved up only when it would leave the bottom of the screen.
+     */
+    static int dropdownTop(int anchorTop, int anchorHeight, int gap, int popupHeight, int screenHeight) {
+        int y = anchorTop + anchorHeight + gap;
+        return fitOnScreen(y, popupHeight, screenHeight);
+    }
+
+    /**
+     * Top of a side menu that grows downward, so its first row meets the top of the row it opened from.
+     * {@code paddingTop} is that menu's own top padding. The menu is moved up only when it would
+     * leave the bottom of the screen.
+     */
+    static int submenuTop(int rowTop, int paddingTop, int menuHeight, int screenHeight) {
+        return fitOnScreen(rowTop - paddingTop, menuHeight, screenHeight);
+    }
+
+    private static int fitOnScreen(int y, int menuHeight, int screenHeight) {
         int limit = screenHeight - 4;
         if (y + menuHeight > limit) y = Math.max(4, limit - menuHeight);
-        return y;
+        return Math.max(4, y);
     }
 
     /**

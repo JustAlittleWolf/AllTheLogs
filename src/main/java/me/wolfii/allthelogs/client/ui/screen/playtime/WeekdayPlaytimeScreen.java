@@ -172,7 +172,8 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
 
     private void rebuild() {
         chart = PlaytimeWeekday.build(PlaytimeSession.spans(), PlaytimeSession.filter(), PlaytimeSession.breakdown(),
-            PlaytimeSession.weekdayFrom(), PlaytimeSession.weekdayUntil(), PlaytimeSession.heatSlotMinutes());
+            PlaytimeSession.weekdayFrom(), PlaytimeSession.weekdayUntil(), PlaytimeSession.heatSlotMinutes(),
+            PlaytimeSession.majorVersions());
         if (chartWidget != null) chartWidget.chart(chart);
         if (legend != null) legend.entries(chart.series(), chart.legend());
         syncButtons();
@@ -193,12 +194,7 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
     }
 
     private void openGroup() {
-        if (groupMenu.isOpen()) return;
-        closeMenus();
-        groupMenu.show(groupButton, PlaytimeScreenSupport.groupChoices(), index -> {
-            PlaytimeSession.breakdown(PlaytimeScreenSupport.GROUPS[index]);
-            rebuild();
-        });
+        PlaytimeScreenSupport.openBreakdown(groupMenu, groupButton, this::closeMenus, this::rebuild);
     }
 
     private void openDetail() {

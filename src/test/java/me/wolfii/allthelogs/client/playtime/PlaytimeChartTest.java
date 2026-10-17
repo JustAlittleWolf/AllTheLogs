@@ -188,6 +188,44 @@ class PlaytimeChartTest {
         assertEquals(PlaytimeColors.UNKNOWN, servers.series().getLast().color());
     }
 
+    @Test
+    void majorVersionsMergePatchReleasesAndLeaveTwoPartVersionsAlone() {
+        List<PlaytimeSpan> spans = List.of(
+            span(1, 1, "1.8.9", "a"),
+            span(1, 2, "1.8", "a"),
+            span(1, 3, "26.2", "a"),
+            span(2, 1, "26.2.1", "b"),
+            span(2, 1, "1.21.4-rc1", null)
+        );
+        PlaytimeChartModel.Result chart = PlaytimeChartModel.build(spans, PlaytimeFilter.all(),
+            PlaytimeBreakdown.VERSION, PlaytimeStyle.BARS, PlaytimeGrain.DAYS, null, 0, true);
+        assertEquals(List.of("1.8", "1.21", "26.2"), chart.series().stream().map(PlaytimeSeries::version).toList());
+        assertEquals(3 * 3_600_000L, chart.columns().getFirst().millis()[0]);
+        assertEquals(0L, chart.columns().getFirst().millis()[1]);
+        assertEquals(3 * 3_600_000L, chart.columns().getFirst().millis()[2]);
+        assertEquals(3_600_000L, chart.columns().get(1).millis()[1]);
+        assertEquals(3_600_000L, chart.columns().get(1).millis()[2]);
+        assertEquals(chart.series().getFirst().color(), PlaytimeColors.ofRank(0));
+
+        PlaytimeChartModel.Result split = PlaytimeChartModel.build(spans, PlaytimeFilter.all(),
+            PlaytimeBreakdown.VERSION_SERVER, PlaytimeStyle.BARS, PlaytimeGrain.DAYS, null, 0, true);
+        assertEquals(List.of("1.8", "1.21", "26.2", "26.2"),
+            split.series().stream().map(PlaytimeSeries::version).toList());
+        assertEquals(List.of("a", PlaytimeFilter.UNKNOWN_SERVER, "a", "b"),
+            split.series().stream().map(PlaytimeSeries::serverKey).toList());
+
+        PlaytimeChartModel.Result filtered = PlaytimeChartModel.build(spans,
+            PlaytimeFilter.all().withVersions(Set.of("1.8.9")),
+            PlaytimeBreakdown.VERSION, PlaytimeStyle.BARS, PlaytimeGrain.DAYS, null, 0, true);
+        assertEquals(List.of("1.8"), filtered.series().stream().map(PlaytimeSeries::version).toList());
+        assertEquals(3_600_000L, filtered.totalMillis());
+
+        PlaytimeWeekday.Result days = PlaytimeWeekday.build(spans, PlaytimeFilter.all(),
+            PlaytimeBreakdown.VERSION, null, null, 60, true);
+        assertEquals(List.of("1.8", "1.21", "26.2"), days.series().stream().map(PlaytimeSeries::version).toList());
+        assertEquals((1 + 2 + 3 + 1 + 1) * 3_600_000L, days.totalMillis());
+    }
+
     private static double hue(int argb) {
         return java.awt.Color.RGBtoHSB((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF, null)[0];
     }
@@ -455,5 +493,14 @@ class PlaytimeChartTest {
         var category = PlaytimeMessageFilter.category(current, at(1, 0), at(2, 0), PlaytimeBreakdown.VERSION_SERVER, both);
         assertEquals(java.util.Set.of("1.21"), category.versions());
         assertEquals(java.util.Set.of("hypixel.net"), category.serversOrWorlds());
+
+        List<PlaytimeSpan> spans = List.of(span(1, 1, "1.8.9", null), span(1, 1, "1.8", null), span(1, 1, "26.2", null));
+        PlaytimeSeries major = PlaytimeSeries.of(PlaytimeBreakdown.VERSION, "1.8", null);
+        var expanded = PlaytimeMessageFilter.category(current, at(1, 0), at(2, 0), PlaytimeBreakdown.VERSION, major,
+            true, spans, null);
+        assertEquals(java.util.Set.of("1.8.9", "1.8"), expanded.versions());
+        var narrowed = PlaytimeMessageFilter.category(current, at(1, 0), at(2, 0), PlaytimeBreakdown.VERSION, major,
+            true, spans, java.util.Set.of("1.8.9"));
+        assertEquals(java.util.Set.of("1.8.9"), narrowed.versions());
     }
 }

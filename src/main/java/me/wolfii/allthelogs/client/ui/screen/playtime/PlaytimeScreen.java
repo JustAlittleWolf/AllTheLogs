@@ -183,7 +183,7 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
     private void rebuild() {
         chart = PlaytimeChartModel.build(PlaytimeSession.spans(), PlaytimeSession.filter(), PlaytimeSession.breakdown(),
             PlaytimeSession.style(), PlaytimeSession.grain(), PlaytimeSession.window(),
-            chartWidget == null ? 0 : chartWidget.plotWidth());
+            chartWidget == null ? 0 : chartWidget.plotWidth(), PlaytimeSession.majorVersions());
         if (chartWidget != null) chartWidget.chart(chart);
         if (legend != null) legend.entries(chart.series(), chart.legend());
         syncButtons();
@@ -241,12 +241,7 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
     }
 
     private void openBreakdown() {
-        if (breakdownMenu.isOpen()) return;
-        closeMenus();
-        breakdownMenu.show(breakdownButton, PlaytimeScreenSupport.groupChoices(), index -> {
-            PlaytimeSession.breakdown(PlaytimeScreenSupport.GROUPS[index]);
-            rebuild();
-        });
+        PlaytimeScreenSupport.openBreakdown(breakdownMenu, breakdownButton, this::closeMenus, this::rebuild);
     }
 
     private void openStyle() {
@@ -282,7 +277,8 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
                 menu.button(Component.translatable(categoryKey(series)), ignored -> {
                     closeContextMenu();
                     applyMessages(PlaytimeMessageFilter.category(BrowserSession.openingFilter(), column.start(),
-                        column.end(), chart.breakdown(), series));
+                        column.end(), chart.breakdown(), series, PlaytimeSession.majorVersions(),
+                        PlaytimeSession.spans(), PlaytimeSession.filter().versions()));
                 });
             }
         });

@@ -8,12 +8,32 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BrowserToolsMenuTest {
     @Test
-    void sideMenuGrowsUpSoItsLastRowMeetsTheSourceRow() {
-        int rowBottom = 200;
+    void toolsMenuOpensToTheLeftOfTheHamburger() {
+        assertEquals(220 - 90 - 2, BrowserToolsMenu.sideLeft(220, 20, 90, 400));
+    }
+
+    @Test
+    void toolsMenuUsesTheRightSideOnlyWhenTheLeftSideDoesNotFit() {
+        assertEquals(6 + 20 + 2, BrowserToolsMenu.sideLeft(6, 20, 80, 400));
+    }
+
+    @Test
+    void anchoredNoticeDropsDownBelowItsButton() {
+        assertEquals(30, BrowserToolsMenu.dropdownTop(8, 20, 2, 70, 240));
+    }
+
+    @Test
+    void toolsMenuMovesUpOnlyWhenItWouldLeaveTheBottom() {
+        assertEquals(120 - 4 - 70, BrowserToolsMenu.dropdownTop(80, 20, 2, 70, 120));
+    }
+
+    @Test
+    void sideMenuDropsDownFromTheTopOfItsRow() {
+        int rowTop = 40;
         int padding = 3;
         int height = 48;
-        int top = BrowserToolsMenu.submenuTop(rowBottom, padding, height, 240);
-        assertEquals(rowBottom, top + height - padding);
+        int top = BrowserToolsMenu.submenuTop(rowTop, padding, height, 240);
+        assertEquals(rowTop, top + padding);
     }
 
     @Test
@@ -24,8 +44,8 @@ class BrowserToolsMenuTest {
     }
 
     @Test
-    void sideMenuMovesDownOnlyWhenItWouldLeaveTheTop() {
-        assertEquals(4, BrowserToolsMenu.submenuTop(30, 3, 80, 240));
+    void sideMenuStaysPutWhenItFitsBelowTheRow() {
+        assertEquals(27, BrowserToolsMenu.submenuTop(30, 3, 80, 240));
     }
 
     @Test
@@ -60,11 +80,10 @@ class BrowserToolsMenuTest {
     }
 
     @Test
-    void sideMenuMovesUpToStayOnScreen() {
+    void sideMenuMovesUpOnlyWhenItWouldLeaveTheBottom() {
         int menuHeight = 80;
         int screenHeight = 220;
-        int top = BrowserToolsMenu.submenuTop(250, 3, menuHeight, screenHeight);
-        assertTrue(top >= 4);
-        assertTrue(top + menuHeight <= screenHeight - 4);
+        int top = BrowserToolsMenu.submenuTop(180, 3, menuHeight, screenHeight);
+        assertEquals(screenHeight - 4 - menuHeight, top);
     }
 }

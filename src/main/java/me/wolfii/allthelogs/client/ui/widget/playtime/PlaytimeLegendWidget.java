@@ -30,7 +30,7 @@ public final class PlaytimeLegendWidget extends BaseUIComponent implements AutoC
     public static final int VALUE_INSET = SCROLLBAR_ROOM + 1;
     /** Pixels kept clear between a series name and its duration. A name that would cross the gap is ellipsized. */
     private static final int NAME_DURATION_GAP = 9;
-    private static final int HIGHLIGHT_ROW = 0x30FFFFFF;
+    private static final int HIGHLIGHT_ROW = Colors.MENU_ROW;
 
     private final SeriesHighlight highlight;
     private final PixelCanvas swatches = new PixelCanvas();

@@ -18,6 +18,8 @@ import me.wolfii.allthelogs.client.config.BrowserSession;
 import me.wolfii.allthelogs.client.export.ExportMetadata;
 import me.wolfii.allthelogs.client.export.ExportProgress;
 import me.wolfii.allthelogs.client.export.MessageExport;
+import me.wolfii.allthelogs.client.files.FileReveal;
+import me.wolfii.allthelogs.client.files.LogPaths;
 import me.wolfii.allthelogs.client.list.DisplayRow;
 import me.wolfii.allthelogs.client.list.MessageSelection;
 import me.wolfii.allthelogs.client.search.ActiveFilters;
@@ -105,7 +107,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         chrome.padding(Insets.none());
 
         FlowLayout content = UIContainers.verticalFlow(Sizing.expand(), Sizing.fill());
-        content.gap(6);
+        content.gap(BrowserToolsMenu.TRACK_GAP);
         content.allowOverflow(true);
         content.surface(Surface.blur(5, 10).and(PanelSurfaces.overlay()))
             .padding(Insets.of(8))
@@ -121,9 +123,18 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
             this::openScripts, this::openImport, this::openPlaytime, this::openCleanup, this::openOptimize,
             this::startExport);
         dialog = new ModalDialog(overlays, () -> this.width);
+        list.setTrackTopInset(BrowserToolsMenu.BUTTON_SIZE + BrowserToolsMenu.TRACK_GAP);
+        StackLayout messages = UIContainers.stack(Sizing.fill(), Sizing.expand());
+        messages.allowOverflow(true);
+        messages.horizontalAlignment(HorizontalAlignment.LEFT).verticalAlignment(VerticalAlignment.TOP);
+        list.sizing(Sizing.fill(), Sizing.fill());
+        messages.child(list);
+        ButtonComponent menuButton = tools.button();
+        menuButton.positioning(Positioning.relative(100, 0));
+        messages.child(menuButton);
         FlowLayout toolbar = buildToolbar();
         queries.attach(list, tools::setDatabaseInfo);
-        content.child(list.verticalSizing(Sizing.expand()));
+        content.child(messages);
         content.child(toolbar);
         chrome.child(content);
 
@@ -161,6 +172,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+        releaseClosedMessageMenu();
         if (tools != null && overlays != null) {
             boolean scrollbarDrag = list != null && list.draggingScrollbar();
             overlays.queue(() -> tools.sync(mouseX, mouseY, scrollbarDrag));
@@ -182,6 +194,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     @Override
     public void tick() {
         super.tick();
+        releaseClosedMessageMenu();
         drainExportProgress();
         queries.pollLatest(!exportBusy && messageMenu == null && (tools == null || !tools.isOpen())
             && (filters == null || !filters.listOpen()) && (dialog == null || !dialog.isOpen()));
@@ -239,22 +252,23 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
 
     private FlowLayout buildToolbar() {
         FlowLayout bar = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
-        bar.gap(4).verticalAlignment(VerticalAlignment.BOTTOM);
 
         searchBar = new SearchBar(queries::filter, Component.translatable("allthelogs.search.placeholder"),
             this::applySearchText);
         search = searchBar.field();
-        bar.child(searchBar.component());
 
         filterButton = UIComponents.button(ActiveFilters.buttonLabel(ActiveFilters.of(queries.filter()).size()),
             button -> {
                 filters.toggle();
                 refreshSearchDecorations();
             });
-        bar.child(filterButton);
+        // The button texture keeps a 1px black frame inside its bounds. Two extra pixels, shifted up by
+        // one, put the gray face on the search field's edges.
+        filterButton.verticalSizing(Sizing.fixed(SearchBar.FILTER_BUTTON_HEIGHT));
+        filterButton.margins(Insets.top(SearchBar.FILTER_BUTTON_LIFT));
+        searchBar.trailing(filterButton);
+        bar.child(searchBar.component());
         refreshFilterButton();
-
-        bar.child(tools.button());
         return bar;
     }
 
@@ -304,17 +318,29 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     }
 
     private void closeMessageMenu() {
-        if (messageMenu == null || overlays == null) return;
-        if (overlays.children().contains(messageMenu)) {
+        if (messageMenu != null && overlays != null && overlays.children().contains(messageMenu)) {
             overlays.removeChild(messageMenu);
         }
         messageMenu = null;
+        if (list != null) list.unpinMenuRow();
+    }
+
+    /**
+     * The menu removes itself on a click outside the list. Drop the reference so the washed message clears
+     * on the same frame.
+     */
+    private void releaseClosedMessageMenu() {
+        if (messageMenu == null) return;
+        if (overlays != null && overlays.children().contains(messageMenu)) return;
+        messageMenu = null;
+        if (list != null) list.unpinMenuRow();
     }
 
     private void openMessageMenu(DisplayRow row, MessageSelection selection, List<DisplayRow> rows,
                                  double screenX, double screenY) {
         if (tools != null) tools.close();
         closeMessageMenu();
+        if (list != null) list.pinMenuRow(row.key());
         messageMenu = DropdownComponent.openContextMenu(this, overlays, StackLayout::child, screenX, screenY, menu -> {
             if (!selection.isEmpty()) {
                 menu.button(Component.translatable("allthelogs.menu.copy_selection"), ignored -> {
@@ -335,6 +361,25 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
                     closeMessageMenu();
                     applyFilter(queries.filter().withServerOrWorld(row.entry().serverOrWorld()));
                 });
+            }
+            Path openable = LogPaths.openable(row.chatLog().source());
+            if (openable != null) {
+                menu.button(Component.translatable("allthelogs.menu.open_log_file_path"), ignored -> {
+                    closeMessageMenu();
+                    showLogFile(openable);
+                });
+            }
+        });
+    }
+
+    /**
+     * Shows the log file in the file manager with that file selected, or the archive when the line
+     * was read from one.
+     */
+    private static void showLogFile(Path path) {
+        FileReveal.reveal(path).whenComplete((ignored, error) -> {
+            if (error != null) {
+                AllTheLogsClient.LOGGER.warn("Could not show {}", path, error);
             }
         });
     }
@@ -655,7 +700,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         int height = Math.max(22, lines.size() * font.lineHeight + 12);
         ButtonComponent anchor = tools.button();
         int x = Math.max(4, anchor.x() + anchor.width() - width);
-        int y = Math.max(4, anchor.y() - height - 4);
+        int y = BrowserToolsMenu.dropdownTop(anchor.y(), anchor.height(), 4, height, this.height);
         notice.positioning(Positioning.absolute(x, y));
         notice.horizontalSizing(Sizing.fixed(width));
         overlays.child(notice);

@@ -13,7 +13,8 @@ import java.util.List;
 
 /**
  * Draws the message list: only the rows that intersect the viewport, their match highlights and selection,
- * the sticky date headers, the match-count chip at the top-right, and the hover card for the row under the pointer.
+ * the wash on the message whose context menu is open, the sticky date headers, the match-count chip at the
+ * top-right, and the hover card for the row under the pointer.
  */
 final class MessageListPainter {
     private static final float DATE_SCALE = 1.25f;
@@ -46,8 +47,19 @@ final class MessageListPainter {
         return MessageListLayout.expandAtLocalX(separator, view.messageLocalX(), localX);
     }
 
+    /**
+     * Full-width wash for one message, including every wrapped line. {@code rowY} and {@code rowHeight}
+     * are screen pixels.
+     */
+    record MenuBand(int x, int y, int right, int bottom) {
+    }
+
+    static MenuBand menuBand(int viewX, int listWidth, int rowY, int rowHeight) {
+        return new MenuBand(viewX, rowY, viewX + listWidth, rowY + rowHeight);
+    }
+
     void drawRows(OwoUIGraphics graphics, ListView view, MessageSelection selection, boolean showingLoading,
-                  Component matchStatus) {
+                  Component matchStatus, int menuRow) {
         List<DisplayRow> rows = view.rows();
         int listWidth = view.listWidth();
         graphics.enableScissor(view.x(), view.y(), view.x() + listWidth, view.y() + view.height());
@@ -70,6 +82,10 @@ final class MessageListPainter {
             for (int i = first; i <= last; i++) {
                 DisplayRow row = rows.get(i);
                 int rowY = view.screenY(layout.rowY(i));
+                if (i == menuRow) {
+                    MenuBand band = menuBand(view.x(), listWidth, rowY, layout.rowHeight(i));
+                    graphics.fill(band.x(), band.y(), band.right(), band.bottom(), Colors.MENU_ROW);
+                }
                 List<MessageWrap.Line> lines = MessageWrap.wrap(row.message(), messageWidth,
                     (from, to) -> Math.round(rowWidths.width(row, view.font(), from, to) * scale));
                 drawHighlights(graphics, view, row, lines, messageX, rowY);

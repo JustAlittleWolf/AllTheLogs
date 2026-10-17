@@ -134,6 +134,17 @@ public final class PlaytimeWeekday {
      */
     public static Result build(List<PlaytimeSpan> spans, PlaytimeFilter filter, PlaytimeBreakdown breakdown,
                                LocalDateTime from, LocalDateTime until, int slotMinutes) {
+        return build(spans, filter, breakdown, from, until, slotMinutes, false);
+    }
+
+    /**
+     * @param from          inclusive start of the period, or null for no lower bound
+     * @param until         exclusive end of the period, or null for no upper bound
+     * @param slotMinutes   heat map slot length; must divide a day evenly
+     * @param majorVersions group by the first two version components, so {@code 1.8.9} shares a series with {@code 1.8}
+     */
+    public static Result build(List<PlaytimeSpan> spans, PlaytimeFilter filter, PlaytimeBreakdown breakdown,
+                               LocalDateTime from, LocalDateTime until, int slotMinutes, boolean majorVersions) {
         int slotLength = slotMinutes > 0 && MINUTES_PER_DAY % slotMinutes == 0 ? slotMinutes : SLOT_MINUTES[0];
         int slots = MINUTES_PER_DAY / slotLength;
         PlaytimeFilter active = filter == null ? PlaytimeFilter.all() : filter;
@@ -150,7 +161,7 @@ public final class PlaytimeWeekday {
             return new Result(0, group, List.of(), List.of(), List.of(), 1, slotLength,
                 new long[ALL_DAYS + 1][slots][0]);
         }
-        PlaytimeSeries.Index index = PlaytimeSeries.collect(kept, spans, group);
+        PlaytimeSeries.Index index = PlaytimeSeries.collect(kept, spans, group, majorVersions);
         int seriesCount = index.size();
         long[][][] heat = new long[ALL_DAYS + 1][slots][seriesCount];
         long[][] dayMillis = new long[7][seriesCount];

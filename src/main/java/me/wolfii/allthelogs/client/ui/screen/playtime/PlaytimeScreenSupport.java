@@ -1,6 +1,7 @@
 package me.wolfii.allthelogs.client.ui.screen.playtime;
 
 import io.wispforest.owo.ui.component.ButtonComponent;
+import io.wispforest.owo.ui.component.CheckboxComponent;
 import io.wispforest.owo.ui.component.LabelComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
@@ -18,8 +19,10 @@ import me.wolfii.allthelogs.client.playtime.PlaytimeChartModel;
 import me.wolfii.allthelogs.client.playtime.PlaytimeDuration;
 import me.wolfii.allthelogs.client.playtime.PlaytimeSession;
 import me.wolfii.allthelogs.client.ui.popup.ChecklistMenu;
+import me.wolfii.allthelogs.client.ui.popup.OptionMenu;
 import me.wolfii.allthelogs.client.ui.text.TextFit;
 import me.wolfii.allthelogs.client.ui.text.UnknownText;
+import me.wolfii.allthelogs.client.ui.text.WrappedTooltip;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
 import me.wolfii.allthelogs.client.ui.widget.playtime.PlaytimeLegendWidget;
@@ -161,6 +164,35 @@ final class PlaytimeScreenSupport {
                 PlaytimeSession.filter(PlaytimeSession.filter().withServers(selected));
                 rebuild.run();
             });
+    }
+
+    /**
+     * Group menu. While the chart is grouped by version, the first row is a checkbox that keeps only the
+     * first two version components, so {@code 1.8.9} is drawn as {@code 1.8} and {@code 26.2} stays {@code 26.2}.
+     */
+    static void openBreakdown(OptionMenu menu, ButtonComponent button, Runnable closeMenus, Runnable rebuild) {
+        if (menu.isOpen()) return;
+        closeMenus.run();
+        menu.show(button, groupChoices(), index -> {
+            PlaytimeSession.breakdown(GROUPS[index]);
+            rebuild.run();
+        }, majorVersionsChoice(rebuild));
+    }
+
+    /**
+     * The group menu's leading checkbox, or null when the current grouping does not include a version.
+     */
+    private static @Nullable CheckboxComponent majorVersionsChoice(Runnable rebuild) {
+        if (!PlaytimeSession.breakdown().byVersion()) return null;
+        CheckboxComponent box = UIComponents.checkbox(Component.translatable("allthelogs.playtime.major_versions"));
+        box.tooltip(WrappedTooltip.of(Component.translatable("allthelogs.playtime.major_versions.hint")));
+        box.checked(PlaytimeSession.majorVersions());
+        box.onChanged(checked -> {
+            if (checked == PlaytimeSession.majorVersions()) return;
+            PlaytimeSession.majorVersions(checked);
+            rebuild.run();
+        });
+        return box;
     }
 
     static Component versionLabel() {

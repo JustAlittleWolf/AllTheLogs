@@ -108,6 +108,40 @@ class MessageSelectionTest {
     }
 
     @Test
+    void extendWordsGrowsToTheWordUnderThePointer() {
+        DisplayRow line = row("one two three four");
+        List<DisplayRow> rows = List.of(line);
+        MessageSelection selection = new MessageSelection();
+        int[] anchor = MessageSelection.wordRange(line.message(), 5);
+        selection.extendWords(rows, 0, anchor[0], anchor[1], 0, 10);
+        assertEquals("two three", selection.copy(rows));
+        selection.extendWords(rows, 0, anchor[0], anchor[1], 0, 1);
+        assertEquals("one two", selection.copy(rows));
+        selection.extendWords(rows, 0, anchor[0], anchor[1], 0, 5);
+        assertEquals("two", selection.copy(rows));
+    }
+
+    @Test
+    void extendWordsCrossesMessagesOnWordBoundaries() {
+        DisplayRow first = row("alpha beta");
+        DisplayRow second = row("gamma delta");
+        List<DisplayRow> rows = List.of(first, second);
+        MessageSelection selection = new MessageSelection();
+        int[] beta = MessageSelection.wordRange(first.message(), 7);
+        int[] gamma = MessageSelection.wordRange(second.message(), 1);
+        selection.extendWords(rows, 0, beta[0], beta[1], 1, 1);
+        assertEquals("beta\ngamma", selection.copy(rows));
+        assertTrue(selection.covers(0, beta[0]));
+        assertTrue(selection.covers(1, gamma[1] - 1));
+        assertTrue(!selection.covers(1, gamma[1]));
+
+        selection.extendWords(rows, 1, gamma[0], gamma[1], 0, 7);
+        assertEquals("beta\ngamma", selection.copy(rows));
+        assertTrue(selection.covers(0, beta[1] - 1));
+        assertTrue(!selection.covers(0, 0));
+    }
+
+    @Test
     void retainInRemapsIndexesAndClearsWhenASelectedRowUnloads() {
         DisplayRow first = rowOn(LocalDateTime.of(2026, 8, 26, 10, 0), 0, "one");
         DisplayRow second = rowOn(LocalDateTime.of(2026, 8, 26, 11, 0), 1, "two");
