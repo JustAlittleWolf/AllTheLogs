@@ -237,7 +237,7 @@ final class FilterOverlay {
             if (!open() || serverMenu.isOpen()) return;
             List<String> values = new ArrayList<>(stored);
             values.sort(Comparator.comparing(FilterOverlay::placeName, String.CASE_INSENSITIVE_ORDER));
-            values.add(ChatQuery.NO_SERVER_OR_WORLD);
+            values.add(0, ChatQuery.NO_SERVER_OR_WORLD);
             serverMenu.show(button, values, () -> filter.get().serversOrWorlds(), FilterOverlay::placeName,
                 selected -> emit(filter.get().withServersOrWorlds(selected)));
         });

@@ -143,6 +143,18 @@ class PlaytimeChartTest {
     }
 
     @Test
+    void serverFilterListsUnknownFirstThenNames() {
+        List<PlaytimeSpan> spans = List.of(
+            span(1, 1, "1.21", "zebra.net"),
+            span(2, 1, "1.21", null),
+            span(3, 1, "1.21", "alpha.net"),
+            span(4, 1, "1.21", "  ")
+        );
+        assertEquals(List.of(PlaytimeFilter.UNKNOWN_SERVER, "alpha.net", "zebra.net"),
+            PlaytimeChartModel.serversIn(spans));
+    }
+
+    @Test
     void serverNamesLoseFormattingAndLongNamesAreCut() {
         PlaytimeSeries series = PlaytimeSeries.of(PlaytimeBreakdown.SERVER, "1.21", "\u00a76Gold \u00a7lWorld");
         assertEquals("Gold World", series.label("Unknown"));

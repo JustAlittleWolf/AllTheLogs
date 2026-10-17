@@ -285,7 +285,7 @@ public final class PlaytimeChartModel {
             String key = PlaytimeFilter.serverKey(span.server());
             if (!servers.contains(key)) servers.add(key);
         }
-        servers.sort(Comparator.comparing((String server) -> server.equals(PlaytimeFilter.UNKNOWN_SERVER))
+        servers.sort(Comparator.comparing((String server) -> !PlaytimeFilter.UNKNOWN_SERVER.equals(server))
             .thenComparing(PlaytimeSeries::displayName, String.CASE_INSENSITIVE_ORDER));
         return List.copyOf(servers);
     }
