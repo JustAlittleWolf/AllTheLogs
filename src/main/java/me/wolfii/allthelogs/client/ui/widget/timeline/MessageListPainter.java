@@ -97,35 +97,47 @@ final class MessageListPainter {
         }
     }
 
-    /** Horizontal padding inside the match-count chip, and the gap between the chip and the list edge. */
+    /** Horizontal padding between the match-count label and the chip's own edges. */
     private static final int STATUS_PAD_X = 8;
     /**
-     * Width floor for the chip: a 7-digit count plus a two-digit duration. Wider than {@code Loading...}
-     * and the plain count, so those swaps do not move the chip.
+     * Sample whose width, halved, is the chip's default text width: a 7-digit count plus a
+     * two-digit duration. The chip grows past that floor only when the label is wider.
      */
     private static final String STATUS_MIN_COUNT = "0000000";
     private static final String STATUS_MIN_DURATION = "00.0";
 
+    record StatusChipBounds(int x, int width) {
+    }
+
     /**
-     * Match count in a chip at the top-right of the list. The chip is always drawn, at least
-     * {@link #STATUS_MIN_COUNT} wide, and the label is right-aligned inside it.
+     * Chip flush with the right edge of the message list. {@code sampleTextWidth} is the width of
+     * the timed seven-digit sample; the default chip is about half of that, plus padding, and
+     * widens to fit {@code textWidth} when the label needs it.
+     */
+    static StatusChipBounds statusChipBounds(int viewX, int listWidth, int textWidth, int sampleTextWidth) {
+        int minTextWidth = Math.max(0, sampleTextWidth) / 2;
+        int desired = Math.max(0, Math.max(textWidth, minTextWidth)) + 2 * STATUS_PAD_X;
+        int boxWidth = Math.min(Math.max(0, listWidth), desired);
+        return new StatusChipBounds(viewX + Math.max(0, listWidth) - boxWidth, boxWidth);
+    }
+
+    /**
+     * Match count in a chip flush with the top-right of the message list. The label is
+     * right-aligned inside the chip, which stays at its default width until the text needs more.
      */
     void drawMatchStatus(OwoUIGraphics graphics, ListView view, Component status) {
         Font font = view.font();
         boolean hasText = status != null && !status.getString().isEmpty();
         int textWidth = hasText ? font.width(status) : 0;
-        int minTextWidth = font.width(Component.translatable("allthelogs.status.messages.timed",
+        int sampleWidth = font.width(Component.translatable("allthelogs.status.messages.timed",
             STATUS_MIN_COUNT, STATUS_MIN_DURATION));
-        int listWidth = view.listWidth();
-        int boxWidth = Math.min(Math.max(0, listWidth - 2 * STATUS_PAD_X),
-            Math.max(textWidth, minTextWidth) + 2 * STATUS_PAD_X);
+        StatusChipBounds box = statusChipBounds(view.x(), view.listWidth(), textWidth, sampleWidth);
         int boxHeight = MessageListLayout.DATE_HEIGHT;
-        int boxX = view.x() + Math.max(STATUS_PAD_X, listWidth - STATUS_PAD_X - boxWidth);
         int boxY = view.y();
-        HoverChip.fill(graphics, boxX, boxY, boxWidth, boxHeight, Colors.STATUS_CHIP);
+        HoverChip.fill(graphics, box.x(), boxY, box.width(), boxHeight, Colors.STATUS_CHIP);
         if (!hasText) return;
         int textY = boxY + Math.max(0, (boxHeight - font.lineHeight) / 2) + 2;
-        graphics.drawText(status, boxX + boxWidth - STATUS_PAD_X - textWidth, textY, 1, Colors.TEXT);
+        graphics.drawText(status, box.x() + box.width() - STATUS_PAD_X - textWidth, textY, 1, Colors.TEXT);
     }
 
     /**

@@ -31,8 +31,9 @@ class PlaytimeChartTest {
         assertEquals("1m 30s", PlaytimeDuration.format(90_000));
         assertEquals("1h 1m", PlaytimeDuration.format(3_660_000));
         assertEquals("1d 1h", PlaytimeDuration.format(90_000_000));
-        assertEquals("4d 23h 59m", PlaytimeDuration.summary(5 * 86_400_000L - 60_000));
-        assertEquals("5d", PlaytimeDuration.summary(5 * 86_400_000L + 3_600_000));
+        assertEquals("2d 23h 59m", PlaytimeDuration.summary(3 * 86_400_000L - 60_000));
+        assertEquals("3d", PlaytimeDuration.summary(3 * 86_400_000L));
+        assertEquals("4d", PlaytimeDuration.summary(3 * 86_400_000L + 12 * 3_600_000L));
         assertEquals("200d", PlaytimeDuration.summary(199 * 86_400_000L + 13 * 3_600_000L));
     }
 
@@ -213,10 +214,12 @@ class PlaytimeChartTest {
     }
 
     @Test
-    void axisLabelsPutDaysOnTheirOwnLine() {
+    void axisUsesDaysOnlyFromThreeDays() {
         assertEquals("6h 36m", PlaytimeDuration.axis(6 * 3_600_000L + 36 * 60_000L));
         assertEquals("2d\n6h 5m", PlaytimeDuration.axis(2 * 86_400_000L + 6 * 3_600_000L + 5 * 60_000L));
         assertEquals("3d", PlaytimeDuration.axis(3 * 86_400_000L));
+        assertEquals("3d", PlaytimeDuration.axis(3 * 86_400_000L + 3_600_000L));
+        assertEquals("5d", PlaytimeDuration.axis(4 * 86_400_000L + 13 * 3_600_000L));
     }
 
     @Test
@@ -301,8 +304,10 @@ class PlaytimeChartTest {
         Locale previous = Locale.getDefault();
         try {
             Locale.setDefault(Locale.UK);
-            assertEquals("1 Jan", PlaytimeChartModel.axisLabel(monday, PlaytimeGrain.WEEKS, false));
-            assertEquals("1 Jan 2024", PlaytimeChartModel.axisLabel(monday, PlaytimeGrain.WEEKS, true));
+            assertEquals("1 Jan 2024", PlaytimeChartModel.axisLabel(monday, PlaytimeGrain.WEEKS));
+            assertEquals("1 Jan 2024", PlaytimeChartModel.axisLabel(monday, PlaytimeGrain.DAYS));
+            assertEquals("Jan 2024", PlaytimeChartModel.axisLabel(monday, PlaytimeGrain.MONTHS));
+            assertEquals("2024", PlaytimeChartModel.axisLabel(monday, PlaytimeGrain.YEARS));
             assertEquals("1 – 7 Jan 2024", PlaytimeChartModel.spanLabel(monday, monday.plusWeeks(1), PlaytimeGrain.WEEKS));
             LocalDateTime late = LocalDateTime.of(2024, 1, 29, 0, 0);
             assertEquals("29 Jan – 4 Feb 2024", PlaytimeChartModel.spanLabel(late, late.plusWeeks(1), PlaytimeGrain.WEEKS));

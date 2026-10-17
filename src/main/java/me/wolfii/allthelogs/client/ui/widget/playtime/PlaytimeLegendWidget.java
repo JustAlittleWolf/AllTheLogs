@@ -17,8 +17,9 @@ import java.util.function.BooleanSupplier;
 
 /**
  * Vertical legend: every series with its playtime, most first, and the same pattern as in the charts.
- * Hovering a row highlights that series in the charts, and shows the full name when it is cut short. Meant to sit in a vertical scroll container; the
- * rightmost pixels stay free for its scrollbar.
+ * Hovering a row highlights that series in the charts and shows its full name. Shared by the timeline
+ * and weekday screens. Meant to sit in a vertical scroll container; the rightmost pixels stay free for
+ * its scrollbar.
  */
 public final class PlaytimeLegendWidget extends BaseUIComponent implements AutoCloseable {
     private static final int ROW = 11;
@@ -26,6 +27,8 @@ public final class PlaytimeLegendWidget extends BaseUIComponent implements AutoC
     private static final int SCROLLBAR_ROOM = 5;
     /** Gap between a duration and the right edge of the legend; the total above the legend uses it too. */
     public static final int VALUE_INSET = SCROLLBAR_ROOM + 1;
+    /** Pixels kept clear between a series name and its duration. A name that would cross the gap is ellipsized. */
+    private static final int NAME_DURATION_GAP = 9;
     private static final int HIGHLIGHT_ROW = 0x30FFFFFF;
 
     private final SeriesHighlight highlight;
@@ -77,7 +80,7 @@ public final class PlaytimeLegendWidget extends BaseUIComponent implements AutoC
             && (parent() == null || parent().isInBoundingBox(mouseX, mouseY));
         int right = x + width - SCROLLBAR_ROOM;
         int hovered = -1;
-        String cutName = null;
+        String hoveredName = null;
         int active = highlight.active();
         int rowY = y;
         for (PlaytimeChartModel.LegendEntry entry : entries) {
@@ -86,12 +89,12 @@ public final class PlaytimeLegendWidget extends BaseUIComponent implements AutoC
                 boolean rowHovered = pointerInside && mouseY >= rowY && mouseY < rowY + ROW;
                 if (rowHovered) hovered = entry.series();
                 if (entry.series() == active) graphics.fill(x, rowY, right, rowY + ROW, HIGHLIGHT_ROW);
-                String duration = PlaytimeDuration.summary(entry.millis());
+                String duration = PlaytimeDuration.format(entry.millis());
                 int durationWidth = font.width(duration);
                 int nameX = x + SWATCH + 4;
                 String fullName = item.label(unknown);
-                String name = TextFit.fit(fullName, right - durationWidth - 4 - nameX);
-                if (rowHovered && !name.equals(fullName)) cutName = fullName;
+                String name = TextFit.fit(fullName, right - durationWidth - NAME_DURATION_GAP - nameX);
+                if (rowHovered) hoveredName = fullName;
                 graphics.drawText(Component.literal(name), nameX, rowY + 2, 1f, Colors.TEXT);
                 graphics.drawText(Component.literal(duration), x + width - VALUE_INSET - durationWidth, rowY + 2, 1f,
                     Colors.MUTED);
@@ -100,7 +103,7 @@ public final class PlaytimeLegendWidget extends BaseUIComponent implements AutoC
         }
         swatches.draw(graphics, scale, (x + 1) * scale, y * scale);
         highlight.legend(hovered);
-        if (cutName != null) graphics.setTooltipForNextFrame(font, Component.literal(cutName), mouseX, mouseY);
+        if (hoveredName != null) graphics.setTooltipForNextFrame(font, Component.literal(hoveredName), mouseX, mouseY);
     }
 
     /**

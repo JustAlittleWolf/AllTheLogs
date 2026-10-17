@@ -57,6 +57,10 @@ public final class Colors {
      */
     public static final int SEARCH_TEXT = 0xFFE0E0E0;
     public static final int SEARCH_INVALID = 0xFFE8A8A8;
+    /**
+     * Regex explanation on the search chip. Red, mixed toward white so it is not a saturated alarm red.
+     */
+    public static final int SEARCH_ERROR = 0xFFE07A7A;
     public static final int REGEX_ESCAPE = 0xFF7EB8D4;
     public static final int REGEX_CLASS = 0xFFA8C48A;
     public static final int REGEX_GROUP = 0xFFB8A9E0;
