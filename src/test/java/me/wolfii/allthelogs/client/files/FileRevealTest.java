@@ -10,10 +10,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FileRevealTest {
     @Test
-    void windowsExplorerSelectsTheFile() {
-        Path file = Path.of("C:\\logs\\My Logs\\latest.log");
-        assertEquals(List.of("explorer.exe", "/select,C:\\logs\\My Logs\\latest.log"),
-            FileReveal.windowsSelect(file));
+    void windowsFallbackOpensTheContainingFolder() {
+        assertEquals("C:\\logs\\My Logs", FileReveal.windowsDirectory("C:\\logs\\My Logs\\latest.log"));
+        assertEquals("C:\\", FileReveal.windowsDirectory("C:\\latest.log"));
+        assertEquals(List.of("explorer.exe", "C:\\logs\\My Logs"),
+            FileReveal.windowsOpenFolder(Path.of("C:\\logs\\My Logs\\latest.log")));
     }
 
     @Test
