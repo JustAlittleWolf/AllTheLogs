@@ -5,6 +5,56 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ServerOrWorldExtractorTest {
+    private static final String VILLAGER_DIAGNOSTIC =
+        "[19:31:45] [Server thread/INFO]: Villager class_1646['Villager'/24, "
+            + "l='ServerLevel[TETRABLOCK]', x=64.50, y=100.50, z=-64.50] died, message: 'Villager was killed'";
+
+    @Test
+    void villagerDiagnosticNamesOnlyAnActiveUnnamedLocalSession() {
+        ServerOrWorldExtractor places = new ServerOrWorldExtractor();
+        places.accept(VILLAGER_DIAGNOSTIC);
+        assertNull(places.current());
+        assertFalse(places.inSession());
+        places.accept("[19:30:00] [Server thread/INFO]: Starting integrated minecraft server version 1.20.1");
+        places.accept(VILLAGER_DIAGNOSTIC);
+        assertEquals("world/TETRABLOCK", places.current());
+        places.accept("[19:37:12] [Server thread/INFO]: Stopping singleplayer server as player logged out");
+        places.accept(VILLAGER_DIAGNOSTIC);
+        assertNull(places.current());
+        assertFalse(places.inSession());
+    }
+
+    @Test
+    void villagerDiagnosticDoesNotReplaceKnownPlaces() {
+        ServerOrWorldExtractor remote = new ServerOrWorldExtractor();
+        remote.accept("[19:30:00] [Render thread/INFO]: Connecting to example.org, 25565");
+        remote.accept(VILLAGER_DIAGNOSTIC);
+        assertEquals("example.org", remote.current());
+
+        ServerOrWorldExtractor local = new ServerOrWorldExtractor();
+        local.accept("[19:30:00] [Server thread/INFO]: Starting integrated minecraft server version 1.20.1");
+        local.accept("[19:30:01] [Server thread/INFO]: Saving chunks for level 'ServerLevel[Known]'/minecraft:overworld");
+        local.accept(VILLAGER_DIAGNOSTIC);
+        assertEquals("world/Known", local.current());
+    }
+
+    @Test
+    void villagerDiagnosticRequiresTheCompleteServerMessage() {
+        ServerOrWorldExtractor places = new ServerOrWorldExtractor();
+        places.accept("[19:30:00] [Server thread/INFO]: Starting integrated minecraft server version 1.20.1");
+        for (String rejected : new String[]{
+            VILLAGER_DIAGNOSTIC.replace("Server thread/INFO", "Render thread/INFO"),
+            VILLAGER_DIAGNOSTIC.replace("Villager class_1646", "[CHAT] Villager class_1646"),
+            VILLAGER_DIAGNOSTIC.replace("[Server thread/INFO]: ", "[Render thread/WARN]: Quoted [Server thread/INFO]: "),
+            VILLAGER_DIAGNOSTIC.replace("ServerLevel[TETRABLOCK]", "ClientLevel"),
+            VILLAGER_DIAGNOSTIC.substring(0, VILLAGER_DIAGNOSTIC.indexOf(" died,")),
+            "[19:31:45] [Server thread/INFO]: Something mentions ServerLevel[Fake]"
+        }) {
+            places.accept(rejected);
+            assertNull(places.current(), rejected);
+        }
+    }
+
     @Test
     void connectingAndLeaveUpdateCurrentAndKeepLast() {
         ServerOrWorldExtractor places = new ServerOrWorldExtractor();

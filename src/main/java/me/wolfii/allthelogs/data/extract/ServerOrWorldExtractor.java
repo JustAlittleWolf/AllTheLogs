@@ -1,6 +1,8 @@
 package me.wolfii.allthelogs.data.extract;
 
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Finds the remote server or local world a log line was recorded on, and when the player left it.
@@ -30,10 +32,14 @@ public final class ServerOrWorldExtractor {
     private static final String INTEGRATED_SERVER_AT =
         " (net.minecraft.server.integrated.IntegratedServer@";
     private static final String SERVER_LEVEL = "ServerLevel[";
+    private static final String VILLAGER_DEATH = "[Server thread/INFO]: Villager ";
+    private static final Pattern VILLAGER_LEVEL = Pattern.compile(
+        ".+, l='ServerLevel\\[(.+)]', x=-?\\d+\\.\\d+, y=-?\\d+\\.\\d+, z=-?\\d+\\.\\d+] died, message: '.*'");
 
     private String current;
     private String last;
     private boolean inSession;
+    private boolean inLocalSession;
     /** After a leave, ignore world-save lines until a new connect / integrated-server start. */
     private boolean placeAllowed = true;
 
@@ -52,9 +58,14 @@ public final class ServerOrWorldExtractor {
         Connecting connecting = connectingMatch(line);
         if (connecting != null || singleplayerJoin) {
             inSession = true;
+            inLocalSession = connecting == null && singleplayerJoin;
             placeAllowed = true;
         }
         String found = placeFrom(line, connecting);
+        if (found == null && current == null && inLocalSession) {
+            String world = villagerDeathWorld(line);
+            if (world != null) found = localWorld(world);
+        }
         if (found != null && found.startsWith(LOCAL_PREFIX) && isRemote(current)) {
             found = null;
         }
@@ -68,6 +79,7 @@ public final class ServerOrWorldExtractor {
     private void clearCurrent() {
         current = null;
         inSession = false;
+        inLocalSession = false;
         placeAllowed = false;
     }
 
@@ -193,6 +205,17 @@ public final class ServerOrWorldExtractor {
             if (quote > i) return line.substring(i, quote);
             from = at + 1;
         }
+    }
+
+    /**
+     * Vanilla villager deaths log the entity's server level as part of its diagnostic string.
+     * Only a complete server-thread death diagnostic supplies a name; arbitrary ServerLevel mentions do not.
+     */
+    private static String villagerDeathWorld(String line) {
+        int at = line.indexOf("] ") + 2;
+        if (at < 2 || !line.startsWith(VILLAGER_DEATH, at) || line.indexOf("[CHAT]") >= 0) return null;
+        Matcher match = VILLAGER_LEVEL.matcher(line.substring(at + VILLAGER_DEATH.length()));
+        return match.matches() ? match.group(1) : null;
     }
 
     /**

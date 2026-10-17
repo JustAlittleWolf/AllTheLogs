@@ -20,6 +20,24 @@ class LogParserTest {
     }
 
     @Test
+    void serverVillagerDeathBackfillsAnUnnamedWorldWithoutCrossingLogout() throws IOException {
+        ParsedLog parsed = parse("""
+            [19:30:00] [Server thread/INFO]: Starting integrated minecraft server version 1.20.1
+            [19:30:43] [Render thread/INFO]: [CHAT] before
+            [19:31:45] [Render thread/INFO]: Villager class_1646['Villager'/24, l='ClientLevel', x=64.50, y=100.50, z=-64.50] died, message: 'Villager died'
+            [19:31:45] [Server thread/INFO]: Villager class_1646['Villager'/24, l='ServerLevel[\u00a7e\u00a7lTETRABLOCK]', x=64.50, y=100.50, z=-64.50] died, message: 'Villager was killed'
+            [19:34:36] [Render thread/INFO]: [CHAT] after
+            [19:37:12] [Server thread/INFO]: Stopping singleplayer server as player logged out
+            [19:37:13] [Server thread/INFO]: Villager class_1646['Villager'/24, l='ServerLevel[Other]', x=64.50, y=100.50, z=-64.50] died, message: 'Villager was killed'
+            [19:37:14] [Render thread/INFO]: [CHAT] menu
+            """);
+        assertEquals(3, parsed.entries().size());
+        assertEquals("world/\u00a7e\u00a7lTETRABLOCK", parsed.entries().get(0).serverOrWorld());
+        assertEquals("world/\u00a7e\u00a7lTETRABLOCK", parsed.entries().get(1).serverOrWorld());
+        assertNull(parsed.entries().get(2).serverOrWorld());
+    }
+
+    @Test
     void removesNulsBeforeRecognizingMetadataAndChat() throws IOException {
         ParsedLog parsed = parse("""
             \u0000\u0000[12:16:20] [main/INFO]: Loading Mine\u0000craft 1.21.8 with Fabric Loader 0.17.2\u0000
