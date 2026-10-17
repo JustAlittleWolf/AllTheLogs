@@ -8,7 +8,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BrowserToolsMenuTest {
     @Test
-    void toolsMenuDropsDownFromTheHamburger() {
+    void toolsMenuOpensToTheLeftOfTheHamburger() {
+        assertEquals(220 - 90 - 2, BrowserToolsMenu.sideLeft(220, 20, 90, 400));
+    }
+
+    @Test
+    void toolsMenuUsesTheRightSideOnlyWhenTheLeftSideDoesNotFit() {
+        assertEquals(6 + 20 + 2, BrowserToolsMenu.sideLeft(6, 20, 80, 400));
+    }
+
+    @Test
+    void anchoredNoticeDropsDownBelowItsButton() {
         assertEquals(30, BrowserToolsMenu.dropdownTop(8, 20, 2, 70, 240));
     }
 

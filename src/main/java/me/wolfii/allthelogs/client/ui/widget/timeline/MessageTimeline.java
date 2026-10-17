@@ -199,7 +199,7 @@ public final class MessageTimeline extends BaseUIComponent {
 
     /**
      * Leaves {@code inset} pixels above the scrubber. The tools button sits in that gap, and the track
-     * starts under the button.
+     * starts below the button instead of running into it.
      */
     public void setTrackTopInset(int inset) {
         this.trackTopInset = Math.max(0, inset);
