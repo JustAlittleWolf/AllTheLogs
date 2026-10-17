@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.client.ui.widget;
 
+import org.joml.Vector2ic;
 import org.junit.jupiter.api.Test;
 
 import me.wolfii.allthelogs.client.search.SearchDecorations;
@@ -38,5 +39,26 @@ class DecoratedSearchFieldTest {
     @Test
     void closingMarkReturnsWhenTheEndScrollsIntoView() {
         assertEquals(40 + 24 + SearchDecorations.GAP, DecoratedSearchField.suffixX(40, 24, SearchDecorations.GAP, 40, 28, 12));
+    }
+
+    @Test
+    void regexTooltipSitsAboveTheSearchField() {
+        Vector2ic at = DecoratedSearchField.placeTooltip(400, 20, 20, 800, 450, 180, 30);
+        assertEquals(20, at.x());
+        assertEquals(400 - 30 - 4, at.y());
+    }
+
+    @Test
+    void regexTooltipDropsBelowWhenTheTopHasNoRoom() {
+        Vector2ic at = DecoratedSearchField.placeTooltip(8, 20, 20, 800, 450, 180, 30);
+        assertEquals(20, at.x());
+        assertEquals(8 + 20 + 4, at.y());
+    }
+
+    @Test
+    void regexTooltipShiftsLeftToStayOnScreen() {
+        Vector2ic at = DecoratedSearchField.placeTooltip(400, 20, 700, 800, 450, 180, 30);
+        assertEquals(800 - 180 - 2, at.x());
+        assertEquals(400 - 30 - 4, at.y());
     }
 }
