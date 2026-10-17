@@ -3,8 +3,10 @@ package me.wolfii.allthelogs.data.extract;
 /**
  * Finds the Minecraft account that produced a log.
  * <p>
- * {@code Setting user:} and In-Game Account Switcher login lines are authoritative and may
- * replace an earlier name when the player switches accounts. A {@code Name[local:E:…] logged in}
+ * {@code Setting user:}, In-Game Account Switcher login lines, and LabyMod's MOJANG VoiceAuth
+ * handshake names may replace an earlier name when the player switches accounts. VoiceAuth is
+ * an observation of the handshake identity, not confirmation of successful authentication or
+ * the exact time the session changed. A {@code Name[local:E:…] logged in}
  * line is only a fallback for the first such login in the file, because later lines are LAN guests.
  */
 public final class MinecraftUserExtractor {
@@ -12,6 +14,7 @@ public final class MinecraftUserExtractor {
     private static final String IAS_LOGGING = "IAS: Logging";
     private static final String IAS_SUCCESS = "IAS: Successful login as MCProfile[uuid=";
     private static final String IAS_LOGIN_DATA = "IAS: Received login request: LoginData{name='";
+    private static final String VOICE_AUTH = "Auth VoiceAuth(authMode=MOJANG, token=";
 
     private String user;
     private boolean fromAuthoritative;
@@ -20,7 +23,7 @@ public final class MinecraftUserExtractor {
      * Observes one log line and updates the detected user when this line is more trustworthy.
      */
     public void accept(String line) {
-        if (line.indexOf("Setting user:") >= 0 || line.indexOf("IAS:") >= 0) {
+        if (line.indexOf("Setting user:") >= 0 || line.indexOf("IAS:") >= 0 || line.indexOf(VOICE_AUTH) >= 0) {
             String authoritative = authoritativeUser(line);
             if (authoritative != null) {
                 user = authoritative;
@@ -48,6 +51,8 @@ public final class MinecraftUserExtractor {
             String setting = settingUser(line);
             if (setting != null) return setting;
         }
+        String voice = voiceAuth(line);
+        if (voice != null) return voice;
         if (line.indexOf("IAS:") < 0) return null;
         if (line.indexOf(IAS_LOGGING) >= 0) {
             String logging = iasLogging(line);
@@ -61,6 +66,27 @@ public final class MinecraftUserExtractor {
             return iasLoginData(line);
         }
         return null;
+    }
+
+    /**
+     * LabyMod 3 logs a player name in MOJANG voice handshakes. LABY handshakes instead contain
+     * opaque credentials. Require the complete log message so chat translations and quoted
+     * diagnostics cannot supply a name, and accept only Minecraft username characters.
+     */
+    static String voiceAuth(String line) {
+        int messageAt = line.indexOf("]: ");
+        if (messageAt < 0) return null;
+        int start = messageAt + 3;
+        if (!line.startsWith(VOICE_AUTH, start)) return null;
+        start += VOICE_AUTH.length();
+        int end = line.indexOf(')', start);
+        if (end <= start || end - start > 16 || !ExtractChars.onlyWhitespaceFrom(line, end + 1)) return null;
+        for (int i = start; i < end; i++) {
+            char c = line.charAt(i);
+            if (!(c >= 'a' && c <= 'z') && !(c >= 'A' && c <= 'Z')
+                && !(c >= '0' && c <= '9') && c != '_') return null;
+        }
+        return line.substring(start, end);
     }
 
     /** {@code Setting user: (\\S+)} */
