@@ -315,24 +315,21 @@ public final class PlaytimeChartWidget extends BaseUIComponent implements AutoCl
 
     /**
      * Labels under the bars. Labelled buckets are a fixed multiple apart counted from a fixed point in time,
-     * so labels move with their bars while panning instead of jumping between them. The first label and any
-     * label in a new year carry the year.
+     * so labels move with their bars while panning instead of jumping between them. Every label is the full
+     * date, including the year.
      */
     private void drawXAxis(OwoUIGraphics graphics, int plotX, int scale, int labelY) {
         List<PlaytimeChartModel.Column> columns = chart.columns();
         int count = layout.count();
         if (count == 0) return;
         int widest = Math.max(labelWidth(columns.getFirst()), labelWidth(columns.getLast()));
-        int previousYear = Integer.MIN_VALUE;
         double averageBar = (layout.right() - layout.left()) / (double) count;
         int step = Math.max(1, (int) Math.ceil((widest + LABEL_GAP) * scale / Math.max(averageBar, 0.001)));
         for (int column = 0; column < count; column++) {
             PlaytimeChartModel.Column bucket = columns.get(column);
             if (Math.floorMod(ordinal(bucket.start()), step) != 0) continue;
             if (layout.barRight(column) <= layout.barLeft(column)) continue;
-            int year = bucket.start().getYear();
-            String label = PlaytimeChartModel.axisLabel(bucket.start(), chart.grain(), year != previousYear);
-            previousYear = year;
+            String label = PlaytimeChartModel.axisLabel(bucket.start(), chart.grain());
             int textWidth = PlaytimePainter.axisWidth(label);
             int center = plotX + (layout.barLeft(column) + layout.barRight(column)) / 2 / scale;
             int textX = Math.max(x, Math.min(center - textWidth / 2, x + width - textWidth));
@@ -353,7 +350,7 @@ public final class PlaytimeChartWidget extends BaseUIComponent implements AutoCl
     }
 
     private int labelWidth(PlaytimeChartModel.Column bucket) {
-        return PlaytimePainter.axisWidth(PlaytimeChartModel.axisLabel(bucket.start(), chart.grain(), true));
+        return PlaytimePainter.axisWidth(PlaytimeChartModel.axisLabel(bucket.start(), chart.grain()));
     }
 
     private void drawViewIndicator(OwoUIGraphics graphics, int left, int span) {
