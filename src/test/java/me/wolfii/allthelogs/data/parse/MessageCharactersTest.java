@@ -24,6 +24,20 @@ class MessageCharactersTest {
     }
 
     @Test
+    void alwaysDropsNulsAndKeepsFormattingAligned() {
+        int red = PackedFormatting.color(0xFF5555);
+        int green = PackedFormatting.color(0x55FF55);
+        FormattingCodes.Parsed input = new FormattingCodes.Parsed(
+            "\u0000A\u0000B\u0000", new long[]{PackedFormatting.run(1, 1, red), PackedFormatting.run(3, 1, green)});
+        for (boolean dropPrivateUse : new boolean[]{false, true}) {
+            FormattingCodes.Parsed parsed = MessageCharacters.filter(input, dropPrivateUse);
+            assertEquals("AB", parsed.text());
+            assertEquals(red, PackedFormatting.at(parsed.formatting(), 0));
+            assertEquals(green, PackedFormatting.at(parsed.formatting(), 1));
+        }
+    }
+
+    @Test
     void dropsPrivateUseCharactersWhenEnabled() {
         String supplementary = new String(Character.toChars(0xF0000)) + new String(Character.toChars(0x10FFFD));
         FormattingCodes.Parsed parsed = MessageCharacters.filter(

@@ -45,8 +45,8 @@ public final class Colors {
     public static final int SELECTION = 0x663A6EA5;
     public static final int STATUS_CHIP = 0xE0181818;
     public static final int HOVER_CHIP = 0xFb1C1C1C;
-    /** Playtime chart hover card, slightly see-through so the bars under it stay visible. */
-    public static final int CHART_HOVER_CHIP = 0xEB1C1C1C;
+    /** Playtime chart hover card at about 85% opacity, so the bars under it stay visible. */
+    public static final int CHART_HOVER_CHIP = 0xD91C1C1C;
     /**
      * Rule drawn between sessions and where context runs out.
      */
@@ -57,6 +57,10 @@ public final class Colors {
      */
     public static final int SEARCH_TEXT = 0xFFE0E0E0;
     public static final int SEARCH_INVALID = 0xFFE8A8A8;
+    /**
+     * Regex explanation on the search chip. Red, mixed toward white so it is not a saturated alarm red.
+     */
+    public static final int SEARCH_ERROR = 0xFFE07A7A;
     public static final int REGEX_ESCAPE = 0xFF7EB8D4;
     public static final int REGEX_CLASS = 0xFFA8C48A;
     public static final int REGEX_GROUP = 0xFFB8A9E0;

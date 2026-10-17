@@ -8,8 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class MinecraftVersionsTest {
     @Test
-    void newestSemanticVersionIsFirstAndUnknownIsLast() {
-        assertEquals(List.of("26.2", "1.21.1", "1.20.1", "1.12.2", "1.8.9", "unknown"),
+    void unknownIsFirstAndThenTheNewestSemanticVersion() {
+        assertEquals(List.of("unknown", "26.2", "1.21.1", "1.20.1", "1.12.2", "1.8.9"),
             MinecraftVersions.newestFirst(List.of("1.8.9", "26.2", "1.12.2", "unknown", "1.21.1", "1.20.1")));
     }
 

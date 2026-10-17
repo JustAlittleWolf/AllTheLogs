@@ -24,7 +24,7 @@ import java.util.function.ToIntFunction;
 
 /**
  * Minecraft {@link Component}s for a displayed chat line: timestamp gutter, coloured message text,
- * date headers, hover cards, and the list status chip.
+ * date headers, hover cards, and the match count at the top-right of the list.
  */
 public final class MessageText {
     /**
@@ -54,7 +54,13 @@ public final class MessageText {
     }
 
     /**
-     * Search duration for the status chip: seconds with one decimal, or empty when under 0.1s after rounding.
+     * A finished query keeps its duration on screen only after this long. {@code Loading...} waits the
+     * same amount of time and never includes the seconds still ticking.
+     */
+    public static final long TIMED_STATUS_MS = 1000;
+
+    /**
+     * Search duration: seconds with one decimal, or empty when under 0.1s after rounding.
      */
     static String searchDurationText(long elapsedMs) {
         double seconds = Math.round(Math.max(0, elapsedMs) / 100.0) / 10.0;
@@ -63,17 +69,20 @@ public final class MessageText {
     }
 
     /**
-     * Text for the list's status chip: a persistent overlay, then loading, then the count and search time.
-     * Unfiltered lists use "message(s)"; a search or version/date filter uses "match(es)".
+     * Text for the match count at the top-right of the list. The count stays up once it is known, except
+     * while {@code loading} is set: that replaces it with {@code Loading...} until the query finishes.
+     * A finished query includes its duration only after {@link #TIMED_STATUS_MS}. Unfiltered lists use
+     * "message(s)"; a search or version/date filter uses "match(es)". An overlay, such as a failed query,
+     * replaces both.
      */
     public static Component listStatus(Component overlay, boolean loading, boolean showCount, long matchCount,
                                        boolean exactCount, long elapsedMs, boolean narrowed) {
         if (overlay != null && !overlay.getString().isEmpty()) return overlay;
         if (loading) return Component.translatable("allthelogs.status.loading");
         if (!showCount) return Component.empty();
-        String duration = searchDurationText(elapsedMs);
         String count = matchCountText(matchCount, exactCount);
         boolean singular = singularMatch(matchCount, exactCount);
+        String duration = elapsedMs > TIMED_STATUS_MS ? searchDurationText(elapsedMs) : "";
         String key = statusCountKey(narrowed, singular, !duration.isEmpty());
         if (duration.isEmpty()) return Component.translatable(key, count);
         return Component.translatable(key, count, duration);

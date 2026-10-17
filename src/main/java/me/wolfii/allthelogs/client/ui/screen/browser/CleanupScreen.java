@@ -111,10 +111,10 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
         page.verticalAlignment(VerticalAlignment.TOP);
 
         FlowLayout top = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
-        top.gap(4).verticalAlignment(VerticalAlignment.CENTER);
+        top.gap(4).verticalAlignment(VerticalAlignment.BOTTOM);
         searchBar = new SearchBar(() -> filter, Component.translatable("allthelogs.cleanup.text_hint"),
             this::onTextChanged);
-        top.child(searchBar.field());
+        top.child(searchBar.component());
         modeButton = UIComponents.button(modeLabel(mode), pressed -> toggleMode());
         modeButton.horizontalSizing(Sizing.fixed(widest(modeLabel(Mode.DELETE), modeLabel(Mode.REMOVE_TEXT))));
         top.child(modeButton);

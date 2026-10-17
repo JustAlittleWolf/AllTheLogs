@@ -262,16 +262,15 @@ public final class PlaytimeChartModel {
     }
 
     /**
-     * Label under a bar, by its first day: {@code 3 Jan} for days and weeks, {@code Jan} for months, and
-     * {@code 2024} for years. {@code withYear} adds the year to days, weeks, and months, for the first label
-     * and where the year changes.
+     * Label under a bar, always the full date of its first day: {@code 3 Jan 2024} for days and weeks,
+     * {@code Jan 2024} for months, and {@code 2024} for years.
      */
-    public static String axisLabel(LocalDateTime start, PlaytimeGrain grain, boolean withYear) {
+    public static String axisLabel(LocalDateTime start, PlaytimeGrain grain) {
         LocalDate day = start.toLocalDate();
         return switch (grain) {
             case YEARS -> Integer.toString(day.getYear());
-            case MONTHS -> date(day, withYear ? "LLL yyyy" : "LLL");
-            case DAYS, WEEKS, AUTO -> date(day, withYear ? "d MMM yyyy" : "d MMM");
+            case MONTHS -> date(day, "LLL yyyy");
+            case DAYS, WEEKS, AUTO -> date(day, "d MMM yyyy");
         };
     }
 
@@ -295,7 +294,7 @@ public final class PlaytimeChartModel {
             String key = PlaytimeFilter.serverKey(span.server());
             if (!servers.contains(key)) servers.add(key);
         }
-        servers.sort(Comparator.comparing((String server) -> server.equals(PlaytimeFilter.UNKNOWN_SERVER))
+        servers.sort(Comparator.comparing((String server) -> !PlaytimeFilter.UNKNOWN_SERVER.equals(server))
             .thenComparing(PlaytimeSeries::displayName, String.CASE_INSENSITIVE_ORDER));
         return List.copyOf(servers);
     }

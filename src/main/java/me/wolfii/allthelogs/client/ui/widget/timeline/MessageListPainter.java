@@ -13,7 +13,7 @@ import java.util.List;
 
 /**
  * Draws the message list: only the rows that intersect the viewport, their match highlights and selection,
- * the sticky date headers, and the hover card for the row under the pointer.
+ * the sticky date headers, the match-count chip at the top-right, and the hover card for the row under the pointer.
  */
 final class MessageListPainter {
     private static final float DATE_SCALE = 1.25f;
@@ -46,7 +46,8 @@ final class MessageListPainter {
         return MessageListLayout.expandAtLocalX(separator, view.messageLocalX(), localX);
     }
 
-    void drawRows(OwoUIGraphics graphics, ListView view, MessageSelection selection, boolean showingLoading) {
+    void drawRows(OwoUIGraphics graphics, ListView view, MessageSelection selection, boolean showingLoading,
+                  Component matchStatus) {
         List<DisplayRow> rows = view.rows();
         int listWidth = view.listWidth();
         graphics.enableScissor(view.x(), view.y(), view.x() + listWidth, view.y() + view.height());
@@ -56,6 +57,7 @@ final class MessageListPainter {
                     graphics.drawText(Component.translatable("allthelogs.status.empty"),
                         view.x() + 8, view.y() + 8, 1, Colors.MUTED);
                 }
+                drawMatchStatus(graphics, view, matchStatus);
                 return;
             }
             MessageListLayout layout = view.layout();
@@ -89,9 +91,53 @@ final class MessageListPainter {
             }
             drawSeparators(graphics, view);
             drawDateHeaders(graphics, view);
+            drawMatchStatus(graphics, view, matchStatus);
         } finally {
             graphics.disableScissor();
         }
+    }
+
+    /** Horizontal padding between the match-count label and the chip's own edges. */
+    private static final int STATUS_PAD_X = 8;
+    /**
+     * Sample whose width, halved, is the chip's default text width: a 7-digit count plus a
+     * two-digit duration. The chip grows past that floor only when the label is wider.
+     */
+    private static final String STATUS_MIN_COUNT = "0000000";
+    private static final String STATUS_MIN_DURATION = "00.0";
+
+    record StatusChipBounds(int x, int width) {
+    }
+
+    /**
+     * Chip flush with the right edge of the message list. {@code sampleTextWidth} is the width of
+     * the timed seven-digit sample; the default chip is about half of that, plus padding, and
+     * widens to fit {@code textWidth} when the label needs it.
+     */
+    static StatusChipBounds statusChipBounds(int viewX, int listWidth, int textWidth, int sampleTextWidth) {
+        int minTextWidth = Math.max(0, sampleTextWidth) / 2;
+        int desired = Math.max(0, Math.max(textWidth, minTextWidth)) + 2 * STATUS_PAD_X;
+        int boxWidth = Math.min(Math.max(0, listWidth), desired);
+        return new StatusChipBounds(viewX + Math.max(0, listWidth) - boxWidth, boxWidth);
+    }
+
+    /**
+     * Match count in a chip flush with the top-right of the message list. The label is
+     * right-aligned inside the chip, which stays at its default width until the text needs more.
+     */
+    void drawMatchStatus(OwoUIGraphics graphics, ListView view, Component status) {
+        Font font = view.font();
+        boolean hasText = status != null && !status.getString().isEmpty();
+        int textWidth = hasText ? font.width(status) : 0;
+        int sampleWidth = font.width(Component.translatable("allthelogs.status.messages.timed",
+            STATUS_MIN_COUNT, STATUS_MIN_DURATION));
+        StatusChipBounds box = statusChipBounds(view.x(), view.listWidth(), textWidth, sampleWidth);
+        int boxHeight = MessageListLayout.DATE_HEIGHT;
+        int boxY = view.y();
+        HoverChip.fill(graphics, box.x(), boxY, box.width(), boxHeight, Colors.STATUS_CHIP);
+        if (!hasText) return;
+        int textY = boxY + Math.max(0, (boxHeight - font.lineHeight) / 2) + 2;
+        graphics.drawText(status, box.x() + box.width() - STATUS_PAD_X - textWidth, textY, 1, Colors.TEXT);
     }
 
     /**

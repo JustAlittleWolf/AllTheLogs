@@ -5,8 +5,8 @@ import java.util.Arrays;
 /**
  * Characters that do not belong in stored chat text.
  * <p>
- * U+FFFC OBJECT REPLACEMENT CHARACTER is always removed. Chat Heads uses it as the placeholder
- * glyph for a player face. Unicode private-use characters are removed when
+ * NUL characters and U+FFFC OBJECT REPLACEMENT CHARACTER are always removed.
+ * Chat Heads uses the latter as the placeholder glyph for a player face. Unicode private-use characters are removed when
  * {@link #dropPrivateUseCharacters()} is set, which the messages settings tab controls.
  * Formatting runs are rebuilt so colours stay on the characters that remain.
  */
@@ -22,7 +22,7 @@ public final class MessageCharacters {
 
     /**
      * Whether private-use characters are removed from messages. Defaults to {@code false}.
-     * U+FFFC is removed either way.
+     * NUL and U+FFFC are removed either way.
      */
     public static boolean dropPrivateUseCharacters() {
         return dropPrivateUseCharacters;
@@ -51,7 +51,7 @@ public final class MessageCharacters {
     }
 
     /**
-     * Removes U+FFFC, and private-use characters when {@code dropPrivateUse} is set.
+     * Removes NUL, U+FFFC, and private-use characters when {@code dropPrivateUse} is set.
      * Returns {@code parsed} itself when nothing is removed.
      */
     public static FormattingCodes.Parsed filter(FormattingCodes.Parsed parsed, boolean dropPrivateUse) {
@@ -80,14 +80,14 @@ public final class MessageCharacters {
     }
 
     static boolean isDropped(int codePoint, boolean dropPrivateUse) {
-        if (codePoint == OBJECT_REPLACEMENT_CODE_POINT) return true;
+        if (codePoint == 0 || codePoint == OBJECT_REPLACEMENT_CODE_POINT) return true;
         return dropPrivateUse && isPrivateUse(codePoint);
     }
 
     private static boolean containsDropped(String text, boolean dropPrivateUse) {
         for (int i = 0; i < text.length(); ) {
             char next = text.charAt(i);
-            if (next == OBJECT_REPLACEMENT) return true;
+            if (next == '\u0000' || next == OBJECT_REPLACEMENT) return true;
             if (dropPrivateUse && next >= '\uE000' && next <= '\uF8FF') return true;
             if (dropPrivateUse && Character.isHighSurrogate(next)) {
                 int codePoint = text.codePointAt(i);

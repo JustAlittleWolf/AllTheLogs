@@ -52,6 +52,8 @@ public final class LogParser {
 
         String line;
         while ((line = reader.readLine()) != null) {
+            // Remove decoded NUL padding before recognizing timestamps, chat markers, or metadata.
+            line = line.replace("\u0000", "");
             LogTimeExtractor.Prefix prefix = LogTimeExtractor.match(line);
             if (prefix == null) {
                 if (pending != null) {

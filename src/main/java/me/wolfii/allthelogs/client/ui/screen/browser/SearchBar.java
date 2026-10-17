@@ -1,10 +1,15 @@
 package me.wolfii.allthelogs.client.ui.screen.browser;
 
+import io.wispforest.owo.ui.container.FlowLayout;
+import io.wispforest.owo.ui.container.UIContainers;
+import io.wispforest.owo.ui.core.Sizing;
+import io.wispforest.owo.ui.core.UIComponent;
 import me.wolfii.allthelogs.client.search.SearchDecorations;
 import me.wolfii.allthelogs.client.search.SearchFilter;
-import me.wolfii.allthelogs.client.ui.text.WrappedTooltip;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
 import me.wolfii.allthelogs.client.ui.widget.DecoratedSearchField;
+import me.wolfii.allthelogs.client.ui.widget.SearchErrorChip;
+import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent;
 import net.minecraft.network.chat.Component;
 
 import java.util.List;
@@ -13,13 +18,15 @@ import java.util.function.Supplier;
 
 /**
  * The search box of the messages and DB Cleanup screens. The regex and case marks sit around the text,
- * regex syntax is highlighted, and an invalid regex turns the text red. Hovering the field then explains
- * the RE2 or syntax problem, all following {@code filter}.
+ * regex syntax is highlighted, and an invalid regex turns the text red. The reason is a chip above the
+ * field, as wide as the field, all following {@code filter}.
  */
 final class SearchBar {
     /** Edit-box cap. Long chat patterns need more than the old 256, and 2^16 is still one string. */
     static final int MAX_LENGTH = 1 << 16;
 
+    private final FlowLayout column = UIContainers.verticalFlow(Sizing.expand(), Sizing.content());
+    private final SearchErrorChip errorChip = new SearchErrorChip();
     private final DecoratedSearchField field = new DecoratedSearchField();
     private final Supplier<SearchFilter> filter;
     private boolean syncing;
@@ -29,6 +36,8 @@ final class SearchBar {
      */
     SearchBar(Supplier<SearchFilter> filter, Component hint, Consumer<String> onText) {
         this.filter = filter;
+        column.gap(SearchErrorChip.GAP);
+        column.child(field);
         field.setMaxLength(MAX_LENGTH);
         field.setValue(filter.get().text());
         field.setHint(hint);
@@ -41,6 +50,13 @@ final class SearchBar {
 
     DecoratedSearchField field() {
         return field;
+    }
+
+    /**
+     * The field, with the error chip above it when the regex cannot be searched.
+     */
+    UIComponent component() {
+        return column;
     }
 
     /**
@@ -62,11 +78,20 @@ final class SearchBar {
         SearchFilter current = filter.get();
         Component error = regexError(current);
         field.setTextColor(error != null ? Colors.SEARCH_INVALID : Colors.SEARCH_TEXT);
-        field.tooltip(error == null ? List.of() : WrappedTooltip.of(error));
+        field.tooltip(List.<ClientTooltipComponent>of());
+        presentError(error);
+    }
+
+    private void presentError(Component error) {
+        errorChip.message(error);
+        boolean show = errorChip.visible();
+        boolean mounted = column.children().contains(errorChip);
+        if (show && !mounted) column.child(0, errorChip);
+        else if (!show && mounted) column.removeChild(errorChip);
     }
 
     /**
-     * The hover text for an invalid regex, or {@code null} when this filter can be searched.
+     * Why this regex cannot be searched, or {@code null} when the filter can be queried.
      */
     static Component regexError(SearchFilter filter) {
         if (filter == null) return null;
