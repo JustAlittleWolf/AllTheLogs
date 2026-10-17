@@ -117,7 +117,8 @@ public final class LogImporter {
                         try {
                             PreparedLog prepared = LogPreparer.prepare(candidate, options.timezone());
                             boolean storedMetadataRepair = options.updateMetadataOnly()
-                                && writer.hasStoredLocation(candidate.sourcePath(), candidate.entryPath());
+                                && (writer.hasStoredLocation(candidate.sourcePath(), candidate.entryPath())
+                                    || (prepared.sessionId() != null && writer.hasSession(prepared.sessionId())));
                             // Not stored: missing timestamps, or no chat and no resource-manager reload.
                             // Empty files are stored logs that have no chat lines.
                             boolean missingTimestamps = prepared.firstLineTime() == null

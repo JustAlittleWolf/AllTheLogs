@@ -206,6 +206,25 @@ class MinecraftVersionMetadataImportTest {
     }
 
     @Test
+    void repairsLiveVersionFromAMarkedLogWithoutChatOrResourceReload() throws IOException {
+        LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 10, 0);
+        var session = store.startSession("unknown", startedAt);
+        String id = ((LogSource.Session) session.source()).id();
+        store.importSessionMessage("live", startedAt.plusSeconds(10));
+        LogFixtures.writePlain(logDirectory(), "2026-08-26-1.log", """
+            [10:00:00] [main/INFO]: Loading Minecraft 1.21.4 with Fabric Loader 0.19.3
+            [10:00:02] [allthelogs-store/INFO]: %s
+            """.formatted(SessionMarker.message(id)));
+
+        var result = store.importDirectory(tempDir, metadataOnly());
+
+        assertEquals("1.21.4", versionFor("live"));
+        assertEquals(1, result.importedFiles());
+        assertEquals(0, result.importedEntries());
+        assertEquals(1, store.chatLogs().size());
+    }
+
+    @Test
     void conflictingVersionsForTheSameLiveSessionAreNotChosenByImportOrder() throws IOException {
         LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 10, 0);
         var session = store.startSession("unknown", startedAt);
