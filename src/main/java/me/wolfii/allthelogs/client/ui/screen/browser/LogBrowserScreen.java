@@ -122,9 +122,17 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
             this::openScripts, this::openImport, this::openPlaytime, this::openCleanup, this::openOptimize,
             this::startExport);
         dialog = new ModalDialog(overlays, () -> this.width);
+        list.setTrackTopInset(BrowserToolsMenu.BUTTON_SIZE);
+        StackLayout messages = UIContainers.stack(Sizing.fill(), Sizing.expand());
+        messages.horizontalAlignment(HorizontalAlignment.LEFT).verticalAlignment(VerticalAlignment.TOP);
+        list.sizing(Sizing.fill(), Sizing.fill());
+        messages.child(list);
+        ButtonComponent menuButton = tools.button();
+        menuButton.positioning(Positioning.relative(100, 0));
+        messages.child(menuButton);
         FlowLayout toolbar = buildToolbar();
         queries.attach(list, tools::setDatabaseInfo);
-        content.child(list.verticalSizing(Sizing.expand()));
+        content.child(messages);
         content.child(toolbar);
         chrome.child(content);
 
@@ -254,8 +262,6 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
             });
         bar.child(filterButton);
         refreshFilterButton();
-
-        bar.child(tools.button());
         return bar;
     }
 
@@ -656,7 +662,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         int height = Math.max(22, lines.size() * font.lineHeight + 12);
         ButtonComponent anchor = tools.button();
         int x = Math.max(4, anchor.x() + anchor.width() - width);
-        int y = Math.max(4, anchor.y() - height - 4);
+        int y = BrowserToolsMenu.dropdownTop(anchor.y(), anchor.height(), 4, height, this.height);
         notice.positioning(Positioning.absolute(x, y));
         notice.horizontalSizing(Sizing.fixed(width));
         overlays.child(notice);
