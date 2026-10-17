@@ -44,8 +44,12 @@ import java.util.function.IntSupplier;
  */
 final class BrowserToolsMenu {
     static final long CLOSE_DELAY_MS = 1000;
-    /** Square hamburger, the same height as the message-count chip. */
+    /** Hamburger width, and the height the scrollbar inset is measured from. Matches the message-count chip. */
     static final int BUTTON_SIZE = MessageListLayout.DATE_HEIGHT;
+    /** The button is one pixel taller than the chip. */
+    static final int BUTTON_EXTRA_HEIGHT = 1;
+    /** Negative top margin. Sits the hamburger two pixels above the list without moving the scrollbar. */
+    static final int BUTTON_LIFT = -2;
     /** Space between the scrubber and the hamburger above it, and the filter button below it. */
     static final int TRACK_GAP = 6;
     private static final int GAP = 2;
@@ -110,13 +114,15 @@ final class BrowserToolsMenu {
     }
 
     /**
-     * Square button at the top of the timeline scrollbar. The first menu opens to its left,
-     * into the screen, instead of off the top or the right edge.
+     * Button at the top of the timeline scrollbar, one pixel taller than the message-count chip
+     * and two pixels above the list. The first menu opens to its left, into the screen, instead
+     * of off the top or the right edge.
      */
     ButtonComponent button() {
         if (anchor != null) return anchor;
         anchor = UIComponents.button(Component.empty(), pressed -> toggle());
-        anchor.sizing(Sizing.fixed(BUTTON_SIZE), Sizing.fixed(BUTTON_SIZE));
+        anchor.sizing(Sizing.fixed(BUTTON_SIZE), Sizing.fixed(BUTTON_SIZE + BUTTON_EXTRA_HEIGHT));
+        anchor.margins(Insets.top(BUTTON_LIFT));
         anchor.renderer((graphics, widget, delta) -> {
             ButtonComponent.Renderer.VANILLA.draw(graphics, widget, delta);
             int bar = 10;
