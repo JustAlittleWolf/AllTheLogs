@@ -47,9 +47,10 @@ final class BrowserToolsMenu {
     /** Hamburger width, and the height the scrollbar inset is measured from. Matches the message-count chip. */
     static final int BUTTON_SIZE = MessageListLayout.DATE_HEIGHT;
     /** The button is one pixel taller than the chip. */
-    static final int BUTTON_EXTRA_HEIGHT = 1;
+    static final int BUTTON_EXTRA_HEIGHT = 2;
+    static final int BUTTON_EXTRA_WIDTH = 37;
     /** Negative top margin. Sits the hamburger two pixels above the list without moving the scrollbar. */
-    static final int BUTTON_LIFT = -2;
+    static final int BUTTON_LIFT = -1;
     /** Space between the scrubber and the hamburger above it, and the filter button below it. */
     static final int TRACK_GAP = 6;
     private static final int GAP = 2;
@@ -121,7 +122,7 @@ final class BrowserToolsMenu {
     ButtonComponent button() {
         if (anchor != null) return anchor;
         anchor = UIComponents.button(Component.empty(), pressed -> toggle());
-        anchor.sizing(Sizing.fixed(BUTTON_SIZE), Sizing.fixed(BUTTON_SIZE + BUTTON_EXTRA_HEIGHT));
+        anchor.sizing(Sizing.fixed(BUTTON_SIZE + BUTTON_EXTRA_WIDTH), Sizing.fixed(BUTTON_SIZE + BUTTON_EXTRA_HEIGHT));
         anchor.margins(Insets.top(BUTTON_LIFT));
         anchor.renderer((graphics, widget, delta) -> {
             ButtonComponent.Renderer.VANILLA.draw(graphics, widget, delta);
