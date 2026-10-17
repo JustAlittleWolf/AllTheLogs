@@ -13,7 +13,7 @@ import java.util.List;
 
 /**
  * Draws the message list: only the rows that intersect the viewport, their match highlights and selection,
- * the sticky date headers, the match count at the top-right, and the hover card for the row under the pointer.
+ * the sticky date headers, the match-count chip at the top-right, and the hover card for the row under the pointer.
  */
 final class MessageListPainter {
     private static final float DATE_SCALE = 1.25f;
@@ -97,41 +97,33 @@ final class MessageListPainter {
         }
     }
 
+    /** Horizontal padding inside the match-count chip, and the gap between the chip and the list edge. */
+    private static final int STATUS_PAD_X = 8;
     /**
-     * Match count at the top-right of the list. When the sticky date header is flush with the top, the count
-     * is drawn on that band, to the right of the date, and does not paint a second background. Otherwise it
-     * keeps its own date-band background so it stays readable over the messages.
+     * Width floor for the chip: a 7-digit count plus {@code (Loading...)}, which is wider than the plain
+     * count and the finished duration. The chip stays this wide so those suffixes do not move it.
      */
-    void drawMatchStatus(OwoUIGraphics graphics, ListView view, Component status) {
-        if (status == null || status.getString().isEmpty()) return;
-        int top = view.y();
-        int bottom = top + MessageListLayout.DATE_HEIGHT;
-        int right = view.x() + view.listWidth();
-        if (!dateHeaderAtTop(view)) {
-            int textWidth = Math.round(view.font().width(status) * DATE_SCALE);
-            int left = Math.max(view.x(), right - textWidth - ListView.PAD * 2);
-            graphics.fill(left, top, right, bottom, Colors.DATE_BAND);
-        }
-        graphics.drawText(status, right - ListView.PAD, bottom, DATE_SCALE, Colors.TEXT,
-            OwoUIGraphics.TextAnchor.BOTTOM_RIGHT);
-    }
+    private static final String STATUS_MIN_COUNT = "0000000";
 
     /**
-     * Whether the pinned date header is sitting on the top edge, rather than scrolling away under the next day.
+     * Match count in a chip at the top-right of the list. The chip is always drawn, at least
+     * {@link #STATUS_MIN_COUNT} wide, and the label is right-aligned inside it.
      */
-    static boolean dateHeaderAtTop(ListView view) {
-        if (view.contentOrigin() > 0 || view.layout().dates().isEmpty()) return false;
-        MessageListLayout.DateBand sticky = view.layout().stickyAt(view.scrollY());
-        if (sticky == null) return false;
-        int headerY = view.y();
-        MessageListLayout.DateBand next = view.layout().nextDate(sticky);
-        if (next != null) {
-            int nextScreenY = view.screenY(next.y());
-            if (nextScreenY < headerY + MessageListLayout.DATE_HEIGHT) {
-                headerY = nextScreenY - MessageListLayout.DATE_HEIGHT;
-            }
-        }
-        return headerY == view.y();
+    void drawMatchStatus(OwoUIGraphics graphics, ListView view, Component status) {
+        Font font = view.font();
+        boolean hasText = status != null && !status.getString().isEmpty();
+        int textWidth = hasText ? font.width(status) : 0;
+        int minTextWidth = font.width(Component.translatable("allthelogs.status.messages.loading", STATUS_MIN_COUNT));
+        int listWidth = view.listWidth();
+        int boxWidth = Math.min(Math.max(0, listWidth - 2 * STATUS_PAD_X),
+            Math.max(textWidth, minTextWidth) + 2 * STATUS_PAD_X);
+        int boxHeight = MessageListLayout.DATE_HEIGHT;
+        int boxX = view.x() + Math.max(STATUS_PAD_X, listWidth - STATUS_PAD_X - boxWidth);
+        int boxY = view.y();
+        HoverChip.fill(graphics, boxX, boxY, boxWidth, boxHeight, Colors.STATUS_CHIP);
+        if (!hasText) return;
+        int textY = boxY + Math.max(0, (boxHeight - font.lineHeight) / 2) + 2;
+        graphics.drawText(status, boxX + boxWidth - STATUS_PAD_X - textWidth, textY, 1, Colors.TEXT);
     }
 
     /**
