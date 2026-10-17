@@ -29,11 +29,11 @@ import java.util.function.IntSupplier;
 
 /**
  * Menu at the top of the timeline scrollbar. Hovering or clicking the hamburger opens Playtime, Import,
- * and Advanced below it, top to bottom. A click keeps the menu open until a click outside it. Advanced
- * opens Export, Scripts, DB Cleanup, and Optimize database to the side, dropping down from its row, with
- * a database info row under them. The row is plain text, not a button, and hovering it shows the database
- * summary. Export opens the export scope beside that, and the chosen scope opens the file format. A row
- * whose side menu is open stays highlighted.
+ * and Advanced to its left, top to bottom. A click keeps the menu open until a click outside it. Advanced
+ * opens Export, Scripts, DB Cleanup, and Optimize database further to the side, dropping down from its
+ * row, with a database info row under them. The row is plain text, not a button, and hovering it shows
+ * the database summary. Export opens the export scope beside that, and the chosen scope opens the file
+ * format. A row whose side menu is open stays highlighted.
  * <p>
  * The export menus are centered on the row they open from, moved only as far as the screen edge needs.
  * Every menu stays open for {@link #CLOSE_DELAY_MS} after the pointer leaves it, so it can be reached
@@ -43,8 +43,10 @@ import java.util.function.IntSupplier;
  */
 final class BrowserToolsMenu {
     static final long CLOSE_DELAY_MS = 1000;
-    /** Square hamburger. The timeline track starts this far down so the button caps the scrollbar. */
+    /** Square hamburger that caps the timeline scrollbar. */
     static final int BUTTON_SIZE = 20;
+    /** Clear pixels between the hamburger and the top of the scrubber. */
+    static final int TRACK_GAP = 4;
     private static final int GAP = 2;
     private static final int INFO_ROW_HEIGHT = 14;
 
@@ -107,7 +109,7 @@ final class BrowserToolsMenu {
     }
 
     /**
-     * Square button at the top of the timeline scrollbar. Menus drop down and to the left,
+     * Square button at the top of the timeline scrollbar. The first menu opens to its left,
      * into the screen, instead of off the top or the right edge.
      */
     ButtonComponent button() {
@@ -269,12 +271,14 @@ final class BrowserToolsMenu {
 
     /**
      * The strip between the hamburger and the menu counts as inside, so crossing it does not start the
-     * close delay. The menu drops down, and only sits above the button when the screen is too short for that.
+     * close delay. The menu opens to the left, and only sits below or above the button when that side
+     * does not fit.
      */
     private boolean anchorGap(int mouseX, int mouseY) {
         if (actions == null || anchor == null) return false;
-        if (actions.y() >= anchor.y() + anchor.height()) return verticalGap(anchor, actions, mouseX, mouseY);
-        return verticalGap(actions, anchor, mouseX, mouseY);
+        return horizontalGap(actions, anchor, mouseX, mouseY)
+            || verticalGap(anchor, actions, mouseX, mouseY)
+            || verticalGap(actions, anchor, mouseX, mouseY);
     }
 
     private boolean advancedHover(int mouseX, int mouseY) {
@@ -432,12 +436,12 @@ final class BrowserToolsMenu {
 
     private void placeActions() {
         if (actions == null || anchor == null || actions.width() <= 0 || actions.height() <= 0) return;
-        int x = Math.max(4, anchor.x() + anchor.width() - actions.width());
-        int y = dropdownTop(anchor.y(), anchor.height(), GAP, actions.height(), screenHeight.getAsInt());
-        if (placedActionsX == x && placedActionsY == y) return;
-        actions.positioning(Positioning.absolute(x, y));
-        placedActionsX = x;
-        placedActionsY = y;
+        int[] at = beside(actions, anchor, false);
+        if (at == null) return;
+        if (placedActionsX == at[0] && placedActionsY == at[1]) return;
+        actions.positioning(Positioning.absolute(at[0], at[1]));
+        placedActionsX = at[0];
+        placedActionsY = at[1];
     }
 
     private void place(FlowLayout menu, UIComponent row) {
@@ -472,14 +476,23 @@ final class BrowserToolsMenu {
      */
     private int[] beside(FlowLayout menu, UIComponent row, boolean centered) {
         if (menu.width() <= 0 || menu.height() <= 0) return null;
-        int left = row.x() - menu.width() - GAP;
-        int right = row.x() + row.width() + GAP;
-        int x = left >= 4 ? left : right;
-        if (x + menu.width() > screenWidth.getAsInt() - 4) x = Math.max(4, left);
+        int x = sideLeft(row.x(), row.width(), menu.width(), screenWidth.getAsInt());
         int y = centered
             ? centeredTop(row.y() + row.height() / 2, menu.height(), screenHeight.getAsInt())
             : submenuTop(row.y(), menu.padding().get().top(), menu.height(), screenHeight.getAsInt());
         return new int[]{x, y};
+    }
+
+    /**
+     * Left edge of a menu that opens beside an anchor. The left side is preferred so a control on the right
+     * edge stays on screen; the right side is used only when the left side does not fit.
+     */
+    static int sideLeft(int anchorX, int anchorWidth, int menuWidth, int screenWidth) {
+        int left = anchorX - menuWidth - GAP;
+        int right = anchorX + anchorWidth + GAP;
+        int x = left >= 4 ? left : right;
+        if (x + menuWidth > screenWidth - 4) x = Math.max(4, left);
+        return x;
     }
 
     /**
