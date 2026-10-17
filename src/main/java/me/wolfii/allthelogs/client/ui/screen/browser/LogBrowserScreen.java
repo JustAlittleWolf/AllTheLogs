@@ -19,11 +19,13 @@ import me.wolfii.allthelogs.client.export.ExportMetadata;
 import me.wolfii.allthelogs.client.export.ExportProgress;
 import me.wolfii.allthelogs.client.export.MessageExport;
 import me.wolfii.allthelogs.client.list.DisplayRow;
+import me.wolfii.allthelogs.client.list.MessageListLayout;
 import me.wolfii.allthelogs.client.list.MessageSelection;
 import me.wolfii.allthelogs.client.search.ActiveFilters;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.ui.screen.playtime.PlaytimeScreen;
 import me.wolfii.allthelogs.client.ui.popup.ModalDialog;
+import me.wolfii.allthelogs.client.ui.theme.Colors;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
 import me.wolfii.allthelogs.client.ui.widget.DecoratedSearchField;
 import me.wolfii.allthelogs.client.ui.widget.timeline.MessageTimeline;
@@ -47,7 +49,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 /**
- * Transparent log browser: search bar, side filter panel, virtualised history, and a timeline of every hit.
+ * Transparent log browser: match count, search bar, side filter panel, virtualised history, and a timeline
+ * of every hit.
  */
 public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     /** How long typing must pause before the search runs, here and on the cleanup screen. */
@@ -58,6 +61,8 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     private final Screen parent;
     private final LogBrowserQueries queries;
     private MessageTimeline list;
+    private LabelComponent matchStatus;
+    private String matchStatusShown = "";
     private SearchBar searchBar;
     private DecoratedSearchField search;
     private ButtonComponent filterButton;
@@ -124,8 +129,10 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         dialog = new ModalDialog(overlays, () -> this.width);
         FlowLayout toolbar = buildToolbar();
         queries.attach(list, tools::setDatabaseInfo);
+        content.child(buildStatusBar());
         content.child(list.verticalSizing(Sizing.expand()));
         content.child(toolbar);
+        syncMatchStatus();
         chrome.child(content);
 
         filters = new FilterOverlay(chrome, overlays, () -> this.width, () -> this.height,
@@ -183,6 +190,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     @Override
     public void tick() {
         super.tick();
+        syncMatchStatus();
         drainExportProgress();
         queries.pollLatest(!exportBusy && messageMenu == null && (tools == null || !tools.isOpen())
             && (filters == null || !filters.listOpen()) && (dialog == null || !dialog.isOpen()));
@@ -235,6 +243,33 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     private boolean searchHasFocus() {
         if (search == null || search.focusHandler() == null) return false;
         return search.focusHandler().focused() == search;
+    }
+
+    /**
+     * Match count for the current query. The time is added by {@link MessageTimeline#statusText()} only
+     * while that query is running, or when it took longer than a second. The row keeps a fixed height so
+     * the list does not jump when the time appears.
+     */
+    private FlowLayout buildStatusBar() {
+        FlowLayout bar = UIContainers.horizontalFlow(Sizing.fill(), Sizing.fixed(MessageListLayout.DATE_HEIGHT));
+        bar.verticalAlignment(VerticalAlignment.CENTER);
+        bar.horizontalAlignment(HorizontalAlignment.RIGHT);
+        matchStatus = UIComponents.label(Component.empty());
+        matchStatus.color(Color.ofArgb(Colors.TEXT));
+        matchStatus.horizontalSizing(Sizing.content());
+        bar.child(matchStatus);
+        return bar;
+    }
+
+    private void syncMatchStatus() {
+        if (matchStatus == null || list == null) return;
+        Component next = list.statusText();
+        String shown = next.getString();
+        if (shown.equals(matchStatusShown)) return;
+        matchStatusShown = shown;
+        matchStatus.text(next);
+        ParentUIComponent parent = matchStatus.parent();
+        if (parent != null) parent.onChildMutated(matchStatus);
     }
 
     private FlowLayout buildToolbar() {

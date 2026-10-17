@@ -85,14 +85,26 @@ class MessageTextTest {
     }
 
     @Test
-    void listStatusOmitsDurationUnderATenthOfASecond() {
-        Component status = MessageText.listStatus(Component.empty(), false, true, 4, true, 12, true);
-        assertEquals("allthelogs.status.matches", key(status));
-        assertEquals("4", args(status)[0]);
-        Component timed = MessageText.listStatus(Component.empty(), false, true, 4, true, 120, true);
-        assertEquals("allthelogs.status.matches.timed", key(timed));
-        assertEquals("4", args(timed)[0]);
-        assertEquals("0.1", args(timed)[1]);
+    void listStatusKeepsTheCountAndShowsTimeOnlyWhileLoadingOrAfterOneSecond() {
+        Component fast = MessageText.listStatus(Component.empty(), false, true, 4, true, 120, true);
+        assertEquals("allthelogs.status.matches", key(fast));
+        assertEquals("4", args(fast)[0]);
+        Component boundary = MessageText.listStatus(Component.empty(), false, true, 4, true,
+            MessageText.TIMED_STATUS_MS, true);
+        assertEquals("allthelogs.status.matches", key(boundary));
+        Component slow = MessageText.listStatus(Component.empty(), false, true, 4, true,
+            MessageText.TIMED_STATUS_MS + 1, true);
+        assertEquals("allthelogs.status.matches.timed", key(slow));
+        assertEquals("4", args(slow)[0]);
+        assertEquals("1.0", args(slow)[1]);
+        Component loading = MessageText.listStatus(Component.empty(), true, true, 4, true, 120, true);
+        assertEquals("allthelogs.status.matches.timed", key(loading));
+        assertEquals("0.1", args(loading)[1]);
+        Component loadingWithoutCount = MessageText.listStatus(Component.empty(), true, false, 0, false, 200, false);
+        assertEquals("allthelogs.status.loading.timed", key(loadingWithoutCount));
+        assertEquals("0.2", args(loadingWithoutCount)[0]);
+        Component loadingTooSoon = MessageText.listStatus(Component.empty(), true, false, 0, false, 12, false);
+        assertEquals("allthelogs.status.loading", key(loadingTooSoon));
     }
 
     @Test
@@ -100,8 +112,9 @@ class MessageTextTest {
         Component status = MessageText.listStatus(Component.empty(), false, true, 1, true, 0, true);
         assertEquals("allthelogs.status.match", key(status));
         assertEquals("1", args(status)[0]);
-        Component timed = MessageText.listStatus(Component.empty(), false, true, 1, true, 120, true);
+        Component timed = MessageText.listStatus(Component.empty(), false, true, 1, true, 1540, true);
         assertEquals("allthelogs.status.match.timed", key(timed));
+        assertEquals("1.5", args(timed)[1]);
         Component capped = MessageText.listStatus(Component.empty(), false, true, 100, false, 0, true);
         assertEquals("allthelogs.status.matches", key(capped));
         assertEquals(">99", args(capped)[0]);
@@ -114,10 +127,12 @@ class MessageTextTest {
         assertEquals("4", args(status)[0]);
         Component singular = MessageText.listStatus(Component.empty(), false, true, 1, true, 0, false);
         assertEquals("allthelogs.status.message", key(singular));
-        Component timed = MessageText.listStatus(Component.empty(), false, true, 4, true, 120, false);
+        Component timed = MessageText.listStatus(Component.empty(), false, true, 4, true, 1540, false);
         assertEquals("allthelogs.status.messages.timed", key(timed));
-        Component singularTimed = MessageText.listStatus(Component.empty(), false, true, 1, true, 120, false);
+        assertEquals("1.5", args(timed)[1]);
+        Component singularTimed = MessageText.listStatus(Component.empty(), true, true, 1, true, 120, false);
         assertEquals("allthelogs.status.message.timed", key(singularTimed));
+        assertEquals("0.1", args(singularTimed)[1]);
         Component capped = MessageText.listStatus(Component.empty(), false, true, 100, false, 0, false);
         assertEquals("allthelogs.status.messages", key(capped));
         assertEquals(">99", args(capped)[0]);

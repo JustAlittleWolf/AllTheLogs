@@ -38,7 +38,7 @@ import java.util.function.Consumer;
  * separators load more context through {@link #onExpand}; shift-click fetches a larger chunk.
  * its owner to fetch more through {@link #onApproachEdge}, {@link #onJump} and {@link #onExpand} rather than
  * touching the store itself. Drawing lives in {@link MessageListPainter} and {@link TimelineTrackPainter},
- * scrubber state in {@link ScrubDrag}, and the status chip in {@link ListStatusChip}.
+ * scrubber state in {@link ScrubDrag}, and the match-count status in {@link ListStatusChip}.
  * <p>
  * The scrubber spans the whole matched range from {@link #setMatchSummary}, not just the loaded page, so its
  * thumb is sized from how many days the query matches and dragging it can land outside the buffer.
@@ -315,7 +315,7 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     /**
-     * Shows {@code N message(s)} or {@code N match(es)} over the list for a moment after a search.
+     * Shows {@code N message(s)} or {@code N match(es)} in the status bar.
      * Counts above 99 read as {@code >99} until {@link #setTotalMatchCount} supplies the exact total.
      */
     public void showMatchCount(long matches, long elapsedMs, boolean narrowed) {
@@ -339,6 +339,14 @@ public final class MessageTimeline extends BaseUIComponent {
 
     public void showOverlay(Component message) {
         status.showOverlay(message);
+    }
+
+    /**
+     * Match count for the top bar, plus the query time while a search is running or when it took longer
+     * than a second.
+     */
+    public Component statusText() {
+        return status.text();
     }
 
     /**
@@ -469,7 +477,6 @@ public final class MessageTimeline extends BaseUIComponent {
         if (!draggingSelection && !scrub.dragging() && !autoScroll.active()) {
             listPainter.drawMessageInfo(graphics, view, hoverX, hoverY);
         }
-        status.draw(graphics, view, view.containsScreen(hoverX, hoverY));
         TimelineTrackPainter.draw(graphics, view, track(), hoverX, hoverY, this::timeAtLocalY);
         if (pointerHere) updateCursor(view, mouseX, mouseY);
     }
