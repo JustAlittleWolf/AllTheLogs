@@ -69,30 +69,29 @@ public final class MessageText {
     }
 
     /**
-     * Text for the match count at the top-right of the list. The count stays up once it is known. {@code loading}
-     * adds {@code Loading...} and leaves the running time off. A finished query includes its duration only
-     * after {@link #TIMED_STATUS_MS}. Unfiltered lists use "message(s)"; a search or version/date filter
-     * uses "match(es)". An overlay, such as a failed query, replaces both.
+     * Text for the match count at the top-right of the list. The count stays up once it is known, except
+     * while {@code loading} is set: that replaces it with {@code Loading...} until the query finishes.
+     * A finished query includes its duration only after {@link #TIMED_STATUS_MS}. Unfiltered lists use
+     * "message(s)"; a search or version/date filter uses "match(es)". An overlay, such as a failed query,
+     * replaces both.
      */
     public static Component listStatus(Component overlay, boolean loading, boolean showCount, long matchCount,
                                        boolean exactCount, long elapsedMs, boolean narrowed) {
         if (overlay != null && !overlay.getString().isEmpty()) return overlay;
-        if (loading && !showCount) return Component.translatable("allthelogs.status.loading");
+        if (loading) return Component.translatable("allthelogs.status.loading");
         if (!showCount) return Component.empty();
         String count = matchCountText(matchCount, exactCount);
         boolean singular = singularMatch(matchCount, exactCount);
-        if (loading) return Component.translatable(statusCountKey(narrowed, singular, false, true), count);
         String duration = elapsedMs > TIMED_STATUS_MS ? searchDurationText(elapsedMs) : "";
-        String key = statusCountKey(narrowed, singular, !duration.isEmpty(), false);
+        String key = statusCountKey(narrowed, singular, !duration.isEmpty());
         if (duration.isEmpty()) return Component.translatable(key, count);
         return Component.translatable(key, count, duration);
     }
 
-    static String statusCountKey(boolean narrowed, boolean singular, boolean timed, boolean loading) {
+    static String statusCountKey(boolean narrowed, boolean singular, boolean timed) {
         String kind = narrowed
             ? (singular ? "match" : "matches")
             : (singular ? "message" : "messages");
-        if (loading) return "allthelogs.status." + kind + ".loading";
         return timed ? "allthelogs.status." + kind + ".timed" : "allthelogs.status." + kind;
     }
 

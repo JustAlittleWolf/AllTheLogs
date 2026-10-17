@@ -61,9 +61,7 @@ class ListStatusChipTest {
         assertEquals("allthelogs.status.messages", key(chip.text(10_050)));
         assertEquals("allthelogs.status.messages", key(chip.text(11_000)));
         Component loading = chip.text(11_001);
-        assertEquals("allthelogs.status.messages.loading", key(loading));
-        assertEquals("4", args(loading)[0]);
-        assertEquals(1, args(loading).length);
+        assertEquals("allthelogs.status.loading", key(loading));
 
         chip.setLoading(false, 11_200);
         Component settled = chip.text(11_300);

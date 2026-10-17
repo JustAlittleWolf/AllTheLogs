@@ -7,9 +7,9 @@ import net.minecraft.network.chat.Component;
  * Match count and query time drawn at the top-right of the message list: a persistent overlay message,
  * a loading label, or the message/match count.
  * <p>
- * The count stays on screen once a search has produced one. {@code Loading...} appears only after the
- * query has already run for more than a second, without the seconds still ticking. A finished query shows
- * its duration only when it took longer than that.
+ * The count stays on screen once a search has produced one, and is replaced by {@code Loading...} only
+ * after the query has already run for more than a second. A finished query shows its duration only when
+ * it took longer than that.
  */
 final class ListStatusChip {
 
@@ -99,9 +99,9 @@ final class ListStatusChip {
     }
 
     /**
-     * Status for {@code nowMs}. The count does not expire. A running query contributes {@code Loading...}
-     * only after a second, and never its live elapsed time. A finished query contributes its duration
-     * only when that was over a second.
+     * Status for {@code nowMs}. The count does not expire. A query that has already run for more than a
+     * second replaces it with {@code Loading...}. A finished query shows its duration only when that was
+     * over a second.
      */
     Component text(long nowMs) {
         return MessageText.listStatus(overlay, showingLoading(nowMs), showMatchCount, matchCount,

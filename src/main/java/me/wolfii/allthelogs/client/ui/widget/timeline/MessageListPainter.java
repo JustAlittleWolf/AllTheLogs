@@ -100,10 +100,11 @@ final class MessageListPainter {
     /** Horizontal padding inside the match-count chip, and the gap between the chip and the list edge. */
     private static final int STATUS_PAD_X = 8;
     /**
-     * Width floor for the chip: a 7-digit count plus {@code (Loading...)}, which is wider than the plain
-     * count and the finished duration. The chip stays this wide so those suffixes do not move it.
+     * Width floor for the chip: a 7-digit count plus a two-digit duration. Wider than {@code Loading...}
+     * and the plain count, so those swaps do not move the chip.
      */
     private static final String STATUS_MIN_COUNT = "0000000";
+    private static final String STATUS_MIN_DURATION = "00.0";
 
     /**
      * Match count in a chip at the top-right of the list. The chip is always drawn, at least
@@ -113,7 +114,8 @@ final class MessageListPainter {
         Font font = view.font();
         boolean hasText = status != null && !status.getString().isEmpty();
         int textWidth = hasText ? font.width(status) : 0;
-        int minTextWidth = font.width(Component.translatable("allthelogs.status.messages.loading", STATUS_MIN_COUNT));
+        int minTextWidth = font.width(Component.translatable("allthelogs.status.messages.timed",
+            STATUS_MIN_COUNT, STATUS_MIN_DURATION));
         int listWidth = view.listWidth();
         int boxWidth = Math.min(Math.max(0, listWidth - 2 * STATUS_PAD_X),
             Math.max(textWidth, minTextWidth) + 2 * STATUS_PAD_X);

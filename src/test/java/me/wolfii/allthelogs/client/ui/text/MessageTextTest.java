@@ -98,9 +98,7 @@ class MessageTextTest {
         assertEquals("4", args(slow)[0]);
         assertEquals("1.0", args(slow)[1]);
         Component loading = MessageText.listStatus(Component.empty(), true, true, 4, true, 1_600, true);
-        assertEquals("allthelogs.status.matches.loading", key(loading));
-        assertEquals("4", args(loading)[0]);
-        assertEquals(1, args(loading).length);
+        assertEquals("allthelogs.status.loading", key(loading));
         Component loadingWithoutCount = MessageText.listStatus(Component.empty(), true, false, 0, false, 2_000, false);
         assertEquals("allthelogs.status.loading", key(loadingWithoutCount));
     }
@@ -129,9 +127,7 @@ class MessageTextTest {
         assertEquals("allthelogs.status.messages.timed", key(timed));
         assertEquals("1.5", args(timed)[1]);
         Component singularLoading = MessageText.listStatus(Component.empty(), true, true, 1, true, 1_600, false);
-        assertEquals("allthelogs.status.message.loading", key(singularLoading));
-        assertEquals("1", args(singularLoading)[0]);
-        assertEquals(1, args(singularLoading).length);
+        assertEquals("allthelogs.status.loading", key(singularLoading));
         Component capped = MessageText.listStatus(Component.empty(), false, true, 100, false, 0, false);
         assertEquals("allthelogs.status.messages", key(capped));
         assertEquals(">99", args(capped)[0]);
