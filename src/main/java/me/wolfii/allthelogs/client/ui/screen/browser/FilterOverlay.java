@@ -16,6 +16,7 @@ import me.wolfii.allthelogs.client.search.MinecraftVersions;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.ui.popup.ChecklistMenu;
 import me.wolfii.allthelogs.client.ui.text.TextFit;
+import me.wolfii.allthelogs.client.ui.text.WrappedTooltip;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
 import me.wolfii.allthelogs.client.ui.widget.DateField;
@@ -166,6 +167,7 @@ final class FilterOverlay {
 
         regexBox = checkbox("allthelogs.filter.regex", current.regex(), value ->
             emit(filter.get().withRegex(value)));
+        regexBox.tooltip(WrappedTooltip.of(Component.translatable("allthelogs.filter.regex.hint")));
         content.child(regexBox);
         caseBox = checkbox("allthelogs.filter.case_sensitive", current.caseSensitive(), value ->
             emit(filter.get().withCaseSensitive(value)));

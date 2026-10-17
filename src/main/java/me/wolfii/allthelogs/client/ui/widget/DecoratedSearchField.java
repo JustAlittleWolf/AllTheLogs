@@ -1,6 +1,7 @@
 package me.wolfii.allthelogs.client.ui.widget;
 
 import io.wispforest.owo.ui.component.TextBoxComponent;
+import io.wispforest.owo.ui.core.OwoUIGraphics;
 import io.wispforest.owo.ui.core.Sizing;
 import me.wolfii.allthelogs.client.mixin.EditBoxAccessor;
 import me.wolfii.allthelogs.client.search.SearchDecorations;
@@ -11,12 +12,18 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.TextColor;
+import org.joml.Vector2i;
+import org.joml.Vector2ic;
 
 /**
  * Search box whose regex {@code /} and {@code /i} are drawn beside the text instead of stored in it.
  * Cursor, selection, copy, and paste see only the pattern.
  */
 public final class DecoratedSearchField extends TextBoxComponent {
+    /** Pixels between the field and a tooltip anchored to it. */
+    private static final int TOOLTIP_GAP = 4;
+    private static final int TOOLTIP_MARGIN = 2;
+
     private String prefix = "";
     private String suffix = "";
     private Component hint = Component.empty();
@@ -32,6 +39,26 @@ public final class DecoratedSearchField extends TextBoxComponent {
      */
     static boolean hidesText(String value, int displayPos) {
         return value != null && !value.isEmpty() && displayPos >= value.length();
+    }
+
+    /**
+     * Screen position of a tooltip for this field. It sits just above the field, near the pointer, so it
+     * does not cover the pattern. It drops below the field when the top of the screen has no room, and
+     * shifts left when it would run off the right.
+     */
+    static Vector2ic placeTooltip(int fieldY, int fieldHeight, int mouseX, int screenWidth, int screenHeight,
+                                  int tooltipWidth, int tooltipHeight) {
+        int x = mouseX;
+        if (x + tooltipWidth > screenWidth - TOOLTIP_MARGIN) {
+            x = screenWidth - tooltipWidth - TOOLTIP_MARGIN;
+        }
+        if (x < TOOLTIP_MARGIN) x = TOOLTIP_MARGIN;
+        int above = fieldY - tooltipHeight - TOOLTIP_GAP;
+        int y = above >= TOOLTIP_MARGIN ? above : fieldY + fieldHeight + TOOLTIP_GAP;
+        if (y + tooltipHeight > screenHeight - TOOLTIP_MARGIN) {
+            y = Math.max(TOOLTIP_MARGIN, screenHeight - tooltipHeight - TOOLTIP_MARGIN);
+        }
+        return new Vector2i(x, y);
     }
 
     /**
@@ -114,6 +141,15 @@ public final class DecoratedSearchField extends TextBoxComponent {
     public void onDrag(MouseButtonEvent event, double deltaX, double deltaY) {
         applyTextInset();
         super.onDrag(event, deltaX, deltaY);
+    }
+
+    @Override
+    public void drawTooltip(OwoUIGraphics graphics, int mouseX, int mouseY, float partialTicks, float delta) {
+        if (!shouldDrawTooltip(mouseX, mouseY)) return;
+        Font font = Minecraft.getInstance().font;
+        if (font == null || tooltip() == null || tooltip().isEmpty()) return;
+        graphics.tooltip(font, tooltip(), mouseX, mouseY, (screenWidth, screenHeight, x, y, tooltipWidth, tooltipHeight) ->
+            placeTooltip(getY(), getHeight(), x, screenWidth, screenHeight, tooltipWidth, tooltipHeight), null);
     }
 
     @Override
