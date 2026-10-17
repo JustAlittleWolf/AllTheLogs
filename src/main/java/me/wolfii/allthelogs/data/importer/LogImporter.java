@@ -222,9 +222,11 @@ public final class LogImporter {
             }
 
             observer.finished();
-            observer.enterPhase(options.shouldOptimize(writer.writtenFiles())
-                ? ImportPhase.CHUNKING
-                : ImportPhase.OPTIMIZING, 0d);
+            if (!options.updateMetadataOnly()) {
+                observer.enterPhase(options.shouldOptimize(writer.writtenFiles())
+                    ? ImportPhase.CHUNKING
+                    : ImportPhase.OPTIMIZING, 0d);
+            }
 
             RuntimeException discoveryFailure = failureRef.get();
             if (discoveryFailure != null && !stop.getAsBoolean()) throw discoveryFailure;
@@ -235,6 +237,13 @@ public final class LogImporter {
                 writer.applyMetadataPatches(options);
             }
             ContinuationLinker.link(connection, writer.touchedFiles());
+
+            // Metadata file counts are final only after applying the queued patches.
+            if (options.updateMetadataOnly()) {
+                observer.enterPhase(options.shouldOptimize(writer.writtenFiles())
+                    ? ImportPhase.CHUNKING
+                    : ImportPhase.OPTIMIZING, 0d);
+            }
 
             List<ImportResult.Failure> failures = new ArrayList<>(discovery.failures());
             failures.addAll(parseFailures);

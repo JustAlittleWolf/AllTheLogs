@@ -1,20 +1,27 @@
 package me.wolfii.allthelogs.data;
 
 import me.wolfii.allthelogs.data.importer.ImportOptions;
+import me.wolfii.allthelogs.data.importer.ImportPhase;
+import me.wolfii.allthelogs.data.importer.ImportProgress;
 import me.wolfii.allthelogs.data.session.SessionMarker;
 import me.wolfii.allthelogs.data.store.StoreConnections;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.sql.Statement;
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MinecraftVersionMetadataImportTest {
     @TempDir
@@ -47,6 +54,56 @@ class MinecraftVersionMetadataImportTest {
         return store.allEntries().stream()
             .filter(entry -> entry.message().equals(message))
             .findFirst().orElseThrow().chatLog().minecraftVersion();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void metadataPatchesPrecedeFullOptimizationAndSurviveCompaction(boolean explicitOptimize) throws IOException {
+        store.close();
+        Path database = tempDir.resolve("store.duckdb");
+        store = LogStore.open(database);
+        for (int day = 25; day <= 26; day++) {
+            LogFixtures.writePlain(logDirectory(), "2026-08-%d-1.log".formatted(day), """
+                [10:00:00] [main/INFO]: Starting Minecraft
+                [10:00:10] [Render thread/INFO]: [CHAT] message %d
+                """.formatted(day));
+        }
+        // Advance the cluster marker so an append-only optimization would leave these historical rows alone.
+        store.importDirectory(tempDir.resolve("instance"), ImportOptions.defaults());
+        assertEquals("unknown", versionFor("message 25"));
+        for (int day = 25; day <= 26; day++) {
+            LogFixtures.writePlain(logDirectory(), "2026-08-%d-1.log".formatted(day), """
+                [10:00:00] [main/INFO]: Loading Minecraft 1.21.4 with Fabric Loader 0.19.3
+                [10:00:01] [Server thread/INFO]: Starting integrated minecraft server version 1.21.4
+                [10:00:02] [Server thread/INFO]: Saving chunks for level 'ServerLevel[World %d]'/minecraft:overworld
+                [10:00:10] [Render thread/INFO]: [CHAT] message %d
+                """.formatted(day, day));
+        }
+        List<ImportProgress> progress = new ArrayList<>();
+        store.importDirectory(tempDir.resolve("instance"), metadataOnly()
+            .withOptimize(explicitOptimize).withOptimizeIfImportedFilesExceed(1), update -> {
+                progress.add(update);
+                if (update.phase() == ImportPhase.CHUNKING && update.phaseFraction() == 0.1) {
+                    assertEquals("1.21.4", versionFor("message 25"));
+                    assertTrue(store.allEntries().stream().allMatch(entry -> entry.serverOrWorld() != null));
+                }
+            });
+        // The full rewrite reports its table-copy step; the no-new-files optimization does not.
+        assertTrue(progress.stream().anyMatch(update ->
+            update.phase() == ImportPhase.CHUNKING && update.phaseFraction() == 0.75));
+        double previousFraction = 0;
+        for (ImportProgress update : progress) {
+            if (update.phase() == ImportPhase.IMPORT) continue;
+            assertTrue(update.fraction() >= previousFraction, "optimization progress moved backwards");
+            previousFraction = update.fraction();
+        }
+        store.close();
+        store = LogStore.open(database);
+        assertEquals(2, store.allEntries().size());
+        assertEquals("1.21.4", versionFor("message 25"));
+        assertEquals("1.21.4", versionFor("message 26"));
+        assertTrue(store.allEntries().stream().allMatch(entry ->
+            entry.serverOrWorld().equals("world/World " + entry.message().substring("message ".length()))));
     }
 
     @Test

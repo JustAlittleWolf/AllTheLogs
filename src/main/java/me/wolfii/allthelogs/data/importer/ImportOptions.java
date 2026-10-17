@@ -24,11 +24,11 @@ import java.util.function.Consumer;
  *                                       or the same SHA-256 of raw bytes) are not imported again; path matches are
  *                                       left unopened, identical copies at a new path are skipped after the bytes
  *                                       are read
- * @param optimize                       whether a successful import of new files should rewrite the whole
+ * @param optimize                       whether a successful import or metadata update should rewrite the whole
  *                                       {@code chat_entry} table oldest-first and compact the database file afterwards
  * @param optimizeIfImportedFilesExceed  when {@code optimize} is false, still cluster if more than this many files
- *                                       were newly stored, only the new files when they come after everything
- *                                       stored; {@code 0} disables that threshold
+ *                                       were stored or updated. New-file imports can cluster only the appended
+ *                                       files; metadata updates rewrite the whole table. {@code 0} disables the threshold
  * @param timezone                       timezone the timestamps inside the imported log files are expressed in; they
  *                                       are converted to the JVM's default timezone for storage, so that files written
  *                                       in different zones stay comparable. Passing the default timezone leaves the
@@ -231,11 +231,9 @@ public record ImportOptions(
     }
 
     /**
-     * Whether this run should cluster and compact after {@code importedFiles} were newly stored.
-     * Metadata-only runs never rewrite the table: they only patch columns on existing rows.
+     * Whether this run should cluster and compact after {@code importedFiles} were stored or updated.
      */
     public boolean shouldOptimize(int importedFiles) {
-        if (updateMetadataOnly) return false;
         if (importedFiles <= 0) return false;
         if (optimize) return true;
         return optimizeIfImportedFilesExceed > 0 && importedFiles > optimizeIfImportedFilesExceed;
