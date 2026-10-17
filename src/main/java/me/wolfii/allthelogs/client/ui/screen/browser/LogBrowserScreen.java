@@ -204,6 +204,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         if (filters != null) filters.closeListsOnClickOutside(event.x(), event.y());
+        if (tools != null) tools.closeOnClickOutside(event.x(), event.y());
         return super.mouseClicked(event, doubleClick);
     }
 

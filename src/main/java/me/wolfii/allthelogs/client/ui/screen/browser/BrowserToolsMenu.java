@@ -29,16 +29,18 @@ import java.util.function.IntSupplier;
 
 /**
  * Menu on the messages toolbar. Hovering or clicking the hamburger opens Playtime, Import, and Advanced
- * above it, top to bottom. A click keeps the menu open. Advanced opens Export, DB Cleanup, Scripts, and
- * Optimize database to the side, with a database info row under them. The row is plain text, not a button,
- * and hovering it shows the database summary. Export opens the export scope beside that, and the chosen
+ * above it, top to bottom. A click keeps the menu open until a click outside it. Advanced opens Export,
+ * DB Cleanup, Scripts, and Optimize database to the side, with a database info row under them. The row is
+ * plain text, not a button, and hovering it shows the database summary. Export opens the export scope
+ * beside that, and the chosen
  * scope opens the file format. A row whose side menu is open stays highlighted.
  * <p>
  * Advanced grows upward from its row, so it stays on screen at the bottom. The export menus are centered on
  * the row they open from, moved only as far as the screen edge needs. Every menu stays
  * open for {@link #CLOSE_DELAY_MS} after the pointer leaves it, so it can be reached again, unless the
- * pointer moves onto another row of the menu it came from. Dragging the timeline scrollbar does not count
- * as a hover, including the moment that drag is released on the button.
+ * pointer moves onto another row of the menu it came from. A click outside closes it at once. Dragging
+ * the timeline scrollbar does not count as a hover, including the moment that drag is released on the
+ * button.
  */
 final class BrowserToolsMenu {
     static final long CLOSE_DELAY_MS = 1000;
@@ -130,7 +132,8 @@ final class BrowserToolsMenu {
     }
 
     /**
-     * Opens the menu and keeps it open after the pointer leaves, until it is clicked again or closed.
+     * Pins the menu open after the pointer leaves, until a click outside it, another click on the
+     * hamburger, or {@link #close()}.
      */
     void toggle() {
         if (pinned) {
@@ -140,6 +143,22 @@ final class BrowserToolsMenu {
         pinned = true;
         closeAt = Long.MAX_VALUE;
         ensureActions();
+    }
+
+    /**
+     * Hides the menu when a click lands outside the hamburger and every open menu. The hamburger
+     * handles its own clicks, so clicking it still toggles the menu. That also drops the menu before
+     * a layout change, such as the filter bar, can leave it at its old position.
+     */
+    void closeOnClickOutside(double mouseX, double mouseY) {
+        if (dismissOnClick(isOpen(), inside((int) mouseX, (int) mouseY))) close();
+    }
+
+    /**
+     * An open menu hides on a click that is outside it. A click on the hamburger or an open menu does not.
+     */
+    static boolean dismissOnClick(boolean open, boolean inside) {
+        return open && !inside;
     }
 
     void close() {
