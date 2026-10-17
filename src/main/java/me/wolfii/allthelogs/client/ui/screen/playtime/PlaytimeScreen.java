@@ -2,6 +2,7 @@ package me.wolfii.allthelogs.client.ui.screen.playtime;
 
 import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.ButtonComponent;
+import io.wispforest.owo.ui.component.CheckboxComponent;
 import io.wispforest.owo.ui.component.DropdownComponent;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.StackLayout;
@@ -57,6 +58,8 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
     private ButtonComponent styleButton;
     private ButtonComponent versionButton;
     private ButtonComponent serverButton;
+    private CheckboxComponent majorVersionsBox;
+    private FlowLayout options;
     private OptionMenu grainMenu;
     private OptionMenu breakdownMenu;
     private OptionMenu styleMenu;
@@ -102,8 +105,10 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         grainMenu.opensOnHover(grainButton, this::openGrain);
         styleMenu.opensOnHover(styleButton, this::openStyle);
         breakdownMenu.opensOnHover(breakdownButton, this::openBreakdown);
-        page.child(PlaytimeScreenSupport.optionsRow(List.of(grainButton, styleButton, breakdownButton),
-            PlaytimeScreenSupport.button("allthelogs.playtime.weekdays", pressed -> openWeekdays())));
+        majorVersionsBox = PlaytimeScreenSupport.majorVersionsBox(this::rebuild);
+        options = PlaytimeScreenSupport.optionsRow(List.of(grainButton, styleButton, breakdownButton),
+            PlaytimeScreenSupport.button("allthelogs.playtime.weekdays", pressed -> openWeekdays()));
+        page.child(options);
 
         chartWidget = new PlaytimeChartWidget(highlight);
         chartWidget.onZoom(this::zoom);
@@ -183,7 +188,7 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
     private void rebuild() {
         chart = PlaytimeChartModel.build(PlaytimeSession.spans(), PlaytimeSession.filter(), PlaytimeSession.breakdown(),
             PlaytimeSession.style(), PlaytimeSession.grain(), PlaytimeSession.window(),
-            chartWidget == null ? 0 : chartWidget.plotWidth());
+            chartWidget == null ? 0 : chartWidget.plotWidth(), PlaytimeSession.majorVersions());
         if (chartWidget != null) chartWidget.chart(chart);
         if (legend != null) legend.entries(chart.series(), chart.legend());
         syncButtons();
@@ -202,6 +207,7 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         if (styleButton != null) styleButton.setMessage(styleLabel(PlaytimeSession.style()));
         if (versionButton != null) versionButton.setMessage(PlaytimeScreenSupport.versionLabel());
         if (serverButton != null) serverButton.setMessage(PlaytimeScreenSupport.serverLabel());
+        PlaytimeScreenSupport.syncMajorVersions(options, breakdownButton, majorVersionsBox);
     }
 
     private void zoom(double fraction, double steps) {
@@ -282,7 +288,8 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
                 menu.button(Component.translatable(categoryKey(series)), ignored -> {
                     closeContextMenu();
                     applyMessages(PlaytimeMessageFilter.category(BrowserSession.openingFilter(), column.start(),
-                        column.end(), chart.breakdown(), series));
+                        column.end(), chart.breakdown(), series, PlaytimeSession.majorVersions(),
+                        PlaytimeSession.spans(), PlaytimeSession.filter().versions()));
                 });
             }
         });

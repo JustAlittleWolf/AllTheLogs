@@ -12,6 +12,7 @@ import java.util.List;
 public final class PlaytimeSession {
     private static PlaytimeFilter filter = PlaytimeFilter.all();
     private static PlaytimeBreakdown breakdown = PlaytimeBreakdown.VERSION;
+    private static boolean majorVersions;
     private static PlaytimeStyle style = PlaytimeStyle.BARS;
     private static PlaytimeGrain grain = PlaytimeGrain.AUTO;
     private static PlaytimeWindow window;
@@ -43,6 +44,17 @@ public final class PlaytimeSession {
 
     public static void breakdown(PlaytimeBreakdown next) {
         breakdown = next == null ? PlaytimeBreakdown.VERSION : next;
+    }
+
+    /**
+     * Whether version groupings keep only the first two components, so {@code 1.8.9} is shown as {@code 1.8}.
+     */
+    public static boolean majorVersions() {
+        return majorVersions;
+    }
+
+    public static void majorVersions(boolean next) {
+        majorVersions = next;
     }
 
     public static PlaytimeStyle style() {
@@ -118,6 +130,7 @@ public final class PlaytimeSession {
     static void clear() {
         filter = PlaytimeFilter.all();
         breakdown = PlaytimeBreakdown.VERSION;
+        majorVersions = false;
         style = PlaytimeStyle.BARS;
         grain = PlaytimeGrain.AUTO;
         window = null;

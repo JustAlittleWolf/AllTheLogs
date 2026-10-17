@@ -42,6 +42,28 @@ public final class MinecraftVersions {
     }
 
     /**
+     * The first two dot-separated components. {@code 1.8.9} becomes {@code 1.8} and {@code 26.2} stays
+     * {@code 26.2}. A non-numeric tail on the second component, such as {@code 1.21-rc1}, is left off.
+     * A version with no dot, including {@link ChatLog#UNKNOWN_VERSION}, is unchanged.
+     */
+    public static String major(String version) {
+        if (version == null || version.isEmpty()) return version;
+        int firstDot = version.indexOf('.');
+        if (firstDot <= 0 || firstDot == version.length() - 1) return version;
+        int end = version.indexOf('.', firstDot + 1);
+        if (end < 0) end = version.length();
+        for (int index = firstDot + 1; index < end; index++) {
+            char c = version.charAt(index);
+            if (c < '0' || c > '9') {
+                end = index;
+                break;
+            }
+        }
+        if (end == firstDot + 1) return version;
+        return version.substring(0, end);
+    }
+
+    /**
      * Negative when {@code left} is an older release than {@code right}. Unknown versions are not compared here.
      */
     static int compareReleaseOldestFirst(String left, String right) {

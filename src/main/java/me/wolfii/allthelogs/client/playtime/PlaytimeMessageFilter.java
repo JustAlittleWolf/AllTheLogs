@@ -1,8 +1,13 @@
 package me.wolfii.allthelogs.client.playtime;
 
+import me.wolfii.allthelogs.client.search.MinecraftVersions;
 import me.wolfii.allthelogs.client.search.SearchFilter;
+import me.wolfii.allthelogs.data.playtime.PlaytimeSpan;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
  * Search filter produced by the playtime bar menu. The period is always applied. A colored section also
@@ -20,11 +25,41 @@ public final class PlaytimeMessageFilter {
 
     public static SearchFilter category(SearchFilter current, LocalDateTime start, LocalDateTime end,
                                         PlaytimeBreakdown breakdown, PlaytimeSeries series) {
+        return category(current, start, end, breakdown, series, false, List.of(), null);
+    }
+
+    /**
+     * @param majorVersions   the series version is only the first two components
+     * @param spans           stored playtime, used to expand a major version to the full versions it stands for
+     * @param allowedVersions full versions the playtime filter keeps, or null when every version is kept
+     */
+    public static SearchFilter category(SearchFilter current, LocalDateTime start, LocalDateTime end,
+                                        PlaytimeBreakdown breakdown, PlaytimeSeries series, boolean majorVersions,
+                                        List<PlaytimeSpan> spans, Set<String> allowedVersions) {
         SearchFilter ranged = period(current, start, end);
         if (series == null || breakdown == null) return ranged;
         SearchFilter next = ranged;
-        if (breakdown.byVersion() && series.canFilterVersion()) next = next.withVersion(series.version());
+        if (breakdown.byVersion() && series.canFilterVersion()) {
+            next = next.withVersions(storedVersions(series.version(), majorVersions, spans, allowedVersions));
+        }
         if (breakdown.byServer() && series.canFilterServer()) next = next.withServerOrWorld(series.serverKey());
         return next;
+    }
+
+    /**
+     * Full versions a grouped series stands for. With major versions, every stored version whose first two
+     * components match, limited to {@code allowed} when the playtime filter has narrowed versions.
+     */
+    static Set<String> storedVersions(String grouped, boolean majorVersions, List<PlaytimeSpan> spans,
+                                      Set<String> allowed) {
+        if (!majorVersions) return Set.of(grouped);
+        Set<String> matches = new LinkedHashSet<>();
+        if (spans != null) {
+            for (PlaytimeSpan span : spans) {
+                if (allowed != null && !allowed.contains(span.version())) continue;
+                if (grouped.equals(MinecraftVersions.major(span.version()))) matches.add(span.version());
+            }
+        }
+        return matches.isEmpty() ? Set.of(grouped) : Set.copyOf(matches);
     }
 }

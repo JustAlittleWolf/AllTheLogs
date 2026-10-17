@@ -2,6 +2,7 @@ package me.wolfii.allthelogs.client.ui.screen.playtime;
 
 import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.ButtonComponent;
+import io.wispforest.owo.ui.component.CheckboxComponent;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
@@ -46,6 +47,8 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
     private ButtonComponent detailButton;
     private ButtonComponent versionButton;
     private ButtonComponent serverButton;
+    private CheckboxComponent majorVersionsBox;
+    private FlowLayout options;
     private OptionMenu groupMenu;
     private OptionMenu detailMenu;
     private ChecklistMenu versionMenu;
@@ -82,8 +85,10 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
             Arrays.stream(PlaytimeWeekday.SLOT_MINUTES).mapToObj(WeekdayPlaytimeScreen::detailLabel).toList(),
             pressed -> openDetail());
         detailMenu.opensOnHover(detailButton, this::openDetail);
-        page.child(PlaytimeScreenSupport.optionsRow(List.of(groupButton, detailButton),
-            PlaytimeScreenSupport.button("allthelogs.playtime.timeline", pressed -> onClose())));
+        majorVersionsBox = PlaytimeScreenSupport.majorVersionsBox(this::rebuild);
+        options = PlaytimeScreenSupport.optionsRow(List.of(groupButton, detailButton),
+            PlaytimeScreenSupport.button("allthelogs.playtime.timeline", pressed -> onClose()));
+        page.child(options);
 
         chartWidget = new WeekdayChartWidget(highlight);
         legend = new PlaytimeLegendWidget(highlight);
@@ -172,7 +177,8 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
 
     private void rebuild() {
         chart = PlaytimeWeekday.build(PlaytimeSession.spans(), PlaytimeSession.filter(), PlaytimeSession.breakdown(),
-            PlaytimeSession.weekdayFrom(), PlaytimeSession.weekdayUntil(), PlaytimeSession.heatSlotMinutes());
+            PlaytimeSession.weekdayFrom(), PlaytimeSession.weekdayUntil(), PlaytimeSession.heatSlotMinutes(),
+            PlaytimeSession.majorVersions());
         if (chartWidget != null) chartWidget.chart(chart);
         if (legend != null) legend.entries(chart.series(), chart.legend());
         syncButtons();
@@ -190,6 +196,7 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
         if (detailButton != null) detailButton.setMessage(detailLabel(PlaytimeSession.heatSlotMinutes()));
         if (versionButton != null) versionButton.setMessage(PlaytimeScreenSupport.versionLabel());
         if (serverButton != null) serverButton.setMessage(PlaytimeScreenSupport.serverLabel());
+        PlaytimeScreenSupport.syncMajorVersions(options, groupButton, majorVersionsBox);
     }
 
     private void openGroup() {

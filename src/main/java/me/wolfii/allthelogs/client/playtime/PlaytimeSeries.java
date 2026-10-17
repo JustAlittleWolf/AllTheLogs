@@ -46,16 +46,33 @@ public record PlaytimeSeries(String version, String serverKey, String playerKey,
     }
 
     public static PlaytimeSeries of(PlaytimeBreakdown breakdown, PlaytimeSpan span) {
-        return of(breakdown, span.version(), span.server(), span.player());
+        return of(breakdown, span, false);
+    }
+
+    /**
+     * @param majorVersions use only the first two version components, so {@code 1.8.9} groups with {@code 1.8}
+     */
+    public static PlaytimeSeries of(PlaytimeBreakdown breakdown, PlaytimeSpan span, boolean majorVersions) {
+        String version = span.version();
+        if (majorVersions) version = MinecraftVersions.major(version);
+        return of(breakdown, version, span.server(), span.player());
     }
 
     /**
      * Series found in {@code kept}, in stack order, colored by their first appearance in {@code all}.
      */
     public static Index collect(List<PlaytimeSpan> kept, List<PlaytimeSpan> all, PlaytimeBreakdown breakdown) {
+        return collect(kept, all, breakdown, false);
+    }
+
+    /**
+     * @param majorVersions group {@code 1.8.9} with {@code 1.8}; {@code 26.2} stays {@code 26.2}
+     */
+    public static Index collect(List<PlaytimeSpan> kept, List<PlaytimeSpan> all, PlaytimeBreakdown breakdown,
+                                boolean majorVersions) {
         Map<PlaytimeSeries, Boolean> found = new LinkedHashMap<>();
-        for (PlaytimeSpan span : kept) found.put(of(breakdown, span), Boolean.TRUE);
-        Map<PlaytimeSeries, Integer> ranks = ranks(all == null ? kept : all, breakdown);
+        for (PlaytimeSpan span : kept) found.put(of(breakdown, span, majorVersions), Boolean.TRUE);
+        Map<PlaytimeSeries, Integer> ranks = ranks(all == null ? kept : all, breakdown, majorVersions);
         List<PlaytimeSeries> keys = new ArrayList<>(found.keySet());
         keys.sort(STACK_ORDER);
         List<PlaytimeSeries> series = new ArrayList<>(keys.size());
@@ -66,7 +83,7 @@ public record PlaytimeSeries(String version, String serverKey, String playerKey,
             series.add(new PlaytimeSeries(key.version, key.serverKey, key.playerKey, key.colorFor(rank),
                 rank >= 0 ? PlaytimeColors.pattern(rank) : PlaytimePattern.SOLID));
         }
-        return new Index(List.copyOf(series), index, breakdown);
+        return new Index(List.copyOf(series), index, breakdown, majorVersions);
     }
 
     /**
@@ -128,12 +145,13 @@ public record PlaytimeSeries(String version, String serverKey, String playerKey,
         return key.equals(unknownKey) ? unknown : displayName(key);
     }
 
-    private static Map<PlaytimeSeries, Integer> ranks(List<PlaytimeSpan> spans, PlaytimeBreakdown breakdown) {
+    private static Map<PlaytimeSeries, Integer> ranks(List<PlaytimeSpan> spans, PlaytimeBreakdown breakdown,
+                                                      boolean majorVersions) {
         List<PlaytimeSpan> byStart = new ArrayList<>(spans);
         byStart.sort(Comparator.comparing(PlaytimeSpan::start));
         Map<PlaytimeSeries, Integer> ranks = new HashMap<>();
         for (PlaytimeSpan span : byStart) {
-            PlaytimeSeries key = of(breakdown, span);
+            PlaytimeSeries key = of(breakdown, span, majorVersions);
             if (!key.canFilterServer() && !key.knowsPlayer() && (key.version == null || isUnknown(key.version))) {
                 continue;
             }
@@ -171,9 +189,9 @@ public record PlaytimeSeries(String version, String serverKey, String playerKey,
      * Colored series in stack order, and the position of the series each span belongs to.
      */
     public record Index(List<PlaytimeSeries> series, Map<PlaytimeSeries, Integer> positions,
-                        PlaytimeBreakdown breakdown) {
+                        PlaytimeBreakdown breakdown, boolean majorVersions) {
         public int of(PlaytimeSpan span) {
-            return positions.get(PlaytimeSeries.of(breakdown, span));
+            return positions.get(PlaytimeSeries.of(breakdown, span, majorVersions));
         }
 
         public int size() {
