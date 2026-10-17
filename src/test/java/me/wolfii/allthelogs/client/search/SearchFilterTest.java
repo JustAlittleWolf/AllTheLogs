@@ -107,6 +107,24 @@ class SearchFilterTest {
     }
 
     @Test
+    void regexIssueNamesTheSyntaxOrRe2Problem() {
+        assertNull(SearchFilter.defaults().withText("(").regexIssue());
+        SearchFilter unclosed = SearchFilter.defaults().withText("foo(").withRegex(true);
+        assertEquals("Unclosed group at the end", unclosed.regexIssue());
+        assertEquals("Dangling meta character '*' at character 1",
+            SearchFilter.defaults().withText("*").withRegex(true).regexIssue());
+        assertEquals(unclosed.regexIssue(), unclosed.regexIssue());
+        assertTrue(unclosed.invalidRegex());
+        assertFalse(unclosed.canQuery());
+        String chatName = "(?:^|[\\]\\)\\>»\\s])([a-zA-Z0-9_]{3,16})(?:\\s*»|:)\\s+(?!(?:Offline|Online)\\b)\\S+.*";
+        assertEquals("Negative lookahead is not supported by RE2",
+            SearchFilter.defaults().withText(chatName).withRegex(true).regexIssue());
+        assertEquals("Backreference \\1 is not supported by RE2",
+            SearchFilter.defaults().withText("(a)\\1").withRegex(true).regexIssue());
+        assertNull(SearchFilter.defaults().withText("foo.*bar").withRegex(true).regexIssue());
+    }
+
+    @Test
     void invalidRegexNeverMatches() {
         var matches = SearchFilter.defaults().withText("(").withRegex(true).messagePredicate();
         assertFalse(matches.test("hello"));

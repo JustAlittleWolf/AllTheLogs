@@ -204,6 +204,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         if (filters != null) filters.closeListsOnClickOutside(event.x(), event.y());
+        if (tools != null) tools.closeOnClickOutside(event.x(), event.y());
         return super.mouseClicked(event, doubleClick);
     }
 
@@ -503,6 +504,8 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         if (AllTheLogsClient.worker() == null || !AllTheLogsClient.worker().isOpen()) {
             return Component.translatable("allthelogs.meta.unavailable");
         }
+        Component regexError = SearchBar.regexError(queries.filter());
+        if (regexError != null) return regexError;
         if (!queries.filter().canQuery()) return Component.translatable("allthelogs.status.error");
         return null;
     }
