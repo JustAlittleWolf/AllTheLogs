@@ -2,7 +2,6 @@ package me.wolfii.allthelogs.client.ui.screen.playtime;
 
 import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.ButtonComponent;
-import io.wispforest.owo.ui.component.CheckboxComponent;
 import io.wispforest.owo.ui.component.DropdownComponent;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.StackLayout;
@@ -58,8 +57,6 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
     private ButtonComponent styleButton;
     private ButtonComponent versionButton;
     private ButtonComponent serverButton;
-    private CheckboxComponent majorVersionsBox;
-    private FlowLayout options;
     private OptionMenu grainMenu;
     private OptionMenu breakdownMenu;
     private OptionMenu styleMenu;
@@ -105,10 +102,8 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         grainMenu.opensOnHover(grainButton, this::openGrain);
         styleMenu.opensOnHover(styleButton, this::openStyle);
         breakdownMenu.opensOnHover(breakdownButton, this::openBreakdown);
-        majorVersionsBox = PlaytimeScreenSupport.majorVersionsBox(this::rebuild);
-        options = PlaytimeScreenSupport.optionsColumn(List.of(grainButton, styleButton, breakdownButton),
-            PlaytimeScreenSupport.button("allthelogs.playtime.weekdays", pressed -> openWeekdays()));
-        page.child(options);
+        page.child(PlaytimeScreenSupport.optionsRow(List.of(grainButton, styleButton, breakdownButton),
+            PlaytimeScreenSupport.button("allthelogs.playtime.weekdays", pressed -> openWeekdays())));
 
         chartWidget = new PlaytimeChartWidget(highlight);
         chartWidget.onZoom(this::zoom);
@@ -207,7 +202,6 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
         if (styleButton != null) styleButton.setMessage(styleLabel(PlaytimeSession.style()));
         if (versionButton != null) versionButton.setMessage(PlaytimeScreenSupport.versionLabel());
         if (serverButton != null) serverButton.setMessage(PlaytimeScreenSupport.serverLabel());
-        PlaytimeScreenSupport.syncMajorVersions(options, majorVersionsBox);
     }
 
     private void zoom(double fraction, double steps) {
@@ -247,12 +241,7 @@ public final class PlaytimeScreen extends BaseOwoScreen<StackLayout> {
     }
 
     private void openBreakdown() {
-        if (breakdownMenu.isOpen()) return;
-        closeMenus();
-        breakdownMenu.show(breakdownButton, PlaytimeScreenSupport.groupChoices(), index -> {
-            PlaytimeSession.breakdown(PlaytimeScreenSupport.GROUPS[index]);
-            rebuild();
-        });
+        PlaytimeScreenSupport.openBreakdown(breakdownMenu, breakdownButton, this::closeMenus, this::rebuild);
     }
 
     private void openStyle() {

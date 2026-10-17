@@ -2,7 +2,6 @@ package me.wolfii.allthelogs.client.ui.screen.playtime;
 
 import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.ButtonComponent;
-import io.wispforest.owo.ui.component.CheckboxComponent;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
@@ -47,8 +46,6 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
     private ButtonComponent detailButton;
     private ButtonComponent versionButton;
     private ButtonComponent serverButton;
-    private CheckboxComponent majorVersionsBox;
-    private FlowLayout options;
     private OptionMenu groupMenu;
     private OptionMenu detailMenu;
     private ChecklistMenu versionMenu;
@@ -85,10 +82,8 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
             Arrays.stream(PlaytimeWeekday.SLOT_MINUTES).mapToObj(WeekdayPlaytimeScreen::detailLabel).toList(),
             pressed -> openDetail());
         detailMenu.opensOnHover(detailButton, this::openDetail);
-        majorVersionsBox = PlaytimeScreenSupport.majorVersionsBox(this::rebuild);
-        options = PlaytimeScreenSupport.optionsColumn(List.of(groupButton, detailButton),
-            PlaytimeScreenSupport.button("allthelogs.playtime.timeline", pressed -> onClose()));
-        page.child(options);
+        page.child(PlaytimeScreenSupport.optionsRow(List.of(groupButton, detailButton),
+            PlaytimeScreenSupport.button("allthelogs.playtime.timeline", pressed -> onClose())));
 
         chartWidget = new WeekdayChartWidget(highlight);
         legend = new PlaytimeLegendWidget(highlight);
@@ -196,16 +191,10 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
         if (detailButton != null) detailButton.setMessage(detailLabel(PlaytimeSession.heatSlotMinutes()));
         if (versionButton != null) versionButton.setMessage(PlaytimeScreenSupport.versionLabel());
         if (serverButton != null) serverButton.setMessage(PlaytimeScreenSupport.serverLabel());
-        PlaytimeScreenSupport.syncMajorVersions(options, majorVersionsBox);
     }
 
     private void openGroup() {
-        if (groupMenu.isOpen()) return;
-        closeMenus();
-        groupMenu.show(groupButton, PlaytimeScreenSupport.groupChoices(), index -> {
-            PlaytimeSession.breakdown(PlaytimeScreenSupport.GROUPS[index]);
-            rebuild();
-        });
+        PlaytimeScreenSupport.openBreakdown(groupMenu, groupButton, this::closeMenus, this::rebuild);
     }
 
     private void openDetail() {
