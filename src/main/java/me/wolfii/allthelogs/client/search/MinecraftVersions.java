@@ -11,7 +11,7 @@ import java.util.regex.Pattern;
 /**
  * Orders Minecraft version strings newest-first for the filter menu. Numeric segments follow semantic versioning;
  * letter suffixes such as {@code pre} or {@code rc} count as older than the same numbers with no suffix.
- * {@link ChatLog#UNKNOWN_VERSION} is always last.
+ * {@link ChatLog#UNKNOWN_VERSION} is always first.
  */
 public final class MinecraftVersions {
     private static final Pattern TOKEN = Pattern.compile("\\d+|[A-Za-z]+");
@@ -29,7 +29,7 @@ public final class MinecraftVersions {
     public static Comparator<String> newestFirstOrder() {
         return (left, right) -> {
             if (isUnknown(left) != isUnknown(right)) {
-                return isUnknown(left) ? 1 : -1;
+                return isUnknown(left) ? -1 : 1;
             }
             int oldestFirst = compareReleaseOldestFirst(left, right);
             if (oldestFirst != 0) return -oldestFirst;
