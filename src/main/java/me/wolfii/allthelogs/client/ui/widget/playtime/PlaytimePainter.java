@@ -182,7 +182,7 @@ final class PlaytimePainter {
             : Math.max(x + 2, Math.min(mouseX + 8, x + width - boxWidth - 2));
         int boxY = mouseY + 12;
         if (boxY + boxHeight > y + height) boxY = Math.max(y + 2, mouseY - boxHeight - 4);
-        HoverChip.fill(graphics, boxX, boxY, boxWidth, boxHeight, Colors.HOVER_CHIP);
+        HoverChip.fill(graphics, boxX, boxY, boxWidth, boxHeight, Colors.CHART_HOVER_CHIP);
         int textY = boxY + pad;
         int valueRight = boxX + boxWidth - pad;
         for (int index = 0; index < shown; index++) {

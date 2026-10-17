@@ -32,6 +32,15 @@ class GraalJsInstallerTest {
     }
 
     @Test
+    void cancelledInstallStopsBeforeDownloadingOrLoading() {
+        GraalJsInstaller installer = new GraalJsInstaller(
+            tempDir, "http://127.0.0.1:1", path -> fail("should not add " + path), () -> false);
+        installer.cancel();
+        assertThrows(java.util.concurrent.CancellationException.class, () -> installer.install(progress -> {
+        }));
+    }
+
+    @Test
     void downloadsEachArtifactOnceAndReusesCache() throws Exception {
         byte[] jarBytes = "graaljs-jar".repeat(800).getBytes(StandardCharsets.UTF_8);
         String sha = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(jarBytes));

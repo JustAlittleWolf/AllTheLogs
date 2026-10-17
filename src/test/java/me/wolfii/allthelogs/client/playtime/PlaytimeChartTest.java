@@ -31,6 +31,9 @@ class PlaytimeChartTest {
         assertEquals("1m 30s", PlaytimeDuration.format(90_000));
         assertEquals("1h 1m", PlaytimeDuration.format(3_660_000));
         assertEquals("1d 1h", PlaytimeDuration.format(90_000_000));
+        assertEquals("4d 23h 59m", PlaytimeDuration.summary(5 * 86_400_000L - 60_000));
+        assertEquals("5d", PlaytimeDuration.summary(5 * 86_400_000L + 3_600_000));
+        assertEquals("200d", PlaytimeDuration.summary(199 * 86_400_000L + 13 * 3_600_000L));
     }
 
     @Test
@@ -50,7 +53,7 @@ class PlaytimeChartTest {
             span(2, 2, "1.21", "a")
         );
         PlaytimeChartModel.Result chart = PlaytimeChartModel.build(spans, PlaytimeFilter.all(),
-            PlaytimeBreakdown.COMBINED, PlaytimeStyle.BARS, PlaytimeGrain.DAYS, null);
+            PlaytimeBreakdown.VERSION_SERVER, PlaytimeStyle.BARS, PlaytimeGrain.DAYS, null);
 
         assertEquals(6 * 3_600_000L, chart.totalMillis());
         assertEquals(List.of("1.20.4", "1.21", "1.21"),
@@ -119,6 +122,24 @@ class PlaytimeChartTest {
         assertEquals(List.of("Total", "1.20.4", "", "1.21"),
             focused.stream().skip(1).map(PlaytimeHover.Line::label).toList());
         assertTrue(focused.get(2).bold());
+    }
+
+    @Test
+    void playerGroupingsLabelAndStackVersionThenServerThenPlayer() {
+        PlaytimeSeries alex = PlaytimeSeries.of(PlaytimeBreakdown.SERVER_PLAYER, "1.21", "hypixel.net", "Alex");
+        PlaytimeSeries unknown = PlaytimeSeries.of(PlaytimeBreakdown.SERVER_PLAYER, "1.21", "hypixel.net", null);
+        PlaytimeSeries other = PlaytimeSeries.of(PlaytimeBreakdown.SERVER_PLAYER, "1.21", "a.net", "Zed");
+        assertEquals("hypixel.net - Alex", alex.label("Unknown"));
+        assertEquals("hypixel.net - Unknown", unknown.label("Unknown"));
+        assertEquals("1.21 - Alex",
+            PlaytimeSeries.of(PlaytimeBreakdown.VERSION_PLAYER, "1.21", "hypixel.net", "Alex").label("Unknown"));
+        assertEquals(List.of(other, alex, unknown),
+            java.util.stream.Stream.of(unknown, alex, other).sorted(PlaytimeSeries.STACK_ORDER).toList());
+
+        var current = me.wolfii.allthelogs.client.search.SearchFilter.defaults();
+        var filter = PlaytimeMessageFilter.category(current, at(1, 0), at(2, 0), PlaytimeBreakdown.SERVER_PLAYER, alex);
+        assertEquals(java.util.Set.of("hypixel.net"), filter.serversOrWorlds());
+        assertNull(filter.versions());
     }
 
     @Test
@@ -410,8 +431,8 @@ class PlaytimeChartTest {
         assertNull(period.versions());
         assertNull(period.serversOrWorlds());
 
-        PlaytimeSeries both = PlaytimeSeries.of(PlaytimeBreakdown.COMBINED, "1.21", "hypixel.net");
-        var category = PlaytimeMessageFilter.category(current, at(1, 0), at(2, 0), PlaytimeBreakdown.COMBINED, both);
+        PlaytimeSeries both = PlaytimeSeries.of(PlaytimeBreakdown.VERSION_SERVER, "1.21", "hypixel.net");
+        var category = PlaytimeMessageFilter.category(current, at(1, 0), at(2, 0), PlaytimeBreakdown.VERSION_SERVER, both);
         assertEquals(java.util.Set.of("1.21"), category.versions());
         assertEquals(java.util.Set.of("hypixel.net"), category.serversOrWorlds());
     }

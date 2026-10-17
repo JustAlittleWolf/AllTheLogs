@@ -3,7 +3,6 @@ package me.wolfii.allthelogs.client.ui.screen.browser;
 import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.LabelComponent;
-import io.wispforest.owo.ui.component.TextBoxComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.ScrollContainer;
@@ -18,6 +17,7 @@ import io.wispforest.owo.ui.core.VerticalAlignment;
 import me.wolfii.allthelogs.client.AllTheLogsClient;
 import me.wolfii.allthelogs.client.config.BrowserSession;
 import me.wolfii.allthelogs.client.search.SearchFilter;
+import me.wolfii.allthelogs.client.ui.popup.ModalDialog;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
@@ -31,6 +31,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
@@ -45,14 +46,17 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 /**
- * Deletes stored messages, or cuts the search text out of them, for everything the filters match. It starts
- * with the messages screen's filters. Before anything is changed it shows how many messages are affected,
- * the oldest and newest of them, and a few picked at random, and the action needs a second click. Once
- * messages changed, the messages screen starts over, see {@link BrowserSession#reset()}.
+ * DB Cleanup: deletes stored messages, or cuts the search text out of them, for everything the search and
+ * filters match. It starts with the messages screen's filters. Before anything is changed it shows how many
+ * messages are affected, the oldest and newest of them, and as many picked at random as fit, and the action
+ * asks for confirmation. Without a search or a filter nothing is offered, so it never deletes everything.
+ * Once messages changed, the messages screen starts over, see {@link BrowserSession#reset()}.
  */
 public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
-    private static final int SAMPLE_SIZE = 6;
+    private static final int EDGE_SIZE = 3;
     private static final int MAX_PREVIEW_CHARS = 300;
+    /** Height around the preview list: page padding, the search row, the bottom row, and the gaps. */
+    private static final int PREVIEW_CHROME = 76;
     private static final int REMOVED = 0xFF6B6B;
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -66,18 +70,14 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
     private Mode mode = Mode.DELETE;
     private StackLayout overlays;
     private FilterOverlay filters;
-    private TextBoxComponent textBox;
+    private SearchBar searchBar;
+    private ModalDialog dialog;
     private ButtonComponent modeButton;
     private FlowLayout preview;
     private LabelComponent status;
     private ButtonComponent applyButton;
-    private ButtonComponent optimizeButton;
     private CleanupPreview current;
     private @Nullable Component notice;
-    private boolean armed;
-    private boolean optimizeArmed;
-    private boolean syncingText;
-    private boolean busy;
     private int requestToken;
 
     /**
@@ -103,6 +103,7 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
     protected void build(StackLayout root) {
         overlays = root;
         root.allowOverflow(true);
+        dialog = new ModalDialog(overlays, () -> this.width);
         FlowLayout page = UIContainers.verticalFlow(Sizing.fill(), Sizing.fill());
         page.gap(6).padding(Insets.of(8));
         page.surface(Surface.blur(5, 10).and(PanelSurfaces.overlay()));
@@ -111,15 +112,11 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
 
         FlowLayout top = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
         top.gap(4).verticalAlignment(VerticalAlignment.CENTER);
-        textBox = UIComponents.textBox(Sizing.expand(), filter.text());
-        textBox.setMaxLength(1024);
-        textBox.setHint(Component.translatable("allthelogs.cleanup.text_hint"));
-        textBox.onChanged().subscribe(this::onTextChanged);
-        top.child(textBox);
-        modeButton = UIComponents.button(modeLabel(), pressed -> toggleMode());
-        int modeWidth = Math.max(Minecraft.getInstance().font.width(modeLabel(Mode.DELETE)),
-            Minecraft.getInstance().font.width(modeLabel(Mode.REMOVE_TEXT)));
-        modeButton.horizontalSizing(Sizing.fixed(modeWidth + 12));
+        searchBar = new SearchBar(() -> filter, Component.translatable("allthelogs.cleanup.text_hint"),
+            this::onTextChanged);
+        top.child(searchBar.field());
+        modeButton = UIComponents.button(modeLabel(mode), pressed -> toggleMode());
+        modeButton.horizontalSizing(Sizing.fixed(widest(modeLabel(Mode.DELETE), modeLabel(Mode.REMOVE_TEXT))));
         top.child(modeButton);
         page.child(top);
 
@@ -136,14 +133,12 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
 
         FlowLayout bottom = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
         bottom.gap(4).verticalAlignment(VerticalAlignment.CENTER);
-        optimizeButton = UIComponents.button(Component.translatable("allthelogs.cleanup.optimize"),
-            pressed -> optimize());
-        bottom.child(optimizeButton);
         status = UIComponents.label(Component.empty());
         status.horizontalSizing(Sizing.expand());
         status.maxWidth(Math.max(120, this.width / 2));
         bottom.child(status);
-        applyButton = UIComponents.button(Component.empty(), pressed -> apply());
+        applyButton = UIComponents.button(applyLabel(mode), pressed -> confirmApply());
+        applyButton.horizontalSizing(Sizing.fixed(widest(applyLabel(Mode.DELETE), applyLabel(Mode.REMOVE_TEXT))));
         bottom.child(applyButton);
         bottom.child(DoneButton.of(this));
         page.child(bottom);
@@ -154,34 +149,48 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
     }
 
     @Override
+    protected void init() {
+        super.init();
+        if (searchBar != null) searchBar.reveal();
+    }
+
+    @Override
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         if (this.minecraft == null || this.minecraft.level != null) return;
         this.extractPanorama(graphics, delta);
     }
 
     @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (filters != null && (dialog == null || !dialog.isOpen())) {
+            filters.closeListsOnClickOutside(event.x(), event.y());
+        }
+        return super.mouseClicked(event, doubleClick);
+    }
+
+    @Override
     public boolean keyPressed(KeyEvent event) {
-        if (event.isEscape() && busy) return true;
+        if (dialog != null && dialog.isOpen()) {
+            if (event.isEscape() && !dialog.working()) dialog.close();
+            return true;
+        }
+        if (event.isEscape() && filters != null && filters.listOpen()) {
+            filters.closeLists();
+            return true;
+        }
         return super.keyPressed(event);
     }
 
     @Override
     public void onClose() {
-        if (busy) return;
+        if (dialog != null && dialog.working()) return;
         Minecraft.getInstance().gui.setScreen(parent);
     }
 
     private void update(SearchFilter next) {
         filter = next;
         notice = null;
-        if (textBox != null && !textBox.getValue().equals(next.text())) {
-            syncingText = true;
-            try {
-                textBox.setValue(next.text());
-            } finally {
-                syncingText = false;
-            }
-        }
+        if (searchBar != null) searchBar.sync();
         refresh();
     }
 
@@ -189,15 +198,13 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
      * Counts again once typing pauses, like the messages screen's search, instead of on every key.
      */
     private void onTextChanged(String text) {
-        if (syncingText) return;
         filter = filter.withText(text);
         notice = null;
-        armed = false;
-        optimizeArmed = false;
+        searchBar.refreshColor();
         current = null;
         int request = ++requestToken;
         status.text(Component.translatable("allthelogs.cleanup.counting"));
-        syncButtons();
+        syncApply();
         CompletableFuture.delayedExecutor(LogBrowserScreen.SEARCH_DEBOUNCE_MS, TimeUnit.MILLISECONDS).execute(() ->
             Minecraft.getInstance().execute(() -> {
                 if (request == requestToken && Minecraft.getInstance().gui.screen() == this) refresh();
@@ -207,7 +214,8 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
     private void toggleMode() {
         mode = mode == Mode.DELETE ? Mode.REMOVE_TEXT : Mode.DELETE;
         notice = null;
-        modeButton.setMessage(modeLabel());
+        modeButton.setMessage(modeLabel(mode));
+        applyButton.setMessage(applyLabel(mode));
         refresh();
     }
 
@@ -215,20 +223,18 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
      * Reloads the preview for the current filter and mode. A newer request makes older answers stale.
      */
     private void refresh() {
-        armed = false;
-        optimizeArmed = false;
         current = null;
         int request = ++requestToken;
         Component blocked = blockedReason();
         if (blocked != null) {
             showPreview(null);
-            status.text(blocked);
-            syncButtons();
+            status.text(withNotice(blocked));
+            syncApply();
             return;
         }
         status.text(Component.translatable("allthelogs.cleanup.counting"));
-        syncButtons();
-        AllTheLogsClient.worker().previewCleanup(filter.toSummaryQuery(), SAMPLE_SIZE).whenComplete(
+        syncApply();
+        AllTheLogsClient.worker().previewCleanup(filter.toSummaryQuery(), EDGE_SIZE, sampleSize()).whenComplete(
             (result, error) -> Minecraft.getInstance().execute(() -> {
                 if (request != requestToken || Minecraft.getInstance().gui.screen() != this) return;
                 if (error != null) {
@@ -239,9 +245,8 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
                 }
                 current = result;
                 showPreview(result);
-                status.text(notice == null ? summary(result)
-                    : Component.empty().append(notice).append("  ").append(summary(result)));
-                syncButtons();
+                status.text(withNotice(summary(result)));
+                syncApply();
             }));
     }
 
@@ -250,27 +255,39 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
         if (worker == null || !worker.isOpen()) return Component.translatable("allthelogs.meta.unavailable");
         if (filter.invalidRegex()) return Component.translatable("allthelogs.cleanup.invalid_regex");
         if (mode == Mode.REMOVE_TEXT && !filter.hasText()) return Component.translatable("allthelogs.cleanup.need_text");
+        if (!filter.isNarrowed()) return Component.translatable("allthelogs.cleanup.need_filter");
         return null;
+    }
+
+    private Component withNotice(Component text) {
+        return notice == null ? text : Component.empty().append(notice).append("  ").append(text);
     }
 
     private Component summary(CleanupPreview result) {
         if (result.matches() == 0) return Component.translatable("allthelogs.cleanup.none");
-        String count = String.format("%,d", result.matches());
-        if (mode == Mode.REMOVE_TEXT) return Component.translatable("allthelogs.cleanup.summary.remove", count);
-        if (!filter.isNarrowed()) return Component.translatable("allthelogs.cleanup.summary.everything", count);
-        return Component.translatable("allthelogs.cleanup.summary.delete", count);
+        String key = mode == Mode.REMOVE_TEXT ? "allthelogs.cleanup.summary.remove" : "allthelogs.cleanup.summary.delete";
+        return Component.translatable(key, count(result.matches()));
+    }
+
+    /**
+     * Random messages to ask for: as many as fit under the oldest and newest, one line each.
+     */
+    private int sampleSize() {
+        int lines = (this.height - PREVIEW_CHROME) / (Minecraft.getInstance().font.lineHeight + 2);
+        return Math.max(EDGE_SIZE, lines - EDGE_SIZE * 2 - 3);
     }
 
     private void showPreview(@Nullable CleanupPreview result) {
         preview.clearChildren();
         if (result == null || result.matches() == 0) return;
         Pattern removed = mode == Mode.REMOVE_TEXT ? filter.removalPattern().orElse(null) : null;
-        section("allthelogs.cleanup.first", List.of(result.first()), removed);
-        section("allthelogs.cleanup.last", List.of(result.last()), removed);
+        section("allthelogs.cleanup.oldest", result.oldest(), removed);
+        section("allthelogs.cleanup.newest", result.newest(), removed);
         section("allthelogs.cleanup.sample", result.sample(), removed);
     }
 
     private void section(String key, List<ChatEntry> entries, @Nullable Pattern removed) {
+        if (entries.isEmpty()) return;
         preview.child(UIComponents.label(Component.translatable(key).withStyle(ChatFormatting.GRAY)));
         for (ChatEntry entry : entries) {
             LabelComponent line = UIComponents.label(line(entry, removed));
@@ -281,11 +298,12 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
     }
 
     /**
-     * Timestamp and message. In remove mode the parts that would be cut are red and struck through.
+     * Gray timestamp and the message in normal text. In remove mode the parts that would be cut are red and
+     * struck through.
      */
     private static Component line(ChatEntry entry, @Nullable Pattern removed) {
-        MutableComponent line = Component.literal(TIME.format(entry.timestamp()) + "  ")
-            .withColor(Colors.TIMESTAMP & 0xFFFFFF);
+        MutableComponent line = Component.empty();
+        line.append(Component.literal(TIME.format(entry.timestamp()) + "  ").withColor(Colors.TIMESTAMP & 0xFFFFFF));
         String message = entry.message();
         boolean cut = message.length() > MAX_PREVIEW_CHARS;
         if (cut) message = message.substring(0, MAX_PREVIEW_CHARS);
@@ -303,103 +321,60 @@ public final class CleanupScreen extends BaseOwoScreen<StackLayout> {
         return line;
     }
 
-    private void syncButtons() {
-        if (optimizeButton != null) {
-            optimizeButton.setMessage(optimizeArmed
-                ? Component.translatable("allthelogs.cleanup.confirm").withStyle(ChatFormatting.RED)
-                : Component.translatable("allthelogs.cleanup.optimize"));
-            optimizeButton.active = !busy;
-        }
-        if (applyButton == null) return;
-        long matches = current == null ? 0 : current.matches();
-        String count = String.format("%,d", matches);
-        Component label;
-        if (busy) label = Component.translatable("allthelogs.cleanup.working");
-        else if (armed) label = Component.translatable("allthelogs.cleanup.confirm").withStyle(ChatFormatting.RED);
-        else if (mode == Mode.REMOVE_TEXT) label = Component.translatable("allthelogs.cleanup.apply.remove", count);
-        else label = Component.translatable("allthelogs.cleanup.apply.delete", count);
-        applyButton.setMessage(label);
-        applyButton.active = !busy && matches > 0;
+    private void syncApply() {
+        if (applyButton != null) applyButton.active = current != null && current.matches() > 0;
+    }
+
+    private void confirmApply() {
+        if (current == null || current.matches() == 0) return;
+        String count = count(current.matches());
+        boolean delete = mode == Mode.DELETE;
+        dialog.confirm(
+            Component.translatable(delete ? "allthelogs.cleanup.confirm.delete" : "allthelogs.cleanup.confirm.remove", count),
+            Component.translatable(delete ? "allthelogs.cleanup.confirm.delete.body" : "allthelogs.cleanup.confirm.remove.body"),
+            applyLabel(mode).copy().withStyle(ChatFormatting.RED),
+            this::apply);
     }
 
     private void apply() {
-        if (busy || current == null || current.matches() == 0) return;
-        if (!armed) {
-            armed = true;
-            optimizeArmed = false;
-            syncButtons();
-            return;
-        }
         Optional<Pattern> part = mode == Mode.REMOVE_TEXT ? filter.removalPattern() : Optional.empty();
         if (mode == Mode.REMOVE_TEXT && part.isEmpty()) return;
-        busy = true;
-        armed = false;
-        syncButtons();
-        status.text(Component.translatable("allthelogs.cleanup.working"));
+        dialog.working(Component.translatable("allthelogs.cleanup.working"),
+            Component.translatable("allthelogs.cleanup.working.detail"));
         AllTheLogsClient.worker().cleanUp(filter.toSummaryQuery(), part.orElse(null)).whenComplete(
             (outcome, error) -> Minecraft.getInstance().execute(() -> finished(outcome, error)));
     }
 
-    /**
-     * Optimizes the whole store after a second click. The first click explains what it does and how long it
-     * may take.
-     */
-    private void optimize() {
-        if (busy) return;
-        var worker = AllTheLogsClient.worker();
-        if (worker == null || !worker.isOpen()) {
-            status.text(Component.translatable("allthelogs.meta.unavailable"));
-            return;
-        }
-        if (!optimizeArmed) {
-            optimizeArmed = true;
-            armed = false;
-            status.text(Component.translatable("allthelogs.cleanup.optimize.warning").withStyle(ChatFormatting.YELLOW));
-            syncButtons();
-            return;
-        }
-        busy = true;
-        optimizeArmed = false;
-        syncButtons();
-        status.text(Component.translatable("allthelogs.status.optimizing"));
-        worker.optimize().whenComplete((ignored, error) -> Minecraft.getInstance().execute(() -> {
-            busy = false;
-            if (Minecraft.getInstance().gui.screen() != this) return;
-            if (error != null) {
-                AllTheLogsClient.LOGGER.warn("Could not optimize the store", error);
-                status.text(Component.translatable("allthelogs.status.error"));
-                syncButtons();
-                return;
-            }
-            notice = Component.translatable("allthelogs.cleanup.optimized").withStyle(ChatFormatting.GREEN);
-            refresh();
-        }));
-    }
-
     private void finished(MessageCleanup.Outcome outcome, Throwable error) {
-        busy = false;
-        if (Minecraft.getInstance().gui.screen() != this) {
-            if (error == null) BrowserSession.reset();
-            return;
-        }
+        dialog.close();
+        if (error == null) BrowserSession.reset();
+        if (Minecraft.getInstance().gui.screen() != this) return;
         if (error != null) {
             AllTheLogsClient.LOGGER.warn("Could not clean up messages", error);
             status.text(Component.translatable("allthelogs.status.error"));
-            syncButtons();
             return;
         }
-        BrowserSession.reset();
         notice = Component.translatable("allthelogs.cleanup.done",
-            String.format("%,d", outcome.changed()), String.format("%,d", outcome.deleted())).withStyle(ChatFormatting.GREEN);
+            count(outcome.changed()), count(outcome.deleted())).withStyle(ChatFormatting.GREEN);
         refresh();
     }
 
-    private Component modeLabel() {
-        return modeLabel(mode);
+    private static String count(long value) {
+        return String.format("%,d", value);
+    }
+
+    private static int widest(Component... labels) {
+        int width = 0;
+        for (Component label : labels) width = Math.max(width, Minecraft.getInstance().font.width(label));
+        return width + 12;
     }
 
     private static Component modeLabel(Mode mode) {
         String key = mode == Mode.DELETE ? "allthelogs.cleanup.mode.delete" : "allthelogs.cleanup.mode.remove";
         return Component.translatable("allthelogs.cleanup.mode", Component.translatable(key));
+    }
+
+    private static Component applyLabel(Mode mode) {
+        return Component.translatable(mode == Mode.DELETE ? "allthelogs.cleanup.apply.delete" : "allthelogs.cleanup.apply.remove");
     }
 }

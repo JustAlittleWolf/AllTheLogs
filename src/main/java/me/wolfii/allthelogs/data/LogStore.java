@@ -25,6 +25,8 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -275,18 +277,23 @@ public final class LogStore implements AutoCloseable {
     }
 
     /**
-     * Count, oldest, newest, and {@code sampleSize} random entries among those {@code query} matches.
-     * Context, paging, and sort are ignored.
+     * Count, the {@code edgeSize} oldest and newest, and up to {@code sampleSize} random other entries among
+     * those {@code query} matches. Context, paging, and sort are ignored.
      */
-    public CleanupPreview previewCleanup(me.wolfii.allthelogs.api.ChatQuery query, int sampleSize) {
+    public CleanupPreview previewCleanup(me.wolfii.allthelogs.api.ChatQuery query, int edgeSize, int sampleSize) {
         me.wolfii.allthelogs.api.ChatQuery matches = query.withContextLines(0).withLimit(-1);
         long count = queries.countMatches(matches);
-        if (count == 0) return new CleanupPreview(0, null, null, List.of());
-        ChatEntry first = queries.findEntries(matches.withLimit(1)
-            .withSort(me.wolfii.allthelogs.api.ChatQuery.Sort.ASCENDING)).getFirst();
-        ChatEntry last = queries.findEntries(matches.withLimit(1)
-            .withSort(me.wolfii.allthelogs.api.ChatQuery.Sort.DESCENDING)).getFirst();
-        return new CleanupPreview(count, first, last, queries.sampleEntries(matches, sampleSize));
+        if (count == 0) return CleanupPreview.NONE;
+        List<ChatEntry> oldest = queries.findEntries(matches.withLimit(edgeSize)
+            .withSort(me.wolfii.allthelogs.api.ChatQuery.Sort.ASCENDING));
+        List<ChatEntry> newest = new ArrayList<>(queries.findEntries(matches.withLimit(edgeSize)
+            .withSort(me.wolfii.allthelogs.api.ChatQuery.Sort.DESCENDING)));
+        newest.removeAll(oldest);
+        Collections.reverse(newest);
+        List<ChatEntry> sample = new ArrayList<>(queries.sampleEntries(matches, sampleSize + oldest.size() + newest.size()));
+        sample.removeAll(oldest);
+        sample.removeAll(newest);
+        return new CleanupPreview(count, oldest, newest, sample.subList(0, Math.min(sampleSize, sample.size())));
     }
 
     /**

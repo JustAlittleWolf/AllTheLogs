@@ -8,6 +8,7 @@ import me.wolfii.allthelogs.client.ui.screen.ScriptsScreen;
 import me.wolfii.allthelogs.data.duckdb.FabricClassPath;
 import net.minecraft.client.Minecraft;
 
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -19,6 +20,7 @@ public final class ScriptRuntime {
     private static final AtomicReference<Progress> PROGRESS = new AtomicReference<>(Progress.idle());
     private static final Object LOCK = new Object();
     private static CompletableFuture<Void> inflight;
+    private static GraalJsInstaller installing;
 
     private ScriptRuntime() {
     }
@@ -49,9 +51,14 @@ public final class ScriptRuntime {
             }
             PROGRESS.set(Progress.working(
                 Progress.Stage.LOADING, 0, GraalJs.ARTIFACTS.size(), 0, 0, "graaljs"));
+            GraalJsInstaller installer = installer();
+            installing = installer;
             inflight = CompletableFuture.runAsync(() -> {
                 try {
-                    installer().install(ScriptRuntime::setProgress);
+                    installer.install(ScriptRuntime::setProgress);
+                } catch (CancellationException e) {
+                    setProgress(Progress.idle());
+                    AllTheLogsClient.LOGGER.info("GraalJS download cancelled");
                 } catch (Exception e) {
                     String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
                     setProgress(Progress.failed(message));
@@ -60,6 +67,15 @@ public final class ScriptRuntime {
                 }
             });
             return inflight;
+        }
+    }
+
+    /**
+     * Stops a running download. The prompt shows again the next time the scripts screen opens.
+     */
+    public static void cancel() {
+        synchronized (LOCK) {
+            if (inflight != null && !inflight.isDone() && installing != null) installing.cancel();
         }
     }
 

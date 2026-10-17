@@ -33,7 +33,8 @@ import java.util.function.Supplier;
  * Download prompt shared by the DuckDB driver and the GraalJS engine. The card, progress bar, and
  * failure actions are the same. Title, explanation, about link, and the decline button are supplied
  * for each library. Once the download is ready the next screen opens on its own: the title menu for
- * DuckDB, the script editor for GraalJS. Decline quits the game for DuckDB and returns for GraalJS.
+ * DuckDB, the script editor for GraalJS. Decline quits the game for DuckDB, which the mod cannot run
+ * without. For GraalJS it is Cancel, which stops a running download and returns.
  */
 public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
     private static final int RETRY_THROTTLE_MS = 1000;
@@ -110,12 +111,15 @@ public final class LibraryDownloadScreen extends BaseOwoScreen<FlowLayout> {
             new Text(
                 Component.translatable("allthelogs.scripts.download.title"),
                 Component.translatable("allthelogs.scripts.download.body"),
-                Component.translatable("gui.done"),
+                Component.translatable("gui.cancel"),
                 aboutLink(GRAALJS_ABOUT_KEY, GRAALJS_ABOUT_URL)
             ),
             () -> Snapshot.fromGraal(ScriptRuntime.progress()),
             ScriptRuntime::ensure,
-            () -> Minecraft.getInstance().gui.setScreen(parent),
+            () -> {
+                ScriptRuntime.cancel();
+                Minecraft.getInstance().gui.setScreen(parent);
+            },
             () -> {
             },
             () -> Minecraft.getInstance().gui.setScreen(new ScriptsScreen(parent)),

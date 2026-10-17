@@ -67,6 +67,7 @@
  *   readonly end: string;
  *   readonly minecraftVersion: string;
  *   readonly serverOrWorld: string | null;
+ *   readonly minecraftUser: string | null;
  *   readonly millis: number;
  * }
  *

@@ -21,13 +21,11 @@ import me.wolfii.allthelogs.client.export.MessageExport;
 import me.wolfii.allthelogs.client.list.DisplayRow;
 import me.wolfii.allthelogs.client.list.MessageSelection;
 import me.wolfii.allthelogs.client.search.ActiveFilters;
-import me.wolfii.allthelogs.client.search.SearchDecorations;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.ui.screen.playtime.PlaytimeScreen;
-import me.wolfii.allthelogs.client.ui.theme.Colors;
+import me.wolfii.allthelogs.client.ui.popup.ModalDialog;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
 import me.wolfii.allthelogs.client.ui.widget.DecoratedSearchField;
-import me.wolfii.allthelogs.client.ui.widget.DoneButton;
 import me.wolfii.allthelogs.client.ui.widget.timeline.MessageTimeline;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -60,13 +58,14 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     private final Screen parent;
     private final LogBrowserQueries queries;
     private MessageTimeline list;
+    private SearchBar searchBar;
     private DecoratedSearchField search;
     private ButtonComponent filterButton;
-    private boolean syncingSearch;
     private FilterOverlay filters;
     private StackLayout overlays;
     private DropdownComponent messageMenu;
     private BrowserToolsMenu tools;
+    private ModalDialog dialog;
     private FlowLayout exporting;
     private LabelComponent exportCounts;
     private BoxComponent exportFill;
@@ -120,7 +119,9 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         list.onDismissContextMenu(this::closeMessageMenu);
         tools = new BrowserToolsMenu(overlays, () -> this.width, () -> this.height,
             () -> list.hasSelectedText(), () -> exportBusy, this::closeMessageMenu,
-            this::openScripts, this::openImport, this::openPlaytime, this::openCleanup, this::startExport);
+            this::openScripts, this::openImport, this::openPlaytime, this::openCleanup, this::openOptimize,
+            this::startExport);
+        dialog = new ModalDialog(overlays, () -> this.width);
         FlowLayout toolbar = buildToolbar();
         queries.attach(list, tools::setDatabaseInfo);
         content.child(list.verticalSizing(Sizing.expand()));
@@ -131,7 +132,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
             queries::filter, queries.catalog(), this::applyFilter);
         root.child(chrome);
         filters.restore();
-        syncSearchBox();
+        searchBar.sync();
     }
 
     @Override
@@ -139,7 +140,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         super.init();
         boolean startOver = sessionResets != BrowserSession.resets();
         if (startOver) startOver();
-        revealSearchQuery();
+        if (searchBar != null) searchBar.reveal();
         if (search != null && search.focusHandler() != null) {
             search.focusHandler().focus(search, UIComponent.FocusSource.KEYBOARD_CYCLE);
         }
@@ -184,7 +185,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         super.tick();
         drainExportProgress();
         queries.pollLatest(!exportBusy && messageMenu == null && (tools == null || !tools.isOpen())
-            && (filters == null || !filters.listOpen()));
+            && (filters == null || !filters.listOpen()) && (dialog == null || !dialog.isOpen()));
     }
 
     @Override
@@ -208,6 +209,10 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
+        if (dialog != null && dialog.isOpen()) {
+            if (event.isEscape() && !dialog.working()) dialog.close();
+            return true;
+        }
         if (event.isEscape() && tools != null && tools.isOpen()) {
             tools.close();
             return true;
@@ -236,15 +241,9 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         FlowLayout bar = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
         bar.gap(4).verticalAlignment(VerticalAlignment.CENTER);
 
-        search = new DecoratedSearchField();
-        search.setMaxLength(256);
-        search.setValue(queries.filter().text());
-        search.setDecorations(SearchDecorations.prefix(queries.filter()), SearchDecorations.suffix(queries.filter()));
-        search.setHint(Component.translatable("allthelogs.search.placeholder"));
-        search.addFormatter(this::formatSearch);
-        search.onChanged().subscribe(this::onSearchChanged);
-        refreshSearchColor();
-
+        searchBar = new SearchBar(queries::filter, Component.translatable("allthelogs.search.placeholder"),
+            this::applySearchText);
+        search = searchBar.field();
         bar.child(search);
 
         filterButton = UIComponents.button(ActiveFilters.buttonLabel(ActiveFilters.of(queries.filter()).size()),
@@ -256,24 +255,14 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         refreshFilterButton();
 
         bar.child(tools.button());
-        bar.child(DoneButton.of(this));
         return bar;
-    }
-
-    private FormattedCharSequence formatSearch(String visible, int start) {
-        return SearchDecorations.format(queries.filter(), visible, start);
-    }
-
-    private void onSearchChanged(String shown) {
-        if (syncingSearch) return;
-        applySearchText(shown == null ? "" : shown);
     }
 
     private void applySearchText(String text) {
         if (text.equals(queries.filter().text())) return;
         queries.updateFilter(queries.filter().withText(text));
         BrowserSession.remember(queries.filter());
-        refreshSearchColor();
+        searchBar.refreshColor();
         if (!queries.filter().canQuery()) {
             queries.bumpGeneration();
             return;
@@ -299,8 +288,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     }
 
     private void refreshSearchDecorations() {
-        syncSearchBox();
-        refreshSearchColor();
+        if (searchBar != null) searchBar.sync();
         refreshFilterButton();
     }
 
@@ -313,47 +301,6 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
             ParentUIComponent parent = filterButton.parent();
             if (parent != null) parent.onChildMutated(filterButton);
         }
-    }
-
-    /**
-     * The toolbar builds the search box before it is laid out, so a restored query is applied at width 0
-     * and the box scrolls it out of sight. The filter still runs. Put the text back once the box has a width,
-     * including a query that was cut off by the edit box's default length.
-     */
-    private void revealSearchQuery() {
-        if (search == null) return;
-        String shown = queries.filter().text();
-        search.setMaxLength(256);
-        if (!shown.equals(search.getValue())) {
-            syncingSearch = true;
-            try {
-                search.setValue(shown);
-            } finally {
-                syncingSearch = false;
-            }
-        }
-        search.revealValue();
-    }
-
-    private void syncSearchBox() {
-        if (search == null) return;
-        SearchFilter filter = queries.filter();
-        search.setDecorations(SearchDecorations.prefix(filter), SearchDecorations.suffix(filter));
-        String shown = filter.text();
-        if (shown.equals(search.getValue())) return;
-        int cursor = Math.min(search.getCursorPosition(), shown.length());
-        syncingSearch = true;
-        try {
-            search.setValue(shown);
-            search.setCursorPosition(cursor);
-        } finally {
-            syncingSearch = false;
-        }
-    }
-
-    private void refreshSearchColor() {
-        if (search == null) return;
-        search.setTextColor(queries.filter().invalidRegex() ? Colors.SEARCH_INVALID : Colors.SEARCH_TEXT);
     }
 
     private void closeMessageMenu() {
@@ -457,6 +404,42 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         if (tools != null) tools.close();
         queries.markReload();
         AllTheLogsScreens.openImport(this);
+    }
+
+    private void openOptimize() {
+        if (overlays != null) {
+            overlays.queue(this::askOptimize);
+            return;
+        }
+        askOptimize();
+    }
+
+    /**
+     * Asks before optimizing the whole store, because it can take minutes and blocks the screen meanwhile.
+     */
+    private void askOptimize() {
+        if (tools != null) tools.close();
+        var worker = AllTheLogsClient.worker();
+        if (worker == null || !worker.isOpen()) {
+            showExportNotice(Component.translatable("allthelogs.meta.unavailable"), true);
+            return;
+        }
+        dialog.confirm(Component.translatable("allthelogs.optimize.title"),
+            Component.translatable("allthelogs.optimize.warning"),
+            Component.translatable("allthelogs.optimize.start"), this::optimize);
+    }
+
+    private void optimize() {
+        dialog.working(Component.translatable("allthelogs.status.optimizing"),
+            Component.translatable("allthelogs.optimize.working"));
+        AllTheLogsClient.worker().optimize().whenComplete((ignored, error) -> Minecraft.getInstance().execute(() -> {
+            dialog.close();
+            if (error != null) AllTheLogsClient.LOGGER.warn("Could not optimize the store", error);
+            if (Minecraft.getInstance().gui.screen() != this) return;
+            queries.refreshStats();
+            showExportNotice(Component.translatable(error == null ? "allthelogs.optimize.done" : "allthelogs.optimize.failed"),
+                error != null);
+        }));
     }
 
     private void startExport(BrowserToolsMenu.Scope scope, MessageExport.Format format) {

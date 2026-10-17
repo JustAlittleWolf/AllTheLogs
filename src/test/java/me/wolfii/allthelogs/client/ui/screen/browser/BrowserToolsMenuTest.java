@@ -17,6 +17,13 @@ class BrowserToolsMenuTest {
     }
 
     @Test
+    void exportMenusAreCenteredOnTheirRowAndKeptOnScreen() {
+        assertEquals(100 - 30, BrowserToolsMenu.centeredTop(100, 60, 240));
+        assertEquals(4, BrowserToolsMenu.centeredTop(10, 60, 240));
+        assertEquals(240 - 4 - 60, BrowserToolsMenu.centeredTop(230, 60, 240));
+    }
+
+    @Test
     void sideMenuMovesDownOnlyWhenItWouldLeaveTheTop() {
         assertEquals(4, BrowserToolsMenu.submenuTop(30, 3, 80, 240));
     }

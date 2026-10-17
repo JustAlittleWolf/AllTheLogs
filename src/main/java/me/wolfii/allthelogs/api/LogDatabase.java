@@ -61,7 +61,7 @@ public final class LogDatabase {
     private static List<Playtime> asPlaytime(List<me.wolfii.allthelogs.data.playtime.PlaytimeSpan> spans) {
         List<Playtime> copy = new ArrayList<>(spans.size());
         for (me.wolfii.allthelogs.data.playtime.PlaytimeSpan span : spans) {
-            copy.add(new Playtime(span.start(), span.end(), span.version(), span.server()));
+            copy.add(new Playtime(span.start(), span.end(), span.version(), span.server(), span.player()));
         }
         return List.copyOf(copy);
     }
@@ -148,7 +148,8 @@ public final class LogDatabase {
 
     /**
      * Estimated playtime, oldest first. Each imported log contributes the time from its first line to its last,
-     * split when the server or world changes. Overlapping logs are clipped so the same moment is counted once.
+     * split when the server or world or the player changes. Overlapping logs are clipped so the same moment is
+     * counted once.
      * The version is the one stored on the log file.
      */
     public CompletableFuture<List<Playtime>> playtime() {

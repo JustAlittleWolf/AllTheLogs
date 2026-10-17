@@ -14,10 +14,10 @@ public final class PanelSurfaces {
     }
 
     public static Surface card() {
-        return Surface.flat(0xE0101010).and(Surface.outline(0xFF3C3C3C));
+        return Surface.flat(0xFF101010).and(Surface.outline(0xFF3C3C3C));
     }
 
     public static Surface menu() {
-        return Surface.flat(0xF0101010).and(Surface.outline(0xFF3C3C3C));
+        return Surface.flat(0xFF101010).and(Surface.outline(0xFF3C3C3C));
     }
 }

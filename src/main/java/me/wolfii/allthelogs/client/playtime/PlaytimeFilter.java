@@ -16,6 +16,7 @@ public record PlaytimeFilter(Set<String> versions, Set<String> servers) {
      * Sentinel stored in {@link #servers} for a span that never names a place. Not a legal server address.
      */
     public static final String UNKNOWN_SERVER = "\u0000";
+    public static final String UNKNOWN_PLAYER = "\u0000";
 
     public PlaytimeFilter {
         versions = copy(versions);
@@ -24,6 +25,13 @@ public record PlaytimeFilter(Set<String> versions, Set<String> servers) {
 
     public static PlaytimeFilter all() {
         return new PlaytimeFilter(null, null);
+    }
+
+    /**
+     * Player key of a span: the name, or {@link #UNKNOWN_PLAYER} when the log names none.
+     */
+    public static String playerKey(String player) {
+        return player == null || player.isBlank() ? UNKNOWN_PLAYER : player;
     }
 
     public static String serverKey(String server) {
