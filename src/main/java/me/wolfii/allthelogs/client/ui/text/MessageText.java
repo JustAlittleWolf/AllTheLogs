@@ -24,7 +24,7 @@ import java.util.function.ToIntFunction;
 
 /**
  * Minecraft {@link Component}s for a displayed chat line: timestamp gutter, coloured message text,
- * date headers, hover cards, and the list status bar.
+ * date headers, hover cards, and the match count at the top-right of the list.
  */
 public final class MessageText {
     /**
@@ -69,7 +69,7 @@ public final class MessageText {
     }
 
     /**
-     * Text for the messages screen's status bar. The match count stays up once it is known. {@code loading}
+     * Text for the match count at the top-right of the list. The count stays up once it is known. {@code loading}
      * adds {@code Loading...} and leaves the running time off. A finished query includes its duration only
      * after {@link #TIMED_STATUS_MS}. Unfiltered lists use "message(s)"; a search or version/date filter
      * uses "match(es)". An overlay, such as a failed query, replaces both.

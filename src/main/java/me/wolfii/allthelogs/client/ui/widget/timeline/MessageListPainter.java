@@ -13,7 +13,7 @@ import java.util.List;
 
 /**
  * Draws the message list: only the rows that intersect the viewport, their match highlights and selection,
- * the sticky date headers, and the hover card for the row under the pointer.
+ * the sticky date headers, the match count at the top-right, and the hover card for the row under the pointer.
  */
 final class MessageListPainter {
     private static final float DATE_SCALE = 1.25f;
@@ -46,7 +46,8 @@ final class MessageListPainter {
         return MessageListLayout.expandAtLocalX(separator, view.messageLocalX(), localX);
     }
 
-    void drawRows(OwoUIGraphics graphics, ListView view, MessageSelection selection, boolean showingLoading) {
+    void drawRows(OwoUIGraphics graphics, ListView view, MessageSelection selection, boolean showingLoading,
+                  Component matchStatus) {
         List<DisplayRow> rows = view.rows();
         int listWidth = view.listWidth();
         graphics.enableScissor(view.x(), view.y(), view.x() + listWidth, view.y() + view.height());
@@ -56,6 +57,7 @@ final class MessageListPainter {
                     graphics.drawText(Component.translatable("allthelogs.status.empty"),
                         view.x() + 8, view.y() + 8, 1, Colors.MUTED);
                 }
+                drawMatchStatus(graphics, view, matchStatus);
                 return;
             }
             MessageListLayout layout = view.layout();
@@ -89,9 +91,47 @@ final class MessageListPainter {
             }
             drawSeparators(graphics, view);
             drawDateHeaders(graphics, view);
+            drawMatchStatus(graphics, view, matchStatus);
         } finally {
             graphics.disableScissor();
         }
+    }
+
+    /**
+     * Match count at the top-right of the list. When the sticky date header is flush with the top, the count
+     * is drawn on that band, to the right of the date, and does not paint a second background. Otherwise it
+     * keeps its own date-band background so it stays readable over the messages.
+     */
+    void drawMatchStatus(OwoUIGraphics graphics, ListView view, Component status) {
+        if (status == null || status.getString().isEmpty()) return;
+        int top = view.y();
+        int bottom = top + MessageListLayout.DATE_HEIGHT;
+        int right = view.x() + view.listWidth();
+        if (!dateHeaderAtTop(view)) {
+            int textWidth = Math.round(view.font().width(status) * DATE_SCALE);
+            int left = Math.max(view.x(), right - textWidth - ListView.PAD * 2);
+            graphics.fill(left, top, right, bottom, Colors.DATE_BAND);
+        }
+        graphics.drawText(status, right - ListView.PAD, bottom, DATE_SCALE, Colors.TEXT,
+            OwoUIGraphics.TextAnchor.BOTTOM_RIGHT);
+    }
+
+    /**
+     * Whether the pinned date header is sitting on the top edge, rather than scrolling away under the next day.
+     */
+    static boolean dateHeaderAtTop(ListView view) {
+        if (view.contentOrigin() > 0 || view.layout().dates().isEmpty()) return false;
+        MessageListLayout.DateBand sticky = view.layout().stickyAt(view.scrollY());
+        if (sticky == null) return false;
+        int headerY = view.y();
+        MessageListLayout.DateBand next = view.layout().nextDate(sticky);
+        if (next != null) {
+            int nextScreenY = view.screenY(next.y());
+            if (nextScreenY < headerY + MessageListLayout.DATE_HEIGHT) {
+                headerY = nextScreenY - MessageListLayout.DATE_HEIGHT;
+            }
+        }
+        return headerY == view.y();
     }
 
     /**

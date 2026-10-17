@@ -342,8 +342,9 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     /**
-     * Match count for the top bar. {@code Loading...} is added only after a search has already run for
-     * more than a second, and a finished search shows its duration only when it took longer than that.
+     * Match count drawn at the top-right of the list. {@code Loading...} is added only after a search has
+     * already run for more than a second, and a finished search shows its duration only when it took
+     * longer than that.
      */
     public Component statusText() {
         return status.text();
@@ -468,7 +469,7 @@ public final class MessageTimeline extends BaseUIComponent {
         applyAutoScroll(mouseY, delta);
 
         ListView view = view();
-        listPainter.drawRows(graphics, view, selection, status.loading());
+        listPainter.drawRows(graphics, view, selection, status.loading(), status.text());
         // Overlays such as the tools menu sit above this list. Hover is still reported from the raw pointer,
         // which would light up the scrubber underneath the menu. Only the component that owns the pointer draws it.
         boolean pointerHere = hovered || scrub.dragging();

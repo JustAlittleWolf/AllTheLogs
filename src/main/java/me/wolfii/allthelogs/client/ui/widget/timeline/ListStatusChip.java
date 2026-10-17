@@ -4,8 +4,8 @@ import me.wolfii.allthelogs.client.ui.text.MessageText;
 import net.minecraft.network.chat.Component;
 
 /**
- * Match count and query time for the messages screen's top bar: a persistent overlay message, a loading
- * label, or the message/match count.
+ * Match count and query time drawn at the top-right of the message list: a persistent overlay message,
+ * a loading label, or the message/match count.
  * <p>
  * The count stays on screen once a search has produced one. {@code Loading...} appears only after the
  * query has already run for more than a second, without the seconds still ticking. A finished query shows
