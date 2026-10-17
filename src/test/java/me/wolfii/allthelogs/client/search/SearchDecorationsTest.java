@@ -27,6 +27,12 @@ class SearchDecorationsTest {
     }
 
     @Test
+    void closingMarkHasTwoExtraPixelsOfLeftMargin() {
+        assertEquals(2, SearchDecorations.SUFFIX_EXTRA_MARGIN);
+        assertEquals(SearchDecorations.GAP + 2, SearchDecorations.suffixGap());
+    }
+
+    @Test
     void substringSearchHasNoChrome() {
         SearchFilter text = SearchFilter.defaults().withText("hello");
         assertFalse(SearchDecorations.wraps(text));

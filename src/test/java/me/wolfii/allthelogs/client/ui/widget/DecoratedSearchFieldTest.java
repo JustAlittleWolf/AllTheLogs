@@ -27,8 +27,23 @@ class DecoratedSearchFieldTest {
     @Test
     void closingMarkFollowsTheVisibleQuery() {
         int textX = 40;
-        int gap = SearchDecorations.GAP;
+        int gap = SearchDecorations.suffixGap();
         assertEquals(textX + 18 + gap, DecoratedSearchField.suffixX(textX, 18, gap, 3, 0, 3));
+    }
+
+    @Test
+    void placeholderSitsBetweenTheRegexMarks() {
+        int textX = 40;
+        int hintWidth = 108;
+        int gap = SearchDecorations.suffixGap();
+        int content = DecoratedSearchField.contentWidth(0, true, hintWidth);
+        assertEquals(hintWidth, content);
+        assertEquals(textX + hintWidth + gap, DecoratedSearchField.suffixX(textX, content, gap, 0, 0, 0));
+    }
+
+    @Test
+    void typedQueryKeepsTheClosingMarkOnTheText() {
+        assertEquals(18, DecoratedSearchField.contentWidth(18, false, 108));
     }
 
     @Test
