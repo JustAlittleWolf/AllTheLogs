@@ -18,6 +18,7 @@ import me.wolfii.allthelogs.client.config.BrowserSession;
 import me.wolfii.allthelogs.client.export.ExportMetadata;
 import me.wolfii.allthelogs.client.export.ExportProgress;
 import me.wolfii.allthelogs.client.export.MessageExport;
+import me.wolfii.allthelogs.client.files.LogPaths;
 import me.wolfii.allthelogs.client.list.DisplayRow;
 import me.wolfii.allthelogs.client.list.MessageSelection;
 import me.wolfii.allthelogs.client.search.ActiveFilters;
@@ -34,6 +35,7 @@ import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
+import net.minecraft.util.Util;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -122,9 +124,17 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
             this::openScripts, this::openImport, this::openPlaytime, this::openCleanup, this::openOptimize,
             this::startExport);
         dialog = new ModalDialog(overlays, () -> this.width);
+        list.setTrackTopInset(BrowserToolsMenu.BUTTON_SIZE);
+        StackLayout messages = UIContainers.stack(Sizing.fill(), Sizing.expand());
+        messages.horizontalAlignment(HorizontalAlignment.LEFT).verticalAlignment(VerticalAlignment.TOP);
+        list.sizing(Sizing.fill(), Sizing.fill());
+        messages.child(list);
+        ButtonComponent menuButton = tools.button();
+        menuButton.positioning(Positioning.relative(100, 0));
+        messages.child(menuButton);
         FlowLayout toolbar = buildToolbar();
         queries.attach(list, tools::setDatabaseInfo);
-        content.child(list.verticalSizing(Sizing.expand()));
+        content.child(messages);
         content.child(toolbar);
         chrome.child(content);
 
@@ -254,8 +264,6 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
             });
         bar.child(filterButton);
         refreshFilterButton();
-
-        bar.child(tools.button());
         return bar;
     }
 
@@ -337,7 +345,25 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
                     applyFilter(queries.filter().withServerOrWorld(row.entry().serverOrWorld()));
                 });
             }
+            Path openable = LogPaths.openable(row.chatLog().source());
+            if (openable != null) {
+                menu.button(Component.translatable("allthelogs.menu.open_path"), ignored -> {
+                    closeMessageMenu();
+                    openPath(openable);
+                });
+            }
         });
+    }
+
+    /**
+     * Opens the log file in the operating system, or the archive when the line was read from one.
+     */
+    private static void openPath(Path path) {
+        try {
+            Util.getPlatform().openPath(path);
+        } catch (RuntimeException error) {
+            AllTheLogsClient.LOGGER.warn("Could not open {}", path, error);
+        }
     }
 
     private void openScripts() {
@@ -656,7 +682,7 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         int height = Math.max(22, lines.size() * font.lineHeight + 12);
         ButtonComponent anchor = tools.button();
         int x = Math.max(4, anchor.x() + anchor.width() - width);
-        int y = Math.max(4, anchor.y() - height - 4);
+        int y = BrowserToolsMenu.dropdownTop(anchor.y(), anchor.height(), 4, height, this.height);
         notice.positioning(Positioning.absolute(x, y));
         notice.horizontalSizing(Sizing.fixed(width));
         overlays.child(notice);

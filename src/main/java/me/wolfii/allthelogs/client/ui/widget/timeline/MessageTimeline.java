@@ -34,7 +34,8 @@ import java.util.function.Consumer;
  * than the viewport sits on its bottom edge only when it is the tail of the result; anywhere earlier, including
  * a page the scrubber just loaded, the date header stays on the top edge.
  * <p>
- * Double-click selects a word and triple-click selects the line. Expand carets on cluster
+ * Double-click selects a word. Dragging while that click is held extends the selection by whole words.
+ * Triple-click selects the line. Expand carets on cluster
  * separators load more context through {@link #onExpand}; shift-click fetches a larger chunk.
  * its owner to fetch more through {@link #onApproachEdge}, {@link #onJump} and {@link #onExpand} rather than
  * touching the store itself. Drawing lives in {@link MessageListPainter} and {@link TimelineTrackPainter},
@@ -85,8 +86,13 @@ public final class MessageTimeline extends BaseUIComponent {
     private double scrollY;
     private int laidOutWidth = -1;
     private int laidOutHeight = -1;
+    /** Pixels kept clear at the top of the scrubber for the tools button that caps it. */
+    private int trackTopInset;
 
     private boolean draggingSelection;
+    private boolean wordDrag;
+    private int wordAnchorStart;
+    private int wordAnchorEnd;
     private boolean pendingClear;
     private int clickCount;
     private long lastClickTime;
@@ -184,11 +190,19 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     /**
-     * Whether the timeline thumb is held. The hamburger sits under the bottom of this track, so a drag
-     * onto that button must not be treated as a hover.
+     * Whether the timeline thumb is held. The hamburger caps this track, so a drag released on that
+     * button must not be treated as a hover.
      */
     public boolean draggingScrollbar() {
         return scrub.dragging();
+    }
+
+    /**
+     * Leaves {@code inset} pixels above the scrubber. The tools button sits in that gap, and the track
+     * starts under the button.
+     */
+    public void setTrackTopInset(int inset) {
+        this.trackTopInset = Math.max(0, inset);
     }
 
     /**
@@ -478,7 +492,8 @@ public final class MessageTimeline extends BaseUIComponent {
         if (!draggingSelection && !scrub.dragging() && !autoScroll.active()) {
             listPainter.drawMessageInfo(graphics, view, hoverX, hoverY);
         }
-        TimelineTrackPainter.draw(graphics, view, track(), hoverX, hoverY, this::timeAtLocalY);
+        TimelineTrackPainter.draw(graphics, view, track(), trackScreenY(), trackHeight(), hoverX, hoverY,
+            this::timeAtLocalY);
         if (pointerHere) updateCursor(view, mouseX, mouseY);
     }
 
@@ -500,6 +515,7 @@ public final class MessageTimeline extends BaseUIComponent {
 
     @Override
     public boolean onMouseDown(MouseButtonEvent click, boolean doubled) {
+        wordDrag = false;
         if (focusHandler() != null) {
             focusHandler().focus(this, UIComponent.FocusSource.MOUSE_CLICK);
         }
@@ -507,7 +523,7 @@ public final class MessageTimeline extends BaseUIComponent {
             onDismissContextMenu.run();
         }
         if (overTimeline(click.x())) {
-            beginScrub(click.y());
+            if (click.y() >= trackTopInset) beginScrub(click.y());
             return true;
         }
         if (autoScroll.active()) {
@@ -559,7 +575,12 @@ public final class MessageTimeline extends BaseUIComponent {
         draggingSelection = false;
         if (clicks == 2) {
             pendingClear = false;
-            selection.selectWord(row, window.rows().get(row).message(), clickChar);
+            String message = window.rows().get(row).message();
+            int[] word = MessageSelection.wordRange(message, clickChar);
+            wordAnchorStart = word[0];
+            wordAnchorEnd = word[1];
+            wordDrag = true;
+            selection.selectRange(row, word[0], word[1]);
             return true;
         }
         if (clicks >= 3) {
@@ -586,9 +607,19 @@ public final class MessageTimeline extends BaseUIComponent {
             draggingSelection = true;
             selection.start(clickRow, clickChar);
         }
+        if (wordDrag && movedPastSelectSlop(click.x(), click.y())) {
+            draggingSelection = true;
+        }
         if (draggingSelection) {
             int row = view().rowAt(click.y());
-            if (row >= 0) selection.extend(row, charAt(row, click.x(), click.y()));
+            if (row >= 0) {
+                int character = charAt(row, click.x(), click.y());
+                if (wordDrag) {
+                    selection.extendWords(window.rows(), clickRow, wordAnchorStart, wordAnchorEnd, row, character);
+                } else {
+                    selection.extend(row, character);
+                }
+            }
             return true;
         }
         return super.onMouseDrag(click, deltaX, deltaY);
@@ -608,6 +639,7 @@ public final class MessageTimeline extends BaseUIComponent {
         }
         draggingSelection = false;
         pendingClear = false;
+        wordDrag = false;
         return super.onMouseUp(click);
     }
 
@@ -667,6 +699,7 @@ public final class MessageTimeline extends BaseUIComponent {
     private void clearClick() {
         pendingClear = false;
         draggingSelection = false;
+        wordDrag = false;
         clickRow = -1;
         clickKey = null;
     }
@@ -806,7 +839,7 @@ public final class MessageTimeline extends BaseUIComponent {
     }
 
     private LocalDateTime timeAtLocalY(double localY) {
-        return timeAtProgress(localY / Math.max(1, height - 1));
+        return timeAtProgress(localY / Math.max(1, trackHeight() - 1));
     }
 
     private LocalDateTime timeAtProgress(double progress) {
@@ -823,25 +856,35 @@ public final class MessageTimeline extends BaseUIComponent {
         if (scrub.capturedThumbHeight() > 0 && (scrub.dragging() || scrub.holdsPosition())) {
             return scrub.capturedThumbHeight();
         }
-        if (window.rows().isEmpty() || height <= 0) return 0;
+        int trackHeight = trackHeight();
+        if (window.rows().isEmpty() || trackHeight <= 0) return 0;
         int spanned = ScrubberGeometry.thumbContentSpan(layout.contentHeight(), height,
             window.hasBefore(), window.hasAfter());
-        return ScrubberGeometry.thumbHeightForDays(height, matches.uniqueDates(), spanned, height);
+        return ScrubberGeometry.thumbHeightForDays(trackHeight, matches.uniqueDates(), spanned, height);
     }
 
     private int thumbTop(int thumbHeight) {
         boolean atStart = scrolledToStart();
         boolean atEnd = scrolledToEnd();
+        int trackHeight = trackHeight();
         int local;
         if (scrub.holdsPosition()) {
-            local = scrub.heldThumbTopOffset(height, thumbHeight);
+            local = scrub.heldThumbTopOffset(trackHeight, thumbHeight);
         } else {
             LocalDateTime time = visibleTime();
-            if (time == null || scrubOldest() == null || scrubNewest() == null) return y;
+            if (time == null || scrubOldest() == null || scrubNewest() == null) return trackScreenY();
             double progress = ScrubberGeometry.pinnedProgress(thumbProgress(time), atStart, atEnd);
-            local = ScrubberGeometry.thumbOffset(height, progress, thumbHeight);
+            local = ScrubberGeometry.thumbOffset(trackHeight, progress, thumbHeight);
         }
-        return y + ScrubberGeometry.reserveEndGap(local, height, thumbHeight, atStart, atEnd);
+        return trackScreenY() + ScrubberGeometry.reserveEndGap(local, trackHeight, thumbHeight, atStart, atEnd);
+    }
+
+    private int trackHeight() {
+        return Math.max(0, height - trackTopInset);
+    }
+
+    private int trackScreenY() {
+        return y + trackTopInset;
     }
 
     private double thumbProgress(LocalDateTime time) {
@@ -902,19 +945,21 @@ public final class MessageTimeline extends BaseUIComponent {
         return pinnedToEnd();
     }
 
-    private void beginScrub(double localY) {
+    private void beginScrub(double widgetLocalY) {
+        double localY = widgetLocalY - trackTopInset;
         autoScroll.stop();
         scrub.begin(thumbHeight());
         if (scrub.capturedThumbHeight() > 0) {
-            scrub.grab(localY, thumbTop(scrub.capturedThumbHeight()) - y, height);
+            scrub.grab(localY, thumbTop(scrub.capturedThumbHeight()) - trackScreenY(), trackHeight());
         }
         onScrubBegin.run();
-        applyThumbScrub(localY, false);
+        applyThumbScrub(widgetLocalY, false);
     }
 
-    private void applyThumbScrub(double localY, boolean commit) {
+    private void applyThumbScrub(double widgetLocalY, boolean commit) {
+        double localY = widgetLocalY - trackTopInset;
         int thumbHeight = scrub.capturedThumbHeight() > 0 ? scrub.capturedThumbHeight() : thumbHeight();
-        applyScrub(scrub.moveTo(localY, thumbHeight, height), commit);
+        applyScrub(scrub.moveTo(localY, thumbHeight, trackHeight()), commit);
     }
 
     /**
@@ -922,7 +967,7 @@ public final class MessageTimeline extends BaseUIComponent {
      * {@link #draw} calls this every frame for as long as the button is down.
      */
     private void continueScrub() {
-        double progress = scrub.parkedProgress(height);
+        double progress = scrub.parkedProgress(trackHeight());
         if (!Double.isNaN(progress)) applyScrub(progress, false);
     }
 

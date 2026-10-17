@@ -35,52 +35,55 @@ final class TimelineTrackPainter {
     }
 
     /**
-     * @param mouseX pointer x in screen coordinates
-     * @param mouseY pointer y in screen coordinates
-     * @param timeAt maps a track-local y onto the timestamp it points at
+     * @param trackY      screen y where the scrubber starts. The tools button occupies the pixels above this
+     * @param trackHeight height of the scrubber, shorter than the list when a button caps it
+     * @param mouseX      pointer x in screen coordinates
+     * @param mouseY      pointer y in screen coordinates
+     * @param timeAt      maps a track-local y onto the timestamp it points at
      */
-    static void draw(OwoUIGraphics graphics, ListView view, Track track, int mouseX, int mouseY,
-                     DoubleFunction<LocalDateTime> timeAt) {
+    static void draw(OwoUIGraphics graphics, ListView view, Track track, int trackY, int trackHeight,
+                     int mouseX, int mouseY, DoubleFunction<LocalDateTime> timeAt) {
         int x = view.x();
-        int y = view.y();
-        int height = view.height();
         int trackX = trackLeft(x, view.width());
-        graphics.fill(trackX, y, trackX + TRACK_WIDTH, y + height, Colors.TRACK);
-        graphics.fill(trackX, y, trackX + 1, y + height, Colors.TRACK_BORDER);
+        graphics.fill(trackX, trackY, trackX + TRACK_WIDTH, trackY + trackHeight, Colors.TRACK);
+        graphics.fill(trackX, trackY, trackX + 1, trackY + trackHeight, Colors.TRACK_BORDER);
 
         if (track.oldest() == null || track.newest() == null) return;
 
-        drawDateTicks(graphics, view, track, trackX);
+        drawDateTicks(graphics, track, trackX, trackY, trackHeight);
         if (track.thumbHeight() > 0) {
             graphics.fill(trackX + 1, track.thumbTop(), trackX + TRACK_WIDTH - 1,
                 track.thumbTop() + track.thumbHeight(), Colors.THUMB);
         }
 
         boolean nearTrack = mouseX >= trackX - HOVER_SLOP && mouseX < x + view.width()
-            && mouseY >= y && mouseY < y + height;
+            && mouseY >= trackY && mouseY < trackY + trackHeight;
         if (!nearTrack && !track.dragging()) return;
-        LocalDateTime hoverTime = timeAt.apply(mouseY - y);
+        LocalDateTime hoverTime = timeAt.apply(mouseY - trackY);
         if (hoverTime == null) return;
-        drawHoverLabel(graphics, view, trackX, mouseY, TimelineTicks.hoverLabel(hoverTime, track.days().size()));
+        drawHoverLabel(graphics, view, trackX, trackY, trackHeight, mouseY,
+            TimelineTicks.hoverLabel(hoverTime, track.days().size()));
     }
 
-    private static void drawDateTicks(OwoUIGraphics graphics, ListView view, Track track, int trackX) {
+    private static void drawDateTicks(OwoUIGraphics graphics, Track track, int trackX, int trackY, int trackHeight) {
         List<MatchDay> days = track.days();
         for (TimelineTicks.DateTick tick
-            : TimelineTicks.spacedTicks(track.oldest(), track.newest(), days, view.height(), TICK_GAP_PX)) {
+            : TimelineTicks.spacedTicks(track.oldest(), track.newest(), days, trackHeight, TICK_GAP_PX)) {
             double progress = TimelineScale.trackProgress(tick.at(), track.oldest(), track.newest(), days);
-            int tickY = TimelineScale.yAtProgress(progress, view.y(), view.height());
+            int tickY = TimelineScale.yAtProgress(progress, trackY, trackHeight);
             graphics.fill(trackX + 2, tickY, trackX + TRACK_WIDTH - 2, tickY + 1, Colors.TICK_DOT);
             graphics.drawText(Component.literal(tick.label()), trackX - 3, tickY + TICK_LABEL_OFFSET,
                 TICK_LABEL_SCALE, Colors.TICK_LABEL, OwoUIGraphics.TextAnchor.BOTTOM_RIGHT);
         }
     }
 
-    private static void drawHoverLabel(OwoUIGraphics graphics, ListView view, int trackX, int mouseY, String label) {
+    private static void drawHoverLabel(OwoUIGraphics graphics, ListView view, int trackX, int trackY,
+                                       int trackHeight, int mouseY, String label) {
         Font font = view.font();
         int labelWidth = font.width(label) + LABEL_PAD_X * 2;
         int labelHeight = Math.max(14, font.lineHeight + 6);
-        int labelY = Math.clamp(mouseY - labelHeight / 2, view.y(), view.y() + view.height() - labelHeight);
+        int lowest = trackY + Math.max(0, trackHeight - labelHeight);
+        int labelY = Math.clamp(mouseY - labelHeight / 2, trackY, lowest);
         int labelX = trackX - 6 - labelWidth;
         HoverChip.fill(graphics, labelX, labelY, labelWidth, labelHeight, Colors.HOVER_CHIP);
         int textY = labelY + Math.max(0, (labelHeight - font.lineHeight) / 2);
