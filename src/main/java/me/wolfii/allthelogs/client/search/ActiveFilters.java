@@ -1,6 +1,6 @@
 package me.wolfii.allthelogs.client.search;
 
-import me.wolfii.allthelogs.client.playtime.PlaytimeSeries;
+import me.wolfii.allthelogs.client.ui.text.UnknownText;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
@@ -41,9 +41,9 @@ public final class ActiveFilters {
         if (filter.upUntil() != null) {
             active.add(new Entry(Kind.UNTIL, DateParser.formatUntil(filter.upUntil())));
         }
-        if (filter.hasVersion()) active.add(new Entry(Kind.VERSION, describe(filter.versions(), Function.identity())));
+        if (filter.hasVersion()) active.add(new Entry(Kind.VERSION, describe(filter.versions(), UnknownText::version)));
         if (filter.hasServerOrWorld()) {
-            active.add(new Entry(Kind.SERVER, describe(filter.serversOrWorlds(), ActiveFilters::placeName)));
+            active.add(new Entry(Kind.SERVER, describe(filter.serversOrWorlds(), UnknownText::place)));
         }
         return List.copyOf(active);
     }
@@ -56,13 +56,6 @@ public final class ActiveFilters {
         if (values == null) return null;
         if (values.isEmpty()) return Component.translatable("allthelogs.playtime.filter.none").getString();
         return values.stream().map(name).sorted(String.CASE_INSENSITIVE_ORDER).collect(Collectors.joining(", "));
-    }
-
-    private static String placeName(String place) {
-        if (place == null || place.isEmpty()) {
-            return Component.translatable("allthelogs.playtime.server.unknown").getString();
-        }
-        return PlaytimeSeries.displayName(place);
     }
 
     public static Component buttonLabel(int count) {

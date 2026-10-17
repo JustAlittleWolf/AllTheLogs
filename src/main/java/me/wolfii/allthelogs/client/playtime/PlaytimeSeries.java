@@ -1,7 +1,6 @@
 package me.wolfii.allthelogs.client.playtime;
 
 import me.wolfii.allthelogs.client.search.MinecraftVersions;
-import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.playtime.PlaytimeSpan;
 
 import java.util.ArrayList;
@@ -72,11 +71,11 @@ public record PlaytimeSeries(String version, String serverKey, String playerKey,
     /**
      * The grouped names joined with " - ", version first, then server, then player.
      *
-     * @param unknown shown for a server or player that is not known
+     * @param unknown shown for a version, server, or player that is not known
      */
     public String label(String unknown) {
         List<String> parts = new ArrayList<>(3);
-        if (version != null) parts.add(version);
+        if (version != null) parts.add(isUnknown(version) ? unknown : version);
         if (serverKey != null) parts.add(nameLabel(serverKey, PlaytimeFilter.UNKNOWN_SERVER, unknown));
         if (playerKey != null) parts.add(nameLabel(playerKey, PlaytimeFilter.UNKNOWN_PLAYER, unknown));
         return String.join(" - ", parts);
@@ -164,7 +163,7 @@ public record PlaytimeSeries(String version, String serverKey, String playerKey,
     }
 
     private static boolean isUnknown(String version) {
-        return version.isBlank() || ChatLog.UNKNOWN_VERSION.equalsIgnoreCase(version);
+        return MinecraftVersions.isUnknown(version);
     }
 
     /**

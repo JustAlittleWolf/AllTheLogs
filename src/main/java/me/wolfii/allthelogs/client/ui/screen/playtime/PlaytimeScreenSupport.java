@@ -16,11 +16,10 @@ import me.wolfii.allthelogs.client.AllTheLogsClient;
 import me.wolfii.allthelogs.client.playtime.PlaytimeBreakdown;
 import me.wolfii.allthelogs.client.playtime.PlaytimeChartModel;
 import me.wolfii.allthelogs.client.playtime.PlaytimeDuration;
-import me.wolfii.allthelogs.client.playtime.PlaytimeFilter;
-import me.wolfii.allthelogs.client.playtime.PlaytimeSeries;
 import me.wolfii.allthelogs.client.playtime.PlaytimeSession;
 import me.wolfii.allthelogs.client.ui.popup.ChecklistMenu;
 import me.wolfii.allthelogs.client.ui.text.TextFit;
+import me.wolfii.allthelogs.client.ui.text.UnknownText;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
 import me.wolfii.allthelogs.client.ui.widget.playtime.PlaytimeLegendWidget;
@@ -33,6 +32,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.IntSupplier;
 
 /**
@@ -146,7 +146,7 @@ final class PlaytimeScreenSupport {
         closeMenus.run();
         if (open) return;
         menu.show(button, PlaytimeChartModel.versionsIn(PlaytimeSession.spans()), () -> PlaytimeSession.filter().versions(),
-            PlaytimeScreenSupport::name, selected -> {
+            UnknownText::version, selected -> {
                 PlaytimeSession.filter(PlaytimeSession.filter().withVersions(selected));
                 rebuild.run();
             });
@@ -157,18 +157,18 @@ final class PlaytimeScreenSupport {
         closeMenus.run();
         if (open) return;
         menu.show(button, PlaytimeChartModel.serversIn(PlaytimeSession.spans()), () -> PlaytimeSession.filter().servers(),
-            PlaytimeScreenSupport::name, selected -> {
+            UnknownText::place, selected -> {
                 PlaytimeSession.filter(PlaytimeSession.filter().withServers(selected));
                 rebuild.run();
             });
     }
 
     static Component versionLabel() {
-        return selection("allthelogs.playtime.versions", PlaytimeSession.filter().versions());
+        return selection("allthelogs.playtime.versions", PlaytimeSession.filter().versions(), UnknownText::version);
     }
 
     static Component serverLabel() {
-        return selection("allthelogs.playtime.servers", PlaytimeSession.filter().servers());
+        return selection("allthelogs.playtime.servers", PlaytimeSession.filter().servers(), UnknownText::place);
     }
 
     /**
@@ -220,21 +220,14 @@ final class PlaytimeScreenSupport {
         };
     }
 
-    private static String name(String value) {
-        if (PlaytimeFilter.UNKNOWN_SERVER.equals(value)) {
-            return Component.translatable("allthelogs.playtime.server.unknown").getString();
-        }
-        return PlaytimeSeries.displayName(value);
-    }
-
     /**
      * "Versions: All", "Versions: None", the single chosen name, or the count, cut to the side column.
      */
-    private static Component selection(String key, Set<String> selected) {
+    private static Component selection(String key, Set<String> selected, Function<String, String> name) {
         Component value;
         if (selected == null) value = Component.translatable("allthelogs.playtime.filter.all");
         else if (selected.isEmpty()) value = Component.translatable("allthelogs.playtime.filter.none");
-        else if (selected.size() == 1) value = Component.literal(name(selected.iterator().next()));
+        else if (selected.size() == 1) value = Component.literal(name.apply(selected.iterator().next()));
         else value = Component.literal(Integer.toString(selected.size()));
         return Component.literal(TextFit.fit(Component.translatable(key, value).getString(), SIDE_WIDTH - BUTTON_PADDING));
     }

@@ -37,7 +37,7 @@ public final class MinecraftVersions {
         };
     }
 
-    static boolean isUnknown(String version) {
+    public static boolean isUnknown(String version) {
         return version == null || version.isBlank() || ChatLog.UNKNOWN_VERSION.equalsIgnoreCase(version);
     }
 

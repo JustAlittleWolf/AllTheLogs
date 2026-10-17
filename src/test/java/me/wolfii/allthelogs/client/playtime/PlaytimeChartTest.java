@@ -130,10 +130,13 @@ class PlaytimeChartTest {
         PlaytimeSeries alex = PlaytimeSeries.of(PlaytimeBreakdown.SERVER_PLAYER, "1.21", "hypixel.net", "Alex");
         PlaytimeSeries unknown = PlaytimeSeries.of(PlaytimeBreakdown.SERVER_PLAYER, "1.21", "hypixel.net", null);
         PlaytimeSeries other = PlaytimeSeries.of(PlaytimeBreakdown.SERVER_PLAYER, "1.21", "a.net", "Zed");
-        assertEquals("hypixel.net - Alex", alex.label("Unknown"));
-        assertEquals("hypixel.net - Unknown", unknown.label("Unknown"));
+        assertEquals("hypixel.net - Alex", alex.label("unknown"));
+        assertEquals("hypixel.net - unknown", unknown.label("unknown"));
+        assertEquals("unknown", PlaytimeSeries.of(PlaytimeBreakdown.VERSION, "unknown", null).label("unknown"));
+        assertEquals("unknown - unknown",
+            PlaytimeSeries.of(PlaytimeBreakdown.VERSION_SERVER, "unknown", null).label("unknown"));
         assertEquals("1.21 - Alex",
-            PlaytimeSeries.of(PlaytimeBreakdown.VERSION_PLAYER, "1.21", "hypixel.net", "Alex").label("Unknown"));
+            PlaytimeSeries.of(PlaytimeBreakdown.VERSION_PLAYER, "1.21", "hypixel.net", "Alex").label("unknown"));
         assertEquals(List.of(other, alex, unknown),
             java.util.stream.Stream.of(unknown, alex, other).sorted(PlaytimeSeries.STACK_ORDER).toList());
 

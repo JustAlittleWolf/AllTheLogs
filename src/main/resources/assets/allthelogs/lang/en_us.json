@@ -144,7 +144,7 @@
   "allthelogs.playtime.filter.all": "All",
   "allthelogs.playtime.filter.none": "None",
   "allthelogs.playtime.filter.search": "Search...",
-  "allthelogs.playtime.server.unknown": "Unknown",
+  "allthelogs.unknown": "unknown",
   "allthelogs.playtime.heat.all": "All",
   "allthelogs.playtime.heat.less": "Less",
   "allthelogs.playtime.heat.detail": "Heatmap detail: %s",

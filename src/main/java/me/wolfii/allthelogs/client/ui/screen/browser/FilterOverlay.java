@@ -10,12 +10,12 @@ import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.*;
 import me.wolfii.allthelogs.api.ChatQuery;
-import me.wolfii.allthelogs.client.playtime.PlaytimeSeries;
 import me.wolfii.allthelogs.client.search.DateParser;
 import me.wolfii.allthelogs.client.search.MinecraftVersions;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.ui.popup.ChecklistMenu;
 import me.wolfii.allthelogs.client.ui.text.TextFit;
+import me.wolfii.allthelogs.client.ui.text.UnknownText;
 import me.wolfii.allthelogs.client.ui.text.WrappedTooltip;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
@@ -148,8 +148,8 @@ final class FilterOverlay {
 
     void syncFilterButtons() {
         SearchFilter current = filter.get();
-        if (versionButton != null) versionButton.setMessage(selection(current.versions(), Function.identity()));
-        if (serverButton != null) serverButton.setMessage(selection(current.serversOrWorlds(), FilterOverlay::placeName));
+        if (versionButton != null) versionButton.setMessage(selection(current.versions(), UnknownText::version));
+        if (serverButton != null) serverButton.setMessage(selection(current.serversOrWorlds(), UnknownText::place));
     }
 
     private void openPanel() {
@@ -186,10 +186,10 @@ final class FilterOverlay {
         untilBox = until.box();
         content.child(from.row());
         content.child(until.row());
-        versionButton = listButton(current.versions(), Function.identity(), this::openVersions);
+        versionButton = listButton(current.versions(), UnknownText::version, this::openVersions);
         content.child(listRow("allthelogs.filter.version", versionButton,
             () -> emit(filter.get().withVersions(null))));
-        serverButton = listButton(current.serversOrWorlds(), FilterOverlay::placeName, this::openServers);
+        serverButton = listButton(current.serversOrWorlds(), UnknownText::place, this::openServers);
         content.child(listRow("allthelogs.filter.server", serverButton,
             () -> emit(filter.get().withServersOrWorlds(null))));
 
@@ -225,7 +225,7 @@ final class FilterOverlay {
         closeLists();
         if (open) return;
         List<String> values = MinecraftVersions.newestFirst(catalog.versions());
-        versionMenu.show(button, values, () -> filter.get().versions(), Function.identity(),
+        versionMenu.show(button, values, () -> filter.get().versions(), UnknownText::version,
             selected -> emit(filter.get().withVersions(selected)));
     }
 
@@ -236,9 +236,9 @@ final class FilterOverlay {
         catalog.serversOrWorlds(stored -> {
             if (!open() || serverMenu.isOpen()) return;
             List<String> values = new ArrayList<>(stored);
-            values.sort(Comparator.comparing(FilterOverlay::placeName, String.CASE_INSENSITIVE_ORDER));
+            values.sort(Comparator.comparing(UnknownText::place, String.CASE_INSENSITIVE_ORDER));
             values.add(0, ChatQuery.NO_SERVER_OR_WORLD);
-            serverMenu.show(button, values, () -> filter.get().serversOrWorlds(), FilterOverlay::placeName,
+            serverMenu.show(button, values, () -> filter.get().serversOrWorlds(), UnknownText::place,
                 selected -> emit(filter.get().withServersOrWorlds(selected)));
         });
     }
@@ -253,16 +253,6 @@ final class FilterOverlay {
             return Component.literal(TextFit.fit(name.apply(selected.iterator().next()), PANEL_WIDTH - 20));
         }
         return Component.translatable("allthelogs.filter.selected", selected.size());
-    }
-
-    /**
-     * Display name of a server or world, without formatting codes; "Unknown" for messages without one.
-     */
-    static String placeName(String place) {
-        if (place == null || place.isEmpty()) {
-            return Component.translatable("allthelogs.playtime.server.unknown").getString();
-        }
-        return PlaytimeSeries.displayName(place);
     }
 
     private FlowLayout contextField(SearchFilter current) {
