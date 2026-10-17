@@ -53,6 +53,13 @@ class BrowserToolsMenuTest {
     }
 
     @Test
+    void outsideClickHidesTheOpenMenu() {
+        assertTrue(BrowserToolsMenu.dismissOnClick(true, false));
+        assertFalse(BrowserToolsMenu.dismissOnClick(true, true));
+        assertFalse(BrowserToolsMenu.dismissOnClick(false, false));
+    }
+
+    @Test
     void sideMenuMovesUpToStayOnScreen() {
         int menuHeight = 80;
         int screenHeight = 220;
