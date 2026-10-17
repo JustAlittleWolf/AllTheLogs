@@ -12,6 +12,8 @@
  *
  * interface ChatQueryCtor {
  *   all(): ChatQuery;
+ *   // Pass to withVersion or withServerOrWorld to match logs or lines that name none.
+ *   readonly NULL: ".NULL";
  *   readonly Sort: typeof Sort;
  * }
  *
@@ -65,7 +67,7 @@
  * interface Playtime {
  *   readonly start: string;
  *   readonly end: string;
- *   readonly minecraftVersion: string;
+ *   readonly minecraftVersion: string | null;
  *   readonly serverOrWorld: string | null;
  *   readonly minecraftUser: string | null;
  *   readonly millis: number;
@@ -84,7 +86,7 @@
  * interface ChatLog {
  *   readonly source: LogSource;
  *   readonly date: string;
- *   readonly minecraftVersion: string;
+ *   readonly minecraftVersion: string | null;
  *   readonly startTime: string;
  *   readonly endTime: string;
  *   readonly minecraftUser: string | null;
@@ -146,7 +148,7 @@ const summary = database.summarizeMatches(query);
 console.log(summary.matches + " messages matching /welcome/i (writing up to 50 newest)");
 
 database.findEntries(query).forEach((entry) => {
-    writeToOutputFile(entry.timestamp + " [" + entry.chatLog.minecraftVersion + "] " + entry.message);
+    writeToOutputFile(entry.timestamp + " [" + (entry.chatLog.minecraftVersion || "unknown") + "] " + entry.message);
 });
 
 const spans = database.playtime;
@@ -154,6 +156,6 @@ let playtimeMillis = 0;
 spans.forEach((span) => {
     playtimeMillis += span.millis;
     const place = span.serverOrWorld || "";
-    writeToOutputFile(span.start + "\t" + span.minecraftVersion + "\t" + place + "\t" + span.millis);
+    writeToOutputFile(span.start + "\t" + (span.minecraftVersion || "") + "\t" + place + "\t" + span.millis);
 });
 console.log(spans.length + " playtime spans, " + playtimeMillis + " ms");
