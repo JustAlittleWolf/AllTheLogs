@@ -86,7 +86,7 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
             pressed -> openDetail());
         detailMenu.opensOnHover(detailButton, this::openDetail);
         majorVersionsBox = PlaytimeScreenSupport.majorVersionsBox(this::rebuild);
-        options = PlaytimeScreenSupport.optionsRow(List.of(groupButton, detailButton),
+        options = PlaytimeScreenSupport.optionsColumn(List.of(groupButton, detailButton),
             PlaytimeScreenSupport.button("allthelogs.playtime.timeline", pressed -> onClose()));
         page.child(options);
 
@@ -196,7 +196,7 @@ public final class WeekdayPlaytimeScreen extends BaseOwoScreen<StackLayout> {
         if (detailButton != null) detailButton.setMessage(detailLabel(PlaytimeSession.heatSlotMinutes()));
         if (versionButton != null) versionButton.setMessage(PlaytimeScreenSupport.versionLabel());
         if (serverButton != null) serverButton.setMessage(PlaytimeScreenSupport.serverLabel());
-        PlaytimeScreenSupport.syncMajorVersions(options, groupButton, majorVersionsBox);
+        PlaytimeScreenSupport.syncMajorVersions(options, majorVersionsBox);
     }
 
     private void openGroup() {
