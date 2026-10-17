@@ -1,6 +1,5 @@
 package me.wolfii.allthelogs.data.playtime;
 
-import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.playtime.PlaytimeSessions.FileSession;
 import me.wolfii.allthelogs.data.playtime.PlaytimeSessions.PlaceMark;
 import org.junit.jupiter.api.Test;
@@ -55,7 +54,7 @@ class PlaytimeSessionsTest {
         ), List.of());
 
         assertEquals(1, spans.size());
-        assertEquals(ChatLog.UNKNOWN_VERSION, spans.getFirst().version());
+        assertNull(spans.getFirst().version());
     }
 
     @Test

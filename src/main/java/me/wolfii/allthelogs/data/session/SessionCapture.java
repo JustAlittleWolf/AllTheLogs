@@ -59,7 +59,6 @@ public final class SessionCapture {
     }
 
     public ChatLog start(String minecraftVersion, LocalDateTime startedAt, String minecraftUser, String serverOrWorld) {
-        Objects.requireNonNull(minecraftVersion, "minecraftVersion");
         Objects.requireNonNull(startedAt, "startedAt");
         LocalDateTime start = startedAt.truncatedTo(ChronoUnit.MILLIS);
         String sessionId = SessionMarker.newId();
@@ -78,7 +77,11 @@ public final class SessionCapture {
                 insert.setString(4, StoredSources.SESSION_PATH);
                 insert.setString(5, entryPath);
                 insert.setDate(6, Date.valueOf(date));
-                insert.setString(7, minecraftVersion);
+                if (minecraftVersion == null) {
+                    insert.setNull(7, Types.VARCHAR);
+                } else {
+                    insert.setString(7, minecraftVersion);
+                }
                 insert.setTimestamp(8, timestamp);
                 insert.setTimestamp(9, timestamp);
                 if (minecraftUser == null) {

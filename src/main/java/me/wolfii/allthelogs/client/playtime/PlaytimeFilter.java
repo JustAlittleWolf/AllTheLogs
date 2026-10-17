@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.client.playtime;
 
+import me.wolfii.allthelogs.api.ChatQuery;
 import me.wolfii.allthelogs.data.playtime.PlaytimeSpan;
 
 import java.util.Collection;
@@ -9,15 +10,9 @@ import java.util.Set;
 
 /**
  * Versions and servers to keep. A null set means every value; an empty set means none.
- * Unknown servers use {@link #UNKNOWN_SERVER}.
+ * A missing version or server is stored as {@link ChatQuery#NULL}; see {@link #key}.
  */
 public record PlaytimeFilter(Set<String> versions, Set<String> servers) {
-    /**
-     * Sentinel stored in {@link #servers} for a span that never names a place. Not a legal server address.
-     */
-    public static final String UNKNOWN_SERVER = "\u0000";
-    public static final String UNKNOWN_PLAYER = "\u0000";
-
     public PlaytimeFilter {
         versions = copy(versions);
         servers = copy(servers);
@@ -28,19 +23,15 @@ public record PlaytimeFilter(Set<String> versions, Set<String> servers) {
     }
 
     /**
-     * Player key of a span: the name, or {@link #UNKNOWN_PLAYER} when the log names none.
+     * Key of a span's version, server, or player: the value, or {@link ChatQuery#NULL} when the log names none.
      */
-    public static String playerKey(String player) {
-        return player == null || player.isBlank() ? UNKNOWN_PLAYER : player;
-    }
-
-    public static String serverKey(String server) {
-        return server == null || server.isBlank() ? UNKNOWN_SERVER : server;
+    public static String key(String value) {
+        return value == null || value.isBlank() ? ChatQuery.NULL : value;
     }
 
     public boolean allows(PlaytimeSpan span) {
-        if (versions != null && !versions.contains(span.version())) return false;
-        return servers == null || servers.contains(serverKey(span.server()));
+        if (versions != null && !versions.contains(key(span.version()))) return false;
+        return servers == null || servers.contains(key(span.server()));
     }
 
     public boolean isNarrowed() {

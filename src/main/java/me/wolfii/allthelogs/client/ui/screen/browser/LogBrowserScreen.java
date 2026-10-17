@@ -24,7 +24,6 @@ import me.wolfii.allthelogs.client.list.DisplayRow;
 import me.wolfii.allthelogs.client.list.MessageSelection;
 import me.wolfii.allthelogs.client.search.ActiveFilters;
 import me.wolfii.allthelogs.client.search.SearchFilter;
-import me.wolfii.allthelogs.client.ui.text.UnknownText;
 import me.wolfii.allthelogs.client.ui.screen.playtime.PlaytimeScreen;
 import me.wolfii.allthelogs.client.ui.popup.ModalDialog;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
@@ -540,8 +539,8 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         };
         return new ExportMetadata(scopeName, filter.text(), filter.regex(), filter.caseSensitive(),
             filter.contextLines(), filter.sort().name().toLowerCase(Locale.ROOT), filter.startingAt(),
-            filter.upUntil(), ActiveFilters.describe(filter.versions(), UnknownText::version),
-            ActiveFilters.describe(filter.serversOrWorlds(), UnknownText::place));
+            filter.upUntil(), ActiveFilters.describe(filter.versions()),
+            ActiveFilters.describe(filter.serversOrWorlds()));
     }
 
     private Component queryBlockedReason() {

@@ -1,12 +1,12 @@
 package me.wolfii.allthelogs.client.search;
 
-import me.wolfii.allthelogs.client.ui.text.UnknownText;
+import me.wolfii.allthelogs.api.ChatQuery;
+import me.wolfii.allthelogs.client.playtime.PlaytimeSeries;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -41,9 +41,9 @@ public final class ActiveFilters {
         if (filter.upUntil() != null) {
             active.add(new Entry(Kind.UNTIL, DateParser.formatUntil(filter.upUntil())));
         }
-        if (filter.hasVersion()) active.add(new Entry(Kind.VERSION, describe(filter.versions(), UnknownText::version)));
+        if (filter.hasVersion()) active.add(new Entry(Kind.VERSION, describe(filter.versions())));
         if (filter.hasServerOrWorld()) {
-            active.add(new Entry(Kind.SERVER, describe(filter.serversOrWorlds(), UnknownText::place)));
+            active.add(new Entry(Kind.SERVER, describe(filter.serversOrWorlds())));
         }
         return List.copyOf(active);
     }
@@ -52,10 +52,22 @@ public final class ActiveFilters {
      * The chosen values by name, sorted and comma separated, "None" when the set is empty, or {@code null}
      * when nothing is chosen because every value is kept.
      */
-    public static String describe(Set<String> values, Function<String, String> name) {
+    public static String describe(Set<String> values) {
         if (values == null) return null;
         if (values.isEmpty()) return Component.translatable("allthelogs.playtime.filter.none").getString();
-        return values.stream().map(name).sorted(String.CASE_INSENSITIVE_ORDER).collect(Collectors.joining(", "));
+        return values.stream().map(ActiveFilters::name).sorted(String.CASE_INSENSITIVE_ORDER)
+            .collect(Collectors.joining(", "));
+    }
+
+    /**
+     * A version, server, or world as shown to the player: without formatting codes, or "unknown" for
+     * {@link ChatQuery#NULL} and missing values.
+     */
+    public static String name(String value) {
+        if (value == null || value.isBlank() || ChatQuery.NULL.equals(value)) {
+            return Component.translatable("allthelogs.unknown").getString();
+        }
+        return PlaytimeSeries.displayName(value);
     }
 
     public static Component buttonLabel(int count) {

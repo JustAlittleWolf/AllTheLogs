@@ -173,7 +173,11 @@ public final class LogWriter implements AutoCloseable {
         fileAppender.append(log.sourcePath());
         fileAppender.append(log.entryPath());
         fileAppender.append(log.date());
-        fileAppender.append(log.minecraftVersion());
+        if (log.minecraftVersion() == null) {
+            fileAppender.appendNull();
+        } else {
+            fileAppender.append(log.minecraftVersion());
+        }
         fileAppender.append(log.firstLineTime());
         fileAppender.append(log.lastLineTime());
         fileAppender.append((long) times.size());
@@ -383,7 +387,7 @@ public final class LogWriter implements AutoCloseable {
 
     private void queueVersionMetadata(PreparedLog log) throws SQLException {
         String version = log.minecraftVersion();
-        if (version == null || version.isBlank() || "unknown".equalsIgnoreCase(version.trim())) return;
+        if (version == null) return;
         if (!versionMetadataPatchReady) {
             flushAppenders();
             try (Statement statement = connection.createStatement()) {
@@ -405,7 +409,7 @@ public final class LogWriter implements AutoCloseable {
         versionMetadataAppender.append(log.entryPath());
         if (log.sessionId() == null) versionMetadataAppender.appendNull();
         else versionMetadataAppender.append(log.sessionId());
-        versionMetadataAppender.append(version.trim());
+        versionMetadataAppender.append(version);
         versionMetadataAppender.endRow();
         versionMetadataPatchFiles++;
     }
@@ -426,9 +430,7 @@ public final class LogWriter implements AutoCloseable {
                     HAVING count(DISTINCT minecraft_version) = 1
                 ) p
                 WHERE f.source_path = p.source_path AND f.entry_path = p.entry_path
-                  AND (f.minecraft_version IS NULL OR trim(f.minecraft_version) = ''
-                       OR lower(trim(f.minecraft_version)) = 'unknown'
-                       OR (%s AND (f.source_kind <> '%s' OR %s)))
+                  AND (f.minecraft_version IS NULL OR (%s AND (f.source_kind <> '%s' OR %s)))
                 RETURNING id
                 """.formatted(overwriteFile, session, overwriteSession), updatedIds);
             // A marked file can also be the disk copy of a live capture. Only its UUID may identify the
@@ -448,8 +450,7 @@ public final class LogWriter implements AutoCloseable {
                   AND (SELECT count(*) FROM log_file s
                        WHERE s.source_kind = '%s'
                          AND s.entry_path = 'session/' || lower(p.session_id)) = 1
-                  AND (f.minecraft_version IS NULL OR trim(f.minecraft_version) = ''
-                       OR lower(trim(f.minecraft_version)) = 'unknown' OR %s)
+                  AND (f.minecraft_version IS NULL OR %s)
                 RETURNING id
                 """.formatted(session, session, overwriteSession), updatedIds);
             touchedFiles.addAll(updatedIds);

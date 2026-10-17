@@ -12,7 +12,7 @@ import me.wolfii.allthelogs.client.playtime.PlaytimeChartModel.Result;
 import me.wolfii.allthelogs.client.playtime.PlaytimeDuration;
 import me.wolfii.allthelogs.client.playtime.PlaytimeHover;
 import me.wolfii.allthelogs.client.playtime.PlaytimeStyle;
-import me.wolfii.allthelogs.client.ui.text.UnknownText;
+import me.wolfii.allthelogs.client.search.ActiveFilters;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
@@ -308,7 +308,7 @@ public final class PlaytimeChartWidget extends BaseUIComponent implements AutoCl
         if (column != hoverColumn || focus != hoverFocus) {
             hoverColumn = column;
             hoverFocus = focus;
-            hoverLines = chart.hover(column, UnknownText.get(),
+            hoverLines = chart.hover(column, ActiveFilters.name(null),
                 Component.translatable("allthelogs.playtime.hover.total").getString(), focus);
         }
         return hoverLines;

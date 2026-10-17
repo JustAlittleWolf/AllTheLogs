@@ -67,6 +67,7 @@ final class CatalogQueries {
                  ResultSet result = statement.executeQuery("""
                      SELECT minecraft_version
                      FROM log_file
+                     WHERE minecraft_version IS NOT NULL
                      GROUP BY minecraft_version
                      ORDER BY MIN(log_date), minecraft_version""")) {
                 while (result.next()) {

@@ -1,5 +1,7 @@
 package me.wolfii.allthelogs.client.playtime;
 
+import me.wolfii.allthelogs.api.ChatQuery;
+import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.data.playtime.PlaytimeSpan;
 import org.junit.jupiter.api.Test;
 
@@ -132,9 +134,9 @@ class PlaytimeChartTest {
         PlaytimeSeries other = PlaytimeSeries.of(PlaytimeBreakdown.SERVER_PLAYER, "1.21", "a.net", "Zed");
         assertEquals("hypixel.net - Alex", alex.label("unknown"));
         assertEquals("hypixel.net - unknown", unknown.label("unknown"));
-        assertEquals("unknown", PlaytimeSeries.of(PlaytimeBreakdown.VERSION, "unknown", null).label("unknown"));
+        assertEquals("unknown", PlaytimeSeries.of(PlaytimeBreakdown.VERSION, null, null).label("unknown"));
         assertEquals("unknown - unknown",
-            PlaytimeSeries.of(PlaytimeBreakdown.VERSION_SERVER, "unknown", null).label("unknown"));
+            PlaytimeSeries.of(PlaytimeBreakdown.VERSION_SERVER, null, null).label("unknown"));
         assertEquals("1.21 - Alex",
             PlaytimeSeries.of(PlaytimeBreakdown.VERSION_PLAYER, "1.21", "hypixel.net", "Alex").label("unknown"));
         assertEquals(List.of(other, alex, unknown),
@@ -154,8 +156,28 @@ class PlaytimeChartTest {
             span(3, 1, "1.21", "alpha.net"),
             span(4, 1, "1.21", "  ")
         );
-        assertEquals(List.of(PlaytimeFilter.UNKNOWN_SERVER, "alpha.net", "zebra.net"),
+        assertEquals(List.of(ChatQuery.NULL, "alpha.net", "zebra.net"),
             PlaytimeChartModel.serversIn(spans));
+    }
+
+    @Test
+    void missingVersionsAreKeyedAndFilteredAsNull() {
+        List<PlaytimeSpan> spans = List.of(span(1, 1, "1.21", "a.net"), span(2, 1, null, null));
+        assertEquals(List.of(ChatQuery.NULL, "1.21"), PlaytimeChartModel.versionsIn(spans));
+
+        PlaytimeFilter unknownOnly = PlaytimeFilter.all().withVersions(Set.of(ChatQuery.NULL));
+        assertFalse(unknownOnly.allows(spans.get(0)));
+        assertTrue(unknownOnly.allows(spans.get(1)));
+        PlaytimeFilter noServer = PlaytimeFilter.all().withServers(Set.of(ChatQuery.NULL));
+        assertFalse(noServer.allows(spans.get(0)));
+        assertTrue(noServer.allows(spans.get(1)));
+
+        PlaytimeSeries series = PlaytimeSeries.of(PlaytimeBreakdown.VERSION, spans.get(1), true);
+        assertEquals(ChatQuery.NULL, series.version());
+        assertEquals("unknown", series.label("unknown"));
+        var filter = PlaytimeMessageFilter.category(SearchFilter.defaults(), at(1, 0), at(3, 0),
+            PlaytimeBreakdown.VERSION, series, true, spans, null);
+        assertEquals(Set.of(ChatQuery.NULL), filter.versions());
     }
 
     @Test
@@ -211,7 +233,7 @@ class PlaytimeChartTest {
             PlaytimeBreakdown.VERSION_SERVER, PlaytimeStyle.BARS, PlaytimeGrain.DAYS, null, 0, true);
         assertEquals(List.of("1.8", "1.21", "26.2", "26.2"),
             split.series().stream().map(PlaytimeSeries::version).toList());
-        assertEquals(List.of("a", PlaytimeFilter.UNKNOWN_SERVER, "a", "b"),
+        assertEquals(List.of("a", ChatQuery.NULL, "a", "b"),
             split.series().stream().map(PlaytimeSeries::serverKey).toList());
 
         PlaytimeChartModel.Result filtered = PlaytimeChartModel.build(spans,

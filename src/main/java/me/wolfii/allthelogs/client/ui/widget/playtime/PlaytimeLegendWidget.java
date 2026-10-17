@@ -7,8 +7,8 @@ import me.wolfii.allthelogs.client.playtime.PlaytimeChartModel;
 import me.wolfii.allthelogs.client.playtime.PlaytimeColors;
 import me.wolfii.allthelogs.client.playtime.PlaytimeDuration;
 import me.wolfii.allthelogs.client.playtime.PlaytimeSeries;
+import me.wolfii.allthelogs.client.search.ActiveFilters;
 import me.wolfii.allthelogs.client.ui.text.TextFit;
-import me.wolfii.allthelogs.client.ui.text.UnknownText;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
 import net.minecraft.client.gui.Font;
 import net.minecraft.network.chat.Component;
@@ -76,7 +76,7 @@ public final class PlaytimeLegendWidget extends BaseUIComponent implements AutoC
         Font font = PlaytimePainter.font();
         int scale = PlaytimePainter.scale();
         if (!swatchesPainted || swatchScale != scale) paintSwatches(scale);
-        String unknown = UnknownText.get();
+        String unknown = ActiveFilters.name(null);
         boolean pointerInside = !hoverBlocked.getAsBoolean() && isInBoundingBox(mouseX, mouseY)
             && (parent() == null || parent().isInBoundingBox(mouseX, mouseY));
         int right = x + width - SCROLLBAR_ROOM;

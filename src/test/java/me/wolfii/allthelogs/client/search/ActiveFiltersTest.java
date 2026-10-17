@@ -1,9 +1,11 @@
 package me.wolfii.allthelogs.client.search;
 
+import me.wolfii.allthelogs.api.ChatQuery;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -46,5 +48,32 @@ class ActiveFiltersTest {
     void defaultContextAndAllVersionsStayInactive() {
         SearchFilter filter = SearchFilter.defaults().withVersions(null).withContextLines(SearchFilter.DEFAULT_CONTEXT_LINES);
         assertTrue(ActiveFilters.of(filter).isEmpty());
+    }
+
+    @Test
+    void missingVersionAndPlaceShareOneLabel() {
+        String unknown = ActiveFilters.name(null);
+        assertEquals(unknown, ActiveFilters.name("  "));
+        assertEquals(unknown, ActiveFilters.name(ChatQuery.NULL));
+    }
+
+    @Test
+    void knownNamesStayAsStored() {
+        assertEquals("1.21.1", ActiveFilters.name("1.21.1"));
+        assertEquals("hypixel.net", ActiveFilters.name("hypixel.net"));
+        assertEquals("unknown", ActiveFilters.name("unknown"));
+        assertEquals("Gold World", ActiveFilters.name("\u00a76Gold \u00a7lWorld"));
+    }
+
+    @Test
+    void nullPlaceholderShowsTheUnknownLabel() {
+        SearchFilter filter = SearchFilter.defaults()
+            .withVersions(Set.of(ChatQuery.NULL))
+            .withServersOrWorlds(Set.of(ChatQuery.NULL));
+        String unknown = ActiveFilters.name(null);
+        assertEquals(List.of(
+            new ActiveFilters.Entry(ActiveFilters.Kind.VERSION, unknown),
+            new ActiveFilters.Entry(ActiveFilters.Kind.SERVER, unknown)
+        ), ActiveFilters.of(filter));
     }
 }

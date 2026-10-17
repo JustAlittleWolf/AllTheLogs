@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.client.playtime;
 
+import me.wolfii.allthelogs.api.ChatQuery;
 import me.wolfii.allthelogs.client.search.MinecraftVersions;
 import me.wolfii.allthelogs.data.playtime.PlaytimeSpan;
 
@@ -14,8 +15,8 @@ import java.util.regex.Pattern;
 /**
  * One colored slice of a bar. The {@code pattern} is drawn over the color where bars are wide enough, so
  * series with similar colors still look different. Each key is null when the chart is not grouped by it:
- * {@code version}, {@code serverKey}, which is {@link PlaytimeFilter#UNKNOWN_SERVER} for no place, and
- * {@code playerKey}, which is {@link PlaytimeFilter#UNKNOWN_PLAYER} for no player.
+ * {@code version}, {@code serverKey}, and {@code playerKey}. A missing value is {@link ChatQuery#NULL}
+ * ({@link PlaytimeFilter#key}).
  */
 public record PlaytimeSeries(String version, String serverKey, String playerKey, int color, PlaytimePattern pattern) {
     /** Longest name shown in hover cards before it is cut with an ellipsis. */
@@ -23,9 +24,9 @@ public record PlaytimeSeries(String version, String serverKey, String playerKey,
     public static final Comparator<PlaytimeSeries> STACK_ORDER = (left, right) -> {
         int versionOrder = compareVersion(left.version(), right.version());
         if (versionOrder != 0) return versionOrder;
-        int serverOrder = compareName(left.serverKey(), right.serverKey(), PlaytimeFilter.UNKNOWN_SERVER);
+        int serverOrder = compareName(left.serverKey(), right.serverKey());
         if (serverOrder != 0) return serverOrder;
-        return compareName(left.playerKey(), right.playerKey(), PlaytimeFilter.UNKNOWN_PLAYER);
+        return compareName(left.playerKey(), right.playerKey());
     };
     private static final Pattern FORMATTING = Pattern.compile("§.?");
 
@@ -34,9 +35,9 @@ public record PlaytimeSeries(String version, String serverKey, String playerKey,
      */
     public static PlaytimeSeries of(PlaytimeBreakdown breakdown, String version, String server, String player) {
         return new PlaytimeSeries(
-            breakdown.byVersion() ? version : null,
-            breakdown.byServer() ? PlaytimeFilter.serverKey(server) : null,
-            breakdown.byPlayer() ? PlaytimeFilter.playerKey(player) : null,
+            breakdown.byVersion() ? PlaytimeFilter.key(version) : null,
+            breakdown.byServer() ? PlaytimeFilter.key(server) : null,
+            breakdown.byPlayer() ? PlaytimeFilter.key(player) : null,
             0, PlaytimePattern.SOLID);
     }
 
@@ -93,8 +94,8 @@ public record PlaytimeSeries(String version, String serverKey, String playerKey,
     public String label(String unknown) {
         List<String> parts = new ArrayList<>(3);
         if (version != null) parts.add(isUnknown(version) ? unknown : version);
-        if (serverKey != null) parts.add(nameLabel(serverKey, PlaytimeFilter.UNKNOWN_SERVER, unknown));
-        if (playerKey != null) parts.add(nameLabel(playerKey, PlaytimeFilter.UNKNOWN_PLAYER, unknown));
+        if (serverKey != null) parts.add(nameLabel(serverKey, unknown));
+        if (playerKey != null) parts.add(nameLabel(playerKey, unknown));
         return String.join(" - ", parts);
     }
 
@@ -110,7 +111,7 @@ public record PlaytimeSeries(String version, String serverKey, String playerKey,
     }
 
     public boolean canFilterServer() {
-        return serverKey != null && !serverKey.equals(PlaytimeFilter.UNKNOWN_SERVER);
+        return serverKey != null && !serverKey.equals(ChatQuery.NULL);
     }
 
     /**
@@ -137,11 +138,11 @@ public record PlaytimeSeries(String version, String serverKey, String playerKey,
     }
 
     private boolean knowsPlayer() {
-        return playerKey != null && !playerKey.equals(PlaytimeFilter.UNKNOWN_PLAYER);
+        return playerKey != null && !playerKey.equals(ChatQuery.NULL);
     }
 
-    private static String nameLabel(String key, String unknownKey, String unknown) {
-        return key.equals(unknownKey) ? unknown : displayName(key);
+    private static String nameLabel(String key, String unknown) {
+        return key.equals(ChatQuery.NULL) ? unknown : displayName(key);
     }
 
     private static Map<PlaytimeSeries, Integer> ranks(List<PlaytimeSpan> spans, PlaytimeBreakdown breakdown,
@@ -172,9 +173,9 @@ public record PlaytimeSeries(String version, String serverKey, String playerKey,
     /**
      * Server or player names alphabetically, unknown last.
      */
-    private static int compareName(String left, String right, String unknownKey) {
-        boolean leftUnknown = left == null || left.equals(unknownKey);
-        boolean rightUnknown = right == null || right.equals(unknownKey);
+    private static int compareName(String left, String right) {
+        boolean leftUnknown = left == null || left.equals(ChatQuery.NULL);
+        boolean rightUnknown = right == null || right.equals(ChatQuery.NULL);
         if (leftUnknown != rightUnknown) return leftUnknown ? 1 : -1;
         if (leftUnknown) return 0;
         return left.compareToIgnoreCase(right);

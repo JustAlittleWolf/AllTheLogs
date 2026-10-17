@@ -9,7 +9,7 @@ import java.util.List;
 public interface LogStoreMetadata {
     /**
      * Distinct {@link ChatLog#minecraftVersion()} values, ordered by the earliest log date of each version,
-     * then by name.
+     * then by name. Logs with no version are omitted.
      */
     List<String> minecraftVersions();
 

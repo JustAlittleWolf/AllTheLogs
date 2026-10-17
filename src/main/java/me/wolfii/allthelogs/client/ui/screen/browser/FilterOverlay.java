@@ -10,12 +10,12 @@ import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.*;
 import me.wolfii.allthelogs.api.ChatQuery;
+import me.wolfii.allthelogs.client.search.ActiveFilters;
 import me.wolfii.allthelogs.client.search.DateParser;
 import me.wolfii.allthelogs.client.search.MinecraftVersions;
 import me.wolfii.allthelogs.client.search.SearchFilter;
 import me.wolfii.allthelogs.client.ui.popup.ChecklistMenu;
 import me.wolfii.allthelogs.client.ui.text.TextFit;
-import me.wolfii.allthelogs.client.ui.text.UnknownText;
 import me.wolfii.allthelogs.client.ui.text.WrappedTooltip;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
@@ -148,8 +148,8 @@ final class FilterOverlay {
 
     void syncFilterButtons() {
         SearchFilter current = filter.get();
-        if (versionButton != null) versionButton.setMessage(selection(current.versions(), UnknownText::version));
-        if (serverButton != null) serverButton.setMessage(selection(current.serversOrWorlds(), UnknownText::place));
+        if (versionButton != null) versionButton.setMessage(selection(current.versions(), ActiveFilters::name));
+        if (serverButton != null) serverButton.setMessage(selection(current.serversOrWorlds(), ActiveFilters::name));
     }
 
     private void openPanel() {
@@ -186,10 +186,10 @@ final class FilterOverlay {
         untilBox = until.box();
         content.child(from.row());
         content.child(until.row());
-        versionButton = listButton(current.versions(), UnknownText::version, this::openVersions);
+        versionButton = listButton(current.versions(), ActiveFilters::name, this::openVersions);
         content.child(listRow("allthelogs.filter.version", versionButton,
             () -> emit(filter.get().withVersions(null))));
-        serverButton = listButton(current.serversOrWorlds(), UnknownText::place, this::openServers);
+        serverButton = listButton(current.serversOrWorlds(), ActiveFilters::name, this::openServers);
         content.child(listRow("allthelogs.filter.server", serverButton,
             () -> emit(filter.get().withServersOrWorlds(null))));
 
@@ -224,8 +224,9 @@ final class FilterOverlay {
         boolean open = versionMenu.isOpen();
         closeLists();
         if (open) return;
-        List<String> values = MinecraftVersions.newestFirst(catalog.versions());
-        versionMenu.show(button, values, () -> filter.get().versions(), UnknownText::version,
+        List<String> values = new ArrayList<>(MinecraftVersions.newestFirst(catalog.versions()));
+        values.add(0, ChatQuery.NULL);
+        versionMenu.show(button, values, () -> filter.get().versions(), ActiveFilters::name,
             selected -> emit(filter.get().withVersions(selected)));
     }
 
@@ -236,9 +237,9 @@ final class FilterOverlay {
         catalog.serversOrWorlds(stored -> {
             if (!open() || serverMenu.isOpen()) return;
             List<String> values = new ArrayList<>(stored);
-            values.sort(Comparator.comparing(UnknownText::place, String.CASE_INSENSITIVE_ORDER));
-            values.add(0, ChatQuery.NO_SERVER_OR_WORLD);
-            serverMenu.show(button, values, () -> filter.get().serversOrWorlds(), UnknownText::place,
+            values.sort(Comparator.comparing(ActiveFilters::name, String.CASE_INSENSITIVE_ORDER));
+            values.add(0, ChatQuery.NULL);
+            serverMenu.show(button, values, () -> filter.get().serversOrWorlds(), ActiveFilters::name,
                 selected -> emit(filter.get().withServersOrWorlds(selected)));
         });
     }

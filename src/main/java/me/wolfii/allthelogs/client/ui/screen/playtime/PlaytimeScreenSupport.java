@@ -18,10 +18,10 @@ import me.wolfii.allthelogs.client.playtime.PlaytimeBreakdown;
 import me.wolfii.allthelogs.client.playtime.PlaytimeChartModel;
 import me.wolfii.allthelogs.client.playtime.PlaytimeDuration;
 import me.wolfii.allthelogs.client.playtime.PlaytimeSession;
+import me.wolfii.allthelogs.client.search.ActiveFilters;
 import me.wolfii.allthelogs.client.ui.popup.ChecklistMenu;
 import me.wolfii.allthelogs.client.ui.popup.OptionMenu;
 import me.wolfii.allthelogs.client.ui.text.TextFit;
-import me.wolfii.allthelogs.client.ui.text.UnknownText;
 import me.wolfii.allthelogs.client.ui.text.WrappedTooltip;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
 import me.wolfii.allthelogs.client.ui.theme.PanelSurfaces;
@@ -149,7 +149,7 @@ final class PlaytimeScreenSupport {
         closeMenus.run();
         if (open) return;
         menu.show(button, PlaytimeChartModel.versionsIn(PlaytimeSession.spans()), () -> PlaytimeSession.filter().versions(),
-            UnknownText::version, selected -> {
+            ActiveFilters::name, selected -> {
                 PlaytimeSession.filter(PlaytimeSession.filter().withVersions(selected));
                 rebuild.run();
             });
@@ -160,7 +160,7 @@ final class PlaytimeScreenSupport {
         closeMenus.run();
         if (open) return;
         menu.show(button, PlaytimeChartModel.serversIn(PlaytimeSession.spans()), () -> PlaytimeSession.filter().servers(),
-            UnknownText::place, selected -> {
+            ActiveFilters::name, selected -> {
                 PlaytimeSession.filter(PlaytimeSession.filter().withServers(selected));
                 rebuild.run();
             });
@@ -196,11 +196,11 @@ final class PlaytimeScreenSupport {
     }
 
     static Component versionLabel() {
-        return selection("allthelogs.playtime.versions", PlaytimeSession.filter().versions(), UnknownText::version);
+        return selection("allthelogs.playtime.versions", PlaytimeSession.filter().versions(), ActiveFilters::name);
     }
 
     static Component serverLabel() {
-        return selection("allthelogs.playtime.servers", PlaytimeSession.filter().servers(), UnknownText::place);
+        return selection("allthelogs.playtime.servers", PlaytimeSession.filter().servers(), ActiveFilters::name);
     }
 
     /**

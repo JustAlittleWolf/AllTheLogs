@@ -8,11 +8,6 @@ import java.time.LocalDateTime;
  */
 public interface ChatLog {
     /**
-     * Placeholder used when the Minecraft version could not be determined from the log contents.
-     */
-    String UNKNOWN_VERSION = "unknown";
-
-    /**
      * Where this log was read from.
      */
     LogSource source();
@@ -23,7 +18,7 @@ public interface ChatLog {
     LocalDate date();
 
     /**
-     * The Minecraft version the log was produced by, or {@link #UNKNOWN_VERSION}.
+     * The Minecraft version the log was produced by, or {@code null} if the log does not name one.
      */
     String minecraftVersion();
 

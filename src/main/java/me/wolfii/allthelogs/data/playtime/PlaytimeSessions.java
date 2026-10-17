@@ -1,7 +1,5 @@
 package me.wolfii.allthelogs.data.playtime;
 
-import me.wolfii.allthelogs.data.ChatLog;
-
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -27,7 +25,7 @@ public final class PlaytimeSessions {
 
     /**
      * @param id      {@code log_file.id}
-     * @param version version stored for the file, or blank for {@link ChatLog#UNKNOWN_VERSION}
+     * @param version version stored for the file, or null when the log names none
      * @param user    player stored for the file, or null when unknown
      */
     public record FileSession(long id, String version, LocalDateTime start, LocalDateTime end, String user) {
@@ -90,9 +88,7 @@ public final class PlaytimeSessions {
     }
 
     private static void append(List<PlaytimeSpan> spans, FileSession file, List<Event> events) {
-        String version = file.version() == null || file.version().isBlank()
-            ? ChatLog.UNKNOWN_VERSION
-            : file.version();
+        String version = blankToNull(file.version());
         String server = null;
         String user = blankToNull(file.user());
         LocalDateTime cursor = file.start();

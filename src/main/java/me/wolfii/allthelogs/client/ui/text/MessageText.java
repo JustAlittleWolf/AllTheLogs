@@ -140,7 +140,6 @@ public final class MessageText {
 
     private static String displayVersion(ChatLog log) {
         if (log.minecraftVersion() == null || log.minecraftVersion().isBlank()) return null;
-        if (ChatLog.UNKNOWN_VERSION.equals(log.minecraftVersion())) return null;
         return log.minecraftVersion();
     }
 
