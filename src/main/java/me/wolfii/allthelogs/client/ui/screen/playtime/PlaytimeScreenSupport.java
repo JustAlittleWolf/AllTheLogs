@@ -21,6 +21,7 @@ import me.wolfii.allthelogs.client.playtime.PlaytimeFilter;
 import me.wolfii.allthelogs.client.playtime.PlaytimeSeries;
 import me.wolfii.allthelogs.client.playtime.PlaytimeSession;
 import me.wolfii.allthelogs.client.ui.popup.ChecklistMenu;
+import me.wolfii.allthelogs.client.ui.popup.OptionMenu;
 import me.wolfii.allthelogs.client.ui.text.TextFit;
 import me.wolfii.allthelogs.client.ui.text.WrappedTooltip;
 import me.wolfii.allthelogs.client.ui.theme.OverflowScrollbar;
@@ -60,18 +61,9 @@ final class PlaytimeScreenSupport {
     }
 
     /**
-     * Row of display options with {@code end} pushed to the right edge. The major-version checkbox sits on
-     * the line under this row, so a control taller than a button does not shift the buttons and the row
-     * stays narrow enough for a small window.
+     * Row of display options with {@code end} pushed to the right edge.
      */
-    static FlowLayout optionsColumn(List<UIComponent> options, UIComponent end) {
-        FlowLayout column = UIContainers.verticalFlow(Sizing.fill(), Sizing.content());
-        column.gap(2);
-        column.child(optionsRow(options, end));
-        return column;
-    }
-
-    private static FlowLayout optionsRow(List<UIComponent> options, UIComponent end) {
+    static FlowLayout optionsRow(List<UIComponent> options, UIComponent end) {
         FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(), Sizing.content());
         row.gap(4).verticalAlignment(VerticalAlignment.CENTER);
         options.forEach(row::child);
@@ -175,10 +167,23 @@ final class PlaytimeScreenSupport {
     }
 
     /**
-     * Shown under the option buttons while the chart groups by version. Checking it keeps only the first
-     * two version components, so {@code 1.8.9} is drawn as {@code 1.8} and {@code 26.2} stays {@code 26.2}.
+     * Group menu. While the chart is grouped by version, the first row is a checkbox that keeps only the
+     * first two version components, so {@code 1.8.9} is drawn as {@code 1.8} and {@code 26.2} stays {@code 26.2}.
      */
-    static CheckboxComponent majorVersionsBox(Runnable rebuild) {
+    static void openBreakdown(OptionMenu menu, ButtonComponent button, Runnable closeMenus, Runnable rebuild) {
+        if (menu.isOpen()) return;
+        closeMenus.run();
+        menu.show(button, groupChoices(), index -> {
+            PlaytimeSession.breakdown(GROUPS[index]);
+            rebuild.run();
+        }, majorVersionsChoice(rebuild));
+    }
+
+    /**
+     * The group menu's leading checkbox, or null when the current grouping does not include a version.
+     */
+    private static @Nullable CheckboxComponent majorVersionsChoice(Runnable rebuild) {
+        if (!PlaytimeSession.breakdown().byVersion()) return null;
         CheckboxComponent box = UIComponents.checkbox(Component.translatable("allthelogs.playtime.major_versions"));
         box.tooltip(WrappedTooltip.of(Component.translatable("allthelogs.playtime.major_versions.hint")));
         box.checked(PlaytimeSession.majorVersions());
@@ -188,18 +193,6 @@ final class PlaytimeScreenSupport {
             rebuild.run();
         });
         return box;
-    }
-
-    /**
-     * Puts {@code box} on the line under the option buttons while grouping includes version, and removes it
-     * otherwise. The checked state is remembered either way.
-     */
-    static void syncMajorVersions(FlowLayout options, CheckboxComponent box) {
-        if (options == null || box == null) return;
-        boolean show = PlaytimeSession.breakdown().byVersion();
-        boolean present = options.children().contains(box);
-        if (show && !present) options.child(box);
-        else if (!show && present) options.removeChild(box);
     }
 
     static Component versionLabel() {
