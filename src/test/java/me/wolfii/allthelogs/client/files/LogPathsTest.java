@@ -51,6 +51,8 @@ class LogPathsTest {
         assertEquals("/data/backup.zip", LogPaths.throughArchive("/data/backup.zip!/logs/latest.log"));
         assertEquals("/data/outer.zip", LogPaths.throughArchive("/data/outer.zip/inner.zip/logs/latest.log"));
         assertEquals("C:\\mods\\pack.tar.gz", LogPaths.throughArchive("C:\\mods\\pack.tar.gz\\logs\\latest.log"));
+        assertEquals("C:\\backups\\world.zip", LogPaths.throughArchive("C:\\backups\\world.zip!\\logs\\latest.log"));
+        assertEquals("C:\\logs\\read!\\this.log", LogPaths.throughArchive("C:\\logs\\read!\\this.log"));
         assertEquals("/logs/2026-01-02-1.log.gz", LogPaths.throughArchive("/logs/2026-01-02-1.log.gz"));
         assertEquals("/logs/read!/this.log", LogPaths.throughArchive("/logs/read!/this.log"));
         assertNull(LogPaths.throughArchive(null));

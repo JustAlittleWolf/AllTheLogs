@@ -34,9 +34,9 @@ class FileRevealTest {
 
     @Test
     void linuxFallbackOpensTheContainingFolder() {
-        assertEquals(List.of("xdg-open", "/tmp/logs"),
-            FileReveal.linuxFolder(Path.of("/tmp/logs/latest.log")));
-        assertEquals(List.of("xdg-open", "/tmp/backups"),
-            FileReveal.linuxFolder(Path.of("/tmp/backups/world.zip")));
+        Path log = Path.of("/tmp/logs/latest.log");
+        assertEquals(List.of("xdg-open", log.getParent().toString()), FileReveal.linuxFolder(log));
+        Path archive = Path.of("/tmp/backups/world.zip");
+        assertEquals(List.of("xdg-open", archive.getParent().toString()), FileReveal.linuxFolder(archive));
     }
 }
