@@ -116,10 +116,15 @@ public final class LogImporter {
                         }
                         try {
                             PreparedLog prepared = LogPreparer.prepare(candidate, options.timezone());
+                            boolean storedMetadataRepair = options.updateMetadataOnly()
+                                && writer.hasStoredLocation(candidate.sourcePath(), candidate.entryPath());
                             // Not stored: missing timestamps, or no chat and no resource-manager reload.
                             // Empty files are stored logs that have no chat lines.
-                            if (prepared.firstLineTime() == null || prepared.lastLineTime() == null
-                                || (prepared.messages().isEmpty() && !prepared.resourceManagerReloaded())) {
+                            boolean missingTimestamps = prepared.firstLineTime() == null
+                                || prepared.lastLineTime() == null;
+                            boolean emptyWithoutReload = prepared.messages().isEmpty()
+                                && !prepared.resourceManagerReloaded();
+                            if ((missingTimestamps || emptyWithoutReload) && !storedMetadataRepair) {
                                 skipped.incrementAndGet();
                                 writer.markConsidered(candidate.sourcePath(), candidate.entryPath(),
                                     candidate.contentHash());

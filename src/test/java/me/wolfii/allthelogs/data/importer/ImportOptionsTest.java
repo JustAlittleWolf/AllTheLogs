@@ -40,4 +40,28 @@ class ImportOptionsTest {
         assertTrue(metadata.withSkipAlreadyImported(false).reparseExistingLogs());
         assertFalse(metadata.withSkipAlreadyImported(true).reparseExistingLogs());
     }
+
+    @Test
+    void versionOverwriteIsOptInAndSurvivesOptionCopies() {
+        ImportOptions defaults = ImportOptions.defaults();
+        assertFalse(defaults.overwriteMinecraftVersion());
+        assertFalse(defaults.overwritesAnyMetadata());
+
+        ImportOptions versionOverwrite = defaults.withOverwriteMinecraftVersion(true);
+        assertTrue(versionOverwrite.overwriteMinecraftVersion());
+        assertTrue(versionOverwrite.overwritesAnyMetadata());
+        assertTrue(versionOverwrite.withParallelism(defaults.parallelism()).overwriteMinecraftVersion());
+
+        ImportOptions noOverwrite = versionOverwrite.withOverwriteMinecraftVersion(false);
+        assertFalse(noOverwrite.overwriteMinecraftVersion());
+        assertFalse(noOverwrite.overwritesAnyMetadata());
+    }
+
+    @Test
+    void originalConstructorDefaultsVersionOverwriteToFalse() {
+        ImportOptions options = new ImportOptions(true, true, null, 1, false, true, 0,
+            ZoneId.systemDefault(), false, false, false, false, false);
+
+        assertFalse(options.overwriteMinecraftVersion());
+    }
 }
