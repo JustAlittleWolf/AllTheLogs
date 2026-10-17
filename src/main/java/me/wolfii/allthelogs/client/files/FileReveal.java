@@ -1,5 +1,7 @@
 package me.wolfii.allthelogs.client.files;
 
+import me.wolfii.allthelogs.client.AllTheLogsClient;
+
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
@@ -10,8 +12,8 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Asks the operating system file manager to show a file with that file selected.
- * Windows uses Explorer, macOS uses Finder, and Linux asks the desktop file manager over D-Bus.
- * When that service is missing, Linux opens the folder that contains the file.
+ * Windows selects it through the shell. macOS uses Finder. Linux asks the desktop file manager over D-Bus.
+ * When selection is not available, the folder that contains the file is opened instead.
  */
 public final class FileReveal {
     /** How long to wait for the Linux file manager to accept the select request. */
@@ -32,7 +34,7 @@ public final class FileReveal {
     static void reveal(String osName, Path absolute) {
         try {
             switch (platform(osName)) {
-                case WINDOWS -> run(windowsSelect(absolute));
+                case WINDOWS -> revealOnWindows(absolute);
                 case MAC -> run(macSelect(absolute));
                 case LINUX -> revealOnLinux(absolute);
             }
@@ -45,11 +47,31 @@ public final class FileReveal {
     }
 
     /**
-     * {@code explorer /select,} takes the path in the same argument. A space after the comma opens
-     * the default folder and leaves the file unselected.
+     * Selects {@code absolute} in Explorer. If the shell call cannot, opens the folder that contains the
+     * file. {@code explorer /select,} is not used: Java quotes that argument, and Explorer then opens Documents.
      */
-    static List<String> windowsSelect(Path file) {
-        return List.of("explorer.exe", "/select," + file.toString());
+    private static void revealOnWindows(Path absolute) throws IOException {
+        try {
+            WindowsFileSelect.select(absolute);
+        } catch (Exception | UnsatisfiedLinkError | ExceptionInInitializerError failure) {
+            AllTheLogsClient.LOGGER.warn("Could not select {}, opening its folder", absolute, failure);
+            run(windowsOpenFolder(absolute));
+        }
+    }
+
+    /**
+     * Directory Explorer should open for {@code path}. A drive root is returned with its trailing separator.
+     */
+    static String windowsDirectory(String path) {
+        int slash = Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/'));
+        if (slash <= 0) return path;
+        String folder = path.substring(0, slash);
+        if (folder.length() == 2 && folder.charAt(1) == ':') return folder + "\\";
+        return folder.isEmpty() ? path.substring(0, slash + 1) : folder;
+    }
+
+    static List<String> windowsOpenFolder(Path file) {
+        return List.of("explorer.exe", windowsDirectory(file.toString()));
     }
 
     static List<String> macSelect(Path file) {
