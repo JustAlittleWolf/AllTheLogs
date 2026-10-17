@@ -1,7 +1,5 @@
 package me.wolfii.allthelogs.data.extract;
 
-import me.wolfii.allthelogs.data.ChatLog;
-
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -27,7 +25,7 @@ public final class LogContinuation {
      * logs the player, so such a log is usually the part of a session after midnight.
      */
     public static boolean lacksStart(String minecraftVersion, String minecraftUser) {
-        return isUnknown(minecraftVersion) && minecraftUser == null;
+        return minecraftVersion == null && minecraftUser == null;
     }
 
     /**
@@ -67,11 +65,6 @@ public final class LogContinuation {
      */
     public static String folder(boolean archive, String sourcePath, String entryPath) {
         return archive ? sourcePath + "!" + parent(entryPath) : parent(sourcePath);
-    }
-
-    public static boolean isUnknown(String minecraftVersion) {
-        return minecraftVersion == null || minecraftVersion.isBlank()
-            || ChatLog.UNKNOWN_VERSION.equalsIgnoreCase(minecraftVersion);
     }
 
     private static String parent(String path) {

@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MinecraftVersionMetadataImportTest {
@@ -70,7 +71,7 @@ class MinecraftVersionMetadataImportTest {
         }
         // Advance the cluster marker so an append-only optimization would leave these historical rows alone.
         store.importDirectory(tempDir.resolve("instance"), ImportOptions.defaults());
-        assertEquals("unknown", versionFor("message 25"));
+        assertNull(versionFor("message 25"));
         for (int day = 25; day <= 26; day++) {
             LogFixtures.writePlain(logDirectory(), "2026-08-%d-1.log".formatted(day), """
                 [10:00:00] [main/INFO]: Loading Minecraft 1.21.4 with Fabric Loader 0.19.3
@@ -115,7 +116,7 @@ class MinecraftVersionMetadataImportTest {
             [10:00:10] [Render thread/INFO]: [CHAT] hello
             """));
         store.importArchive(archive, ImportOptions.defaults().withOptimize(false));
-        assertEquals("unknown", versionFor("hello"));
+        assertNull(versionFor("hello"));
 
         LogFixtures.writeZip(archive, Map.of(entry, """
             [10:00:00] [main/INFO]: Loading for game Minecraft 1.17
@@ -154,7 +155,7 @@ class MinecraftVersionMetadataImportTest {
             [10:00:10] [Worker-Main-1/INFO]: Reloading ResourceManager: Default
             """);
         store.importDirectory(tempDir, ImportOptions.defaults().withOptimize(false));
-        assertEquals("unknown", store.chatLogs().getFirst().minecraftVersion());
+        assertNull(store.chatLogs().getFirst().minecraftVersion());
 
         LogFixtures.writePlain(logs, "2026-08-26-1.log", """
             [10:00:00] [main/INFO]: Loading Minecraft 26.2 with Fabric Loader 0.19.3
@@ -197,7 +198,7 @@ class MinecraftVersionMetadataImportTest {
     }
 
     @Test
-    void fillsBlankStoredVersion() throws Exception {
+    void fillsMissingStoredVersion() throws Exception {
         Path database = tempDir.resolve("store.duckdb");
         store.close();
         store = LogStore.open(database);
@@ -206,7 +207,7 @@ class MinecraftVersionMetadataImportTest {
         store.close();
         try (var connection = StoreConnections.openFile(database);
              Statement statement = connection.createStatement()) {
-            statement.execute("UPDATE log_file SET minecraft_version = ' ' ");
+            statement.execute("UPDATE log_file SET minecraft_version = NULL");
         }
         store = LogStore.open(database);
 
@@ -251,7 +252,7 @@ class MinecraftVersionMetadataImportTest {
     @Test
     void fillsUnknownLiveVersionFromItsSessionMarkerWithoutAnOverwrite() throws IOException {
         LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 10, 0);
-        var session = store.startSession("unknown", startedAt);
+        var session = store.startSession(null, startedAt);
         String id = ((LogSource.Session) session.source()).id();
         store.importSessionMessage("live", startedAt.plusSeconds(10));
         writeMarkedLog("2026-08-26-1.log", id, "1.21.4");
@@ -265,7 +266,7 @@ class MinecraftVersionMetadataImportTest {
     @Test
     void repairsLiveVersionFromAMarkedLogWithoutChatOrResourceReload() throws IOException {
         LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 10, 0);
-        var session = store.startSession("unknown", startedAt);
+        var session = store.startSession(null, startedAt);
         String id = ((LogSource.Session) session.source()).id();
         store.importSessionMessage("live", startedAt.plusSeconds(10));
         LogFixtures.writePlain(logDirectory(), "2026-08-26-1.log", """
@@ -284,7 +285,7 @@ class MinecraftVersionMetadataImportTest {
     @Test
     void conflictingVersionsForTheSameLiveSessionAreNotChosenByImportOrder() throws IOException {
         LocalDateTime startedAt = LocalDateTime.of(2026, 8, 26, 10, 0);
-        var session = store.startSession("unknown", startedAt);
+        var session = store.startSession(null, startedAt);
         String id = ((LogSource.Session) session.source()).id();
         store.importSessionMessage("live", startedAt.plusSeconds(10));
         writeMarkedLog("2026-08-26-1.log", id, "1.20.1");
@@ -292,7 +293,7 @@ class MinecraftVersionMetadataImportTest {
 
         store.importDirectory(tempDir, metadataOnly().withOverwriteMinecraftVersion(true).withOverwriteLive(true));
 
-        assertEquals("unknown", versionFor("live"));
+        assertNull(versionFor("live"));
         assertEquals(1, store.chatLogs().size());
     }
 

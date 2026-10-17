@@ -1,6 +1,6 @@
 package me.wolfii.allthelogs.client.search;
 
-import me.wolfii.allthelogs.data.ChatLog;
+import me.wolfii.allthelogs.api.ChatQuery;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -11,7 +11,7 @@ import java.util.regex.Pattern;
 /**
  * Orders Minecraft version strings newest-first for the filter menu. Numeric segments follow semantic versioning;
  * letter suffixes such as {@code pre} or {@code rc} count as older than the same numbers with no suffix.
- * {@link ChatLog#UNKNOWN_VERSION} is always first.
+ * An unknown version ({@link #isUnknown}) is always first.
  */
 public final class MinecraftVersions {
     private static final Pattern TOKEN = Pattern.compile("\\d+|[A-Za-z]+");
@@ -28,8 +28,8 @@ public final class MinecraftVersions {
 
     public static Comparator<String> newestFirstOrder() {
         return (left, right) -> {
-            if (isUnknown(left) != isUnknown(right)) {
-                return isUnknown(left) ? -1 : 1;
+            if (isUnknown(left) || isUnknown(right)) {
+                return Boolean.compare(isUnknown(right), isUnknown(left));
             }
             int oldestFirst = compareReleaseOldestFirst(left, right);
             if (oldestFirst != 0) return -oldestFirst;
@@ -37,14 +37,14 @@ public final class MinecraftVersions {
         };
     }
 
-    static boolean isUnknown(String version) {
-        return version == null || version.isBlank() || ChatLog.UNKNOWN_VERSION.equalsIgnoreCase(version);
+    public static boolean isUnknown(String version) {
+        return version == null || version.isBlank() || ChatQuery.NULL.equals(version);
     }
 
     /**
      * The first two dot-separated components. {@code 1.8.9} becomes {@code 1.8} and {@code 26.2} stays
      * {@code 26.2}. A non-numeric tail on the second component, such as {@code 1.21-rc1}, is left off.
-     * A version with no dot, including {@link ChatLog#UNKNOWN_VERSION}, is unchanged.
+     * Null, a version with no dot, and {@link ChatQuery#NULL} are unchanged.
      */
     public static String major(String version) {
         if (version == null || version.isEmpty()) return version;

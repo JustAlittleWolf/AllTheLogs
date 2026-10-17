@@ -157,7 +157,7 @@ class LogParserTest {
     @Test
     void fallsBackToUnknownVersion() throws IOException {
         ParsedLog parsed = parse("[10:00:00] [Render thread/INFO]: [CHAT] hi\n");
-        assertEquals(ChatLog.UNKNOWN_VERSION, parsed.minecraftVersion());
+        assertNull(parsed.minecraftVersion());
     }
 
     @Test

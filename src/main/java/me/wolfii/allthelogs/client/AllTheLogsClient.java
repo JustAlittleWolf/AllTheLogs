@@ -74,7 +74,7 @@ public final class AllTheLogsClient implements ClientModInitializer {
     private static String minecraftVersion() {
         return FabricLoader.getInstance().getModContainer("minecraft")
             .map(container -> container.getMetadata().getVersion().getFriendlyString())
-            .orElse("unknown");
+            .orElse(null);
     }
 
     private static String currentUsername() {

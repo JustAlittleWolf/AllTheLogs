@@ -25,9 +25,10 @@ import java.util.regex.PatternSyntaxException;
  * @param regex        whether {@code text} is a regular expression rather than a literal substring
  * @param limit        matches per page; negative means no cap
  * @param offset       exclusive timestamp cursor the current page starts after, or {@code null} for the first page
- * @param versions        Minecraft versions to keep, or {@code null} for all of them; empty keeps nothing
- * @param serversOrWorlds exact servers or worlds to keep, with {@link ChatQuery#NO_SERVER_OR_WORLD} for messages
- *                        without one, or {@code null} for all of them; empty keeps nothing
+ * @param versions        Minecraft versions to keep, with {@link ChatQuery#NULL} for logs without one, or
+ *                        {@code null} for all of them; empty keeps nothing
+ * @param serversOrWorlds exact servers or worlds to keep, with {@link ChatQuery#NULL} for messages without one,
+ *                        or {@code null} for all of them; empty keeps nothing
  */
 public record SearchFilter(
     String text,
@@ -303,7 +304,7 @@ public record SearchFilter(
         if (upUntil != null && !entry.timestamp().isBefore(upUntil)) return false;
         if (!hasServerOrWorld()) return true;
         String place = entry.serverOrWorld();
-        return serversOrWorlds.contains(place == null || place.isEmpty() ? ChatQuery.NO_SERVER_OR_WORLD : place);
+        return serversOrWorlds.contains(place == null || place.isEmpty() ? ChatQuery.NULL : place);
     }
 
     /**

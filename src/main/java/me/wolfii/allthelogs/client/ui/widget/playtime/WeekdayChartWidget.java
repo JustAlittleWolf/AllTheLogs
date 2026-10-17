@@ -7,6 +7,7 @@ import me.wolfii.allthelogs.client.playtime.PlaytimeChartModel;
 import me.wolfii.allthelogs.client.playtime.PlaytimeDuration;
 import me.wolfii.allthelogs.client.playtime.PlaytimeHover;
 import me.wolfii.allthelogs.client.playtime.PlaytimeWeekday;
+import me.wolfii.allthelogs.client.search.ActiveFilters;
 import me.wolfii.allthelogs.client.ui.theme.Colors;
 import net.minecraft.network.chat.Component;
 
@@ -343,7 +344,7 @@ public final class WeekdayChartWidget extends BaseUIComponent implements AutoClo
     }
 
     private static String unknown() {
-        return Component.translatable("allthelogs.playtime.server.unknown").getString();
+        return ActiveFilters.name(null);
     }
 
     private String durationLabel(double value) {

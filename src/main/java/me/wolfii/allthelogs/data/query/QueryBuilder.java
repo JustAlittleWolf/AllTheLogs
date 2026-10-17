@@ -184,13 +184,12 @@ public final class QueryBuilder {
             addOffsetCondition(query, conditions, parameters);
         }
         if (query.version() != null) {
-            conditions.add("file_id IN (SELECT id FROM log_file WHERE minecraft_version = ?)");
-            parameters.add(query.version());
+            conditions.add("file_id IN (SELECT id FROM log_file WHERE "
+                + oneOf("minecraft_version", Set.of(query.version()), parameters) + ")");
         }
         if (query.versions() != null) {
-            conditions.add(query.versions().isEmpty() ? "FALSE"
-                : "file_id IN (SELECT id FROM log_file WHERE " + inList("minecraft_version", query.versions(),
-                    parameters) + ")");
+            conditions.add("file_id IN (SELECT id FROM log_file WHERE "
+                + oneOf("minecraft_version", query.versions(), parameters) + ")");
         }
         addServerConditions(query, "server_or_world", conditions, parameters);
         if (query.substring() != null) {
@@ -218,13 +217,20 @@ public final class QueryBuilder {
             parameters.add(query.serverOrWorld().toLowerCase(Locale.ROOT));
         }
         Set<String> places = query.serversOrWorlds();
-        if (places == null) return;
-        Set<String> named = new LinkedHashSet<>(places);
-        boolean none = named.remove(ChatQuery.NO_SERVER_OR_WORLD);
+        if (places != null) conditions.add(oneOf(column, places, parameters));
+    }
+
+    /**
+     * {@code column} is one of {@code values}, where {@link ChatQuery#NULL} stands for {@code IS NULL}.
+     * No values is {@code FALSE}.
+     */
+    private static String oneOf(String column, Set<String> values, List<Object> parameters) {
+        Set<String> named = new LinkedHashSet<>(values);
+        boolean none = named.remove(ChatQuery.NULL);
         List<String> either = new ArrayList<>();
         if (!named.isEmpty()) either.add(inList(column, named, parameters));
         if (none) either.add(column + " IS NULL");
-        conditions.add(either.isEmpty() ? "FALSE" : "(" + String.join(" OR ", either) + ")");
+        return either.isEmpty() ? "FALSE" : "(" + String.join(" OR ", either) + ")";
     }
 
     private static String inList(String column, Set<String> values, List<Object> parameters) {

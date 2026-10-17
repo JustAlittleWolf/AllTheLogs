@@ -52,9 +52,22 @@ class FilterSetsTest {
         var all = me.wolfii.allthelogs.api.ChatQuery.all();
         assertEquals(List.of("on a", "older version on a"), messages(all.withServersOrWorlds(Set.of("a.net"))));
         assertEquals(List.of("before joining", "on b"), messages(all.withServersOrWorlds(
-            Set.of("b.net", me.wolfii.allthelogs.api.ChatQuery.NO_SERVER_OR_WORLD))));
+            Set.of("b.net", me.wolfii.allthelogs.api.ChatQuery.NULL))));
         assertEquals(List.of(), messages(all.withServersOrWorlds(Set.of())));
         assertEquals(List.of(), messages(all.withServersOrWorlds(Set.of("a"))));
+    }
+
+    @Test
+    void theNullPlaceholderMatchesLogsWithoutAVersion() throws IOException {
+        LogFixtures.writePlain(tempDir.resolve("instance/logs"), "2024-05-03-1.log", """
+            [10:00:00] [Render thread/INFO]: [CHAT] no version
+            """);
+        store.importDirectory(tempDir.resolve("instance"));
+        var all = me.wolfii.allthelogs.api.ChatQuery.all();
+        String none = me.wolfii.allthelogs.api.ChatQuery.NULL;
+        assertEquals(List.of("no version"), messages(all.withVersion(none)));
+        assertEquals(List.of("older version on a", "no version"), messages(all.withVersions(Set.of("1.20.4", none))));
+        assertEquals(List.of("1.21", "1.20.4"), store.metadata().minecraftVersions());
     }
 
     @Test

@@ -46,8 +46,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
-
 /**
  * Transparent log browser: search bar, side filter panel, virtualised history, and a timeline of every hit.
  */
@@ -541,8 +539,8 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
         };
         return new ExportMetadata(scopeName, filter.text(), filter.regex(), filter.caseSensitive(),
             filter.contextLines(), filter.sort().name().toLowerCase(Locale.ROOT), filter.startingAt(),
-            filter.upUntil(), ActiveFilters.describe(filter.versions(), Function.identity()),
-            ActiveFilters.describe(filter.serversOrWorlds(), FilterOverlay::placeName));
+            filter.upUntil(), ActiveFilters.describe(filter.versions()),
+            ActiveFilters.describe(filter.serversOrWorlds()));
     }
 
     private Component queryBlockedReason() {

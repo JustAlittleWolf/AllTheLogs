@@ -88,7 +88,7 @@ class SearchFilterTest {
     @Test
     void contextStaysOnTheChosenServersIncludingMessagesWithoutOne() {
         SearchFilter filter = SearchFilter.defaults()
-            .withServersOrWorlds(java.util.Set.of("a.net", me.wolfii.allthelogs.api.ChatQuery.NO_SERVER_OR_WORLD));
+            .withServersOrWorlds(java.util.Set.of("a.net", me.wolfii.allthelogs.api.ChatQuery.NULL));
         assertTrue(filter.allowsContext(entry("a.net")));
         assertTrue(filter.allowsContext(entry(null)));
         assertFalse(filter.allowsContext(entry("b.net")));

@@ -22,10 +22,11 @@ import java.util.Set;
  */
 public interface ChatQuery {
     /**
-     * Stands for "no known server or world" in {@link #withServersOrWorlds(Collection)}: it keeps entries whose
-     * {@link ChatEntry#serverOrWorld()} is {@code null}.
+     * Stands for a missing value in {@link #withVersion(String)}, {@link #withVersions(Collection)} and
+     * {@link #withServersOrWorlds(Collection)}: it keeps entries whose {@link ChatLog#minecraftVersion()} or
+     * {@link ChatEntry#serverOrWorld()} is {@code null}. No release or server address starts with a dot.
      */
-    String NO_SERVER_OR_WORLD = "";
+    String NULL = ".NULL";
 
     /**
      * A query matching every stored entry, ordered by timestamp ascending.
@@ -50,7 +51,8 @@ public interface ChatQuery {
     String regex();
 
     /**
-     * Minecraft version the matching entries' logs must have, or {@code null} for any.
+     * Minecraft version the matching entries' logs must have, {@link #NULL} for logs without one, or
+     * {@code null} for any.
      */
     String version();
 
@@ -61,14 +63,14 @@ public interface ChatQuery {
     String serverOrWorld();
 
     /**
-     * Minecraft versions the matching entries' logs must have one of, or {@code null} for any. Empty matches
-     * nothing.
+     * Minecraft versions the matching entries' logs must have one of, with {@link #NULL} for logs without one,
+     * or {@code null} for any. Empty matches nothing.
      */
     Set<String> versions();
 
     /**
-     * Servers or worlds the matching entries must have exactly one of, with {@link #NO_SERVER_OR_WORLD} for
-     * entries without one, or {@code null} for any. Empty matches nothing.
+     * Servers or worlds the matching entries must have exactly one of, with {@link #NULL} for entries without
+     * one, or {@code null} for any. Empty matches nothing.
      */
     Set<String> serversOrWorlds();
 
@@ -142,8 +144,9 @@ public interface ChatQuery {
     ChatQuery withRegex(String regex);
 
     /**
-     * Keeps only entries from logs whose {@link ChatLog#minecraftVersion()} is {@code version}.
-     * Replaces any previously set version. Context lines come from the same log, so they share this version.
+     * Keeps only entries from logs whose {@link ChatLog#minecraftVersion()} is {@code version}; {@link #NULL}
+     * keeps logs without one. Replaces any previously set version. Context lines come from the same log, so
+     * they share this version.
      */
     ChatQuery withVersion(String version);
 
@@ -155,15 +158,15 @@ public interface ChatQuery {
     ChatQuery withServerOrWorld(String serverOrWorld);
 
     /**
-     * Keeps only entries from logs whose {@link ChatLog#minecraftVersion()} is one of {@code versions}, or
-     * removes that restriction when {@code versions} is {@code null}. An empty collection matches nothing.
-     * Combines with {@link #withVersion(String)}: both must hold.
+     * Keeps only entries from logs whose {@link ChatLog#minecraftVersion()} is one of {@code versions};
+     * {@link #NULL} keeps logs without one. {@code null} removes the restriction and an empty collection
+     * matches nothing. Combines with {@link #withVersion(String)}: both must hold.
      */
     ChatQuery withVersions(Collection<String> versions);
 
     /**
      * Keeps only entries whose {@link ChatEntry#serverOrWorld()} is exactly one of {@code serversOrWorlds};
-     * {@link #NO_SERVER_OR_WORLD} keeps entries without one. {@code null} removes the restriction and an
+     * {@link #NULL} keeps entries without one. {@code null} removes the restriction and an
      * empty collection matches nothing. Context lines are taken from the same servers. Combines with
      * {@link #withServerOrWorld(String)}: both must hold.
      */

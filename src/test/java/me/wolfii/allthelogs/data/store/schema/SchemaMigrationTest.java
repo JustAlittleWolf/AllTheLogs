@@ -282,6 +282,59 @@ class SchemaMigrationTest {
     }
 
     @Test
+    void migratesVersion6DatabasesToANullableVersion() throws SQLException {
+        Path database = tempDir.resolve("v6.duckdb");
+        try (var connection = StoreConnections.openFile(database);
+             Statement statement = connection.createStatement()) {
+            statement.execute("DROP TABLE log_file");
+            statement.execute("""
+                CREATE TABLE log_file (
+                    id BIGINT PRIMARY KEY,
+                    file_name VARCHAR NOT NULL,
+                    source_kind VARCHAR NOT NULL,
+                    source_path VARCHAR NOT NULL,
+                    entry_path VARCHAR NOT NULL,
+                    log_date DATE NOT NULL,
+                    minecraft_version VARCHAR NOT NULL,
+                    start_time TIMESTAMP NOT NULL,
+                    end_time TIMESTAMP NOT NULL,
+                    entry_count BIGINT NOT NULL,
+                    minecraft_user VARCHAR
+                )""");
+            statement.execute("CREATE UNIQUE INDEX log_file_location ON log_file (source_path, entry_path)");
+            String[] versions = {"unknown", "Unknown", " ", "1.21.1"};
+            for (int id = 0; id < versions.length; id++) {
+                statement.execute("""
+                    INSERT INTO log_file VALUES (
+                        %d, 'chat.log', 'FILE', '/tmp/%d.log', '/tmp/%d.log', DATE '2026-01-01', '%s',
+                        TIMESTAMP '2026-01-01 00:00:00', TIMESTAMP '2026-01-01 00:00:01', 1, NULL)"""
+                    .formatted(id, id, id, versions[id]));
+            }
+            SchemaMigration.setVersion(statement, 6);
+        }
+
+        try (var connection = StoreConnections.openFile(database);
+             Statement statement = connection.createStatement()) {
+            assertEquals(Schema.CURRENT_VERSION, SchemaMigration.readVersion(statement));
+            try (ResultSet result = statement.executeQuery("SELECT minecraft_version FROM log_file ORDER BY id")) {
+                for (int id = 0; id < 3; id++) {
+                    assertTrue(result.next());
+                    assertNull(result.getString(1));
+                }
+                assertTrue(result.next());
+                assertEquals("1.21.1", result.getString(1));
+                assertFalse(result.next());
+            }
+            try (ResultSet result = statement.executeQuery("""
+                SELECT is_nullable FROM information_schema.columns
+                WHERE table_name = 'log_file' AND column_name = 'minecraft_version'""")) {
+                assertTrue(result.next());
+                assertEquals("YES", result.getString(1));
+            }
+        }
+    }
+
+    @Test
     void newerDatabaseVersionIsRejected() throws SQLException {
         Path database = tempDir.resolve("future.duckdb");
         try (var connection = StoreConnections.openFile(database);

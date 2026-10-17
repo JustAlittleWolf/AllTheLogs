@@ -56,8 +56,9 @@ public final class PlaytimeMessageFilter {
         Set<String> matches = new LinkedHashSet<>();
         if (spans != null) {
             for (PlaytimeSpan span : spans) {
-                if (allowed != null && !allowed.contains(span.version())) continue;
-                if (grouped.equals(MinecraftVersions.major(span.version()))) matches.add(span.version());
+                String version = PlaytimeFilter.key(span.version());
+                if (allowed != null && !allowed.contains(version)) continue;
+                if (grouped.equals(MinecraftVersions.major(version))) matches.add(version);
             }
         }
         return matches.isEmpty() ? Set.of(grouped) : Set.copyOf(matches);

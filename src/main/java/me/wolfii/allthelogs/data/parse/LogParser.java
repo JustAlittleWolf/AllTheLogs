@@ -1,6 +1,5 @@
 package me.wolfii.allthelogs.data.parse;
 
-import me.wolfii.allthelogs.data.ChatLog;
 import me.wolfii.allthelogs.data.extract.LogTimeExtractor;
 import me.wolfii.allthelogs.data.extract.MinecraftUserExtractor;
 import me.wolfii.allthelogs.data.extract.MinecraftVersionExtractor;
@@ -112,8 +111,7 @@ public final class LogParser {
             flushPending(entries, pendingPlace, pendingDate, pendingTime, pending, users, places);
         }
 
-        String version = versions.version();
-        return new ParsedLog(version == null ? ChatLog.UNKNOWN_VERSION : version, users.user(), places.last(),
+        return new ParsedLog(versions.version(), users.user(), places.last(),
             entries, resourceManagerReloaded, firstLineDate, firstLineTime, lastLineDate, lastLineTime, sessionId);
     }
 

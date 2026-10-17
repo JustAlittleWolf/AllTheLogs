@@ -6,6 +6,7 @@ import org.graalvm.polyglot.proxy.ProxyExecutable;
 import org.graalvm.polyglot.proxy.ProxyObject;
 
 import java.lang.reflect.Array;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.time.LocalDate;
@@ -201,6 +202,11 @@ final class HostObjects {
         return fallback;
     }
 
+    private static boolean isConstant(Field field) {
+        return Modifier.isStatic(field.getModifiers()) && Modifier.isFinal(field.getModifiers())
+            && !field.isEnumConstant();
+    }
+
     static Set<String> members(Class<?> type, boolean staticOnly) {
         Set<String> names = new LinkedHashSet<>();
         for (Method method : type.getMethods()) {
@@ -214,6 +220,11 @@ final class HostObjects {
         }
         for (Class<?> nested : type.getClasses()) {
             names.add(nested.getSimpleName());
+        }
+        if (staticOnly) {
+            for (Field field : type.getFields()) {
+                if (isConstant(field)) names.add(field.getName());
+            }
         }
         if (type.isEnum()) {
             for (Object constant : type.getEnumConstants()) {
@@ -298,6 +309,15 @@ final class HostObjects {
             for (Class<?> nested : type.getClasses()) {
                 if (nested.getSimpleName().equals(key)) {
                     return new HostType(nested);
+                }
+            }
+            for (Field field : type.getFields()) {
+                if (field.getName().equals(key) && isConstant(field)) {
+                    try {
+                        return wrap(field.get(null));
+                    } catch (IllegalAccessException e) {
+                        throw new IllegalStateException(e);
+                    }
                 }
             }
             return (ProxyExecutable) args -> invoke(type, key, args);

@@ -9,7 +9,7 @@ import java.util.Objects;
  *
  * @param source           where this log was read from
  * @param date             the calendar date the log belongs to
- * @param minecraftVersion the Minecraft version the log was produced by, or {@code unknown}
+ * @param minecraftVersion the Minecraft version the log was produced by, or {@code null} if the log names none
  * @param startTime        timestamp of the first logged line, not just chat entries; converted from the import
  *                         timezone like chat entries. For a client session this is when the session started
  * @param endTime          timestamp of the last logged line, not just chat entries; converted from the import
@@ -25,15 +25,9 @@ public record ChatLog(
     LocalDateTime endTime,
     String minecraftUser
 ) implements me.wolfii.allthelogs.api.ChatLog {
-    /**
-     * Placeholder used when the Minecraft version could not be determined from the log contents.
-     */
-    public static final String UNKNOWN_VERSION = me.wolfii.allthelogs.api.ChatLog.UNKNOWN_VERSION;
-
     public ChatLog {
         Objects.requireNonNull(source, "source");
         Objects.requireNonNull(date, "date");
-        Objects.requireNonNull(minecraftVersion, "minecraftVersion");
         Objects.requireNonNull(startTime, "startTime");
         Objects.requireNonNull(endTime, "endTime");
     }

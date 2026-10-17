@@ -13,7 +13,7 @@ import java.util.function.DoubleConsumer;
  * {@code chat_entry.formatting} is a {@code BIGINT[]} of packed runs (one {@code long} per range), or NULL.
  */
 public final class Schema {
-    public static final int CURRENT_VERSION = 6;
+    public static final int CURRENT_VERSION = 7;
     static final String META_TABLE = "allthelogs_meta";
     static final String VERSION_KEY = "schema_version";
     static final String CLUSTER_MARKER_KEY = "clustered_before_file_id";
@@ -30,7 +30,7 @@ public final class Schema {
                 source_path VARCHAR NOT NULL,
                 entry_path VARCHAR NOT NULL,
                 log_date DATE NOT NULL,
-                minecraft_version VARCHAR NOT NULL,
+                minecraft_version VARCHAR,
                 start_time TIMESTAMP NOT NULL,
                 end_time TIMESTAMP NOT NULL,
                 entry_count BIGINT NOT NULL,

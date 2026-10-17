@@ -8,7 +8,7 @@ import java.util.Objects;
  * Snapshot of what a {@link LogStore} currently holds.
  *
  * @param minecraftVersions distinct {@link ChatLog#minecraftVersion()} values, ordered by the earliest log date of
- *                          each version, then by name
+ *                          each version, then by name; logs with no version are omitted
  * @param serverOrWorlds    distinct {@link ChatEntry#serverOrWorld()} values, ordered by the earliest matching
  *                          entry time, then by name
  * @param firstLogDate      earliest {@link ChatLog#date()} among stored logs, or {@code null} when the store is empty

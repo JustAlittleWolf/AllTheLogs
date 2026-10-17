@@ -17,6 +17,7 @@ import java.util.Comparator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ContinuationTest {
@@ -54,8 +55,8 @@ class ContinuationTest {
         assertFalse(LogContinuation.continues(day, day.plusDays(1).atTime(13, 50), day.plusDays(1),
             day.plusDays(1).atTime(14, 0)));
         assertFalse(LogContinuation.continues(day, end, day.plusDays(2), day.plusDays(1).atTime(0, 0, 1)));
-        assertTrue(LogContinuation.lacksStart("unknown", null));
-        assertFalse(LogContinuation.lacksStart("unknown", "Steve"));
+        assertTrue(LogContinuation.lacksStart(null, null));
+        assertFalse(LogContinuation.lacksStart(null, "Steve"));
         assertEquals("/logs", LogContinuation.folder(false, "/logs/2024-05-01-1.log.gz", ""));
         assertEquals("/a.zip!.minecraft/logs", LogContinuation.folder(true, "/a.zip", ".minecraft/logs/x.log"));
     }
@@ -96,7 +97,7 @@ class ContinuationTest {
         try (LogStore store = LogStore.open(database)) {
             store.importDirectory(tempDir.resolve("instance"),
                 ImportOptions.defaults().withOptimize(false).withSkipAlreadyImported(true));
-            assertEquals("unknown", log(store, "2024-05-02-1.log").minecraftVersion());
+            assertNull(log(store, "2024-05-02-1.log").minecraftVersion());
         }
     }
 
@@ -127,7 +128,7 @@ class ContinuationTest {
     private static void forgetContinuation(Path database) throws SQLException {
         try (Connection connection = DriverManager.getConnection("jdbc:duckdb:" + database);
              Statement statement = connection.createStatement()) {
-            statement.execute("UPDATE log_file SET minecraft_version = 'unknown', minecraft_user = NULL "
+            statement.execute("UPDATE log_file SET minecraft_version = NULL, minecraft_user = NULL "
                 + "WHERE file_name = '2024-05-02-1.log'");
             statement.execute("UPDATE chat_entry SET minecraft_user = NULL, server_or_world = NULL "
                 + "WHERE file_id = (SELECT id FROM log_file WHERE file_name = '2024-05-02-1.log') AND line_index = 0");

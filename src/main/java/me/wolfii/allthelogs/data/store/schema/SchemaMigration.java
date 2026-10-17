@@ -36,7 +36,8 @@ public final class SchemaMigration {
         2, NO_OP,
         3, SchemaMigration::migrate3To4SeedClusterMarker,
         4, SchemaMigration::migrate4To5PerEntryMetadata,
-        5, SchemaMigration::migrate5To6StripPlaceholderCharacters
+        5, SchemaMigration::migrate5To6StripPlaceholderCharacters,
+        6, SchemaMigration::migrate6To7NullableVersion
     );
 
     @FunctionalInterface
@@ -191,6 +192,21 @@ public final class SchemaMigration {
             statement.execute("DROP TABLE IF EXISTS chat_entry_rewrite");
         }
         return true;
+    }
+
+    /**
+     * 6 → 7: a log whose Minecraft version was not found stores {@code NULL} instead of the word
+     * {@code unknown}, like a missing player or server. DuckDB does not alter a column while an index
+     * depends on the table, so the location index is rebuilt around the change.
+     */
+    private static boolean migrate6To7NullableVersion(Statement statement) throws SQLException {
+        statement.execute("DROP INDEX IF EXISTS log_file_location");
+        statement.execute("ALTER TABLE log_file ALTER COLUMN minecraft_version DROP NOT NULL");
+        statement.execute("CREATE UNIQUE INDEX log_file_location ON log_file (source_path, entry_path)");
+        statement.execute("""
+            UPDATE log_file SET minecraft_version = NULL
+            WHERE trim(minecraft_version) = '' OR lower(trim(minecraft_version)) = 'unknown'""");
+        return false;
     }
 
     public static int readVersion(Statement statement) throws SQLException {

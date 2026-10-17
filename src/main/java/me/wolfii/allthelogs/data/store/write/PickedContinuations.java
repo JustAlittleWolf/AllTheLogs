@@ -58,7 +58,7 @@ final class PickedContinuations {
                      2147483647)""");
              PreparedStatement versions = connection.prepareStatement("""
                  UPDATE log_file SET minecraft_version = ?
-                 WHERE source_path = ? AND entry_path = ? AND lower(minecraft_version) = 'unknown'""")) {
+                 WHERE source_path = ? AND entry_path = ? AND minecraft_version IS NULL""")) {
             for (List<Picked> folder : byFolder.values()) {
                 folder.sort(Comparator.comparing(Picked::start));
                 for (int index = 0; index < folder.size(); index++) {
@@ -76,7 +76,7 @@ final class PickedContinuations {
                         places.setString(5, file.entryPath());
                         places.execute();
                     }
-                    if (!LogContinuation.isUnknown(previous.version())) {
+                    if (previous.version() != null) {
                         bind(versions, previous.version(), file);
                         versions.execute();
                     }

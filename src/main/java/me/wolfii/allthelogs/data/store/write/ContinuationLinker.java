@@ -85,7 +85,7 @@ public final class ContinuationLinker {
         String version = log.version();
         String user = log.user();
         boolean changed = false;
-        if (LogContinuation.isUnknown(version) && !LogContinuation.isUnknown(previous.version())) {
+        if (version == null && previous.version() != null) {
             version = previous.version();
             updates.version(log.id(), version);
             changed = true;

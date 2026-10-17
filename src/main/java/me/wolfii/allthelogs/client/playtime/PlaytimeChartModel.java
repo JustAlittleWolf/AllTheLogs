@@ -1,5 +1,6 @@
 package me.wolfii.allthelogs.client.playtime;
 
+import me.wolfii.allthelogs.api.ChatQuery;
 import me.wolfii.allthelogs.client.search.MinecraftVersions;
 import me.wolfii.allthelogs.data.playtime.PlaytimeSpan;
 
@@ -282,7 +283,8 @@ public final class PlaytimeChartModel {
         List<String> versions = new ArrayList<>();
         if (spans == null) return List.of();
         for (PlaytimeSpan span : spans) {
-            if (!versions.contains(span.version())) versions.add(span.version());
+            String key = PlaytimeFilter.key(span.version());
+            if (!versions.contains(key)) versions.add(key);
         }
         return MinecraftVersions.newestFirst(versions);
     }
@@ -291,10 +293,10 @@ public final class PlaytimeChartModel {
         List<String> servers = new ArrayList<>();
         if (spans == null) return List.of();
         for (PlaytimeSpan span : spans) {
-            String key = PlaytimeFilter.serverKey(span.server());
+            String key = PlaytimeFilter.key(span.server());
             if (!servers.contains(key)) servers.add(key);
         }
-        servers.sort(Comparator.comparing((String server) -> !PlaytimeFilter.UNKNOWN_SERVER.equals(server))
+        servers.sort(Comparator.comparing((String server) -> !ChatQuery.NULL.equals(server))
             .thenComparing(PlaytimeSeries::displayName, String.CASE_INSENSITIVE_ORDER));
         return List.copyOf(servers);
     }
