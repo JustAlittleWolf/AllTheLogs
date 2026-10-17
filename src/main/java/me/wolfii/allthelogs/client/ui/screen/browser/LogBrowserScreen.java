@@ -246,9 +246,9 @@ public final class LogBrowserScreen extends BaseOwoScreen<StackLayout> {
     }
 
     /**
-     * Match count for the current query. The time is added by {@link MessageTimeline#statusText()} only
-     * while that query is running, or when it took longer than a second. The row keeps a fixed height so
-     * the list does not jump when the time appears.
+     * Match count for the current query. {@code Loading...} appears only after the query has already run
+     * for more than a second, without a live timer. A finished query adds its duration only when it took
+     * longer than that. The row keeps a fixed height so the list does not jump when the time appears.
      */
     private FlowLayout buildStatusBar() {
         FlowLayout bar = UIContainers.horizontalFlow(Sizing.fill(), Sizing.fixed(MessageListLayout.DATE_HEIGHT));

@@ -45,7 +45,7 @@ class ListStatusChipTest {
     }
 
     @Test
-    void theCountStaysUpAndTheTimeFollowsLoadingOrASlowQuery() {
+    void theCountStaysUpAndLoadingWaitsASecondWithoutALiveTimer() {
         ListStatusChip chip = new ListStatusChip();
         chip.showTotalMatchCount(4, 80);
         assertEquals("allthelogs.status.messages", key(chip.text(60_000)));
@@ -59,23 +59,24 @@ class ListStatusChipTest {
         chip.showTotalMatchCount(4, 80);
         chip.setLoading(true, 10_000);
         assertEquals("allthelogs.status.messages", key(chip.text(10_050)));
-        Component loading = chip.text(10_200);
-        assertEquals("allthelogs.status.messages.timed", key(loading));
+        assertEquals("allthelogs.status.messages", key(chip.text(11_000)));
+        Component loading = chip.text(11_001);
+        assertEquals("allthelogs.status.messages.loading", key(loading));
         assertEquals("4", args(loading)[0]);
-        assertEquals("0.2", args(loading)[1]);
+        assertEquals(1, args(loading).length);
 
-        chip.setLoading(false, 10_200);
-        Component settled = chip.text(10_300);
+        chip.setLoading(false, 11_200);
+        Component settled = chip.text(11_300);
         assertEquals("allthelogs.status.messages", key(settled));
         assertEquals("4", args(settled)[0]);
         assertEquals(80, chip.elapsedMs());
 
         chip.beginNewSearchCount();
-        assertEquals("", chip.text(10_300).getString());
-        assertFalse(chip.text(10_300).getContents() instanceof TranslatableContents);
+        assertEquals("", chip.text(11_300).getString());
+        assertFalse(chip.text(11_300).getContents() instanceof TranslatableContents);
         chip.setLoading(true, 20_000);
-        Component waiting = chip.text(20_150);
-        assertEquals("allthelogs.status.loading.timed", key(waiting));
-        assertEquals("0.2", args(waiting)[0]);
+        assertEquals("", chip.text(21_000).getString());
+        Component waiting = chip.text(21_001);
+        assertEquals("allthelogs.status.loading", key(waiting));
     }
 }

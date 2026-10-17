@@ -7,12 +7,11 @@ import net.minecraft.network.chat.Component;
  * Match count and query time for the messages screen's top bar: a persistent overlay message, a loading
  * label, or the message/match count.
  * <p>
- * The count stays on screen once a search has produced one. The time is included only while a query is
- * running, or when that query took longer than a second. Loading is only announced after
- * {@link #LOADING_DELAY_MS} so that fast queries do not flash it.
+ * The count stays on screen once a search has produced one. {@code Loading...} appears only after the
+ * query has already run for more than a second, without the seconds still ticking. A finished query shows
+ * its duration only when it took longer than that.
  */
 final class ListStatusChip {
-    private static final int LOADING_DELAY_MS = 100;
 
     private long matchCount;
     private boolean exactMatchCount;
@@ -88,25 +87,25 @@ final class ListStatusChip {
     }
 
     /**
-     * Whether the loading label has been pending long enough to be worth showing.
+     * Whether {@code Loading...} is due. Fast queries never reach this, and the label does not include
+     * the time still elapsing.
      */
     boolean showingLoading() {
         return showingLoading(System.currentTimeMillis());
     }
 
     boolean showingLoading(long nowMs) {
-        return loading && loadingSinceMs > 0 && nowMs - loadingSinceMs >= LOADING_DELAY_MS;
+        return loading && loadingSinceMs > 0 && nowMs - loadingSinceMs > MessageText.TIMED_STATUS_MS;
     }
 
     /**
-     * Status for {@code nowMs}. The count does not expire. While a query is running the time is how long
-     * it has been running; afterwards it is the recorded duration, and only when that was over a second.
+     * Status for {@code nowMs}. The count does not expire. A running query contributes {@code Loading...}
+     * only after a second, and never its live elapsed time. A finished query contributes its duration
+     * only when that was over a second.
      */
     Component text(long nowMs) {
-        boolean showLoading = showingLoading(nowMs);
-        long shownElapsed = showLoading ? Math.max(0, nowMs - loadingSinceMs) : elapsedMs;
-        return MessageText.listStatus(overlay, showLoading, showMatchCount, matchCount, exactMatchCount,
-            shownElapsed, narrowed);
+        return MessageText.listStatus(overlay, showingLoading(nowMs), showMatchCount, matchCount,
+            exactMatchCount, elapsedMs, narrowed);
     }
 
     Component text() {

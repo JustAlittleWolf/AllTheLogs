@@ -54,10 +54,10 @@ public final class MessageText {
     }
 
     /**
-     * A finished query keeps its duration on screen only after this long. A query that is still running
-     * shows the time it has used so far even when it is shorter.
+     * A finished query keeps its duration on screen only after this long. {@code Loading...} waits the
+     * same amount of time and never includes the seconds still ticking.
      */
-    static final long TIMED_STATUS_MS = 1000;
+    public static final long TIMED_STATUS_MS = 1000;
 
     /**
      * Search duration: seconds with one decimal, or empty when under 0.1s after rounding.
@@ -69,32 +69,30 @@ public final class MessageText {
     }
 
     /**
-     * Text for the messages screen's status bar. The match count stays up once it is known. The duration
-     * is included only while {@code loading} is set, or when a finished query took longer than
-     * {@link #TIMED_STATUS_MS}. Unfiltered lists use "message(s)"; a search or version/date filter uses
-     * "match(es)". An overlay, such as a failed query, replaces both.
+     * Text for the messages screen's status bar. The match count stays up once it is known. {@code loading}
+     * adds {@code Loading...} and leaves the running time off. A finished query includes its duration only
+     * after {@link #TIMED_STATUS_MS}. Unfiltered lists use "message(s)"; a search or version/date filter
+     * uses "match(es)". An overlay, such as a failed query, replaces both.
      */
     public static Component listStatus(Component overlay, boolean loading, boolean showCount, long matchCount,
                                        boolean exactCount, long elapsedMs, boolean narrowed) {
         if (overlay != null && !overlay.getString().isEmpty()) return overlay;
-        boolean showTime = loading || elapsedMs > TIMED_STATUS_MS;
-        String duration = showTime ? searchDurationText(elapsedMs) : "";
-        if (!showCount) {
-            if (!loading) return Component.empty();
-            if (duration.isEmpty()) return Component.translatable("allthelogs.status.loading");
-            return Component.translatable("allthelogs.status.loading.timed", duration);
-        }
+        if (loading && !showCount) return Component.translatable("allthelogs.status.loading");
+        if (!showCount) return Component.empty();
         String count = matchCountText(matchCount, exactCount);
         boolean singular = singularMatch(matchCount, exactCount);
-        String key = statusCountKey(narrowed, singular, !duration.isEmpty());
+        if (loading) return Component.translatable(statusCountKey(narrowed, singular, false, true), count);
+        String duration = elapsedMs > TIMED_STATUS_MS ? searchDurationText(elapsedMs) : "";
+        String key = statusCountKey(narrowed, singular, !duration.isEmpty(), false);
         if (duration.isEmpty()) return Component.translatable(key, count);
         return Component.translatable(key, count, duration);
     }
 
-    static String statusCountKey(boolean narrowed, boolean singular, boolean timed) {
+    static String statusCountKey(boolean narrowed, boolean singular, boolean timed, boolean loading) {
         String kind = narrowed
             ? (singular ? "match" : "matches")
             : (singular ? "message" : "messages");
+        if (loading) return "allthelogs.status." + kind + ".loading";
         return timed ? "allthelogs.status." + kind + ".timed" : "allthelogs.status." + kind;
     }
 
